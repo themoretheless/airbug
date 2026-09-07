@@ -1,0 +1,28 @@
+[package]
+name = "runit"
+version = "0.5.0"
+edition = "2024"
+rust-version = "1.96"
+description = "Object generation graphs, fluent assertions, validation, and method mocks"
+license = "MIT"
+readme = "README.md"
+include = ["src/**", "tests/**", "examples/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "PILOT.md"]
+
+[workspace]
+members = ["runit-macros"]
+resolver = "3"
+
+[features]
+default = []
+macros = ["dep:runit-macros"]
+
+[dependencies]
+runit-macros = { version = "=0.5.0", path = "runit-macros", optional = true }
+
+[[example]]
+name = "native_service"
+required-features = ["macros"]
+
+[[example]]
+name = "checkout_pilot"
+required-features = ["macros"]
