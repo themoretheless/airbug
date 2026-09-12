@@ -6,7 +6,7 @@ rust-version = "1.96"
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
 license = "MIT"
 readme = "README.md"
-include = ["src/**", "tests/**", "examples/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "PILOT.md"]
+include = ["src/**", "tests/**", "examples/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "PILOT.md", "WEB_REPORT.md", "tools/runit_report.py", "tools/report/**", "tools/tests/*.py"]
 
 [workspace]
 members = ["runit-macros"]

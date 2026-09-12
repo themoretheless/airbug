@@ -30,8 +30,17 @@ impl<'a, T: ?Sized> Assertion<'a, T> {
 impl<T: Debug + PartialEq + ?Sized> Assertion<'_, T> {
     #[track_caller]
     pub fn is_equal_to(self, expected: &T) -> Self {
+        let passed = self.actual == expected;
+        if !passed && crate::report::is_enabled() {
+            crate::report::comparison(
+                self.reason.unwrap_or("is_equal_to"),
+                &format!("{expected:#?}"),
+                &format!("{:#?}", self.actual),
+                passed,
+            );
+        }
         self.check(
-            self.actual == expected,
+            passed,
             format_args!("expected {:?} to equal {:?}", self.actual, expected),
         );
         self

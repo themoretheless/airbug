@@ -37,3 +37,5 @@ pub mod prelude {
 
 pub mod order;
 pub use order::CallSequence;
+
+pub mod report;

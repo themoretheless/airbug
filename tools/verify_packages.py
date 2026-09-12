@@ -58,6 +58,10 @@ mod tests {
     trait Store { fn get(&self, id: u64) -> u64; }
     #[helpers::cases(first(7), second(9))]
     fn packaged_helpers(value: u64) {
+        helpers::report::step("packaged diagnostics", || {
+            helpers::report::attach_text("example.txt", "package consumer").unwrap();
+            helpers::report::assert_equal("value", &value, &value);
+        });
         let mut ctx = helpers::FixtureContext::new();
         let data = ctx.builder::<Data>().with_value(value).build();
         let store = MockStore::default();

@@ -433,3 +433,22 @@ Version 0.3 adds opt-in macros and native helpers. Version 0.2 changes Generate:
 to try_build()?. Validator callbacks now require Send + Sync. This is a release
 candidate for the documented surface, not compatibility with every .NET API.
 Publishing and a stable 1.0 contract require a release review and successful CI.
+
+## Web test reports
+
+Generate a standalone browser report with suite summaries, searchable test cases,
+status filters, failure logs and the last 20 runs:
+
+```sh
+python3 tools/runit_report.py --workspace --all-features --locked --doc-tests
+```
+
+Open `target/runit-report/index.html`. The optional Python 3.9+ tool executes real
+native tests one process per case and preserves failure exit codes. Doctests are
+an opt-in aggregate entry. It needs no frontend dependencies or report server.
+See [WEB_REPORT.md](WEB_REPORT.md) for execution differences, options and CI usage.
+
+Structured diagnostics are opt-in via `runit::report::step`, `try_step`,
+`attach_text`, `attach_bytes`, `assert_equal` and `assert_text_equal`.
+Equality failures from fluent assertions and `CheckReport` are recorded too.
+Step/comparison statuses remain distinct from the native test outcome.

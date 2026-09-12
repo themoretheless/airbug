@@ -52,6 +52,11 @@ impl CheckReport {
     }
     #[track_caller]
     pub fn assert(&self) {
+        if crate::report::is_enabled() {
+            for failure in &self.failures {
+                crate::report::comparison(&failure.path, &failure.expected, &failure.actual, false);
+            }
+        }
         assert!(self.is_success(), "{self}");
     }
 }

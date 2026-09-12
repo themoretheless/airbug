@@ -1,5 +1,16 @@
 # 0.5.0
 
+## Unreleased
+
+- Add synchronous nested report steps, text/binary attachments, and structured expected/actual diffs; preserve native assertions and panic outcomes.
+
+- Add an execution timeline with measured start/end offsets, zoom, filters and build/discovery phases.
+
+- Add an optional native-test report CLI and standalone Allure-inspired web UI:
+  suite/status/search filters, logs, durations, JSON export and bounded run history.
+- Distinguish test failures, ignored cases, process timeouts and build/discovery errors.
+- Add end-to-end reporter tests and a CI report artifact job.
+
 - Shared CallSequence enforces strict admission order across mock methods/objects.
 - Out-of-order calls retain diagnostic errors without consuming counts or running answers.
 - Positive exact repeated steps, cross-thread admission and optional grouped verification.
