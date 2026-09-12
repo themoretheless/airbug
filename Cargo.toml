@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.96"
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
 license = "MIT"
+repository = "https://github.com/themoretheless/airbug"
 readme = "README.md"
 keywords = ["testing", "mocking", "assertions", "fixtures", "validation"]
 categories = ["development-tools::testing", "development-tools"]
