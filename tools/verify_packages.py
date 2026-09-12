@@ -24,7 +24,13 @@ def run(arguments, directory=root, **kwargs):
 metadata = json.loads(run(['metadata', '--offline', '--no-deps', '--format-version=1'],
                          capture_output=True, text=True).stdout)
 packages = {p['name']: p for p in metadata['packages']}
-run(['package', '--offline', '--workspace', '--all-features', '--allow-dirty', '--no-verify'])
+# Workspace members marked `publish = false` are dev-only (the pilot domain shared
+# by tests and examples). Cargo still tries to package them under --workspace and
+# rejects their path dependencies for having no version, so skip them explicitly.
+excluded = [name for name, p in packages.items() if p.get('publish') == []]
+exclusions = [argument for name in excluded for argument in ('--exclude', name)]
+run(['package', '--offline', '--workspace', '--all-features', '--allow-dirty', '--no-verify']
+    + exclusions)
 with tempfile.TemporaryDirectory(prefix='airbug-packages-') as temp:
     temp = Path(temp).resolve()
     unpacked = {}
