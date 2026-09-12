@@ -6,8 +6,8 @@ use quote::{format_ident, quote};
 use syn::{parse_macro_input, parse_quote, spanned::Spanned};
 
 fn runtime() -> syn::Result<Tokens> {
-    match proc_macro_crate::crate_name("runit") {
-        Ok(proc_macro_crate::FoundCrate::Itself) => Ok(quote!(::runit)),
+    match proc_macro_crate::crate_name("airbug") {
+        Ok(proc_macro_crate::FoundCrate::Itself) => Ok(quote!(::airbug)),
         Ok(proc_macro_crate::FoundCrate::Name(name)) => {
             let name = format_ident!("{}", name);
             Ok(quote!(::#name))
@@ -71,7 +71,7 @@ fn derive_generate(input: syn::DeriveInput) -> syn::Result<Tokens> {
             let n = syn::Index::from(index);
             quote!(#n)
         });
-        let slot = format_ident!("__runit_value_{}", index);
+        let slot = format_ident!("__airbug_value_{}", index);
         let setter = field
             .ident
             .as_ref()
@@ -104,13 +104,13 @@ fn derive_generate(input: syn::DeriveInput) -> syn::Result<Tokens> {
                 .push(parse_quote!(#ty: ::core::default::Default));
             quote!(<#ty as ::core::default::Default>::default())
         } else if let Some(factory) = factory {
-            quote!(#factory(__runit_ctx)?)
+            quote!(#factory(__airbug_ctx)?)
         } else {
             generics
                 .make_where_clause()
                 .predicates
                 .push(parse_quote!(#ty: #root::Generate));
-            quote!(__runit_ctx.try_build::<#ty>()?)
+            quote!(__airbug_ctx.try_build::<#ty>()?)
         };
         fields.push(quote!(#member: #value));
         values.push(quote!(#slot));
@@ -124,7 +124,7 @@ fn derive_generate(input: syn::DeriveInput) -> syn::Result<Tokens> {
     let mut builder_generics = generics.clone();
     builder_generics
         .params
-        .insert(0, parse_quote!('__runit_ctx));
+        .insert(0, parse_quote!('__airbug_ctx));
     let (impl_g, types, where_g) = generics.split_for_impl();
     let (builder_impl, builder_types, builder_where) = builder_generics.split_for_impl();
     let args: Vec<_> = generics
@@ -144,26 +144,26 @@ fn derive_generate(input: syn::DeriveInput) -> syn::Result<Tokens> {
         .collect();
     Ok(quote! {
         impl #impl_g #root::Generate for #name #types #where_g {
-            fn generate(__runit_ctx: &mut #root::FixtureContext) -> ::core::result::Result<Self, #root::GenerationError> {
+            fn generate(__airbug_ctx: &mut #root::FixtureContext) -> ::core::result::Result<Self, #root::GenerationError> {
                 ::core::result::Result::Ok(Self { #(#fields),* })
             }
         }
         #[must_use = "call build or try_build to generate the object"]
         #vis struct #builder #builder_generics #builder_where {
-            __runit_context: &'__runit_ctx mut #root::FixtureContext,
+            __airbug_context: &'__airbug_ctx mut #root::FixtureContext,
             #(#stored),*
         }
         impl #impl_g #root::fixture::FixtureBuild for #name #types #where_g {
-            type Builder<'__runit_ctx> = #builder<'__runit_ctx, #(#args),*>;
+            type Builder<'__airbug_ctx> = #builder<'__airbug_ctx, #(#args),*>;
             fn fixture_builder(ctx: &mut #root::FixtureContext) -> Self::Builder<'_> {
-                #builder { __runit_context: ctx, #(#defaults),* }
+                #builder { __airbug_context: ctx, #(#defaults),* }
             }
         }
         impl #builder_impl #builder #builder_types #builder_where {
             #(#setters)*
             #vis fn try_build(self) -> ::core::result::Result<#name #types, #root::GenerationError> {
-                let Self { __runit_context, #(#values),* } = self;
-                __runit_context.try_build_with(|__runit_ctx| ::core::result::Result::Ok(#name { #(#build_values),* }))
+                let Self { __airbug_context, #(#values),* } = self;
+                __airbug_context.try_build_with(|__airbug_ctx| ::core::result::Result::Ok(#name { #(#build_values),* }))
             }
             #[track_caller]
             #vis fn build(self) -> #name #types {
@@ -279,7 +279,7 @@ fn derive_mock(input: syn::ItemTrait) -> syn::Result<Tokens> {
             let syn::FnArg::Typed(arg) = arg else {
                 unreachable!()
             };
-            let local = format_ident!("__runit_arg_{index}");
+            let local = format_ident!("__airbug_arg_{index}");
             *arg.pat = parse_quote!(#local);
             let (owned, value) = if let syn::Type::Reference(reference) = &*arg.ty {
                 if reference.mutability.is_some() {

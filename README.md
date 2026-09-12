@@ -1,4 +1,4 @@
-# RUnit
+# Airbug
 
 Helpers for ordinary Rust tests: keep `#[test]`, `cargo test`, `assert!` and
 `assert_eq!`. Add data generation, trait mocks, named cases, collection checks,
@@ -9,7 +9,7 @@ use a separate procedural-macro crate.
 ## Cross-method order (0.5)
 
 ```rust
-use runit::{CallSequence, Mock, with_mocks};
+use airbug::{CallSequence, Mock, with_mocks};
 let order = CallSequence::new("checkout");
 let charge = Mock::<(), ()>::new("payments.charge");
 let save = Mock::<(), ()>::new("orders.save");
@@ -59,7 +59,7 @@ cargo run --features macros --example checkout_pilot -- store-failure
 The `prelude` is optional; direct module imports remain supported.
 
 ```rust
-use runit::prelude::*;
+use airbug::prelude::*;
 let mut fixture = FixtureContext::with_seed(42);
 fixture.reuse(10u64);
 let temporary = fixture.scoped(|ctx| { ctx.reuse(20u64); ctx.build::<u64>() });
@@ -77,7 +77,7 @@ or unwind but retains RNG progress. Root generation errors include the seed.
 Boundary sets live in `fixture::boundaries` for ordinary table-driven tests.
 
 ```rust
-use runit::prelude::*;
+use airbug::prelude::*;
 let capture = Capture::new(4);
 let fetch = Mock::<u64, Option<u64>>::new("fetch");
 fetch.journal_capacity(4);
@@ -102,7 +102,7 @@ only; it rejects active calls, ordered expectations and one-shot/response-sequen
 clear separate captures or reopen configuration.
 
 ```rust
-use runit::prelude::*;
+use airbug::prelude::*;
 let mut report = CheckReport::default();
 report.equal("order.quantity", &2, &2);
 report.assert();
@@ -121,7 +121,7 @@ finite values and nonnegative finite tolerance. Panic checks require UnwindSafe
 closures and unwind builds; non-string panic payloads do not match text.
 
 ```rust
-use runit::Validator;
+use airbug::Validator;
 let validator = Validator::<(u8, u8)>::new()
     .check("end", "range_order", "end must follow start", |(start, end)| start <= end)
     .max_errors(2);
@@ -140,7 +140,7 @@ rules and skips later callbacks once full; global stop_on_first_failure sets it
 to one. Error maps convert owned records into application-specific formats.
 
 ```rust
-use runit::prelude::*;
+use airbug::prelude::*;
 let snapshots = Snapshots::new("snapshots").redact("request-123", "<request>");
 snapshots.inline("id=<request>", "id=request-123").unwrap();
 ```
@@ -158,7 +158,7 @@ partial output. A process crash may leave .lock/.tmp files for manual cleanup.
 Snapshot directories are caller-owned trusted locations, not a sandbox boundary.
 
 ```rust
-use runit::prelude::*;
+use airbug::prelude::*;
 use std::time::{Duration, SystemTime};
 let clock = ManualClock::new(SystemTime::UNIX_EPOCH);
 let mut attempts = 0;
@@ -184,7 +184,7 @@ migrating. Custom Generate implementations from 0.3 remain unchanged.
 
 ```toml
 [dev-dependencies]
-runit = { path = "../runit", features = ["macros"] }
+airbug = { path = "../airbug", features = ["macros"] }
 ```
 
 Omit `features` for the dependency-free core. Validator may be used as a normal
@@ -195,7 +195,7 @@ runner, global state, or mandatory TestContext is installed.
 
 ```rust
 # #[cfg(feature = "macros")] {
-use runit::{FixtureContext, Generate};
+use airbug::{FixtureContext, Generate};
 #[derive(Generate)]
 struct Order {
     customer: String,
@@ -229,7 +229,7 @@ The generated builder is named `TypeFixtureBuilder`; reserve that type name.
 
 ```rust
 # #[cfg(feature = "macros")]
-#[runit::cases(empty(0, 0), positive(2, 4), negative(-3, -6))]
+#[airbug::cases(empty(0, 0), positive(2, 4), negative(-3, -6))]
 fn doubles(input: i32, expected: i32) {
     assert_eq!(input * 2, expected);
 }
@@ -245,7 +245,7 @@ attribute directly for async tests.
 ## Extra native assertions
 
 ```rust
-use runit::{assert_contains, assert_same_items, check_all};
+use airbug::{assert_contains, assert_same_items, check_all};
 assert_contains!([1, 2, 3], 2);
 assert_same_items!([1, 2, 1], [2, 1, 1]);
 let quantity = 2;
@@ -262,8 +262,8 @@ macros supplement native assertions and do not require fluent assertion syntax.
 
 ```rust
 # #[cfg(feature = "macros")] {
-use runit::with_mocks;
-#[runit::mock]
+use airbug::with_mocks;
+#[airbug::mock]
 trait Repository: Send + Sync {
     fn lookup(&self, customer: &str) -> Option<u64>;
 }
@@ -301,7 +301,7 @@ still runs on normal completion, even when the body returns Err.
 ## Fixture
 
 ```rust
-use runit::{FixtureContext, Generate, GenerationError};
+use airbug::{FixtureContext, Generate, GenerationError};
 struct Order { id: u64, customer: String }
 impl Generate for Order {
     fn generate(ctx: &mut FixtureContext) -> Result<Self, GenerationError> {
@@ -335,7 +335,7 @@ cryptographic or property-testing generator. Floats are finite in [0, 1).
 ## Assertions
 
 ```rust
-use runit::assert_that;
+use airbug::assert_that;
 assert_that(&Some(5)).value().is_between(&1, &10);
 assert_that(&vec![1, 2]).has_length(2).contains(&1);
 assert_that("Alice").because("customer was fixed").starts_with("Al");
@@ -352,7 +352,7 @@ stop on first failure; there is no soft-assertion scope.
 ## Validator
 
 ```rust
-use runit::Validator;
+use airbug::Validator;
 struct User { name: String, age: u8 }
 let validator = Validator::<User>::new()
     .rule_for("name", |u| &u.name)
@@ -379,7 +379,7 @@ shared across threads. Callbacks run synchronously and their panics propagate.
 ## Mock
 
 ```rust
-use runit::Mock;
+use airbug::Mock;
 let lookup = Mock::new("Repository::lookup");
 lookup.expect("known id", |id: &u64| *id == 7)
     .times(2).returns(Some(String::from("Alice")));
@@ -412,7 +412,7 @@ lifetime modeling and async validators remain outside this release's surface.
 
 ```text
 cargo test --workspace --all-features
-cargo test -p runit --no-default-features
+cargo test -p airbug --no-default-features
 cargo test --workspace --all-features --release
 cargo run --features macros --example native_service
 cargo clippy --workspace --all-features --all-targets -- -D warnings

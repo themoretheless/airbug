@@ -1,4 +1,4 @@
-use runit::{FixtureContext, Generate, GenerationError, Mock, Validator, assert_that};
+use airbug::{FixtureContext, Generate, GenerationError, Mock, Validator, assert_that};
 
 #[derive(Debug)]
 struct Order {

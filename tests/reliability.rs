@@ -1,4 +1,4 @@
-use runit::{
+use airbug::{
     FixtureContext, Generate, GenerationError, GenerationErrorKind, Mock, Validator, assert_that,
 };
 use std::sync::Arc;

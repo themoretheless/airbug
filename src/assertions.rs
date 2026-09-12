@@ -16,8 +16,15 @@ impl<'a, T: ?Sized> Assertion<'a, T> {
         self.reason = Some(reason);
         self
     }
+    /// The borrowed subject, for assertions defined outside this crate.
+    pub fn subject(&self) -> &'a T {
+        self.actual
+    }
+    /// Fail unless `passed`, appending any `because` reason. Public so downstream
+    /// crates can add their own assertions in an extension trait and get the same
+    /// failure formatting.
     #[track_caller]
-    fn check(&self, passed: bool, expectation: impl std::fmt::Display) {
+    pub fn check(&self, passed: bool, expectation: impl std::fmt::Display) {
         assert!(
             passed,
             "{expectation}{}",

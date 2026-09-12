@@ -25,10 +25,10 @@ metadata = json.loads(run(['metadata', '--offline', '--no-deps', '--format-versi
                          capture_output=True, text=True).stdout)
 packages = {p['name']: p for p in metadata['packages']}
 run(['package', '--offline', '--workspace', '--all-features', '--allow-dirty', '--no-verify'])
-with tempfile.TemporaryDirectory(prefix='runit-packages-') as temp:
+with tempfile.TemporaryDirectory(prefix='airbug-packages-') as temp:
     temp = Path(temp).resolve()
     unpacked = {}
-    for name in ['runit', 'runit-macros']:
+    for name in ['airbug', 'airbug-macros']:
         folder = name + '-' + packages[name]['version']
         archive = Path(metadata['target_directory']) / 'package' / (folder + '.crate')
         with tarfile.open(archive) as contents:
@@ -44,11 +44,11 @@ with tempfile.TemporaryDirectory(prefix='runit-packages-') as temp:
     # JSON string syntax is compatible with TOML basic strings for these paths.
     path = lambda name: json.dumps(str(unpacked[name]))
     (consumer / 'Cargo.toml').write_text(
-        '[package]\nname="runit-package-check"\nversion="0.0.0"\nedition="2024"\n'
+        '[package]\nname="airbug-package-check"\nversion="0.0.0"\nedition="2024"\n'
         '[workspace]\n[dependencies]\n'
-        f'helpers={{package="runit",path={path("runit")},features=["macros"]}}\n'
+        f'helpers={{package="airbug",path={path("airbug")},features=["macros"]}}\n'
         '[patch.crates-io]\n'
-        f'runit-macros={{path={path("runit-macros")}}}\n', encoding='utf-8')
+        f'airbug-macros={{path={path("airbug-macros")}}}\n', encoding='utf-8')
     (consumer / 'src/lib.rs').write_text('''
 #[cfg(test)]
 mod tests {
