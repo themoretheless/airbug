@@ -1,0 +1,16 @@
+[package]
+name = "airbug-hub"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+description = "Cross-domain dashboard for the airbug monorepo (unit / bench / otel / trace)"
+
+[[bin]]
+name = "airbug-hub"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

@@ -147,6 +147,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "airbug-containers"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "airbug-hub"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "airbug-macros"
 version = "0.5.0"
 dependencies = [

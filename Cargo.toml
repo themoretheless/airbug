@@ -4,18 +4,22 @@ members = [
     "unit/airbug",
     "unit/airbug-macros",
     "unit/checkout-domain",
+    "unit/containers",
     "bench/rbench",
     "bench/rbench-macros",
     "bench/cargo-rbench",
     "otel/monik",
+    "dash/hub",
 ]
 default-members = [
     "unit/airbug",
     "unit/airbug-macros",
     "unit/checkout-domain",
+    "unit/containers",
     "bench/rbench",
     "bench/rbench-macros",
     "bench/cargo-rbench",
+    "dash/hub",
 ]
 exclude = [
     "integrations/forma",

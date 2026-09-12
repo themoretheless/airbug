@@ -1,0 +1,16 @@
+[package]
+name = "airbug-containers"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+description = "Testcontainers-style Docker helpers for ordinary Rust tests (C#-like builders)"
+repository = "https://github.com/themoretheless/airbug"
+keywords = ["testing", "docker", "testcontainers", "integration"]
+categories = ["development-tools::testing"]
+
+[dependencies]
+serde_json.workspace = true
+
+[dev-dependencies]
