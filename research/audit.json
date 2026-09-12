@@ -1,0 +1,36 @@
+{
+  "checked_at_utc": "2026-09-06T16:34:30.866558+00:00",
+  "records": 779,
+  "readmes": 763,
+  "dispositions": {
+    "retained": 614,
+    "alias": 1,
+    "excluded": 148,
+    "unavailable": 16
+  },
+  "retained_distinct_readme_hashes": 614,
+  "focused_engine_source_review": [
+    "criterion-rs/criterion.rs",
+    "nvzqz/divan",
+    "dotnet/BenchmarkDotNet",
+    "bazhenov/tango",
+    "imazen/zenbench",
+    "gungraun/gungraun",
+    "sharkdp/hyperfine"
+  ],
+  "forma_commit": "e2ef5f7792af363fe6e625febd44ced0c874cb9f",
+  "errors": [],
+  "checks": [
+    "README SHA-256",
+    "evidence line correspondence",
+    "unique repository names",
+    "minimum retained count",
+    "authored local links"
+  ],
+  "not_tested": [
+    "upstream benchmarks",
+    "new Rust library",
+    "Forma GPU/window runtime",
+    "statistical engine implementation"
+  ]
+}

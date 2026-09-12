@@ -1,0 +1,220 @@
+sharkdp/hyperfine | **Demo**: Benchmarking [`fd`](https://github.com/sharkdp/fd) and
+hatoo/oha | Correct latency to avoid coordinated omission problem. It's ignored if -q is not set.
+pawurb/hotpath-rs | hotpath-rs is an easy-to-configure Rust performance profiler that shows exactly where your code spends time, burns CPU, and allocates memory.
+nvzqz/divan | 2. Create a benchmarks file at `benches/example.rs`[^1] with your benchmarking code:
+djkoloski/rust_serialization_benchmark | The goal of these benchmarks is to provide thorough and complete benchmarks for various rust
+bencherdev/bencher | [Bencher](https://bencher.dev) is the first continuous benchmarking platform
+bheisler/iai | <div align="center">Experimental One-shot Benchmark Framework in Rust</div>
+lnx-search/rewrk | A more modern http framework benchmark utility.
+Voultapher/sort-research-rs | * An extensive benchmark suite, abstracting over types, patterns and sizes
+lance0/xfr | - **Live TUI** with real-time throughput graphs and per-stream stats
+twitter/rpc-perf | * If comparing latency between two setups, be sure to set a ratelimit that's
+alacritty/vtebench | A tool for benchmarking terminal emulator PTY read performance.
+BurntSushi/cargo-benchcmp | A small utility for comparing micro-benchmarks produced by `cargo bench`. The
+CodSpeedHQ/codspeed | - 🎯 **<1% variance** in measurements using CPU simulation - no more flaky benchmarks.
+gungraun/gungraun | High-precision, one-shot and consistent benchmarking framework/harness for
+hoodie/concatenation_benchmarks-rs | Here I benchmark several different ways to concatenate the strings `"2014-11-28"`, `"T"` and `"12:00:09Z"` into `"2014-11-28T12:00:09Z"`.
+MystenLabs/fastcrypto | - Performance: Whether the crate performs cryptographic operations with speed after extensive benchmarking. This is critical for the Sui Network to be performant when signing and verifying large amoun
+programatik29/rust-web-benchmarks | Benchmarking web frameworks written in [rust] with [rewrk] tool.
+BurntSushi/critcmp | A command line tool to for comparing benchmarks run by Criterion. This supports
+rsasaki0109/rust_robotics | extended with benchmarks, ROS2/Gazebo demos, and a visual showcase.
+datafusion-contrib/tpcgen-rs | Blazing fast [TPCH] benchmark data generator, in pure Rust with zero dependencies.
+rosetta-rs/template-benchmarks-rs | Plots will be rendered if `gnuplot` is installed and will be available in the
+wfxr/rlt | For simple benchmarks without per-worker state, implement the `StatelessBenchSuite` trait:
+bheisler/cargo-criterion | reporting on [Criterion-rs](https://github.com/bheisler/criterion.rs) benchmarks.
+facebookexperimental/resctl-demo | resctl-bench is a collection of whole-system benchmarks to evaluate resource
+beling/bsuccinct-rs | - `dyn_size_of` ([crate](https://crates.io/crates/dyn_size_of), [doc](https://docs.rs/dyn_size_of)) - calculate memory consumed by variables, including the memory allocated on heap,
+huggingface/inference-benchmarker | **The best tool for benchmarking inference engines and LLM performance**
+OxidizeLabs/cachekit | **High-performance cache policies and supporting data structures for Rust systems with optional metrics and benchmarks.**
+ashvardanian/StringWars | Where Rust decimates C and C++, is the __simplicity__ of dependency management, making it great for benchmarking "Systems Software" and lining up apples-to-apples across native crates and their Python
+jcaromiq/goku | Goku is a high-performance, scalable HTTP load-testing tool designed for benchmarking and performance analysis of web services. Inspired by tools like [Drill](https://github.com/fcsonline/drill) and [
+flashbots/contender | High-performance Ethereum transaction spammer and benchmarking tool.
+delendum-xyz/zk-benchmarking | zk-benchmarking is a suite of benchmarks designed to compare different zero-knowledge proof libraries. Zero-knowledge proof libraries are used to enable privacy-preserving transactions and other crypt
+ashvardanian/less_slow.rs | > The benchmarks in this repository don't aim to cover every topic entirely, but they help form a mindset and intuition for performance-oriented software design.
+wkwan/flo | # Flo: Vulkan/Ash 3D Renderer Integrated with the Bevy Game Engine
+anoma/zkp-compiler-shootout | Evaluating &amp; benchmarking ZKP compilation strategies.
+jonhoo/bustle | Bustle is a benchmarking harness for concurrent key-value collections.
+rousan/rust-web-frameworks-benchmark | # Benchmarking Rust Web Frameworks: hyper vs gotham vs actix-web vs warp vs rocket
+Proryanator/encoder-benchmark | - [Benchmark Tool Quick Run Guide](#benchmark-tool-quick-run-guide)
+fede1024/kafka-benchmark | A tool to run programmable benchmarks on Kafka clusters.
+khvzak/script-bench-rs | The project goal is to benchmark most popular embedded scripting languages for Rust.
+erickt/rust-serialization-benchmarks | This is a suite of serialization benchmarks. It comprises of the following projects:
+optuna/kurobako | `kurobako` is a command-line tool to benchmark black-box optimization algorithms.
+bluss/bencher | A port of the libtest (unstable Rust) benchmark runner to Rust stable releases.
+omarmhaimdat/pepe | Pepe is a command-line HTTP load generator designed to test the performance and reliability of web servers. It allows you to send a large number of HTTP requests to a specified URL and measure various
+sharkbench/sharkbench | Benchmarking programming languages and frameworks.
+klingtnet/rb | The benchmarking feature needs *rust nightly*.
+trinhminhtriet/spiko | - 📊 Visual feedback on request rates, latency, and more
+solstackapp/geyserbench | GeyserBench benchmarks the speed and reliability of Solana gRPC-compatible data feeds so you can compare providers with consistent metrics.
+gamelife1314/rsb | `rsb` is a http server benchmark tool written in rust. The development of this tool is mainly inspired
+CodSpeedHQ/codspeed-rust | [![CI](https://github.com/CodSpeedHQ/codspeed-rust/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CodSpeedHQ/codspeed-rust/actions/workflows/ci.yml)
+lschmierer/ecs_bench | # Benchmarks of various Rust Entity Component Systems
+marvin-j97/rust-storage-bench | - fjall Δ ★ (https://github.com/fjall-rs/fjall)
+TeXitoi/benchmarksgame-rs | This is the version I propose to the [The Computer Language Benchmarks
+tczajka/bigint-benchmark-rs | Benchmarks for Rust big integer implementations.
+briansmith/crypto-bench | * fastpbkdf2 is also benchmarked, for PBKDF2 only.
+bluss/twoway | - Only testing and benchmarking changes otherwise (no changes to the crate itself)
+SwiftyPop/TimerResBenchmark | <p align="center"><b>A Rust-based tool for benchmarking system timer resolution to achieve precise sleep intervals, optimizing performance and consistency for high-performance tasks like gaming, espec
+a16z/zkvm-benchmarks | The benchmark results should be outputted in CSV form in `benchmark_outputs`.
+EmbarkStudios/tiny-bench | A benchmarking and timing library inspired by [Criterion](https://github.com/bheisler/criterion.rs).
+unixpickle/Benchmarks | These are some simple language benchmarks I am running on the following programming languages:
+rust-lang/libtest | libtest - Rust's built-in unit-testing and benchmarking framework
+rylev/welle | Welle is a tool for benchmarking servers similar to [ApacheBench](https://httpd.apache.org/docs/2.4/programs/ab.html).
+samuell/gccontent-benchmark | This is a continuation of a previous benchmarking project, covered in [this blog post](http://saml.rilspace.com/moar-languagez-gc-content-in-python-d-fpc-c-and-c).
+sassman/ssd-benchmark-rs | It used random data and writes first sequentially chunks of 8MB until a total 1GB is written. It measures writing time and throughput.
+surrealdb/crud-bench | The crud-bench benchmarking tool is an open-source benchmarking tool for testing and comparing the performance of a
+fereidani/rust-channel-benchmarks | This is a highly modified fork of the crossbeam-channel benchmarks. to keep track of Kanal library stats in comparison with other competitors.
+PSeitz/binggan | Binggan (餅乾, bǐng gān, means cookie in Chinese) is a benchmarking library for Rust.
+BurntSushi/rust-sorts | sort. The library comes with benchmarks for vectors of different sizes and for
+egraphs-good/extraction-gym | A suite of benchmarks to test e-graph extraction algorithms.
+xemantic/java-2-times-faster-than-c | in algorithmic sense, because memory allocation, and releasing it implicitly or explicitly,
+vllm-project/vllm-bench | High-performance Rust benchmark client for vLLM serving endpoints. A drop-in replacement for `vllm bench serve` with near-instant startup, parallel dataset generation, and a fraction of the memory ove
+tempoxyz/schelk | schelk restores a block device to a known baseline quickly. It is designed for benchmarking
+apitap/apitap-lib | all three row-matched ([benchmarks/logbased-cdc.md](benchmarks/logbased-cdc.md)). Every step got here the same way: one lever at a
+haraldh/rust_echo_bench | This benchmark can also be used to run it against various other echo servers, e.g. those found at https://gist.github.com/idada/9342414
+kaist-cp/smr-benchmark | # SMR Benchmark: A Microbenchmark Suite for Concurrent Safe Memory Reclamation Schemes
+polybase/zk-benchmarks | Benchmarks are really hard. We've done our best to provide accurate and fair benchmarks, and we'll happily accept contributions if you think this can be improved. We also strive to caveat and explain
+apache/sedona-spatialbench | SpatialBench is a benchmark for assessing geospatial SQL analytics query performance across database systems. It provides a reproducible and scalable way to evaluate the performance of spatial data en
+eth-act/zkevm-benchmark-workload | <h1 align="center">zkEVM Benchmarking Workload</h1>
+Canop/glassbench | Glassbench is a micro-benchmark library with memory, to use with `cargo bench`.
+privacy-ethereum/nova-bench | Here's a list of some of the benchmarks we've been taking to better understand how Nova performs vs other proof systems.
+askama-rs/template-benchmark | This benchmark tries to compare different template engines in Rust.
+xnuter/perf-gauge | Benchmarking tool for network services. Currently supports HTTP (H1 or H2, over TCP or TLS)
+nu11ptr/criterion-table | [Cargo Criterion](https://github.com/bheisler/cargo-criterion) benchmark JSON
+dmitryikh/rust-vs-cpp-bench | The goal of this project is to understand programming idioms of Rust, and
+ruvnet/rupixel | your OpenRouter key is stored only in your browser tab (`sessionStorage`,
+SpaceCell/lightstream | **Movement Friction**: Right now, moving Arrow data *(the common tabular interface standard)* between high-throughput services is not as easy as it could be.
+DoHoonKim8/halo2-lasso | This work is implementation of Lasso lookup argument inside HyperPlonk backend.
+danoctavian/c10k-bench | The benchmark is not great. I am unsure if the request strategy is legit. i should measure latency average and standard deviation.
+TechEmpower/FrameworkBenchmarks | # Welcome to [TechEmpower Framework Benchmarks (TFB)](http://www.techempower.com/benchmarks/)
+krausest/js-framework-benchmark | This is a simple benchmark for several javascript frameworks. The benchmarks creates a large table with randomized entries and measures the time for various operations including rendering duration.
+the-benchmarker/web-frameworks | [Explore the results](https://web-frameworks-benchmark.netlify.app/) · [Add a framework](CONTRIBUTING.md) · [Report a problem](https://github.com/the-benchmarker/web-frameworks/issues) · [Join the dis
+processone/tsung | [![Build Status](https://travis-ci.org/processone/tsung.svg?branch=master)](https://travis-ci.org/processone/tsung)
+yandex/yandex-tank | # Yandex Tank [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yandex/yandex-tank?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+EMI-Group/evox | EvoX is a distributed GPU-accelerated evolutionary computation framework compatible with **PyTorch**.  With a user-friendly programming model, it offers a comprehensive suite of **50+ Evolutionary Alg
+hexo-ai/sia | SIA is a Self Improving AI framework to autonomously improve the performance of any AI system (Model / Agent) on a benchmark task.
+smallnest/go-web-framework-benchmark | This benchmark suite aims to compare the performance of Go web frameworks. It is inspired by [Go HTTP Router Benchmark](https://github.com/julienschmidt/go-http-routing-benchmark) but this benchmark s
+phpbench/phpbench | PHPBench is a benchmark runner for PHP analogous to
+Elanis/web-to-desktop-framework-comparison | | **WebGL Support** | Yes | Yes | Yes | Yes | ? | Yes | [Yes](https://docs.flutter.dev/platform-integration/web/renderers) | Yes, but not on all flavors |
+IntelLabs/fastRAG | Intel will not provide or guarantee development of or support for this project, including but not limited to, maintenance, bug fixes, new releases or updates.
+julienschmidt/go-http-routing-benchmark | This benchmark suite aims to compare the performance of HTTP request routers for [Go](https://golang.org) by implementing the routing structure of some real world APIs.
+yoshitomo-matsubara/torchdistill | [Top-1 validation accuracy for ILSVRC 2012 (ImageNet)](https://yoshitomo-matsubara.net/torchdistill/benchmarks.html#imagenet-ilsvrc-2012)
+ZJU-REAL/ClawGUI | Building a capable GUI agent involves three tightly coupled problems that are rarely solved together: you need an environment to train the agent online, rigorous benchmarks to measure what it has lear
+PKU-Alignment/omnisafe | It provides a comprehensive and reliable benchmark for safe RL algorithms, and also an out-of-box modular toolkit for researchers.
+tensorflow/benchmarks | This repository contains various TensorFlow benchmarks. Currently, it consists of two projects:
+kenjis/php-framework-benchmark | So I think the minimum applications to benchmark should not include:
+DigitalInBlue/Celero | Developing consistent and meaningful benchmark results for code is a complicated task. Measurement tools exist (Intel® VTune™ Amplifier, SmartBear AQTime, Valgrind, etc.) external to applications, but
+eknkc/ssr-benchmark | This is an experiment in response to https://twitter.com/thdxr/status/1777782835249553517 where it is stated that Next.JS is a lot slower on server side rendering compared to Vanilla React.
+caderek/benny | # Benny - a dead simple benchmarking framework
+klen/py-frameworks-bench | This is a simple benchmark for python async frameworks. Almost all of the
+networknt/microservices-framework-benchmark | [Gitter Chat](https://gitter.im/networknt/microservices-framework-benchmark) |
+hyperledger-caliper/caliper | Welcome to the Hyperledger Caliper project. Caliper is a blockchain performance benchmark framework, which allows users to test different blockchain solutions with predefined use cases, and get a set
+mroth/phoenix-showdown | # Benchmarking Phoenix vs Rails vs Sinatra vs Express vs Martini...
+JuliaCI/BenchmarkTools.jl | BenchmarkTools makes **performance tracking of Julia code easy** by supplying a framework for **writing and running groups of benchmarks** as well as **comparing benchmark results**.
+cmu-db/benchbase | BenchBase (formerly [OLTPBench](https://github.com/oltpbenchmark/oltpbench/)) is a Multi-DBMS SQL Benchmarking Framework via JDBC.
+fastify/benchmarks | * This package shows how fast it is compared to other JS frameworks: these benchmarks do not pretend to represent a real-world scenario, but they give a **good indication of the framework overhead**.
+ServiceNow/AgentLab | [benchmarks](#-supported-benchmarks) supported by
+facebookresearch/MLGym | > Meta <span style="font-variant:small-caps;">MLGym</span> is currently an experimental framework intended for benchmarking AI Research Agents. It is under heavy development. Please expect major chang
+allenai/vla-evaluation-harness | **One framework to evaluate any VLA model on any robot simulation benchmark.**
+SaltyAom/bun-http-framework-benchmark | Compare throughput benchmarks from various JavaScript HTTP framework
+petabridge/NBench | Cross-platform performance benchmarking and testing framework for .NET applications.
+itbench-hub/ITBench | **[Paper](./it_bench_arxiv.pdf) | [Leaderboard](#leaderboard) | [Scenarios](#scenarios) | [Agents](#agents) | [Related Benchmarks](#related-benchmarks) | [How to Cite](#how-to-cite) | [Contributors](.
+shchur/gnn-benchmark | pip install -e .  # has to be run in the directory with setup.py file, i.e. in gnn-benchmark/
+BuilderIO/framework-benchmarks | **Important: This is not a measure of "is framework x better than y". There are many tradeoffs to weigh when choosing the best framework for you - such as DX, features, familiarity, ecosystem, documen
+openmessaging/benchmark | # Fork of the OpenMessaging Benchmark Framework that uses sapmachine 17 docker image
+layoutBox/LayoutFrameworkBenchmark | <h1 align="center" style="color: #376C9D; font-family: Arial Black, Gadget, sans-serif; font-size: 2em">Layout Framework Benchmark</h1>
+harsha-simhadri/big-ann-benchmarks | See <http://big-ann-benchmarks.com/> for details on the different datasets.
+wil3/gymfc | ![GymFC](https://github.com/wil3/gymfc/blob/master/images/gymfc-logo.png)
+u39kun/deep-learning-benchmark | # Benchmark on Deep Learning Frameworks and GPUs
+oltpbenchmark/oltpbench | Benchmarking is incredibly useful, yet endlessly painful. This benchmark suite is the result of a group of
+the-benchmarker/website | This is the repository of the [Web Frameworks Benchmark Website](https://web-frameworks-benchmark.vercel.app). It's currently hosted on [Vercel](https://vercel.com/).
+irobot-ros/ros2-performance | The **[irobot_benchmark](irobot_benchmark)** package contains the main application and example of graph topologies for evaluation.
+qdrant/vector-db-benchmark | > [View results](https://qdrant.tech/benchmarks/)
+libnonius/nonius | Nonius is an open-source framework for benchmarking small snippets of C++ code.
+nickbruun/hayai | _hayai_ is a C++ framework for writing benchmarks for pieces of code along the lines of the normal approach for unit testing using frameworks such as [googletest](http://code.google.com/p/googletest/)
+AlexeyZatsepin/Android-ORM-benchmark | # Performance comparison of Android ORM Frameworks
+openstack/rally | **easy** and **illustrative** guidance through this benchmarking tool.
+chronoxor/CppBenchmark | C++ Benchmark Library allows to create performance benchmarks of some code to investigate
+remotebiosensing/rppg | We aim to implement, evaluate, and benchmark DNN models for remote photoplethysmography (rPPG) and continuous non-invasive blood pressure (CNIBP). Our code is based on PyTorch.
+fperf/fperf | fperf is a powerful and flexible framework which allows you to develop your own benchmark tools so much easy.
+benchopt/benchopt | *—A framework for reproducible, comparable benchmarks—*
+bark-simulator/bark | BARK is a semantic simulation framework for autonomous driving. Its behavior model-centric design allows for the rapid development, training, and benchmarking of various decision-making algorithms. It
+abeimler/ecs_benchmark | This repository contains a collection of benchmarks for popular Entity-Component-System (ECS) frameworks.
+pathwaycom/pathway-benchmarks | [Pathway Live Data Framework](https://www.pathway.com) is a reactive data processing framework designed for high-throughput and low-latency realtime data processing. The Pathway Live Data Framework's
+chaoran/fast-wait-free-queue | This is a benchmark framework for evaluating the performance of concurrent queues. Currently, it contains four concurrent queue implementations. They are:
+polyfractal/athletic | Athletic is a benchmarking framework.  It allows developers to benchmark their code without littering microtime() calls everywhere.
+seedifferently/the-great-web-framework-shootout | benchmark results comparing the performance of a few of the most popular F/OSS
+sosy-lab/benchexec | This file is part of BenchExec, a framework for reliable benchmarking:
+arey/java-object-mapper-benchmark | # Object-to-object mapping framework microbenchmark
+reframe-hpc/reframe | ReFrame is a powerful framework for writing system regression tests and benchmarks, specifically targeted to HPC systems.
+a-r-j/ProteinWorkshop | This [repository](https://github.com/a-r-j/ProteinWorkshop) provides the code for the protein structure representation learning benchmark detailed in the paper [*Evaluating Representation Learning on
+ARM-software/Tool-Solutions | This ML [Tool Solutions](https://github.com/ARM-software/Tool-Solutions) repository provides scripts to build a wheel and a Docker image containing a complete ML framework stack, including dependencie
+sheredom/ubench.h | A simple one header solution to benchmarking for C/C++.
+efficientgo/e2e | Go Module providing robust framework for running complex workload scenarios in isolation, using Go and Docker. For integration, e2e tests, benchmarks and more! 💪
+gormanm/mmtests | all benchmarks. Support exists for gathering additional telemetry while
+google/benchmark | A library to benchmark code snippets, similar to unit tests. Example:
+evanwashere/mitata | <div align=center>benchmark tooling that loves you ❤️</div>
+martinus/nanobench | `ankerl::nanobench` is a platform independent microbenchmarking library for C++11/14/17/20.
+attaswift/Attabench | | This package has been largely superseded by the [Swift Collections Benchmark package](https://github.com/apple/swift-collections-benchmark). That package provides a portable benchmarking solution th
+atemerev/skynet | Creates an actor (goroutine, whatever), which spawns 10 new actors, each of them spawns 10
+sbt/sbt-jmh | SBT plugin for running [OpenJDK JMH](http://openjdk.java.net/projects/code-tools/jmh/) benchmarks.
+andreas-abel/nanoBench | *nanoBench* is a Linux-based tool for running small microbenchmarks on recent Intel and AMD x86 CPUs. The microbenchmarks are evaluated using [hardware performance counters](https://en.wikipedia.org/w
+alco/benchfella | benchmarking results and determine their credibility.
+scalameter/scalameter | Microbenchmarking and performance regression testing framework for the JVM platform.
+p-ranav/criterion | `Criterion` is a micro-benchmarking library for modern C++.
+iboB/picobench | picobench is a tiny (micro) microbenchmarking library in a single header file.
+clamchowder/Microbenchmarks | Basically my playground to microbenchmark various CPU-related things like ROB/register file sizes, lock/cache coherency latency, and cache/memory performance. This repo is loose collection of various
+clamchowder/MicrobenchmarksGui | # Microbenchmark GUI, currently cache and memory benchmark
+Ichoran/thyme | Thyme and Parsley are microbenchmarking and profiling utilities.
+bazhenov/tango | It used to be that benchmarking required a significant amount of time and numerous iterations to arrive at meaningful results, which was particularly arduous when trying to detect subtle changes, such
+tylertreat/go-benchmarks | Benchmarks used in [So You Wanna Go Fast?](http://bravenewgeek.com/so-you-wanna-go-fast/).
+aayasin/perf-tools | perf-tools is an open-source package that profiles workloads, identifies issues, and maps them to application code.
+sjfeng1999/gpu-arch-microbenchmark | > `git clone --recursive git@github.com:sjfeng1999/gpu-arch-microbenchmark.git`
+svanoort/python-client-benchmarks | Benchmarking different python HTTP clients, using a small, high-performance sample API.
+ChipsandCheese/Microbenchmarks | Basically my playground to microbenchmark various CPU-related things like ROB/register file sizes, lock/cache coherency latency, and cache/memory performance.
+joshuaulrich/microbenchmark | remotes::install_github("joshuaulrich/microbenchmark")
+JuliaLang/Microbenchmarks | A collection of micro-benchmarks comparing Julia's performance against other languages.
+mp911de/microbenchmark-runner | Microbenchmark Runner is a JUnit (JUnit 6 and JUnit 4.12) extension to launch JMH
+Dr-Noob/peakperf | Microbenchmark to achieve peak performance on x86_64 CPUs and NVIDIA GPUs.
+frappe/caffeine | - Set up a good benchmark suite ranging from microbenchmarks to realistic traces.
+ucb-bar/ccbench | The "runall.sh" script is the preferred way to compile benchmarks, run the
+stanford-mast/iBench | iBench is a suite of contentious microbenchmarks. Each microbenchmark targets a different shared resource in a multi-core chip (processing cores, cache capacity, main memory bandwidth) and has tunable
+ibireme/yybench | A microbenchmark library for C, support Linux, macOS, Windows, Android, iOS.
+forresti/osu-micro-benchmarks | This code is from: http://mvapich.cse.ohio-state.edu/benchmarks/
+Vitorian/hft-challenges | # HFT University — Microbenchmark Challenges (C++ & Rust)
+VerticalResearchGroup/microbench | README has no descriptive paragraph
+openjdk/jmh-jdk-microbenchmarks | The JMH JDK Microbenchmarks is a collection of microbenchmarks for measuring
+ldbc/lsqb | :page_facing_up: [LSQB: A Large-Scale Subgraph Query Benchmark](https://dl.acm.org/doi/pdf/10.1145/3461837.3464516), GRADES-NDA'21 paper ([presentation](https://docs.google.com/presentation/d/13B5XwwS
+Sayi/jmh-visual-chart | [Java Microbenchmark Harness Tutorials](http://tutorials.jenkov.com/java-performance/jmh.html)
+hax/my-benchmark | README has no descriptive paragraph
+junkdog/entity-system-benchmarks | - All benchmarks measure throughput; higher score is better.
+shoaibkamil/stencilprobe | StencilProbe: A Microbenchmark for Stencil Applications
+SFU-HiAccel/uBench | uBench is a set of HLS-based microbenchmarks to quantitatively evaluate the performance of the Xilinx Alveo FPGA memory systems under a comprehensive set of factors that affect the memory bandwidth, i
+PeterTh/uCLbench | 1. Ensure accuracy. The benchmarks need to actually measure the intended
+scivision/python-performance | All benchmarks are platform-independent (run on any computing device with appropriate hardware).
+IBM/microprobe | Microprobe is a **productive** microbenchmark generation framework that an user
+tycho/clockperf | measurement (e.g. profiling, benchmarks, etc).
+adoptium/bumblebench | This microbenchmarking test framework for [Eclipse Adoptium](https://adoptium.net), along with [jmh](http://openjdk.java.net/projects/code-tools/jmh/) will be used to create and run different types of
+AI-Hypercomputer/accelerator-microbenchmarks | > The main branch is currently under active development and is not yet recommended for general use, see [main_legacy](https://github.com/AI-Hypercomputer/accelerator-microbenchmarks/tree/main_legacy)
+berestovskyy/applied-benchmarks | Please see the [detailed analysis on Medium](https://medium.com/applied/benchmarks).
+jorendorff/dht | * figure-1.png shows how much memory each implementation allocates. figure-1-data.txt is the raw data.
+rdyro/tune-jax | This package provides a `tune` decorator for microbenchmarking and tuning JAX functions, particularly Pallas kernels.
+maximenajim/java-vs-node-react-rendering-microbenchmark | Server-side rendering of a simple react component - Java 8's nashorn vs node.js microbenchmark
+arkanis/syscall-benchmark | The source code and results of some microbenchmarks I did for fun.
+wsargent/slf4j-benchmark | This is a benchmark to put some numbers down on the costs and overhead of logging using SLF4J and Logback.
+eigenform/lamina | Some tools for generating and playing with x64 microbenchmarks in user-space,
+Deleplace/microbenchmarks | README has no descriptive paragraph
+pyk/bench | const m_naive = try bench.run(allocator, "fibNaive/30", fibNaive, .{30}, opts);
+seriyps/rebar3_bench | * `bench_<name>/1` function which prepares the input and state data for the benchmark (called before
+ning/ub | ub is a PHP microbenchmarking framework. Its purpose is to make it
+biboudis/clashofthelambdas | Microbenchmarking Stream APIs of the VM-based, multiparadigm languages:
+blitz/kernel_entry_benchmark | This repository contains x86 kernel entry benchmarks for:
+vickiegpt/A16-microbenchmark | A repo to store what M1 explainer does and Armv9 ISA on A16
+martinbonnin/run-benchmarks | your [Android microbenchmarks](https://developer.android.com/topic/performance/benchmarking/benchmarking-overview)
+spthm/cudabmk | ### Demystifying GPU Microarchitecture through Microbenchmarking
+RasterDuck/vectormathbench | This project benchmarks several open source vector math libraries against one another to establish a baseline for performance.  Currently, it tests [GLM](https://github.com/g-truc/glm), [DirectXMath](
+softprops/cappi | > The [sweetest](http://www.urbandictionary.com/define.php?term=cappi) [sbt](http://www.scala-sbt.org/) plugin your [microbenchmarks](https://code.google.com/p/caliper/wiki/JavaMicrobenchmarks) will e
+silversquirl/benchmark.zig | This is a tiny microbenchmark library for Zig, designed to be easy to use and very small.
+maxim-saplin/mandelbrot | Benchmarking several languages/tools with Mandelbrot set generation. 1-to-1 translation of code from one language to another. No SIMD, no multithreading (except prange() trick with Numba), no tricks (
+fullzer4/pybenchx | # PyBench — precise microbenchmarks for Python
+chrirocca/GPUNetBench | This repository contains CUDA-based benchmarks designed to evaluate various aspects of GPU memory and interconnection networks on NVIDIA GPUs (V100, A100, H100). Each benchmark focuses on distinct arc

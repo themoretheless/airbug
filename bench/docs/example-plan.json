@@ -1,0 +1,9 @@
+{
+  "candidate": {"path": "target/release/examples/sort", "args": ["--json", "--filter", "stable/32"], "env": {}, "cwd": null},
+  "baseline": {"path": "target/release/examples/sort", "args": ["--json", "--filter", "stable/32"], "env": {}, "cwd": null},
+  "repetitions": 12,
+  "timeout_ms": 60000,
+  "protocol": true,
+  "fixtures": [],
+  "contract": {"purpose": "A/A validation; same binary"}
+}

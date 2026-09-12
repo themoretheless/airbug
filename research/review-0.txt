@@ -1,0 +1,150 @@
+sharkdp/hyperfine | A command-line benchmarking tool | statistics,comparison,lifecycle,report
+hatoo/oha | Ohayou(おはよう), HTTP load generator, inspired by rakyll/hey with tui animation. | async,report
+bheisler/criterion.rs | Statistics-driven benchmarking library for Rust |
+pawurb/hotpath-rs | Rust profiler for CPU, memory, SQL, HTTP, and async performance, with Prometheus and Grafana support. | comparison,lifecycle,memory,async,report
+nvzqz/divan | Fast and simple benchmarking for Rust projects |
+djkoloski/rust_serialization_benchmark | Benchmarks for rust serialization frameworks | async,report,correctness
+us/crw | Fast, lightweight Firecrawl/Tavily alternative in Rust. Web scraper, crawler & search API with MCP server for AI agents. Drop-in F | lifecycle,async,report
+bencherdev/bencher | 🐰 Bencher - Continuous Benchmarking | statistics,comparison,gpu,async,report,correctness
+suyoumo/ClawProBench | ClawProBench is a live-first benchmark harness for evaluating LLM agents   in the OpenClaw runtime with deterministic grading and  | comparison,lifecycle,async,report,correctness
+bheisler/iai | Experimental one-shot benchmarking/profiling harness for Rust | statistics,comparison,lifecycle,report
+lnx-search/rewrk | A more modern http framework benchmarker supporting HTTP/1 and HTTP/2 benchmarks. | async,report,correctness
+Voultapher/sort-research-rs | Test and benchmark suite for sort implementations. | comparison,report
+lance0/xfr | A modern iperf3 alternative with a live TUI, multi-client server, and QUIC support. Built in Rust. | comparison,lifecycle,memory,async,report,correctness,isolation
+reyamira/models | TUI and CLI for browsing models.dev, benchmarks, coding agents, and statuses for AI providers. | report
+twitter/rpc-perf | A tool for benchmarking RPC services | lifecycle,async,report
+alacritty/vtebench | Generate benchmarks for terminal emulators | lifecycle,async
+BurntSushi/cargo-benchcmp | A small utility to compare Rust micro-benchmarks. | comparison
+CodSpeedHQ/codspeed | CodSpeed is the all-in-one performance testing toolkit. Optimize code performance and catch regressions early. | statistics,comparison,lifecycle,memory,report
+gungraun/gungraun | High-precision, one-shot and consistent benchmarking framework/harness for Rust. All Valgrind tools at your fingertips. | statistics,comparison,memory,async
+hoodie/concatenation_benchmarks-rs | 📈 benchmarking different ways to concatenate strings in rust |
+MystenLabs/fastcrypto | Common cryptographic library used in software at Mysten Labs. | report,correctness
+programatik29/rust-web-benchmarks | Benchmarking web frameworks written in rust with rewrk tool. |
+BurntSushi/critcmp | A command line tool for comparing benchmarks run by Criterion. | comparison,report
+rsasaki0109/rust_robotics | 100+ robotics algorithms in Rust: planning, localization, SLAM, control, and benchmarks. | statistics,comparison,lifecycle,gpu,report,correctness
+datafusion-contrib/tpcgen-rs | TPC-H benchmark data generation in pure Rust | memory,correctness
+rosetta-rs/template-benchmarks-rs | Collected benchmarks for templating crates written in Rust |
+wfxr/rlt | A universal load testing framework for Rust, with real-time tui support. | comparison,lifecycle,async,report
+bheisler/cargo-criterion | Cargo extension for running Criterion.rs benchmarks | report
+facebookexperimental/resctl-demo | Demonstrate and benchmark various features of Linux resource control in a self-contained package. | async,report,isolation
+beling/bsuccinct-rs | Rust libraries and programs focused on succinct data structures | memory
+huggingface/inference-benchmarker | Inference server benchmarking tool | statistics,lifecycle,gpu,async,report
+OxidizeLabs/cachekit | High-performance cache policies and supporting data structures for Rust systems, with optional metrics and benchmarks. | comparison,memory,async,correctness
+ashvardanian/StringWars | Comparing performance-oriented string-processing libraries for substring search, multi-pattern matching, hashing, edit-distances,  | comparison,lifecycle,memory,gpu,async,report,correctness
+abundant-ai/swe-marathon | SWE-Marathon: an ultra long-horizon SWE benchmark |
+jcaromiq/goku | Goku is an HTTP load testing application written in Rust  | comparison,async,report
+flashbots/contender | spam EVM execution nodes over JSON-RPC & run benchmarks | lifecycle,report,correctness
+raphaelmansuy/edgeparse | EdgeParse converts any digital PDF into Markdown, JSON (with bounding boxes), HTML, or plain text — deterministically, without a J | comparison,gpu,async,report,correctness
+delendum-xyz/zk-benchmarking | comparing the performance of different zero-knowledge proof libraries | memory,gpu,correctness
+ashvardanian/less_slow.rs | Playing around "Less Slow" coding practices in Rust, from numerical micro-kernels to coroutines, ranges, and polymorphic state mac | async
+wkwan/flo | Fast Vulkan 3D Renderer Integrated with the Bevy Game Engine | lifecycle,gpu,correctness
+anoma/zkp-compiler-shootout | Evaluating & benchmarking ZKP compilation strategies. | lifecycle,report
+jonhoo/bustle | A benchmarking harness for concurrent key-value collections | async,report
+rousan/rust-web-frameworks-benchmark | A hello world benchmark for the available Rust Web Frameworks: hyper vs gotham vs actix-web vs warp vs rocket | async
+Proryanator/encoder-benchmark | A tool to benchmark your hardware's real-time video encoding capabilities. | lifecycle,gpu
+fede1024/kafka-benchmark | A tool to run benchmarks on Kafka clusters |
+goobolabs/somali-language-standard | The open, machine-readable standard for the Somali language — orthography, grammar, terminology, translation, and AI/benchmark res | comparison,report,correctness
+khvzak/script-bench-rs | Rust embedded scripting languages benchmark |
+erickt/rust-serialization-benchmarks | None | gpu,report
+optuna/kurobako | A black-box optimization benchmark tool | async,report,correctness
+bluss/bencher | bencher is just a port of the libtest (unstable) benchmark runner to Rust stable releases. `cargo bench` on stable. "Not a better  | correctness
+omarmhaimdat/pepe | HTTP Load Generator | async,report
+sharkbench/sharkbench | Benchmarking programming languages and web frameworks. | lifecycle,memory,async,report
+clouedoc/hzfind | A TUI to find the best Hetzner dedicated server auction deals, with PassMark CPU benchmarks built-in | comparison,report
+klingtnet/rb | A thread-safe fixed-size circular buffer written in safe Rust. |
+trinhminhtriet/spiko | 🚀 Spiko is a fast, Rust-based load testing tool with a beautiful TUI for real-time insights. | async,report
+solstackapp/geyserbench | Benchmark multiple Yellowstone gRPC endpoints! | async,report
+gamelife1314/rsb | a http server benchmark tool written in rust 🦀 | async,report
+CodSpeedHQ/codspeed-rust | Crates to benchmark your Rust code | report
+lschmierer/ecs_bench | Benchmarks of various Entity Component Systems in Rust |
+marvin-j97/rust-storage-bench | Benchmarking Rust key-value storage engines | report
+TeXitoi/benchmarksgame-rs | The Computer Language Benchmarks Game: Rust implementations |
+tczajka/bigint-benchmark-rs | Bechmarks for Rust big integer implementations |
+briansmith/crypto-bench | Benchmarks for crypto libraries (in Rust, or with Rust bindings) | report
+ultralytics/template-rust | Ultralytics Rust project template with library and CLI examples, tests, benchmarks, rustfmt, clippy, coverage, dependency checks,  | lifecycle,report,correctness
+bluss/twoway | Twoway / Fast substring search for strings and byte strings (Rust) / Also assorted benchmarks and string search snippets |
+SwiftyPop/TimerResBenchmark | TimerResBenchmark is a tool rewritten in Rust for fine-tuning system timer resolution to achieve precise sleep intervals close to  | lifecycle,async,report
+a16z/zkvm-benchmarks | Benchmarks of popular zkVMs including Jolt | report,correctness
+EmbarkStudios/tiny-bench | A tiny benchmarking library | statistics
+unixpickle/Benchmarks | Some language performance comparisons. | memory
+rust-lang/libtest | Rust's built-in testing and benchmarking framework |
+rylev/welle | Apache-Benchmark-Like Tool Written in Rust | async
+samuell/gccontent-benchmark | Benchmarking different languages for a simple bioinformatics task (Counting the GC fraction of DNA in a FASTA file) | report
+sassman/ssd-benchmark-rs | Super Simple Disk Benchmark - benchmarks the writing performance of your disk | async
+surrealdb/crud-bench | A benchmarking tool for testing and comparing the performance of both embedded and networked SQL and NoSQL databases. | lifecycle,async,report
+fereidani/rust-channel-benchmarks | rust channel benchmarks to keep stat of performance of Kanal library in comparison with other competitors. | memory,async,report
+PSeitz/binggan | Benchmarking library for stable Rust | comparison,memory,async,report,correctness
+BurntSushi/rust-sorts | Implementations of common sorting algorithms in Rust with comprehensive tests and benchmarks. | memory
+egraphs-good/extraction-gym | benchmarking e-graph extraction | report
+xemantic/java-2-times-faster-than-c | An inquiry into nondogmatic software development. An experiment showing double performance of the code running on JVM comparing to | statistics,memory,gpu,async,report,correctness
+vllm-project/vllm-bench | High-performance Rust benchmark client for vLLM serving endpoints. | statistics,comparison,lifecycle,memory,async,report,correctness,isolation
+tempoxyz/schelk | Fast filesystem snapshot and rollback tool for benchmarking | statistics,comparison,lifecycle,memory,report,correctness
+apitap/apitap-lib | Move whole tables between databases fast — Postgres, MySQL, ClickHouse, BigQuery. Rust engine, one-line Python API, bounded memory | statistics,memory,async,report,correctness,isolation
+haraldh/rust_echo_bench | rust echo server benchmark |
+kaist-cp/smr-benchmark | SMR Benchmark: A Microbenchmark Suite for Concurrent Safe Memory Reclamation Schemes | comparison,memory,async,report,correctness
+polybase/zk-benchmarks | None |
+apache/sedona-spatialbench | A benchmark for assessing geospatial SQL analytics query performance across database systems | statistics,comparison,async,report,correctness
+eth-act/zkevm-benchmark-workload | zkVM benchmarking for Ethereum | report,correctness
+deepu105/concurrency-benchmarks | concurrency-benchmarks for languages |
+Canop/glassbench | A micro-benchmark framework to use with cargo bench | report
+privacy-ethereum/nova-bench | A collection of comparison-benchmarks for Nova & related Proving systems  | memory,gpu,correctness
+askama-rs/template-benchmark | Comparison of template engines written in and for Rust. | report
+xnuter/perf-gauge | Benchmarking tool for network services. | comparison,async,report
+nu11ptr/criterion-table | Generate markdown comparison tables from `cargo-criterion` JSON output | comparison,report
+dmitryikh/rust-vs-cpp-bench | Performance benchmark of Rust vs. C++ on simple algorithmic problems | memory
+ruvnet/rupixel | Pixel-native visual RAG ported to Rust on the ruvector ANN substrate (HNSW + IVF-Flat) — screenshot/document retrieval over visual | lifecycle,gpu,report,correctness
+SpaceCell/lightstream | Fast data transport : Apache Arrow, Protobuf and Message Pack data on the one stream. Measured faster than Arrow Flight on all ope | statistics,lifecycle,async,report
+nuald/simple-web-benchmark | A simple web benchmark of C++, Crystal, Go, Java, Node.js, PHP, Python, Rust and Scala. |
+codecrafters-io/ccbench | A benchmark for coding agents | correctness
+DoHoonKim8/halo2-lasso | Benchmark for adding Lasso lookup argument to halo2 backend |
+danoctavian/c10k-bench | echo server benchmark for runtimes that use event loops | memory,async
+openai/evals | Evals is a framework for evaluating LLMs and LLM systems, and an open-source registry of benchmarks. | lifecycle,report
+TechEmpower/FrameworkBenchmarks | Source for the TechEmpower Framework Benchmarks project | report
+krausest/js-framework-benchmark | A comparison of the performance of a few popular javascript frameworks | statistics,comparison,lifecycle,memory,report,correctness
+the-benchmarker/web-frameworks | Which is the fastest web framework? | lifecycle,async,report,correctness
+AgentOps-AI/agentops | Python SDK for AI agent monitoring, LLM cost tracking, benchmarking, and more. Integrates with most LLMs and agent frameworks incl | comparison,lifecycle,async,report,correctness
+modelscope/evalscope | A streamlined and customizable framework for efficient large model (LLM, VLM, AIGC) evaluation and performance benchmarking. | gpu,async,report,correctness
+mani-skill/ManiSkill | Manipulation Skill Framework, an open source GPU parallelized robotics simulator and benchmark | comparison,lifecycle,memory,gpu,async
+llm-as-a-verifier/llm-as-a-verifier | LLM-as-a-Verifier is a general-purpose framework that provides fine-grained feedback for any agent without requiring additional tr | lifecycle,report,correctness
+microsoftarchive/promptbench | A unified evaluation framework for large language models | report
+processone/tsung | Tsung is a high-performance benchmark framework for various protocols including HTTP, XMPP, LDAP, etc. |
+yandex/yandex-tank | Load and performance benchmark tool |
+ARISE-Initiative/robosuite | robosuite: A Modular Simulation Framework and Benchmark for Robot Learning | comparison,correctness
+EMI-Group/evox | Distributed GPU-Accelerated Framework for Evolutionary Computation. Comprehensive Library of Evolutionary Algorithms & Benchmark P | lifecycle,gpu
+IBM/AssetOpsBench | AssetOpsBench - Industry 4.0: A unified benchmark and framework for building, orchestrating, and evaluating domain-specific AI age | lifecycle,async,report,correctness
+hexo-ai/sia | SIA is a Self Improving AI framework to autonomously improve the performance of any AI system (Model / Agent) on a benchmark task. | statistics,comparison,lifecycle,gpu,async,report,correctness
+smallnest/go-web-framework-benchmark | :zap: Go web framework benchmark | memory,async,report
+phpbench/phpbench | PHP Benchmarking framework | statistics,comparison,memory,report,correctness,isolation
+Elanis/web-to-desktop-framework-comparison | An objective comparison of multiple frameworks that allow us to "transform" our web apps to desktop applications. | lifecycle,memory,report
+IntelLabs/fastRAG | Efficient Retrieval Augmentation and Generation Framework | gpu,report
+julienschmidt/go-http-routing-benchmark | Go HTTP request router and web framework benchmark | memory,report
+yoshitomo-matsubara/torchdistill | A coding-free framework built on PyTorch for reproducible deep learning studies. PyTorch Ecosystem. 🏆26 knowledge distillation met | lifecycle,gpu,correctness
+kengz/SLM-Lab | Modular Deep Reinforcement Learning framework in PyTorch. Companion library of the book "Foundations of Deep Reinforcement Learnin | lifecycle,gpu,report,correctness
+ZJU-REAL/ClawGUI | Build, Evaluate, and Deploy GUI Agents — online RL training, standardized benchmarks, and real-device deployment in one framework. | comparison,lifecycle,gpu,report,correctness
+flow-project/flow | Computational framework for reinforcement learning in traffic control | lifecycle,report
+PKU-Alignment/omnisafe | JMLR: OmniSafe is an infrastructural framework for accelerating SafeRL research. | async,correctness
+tensorflow/benchmarks |  A benchmark framework for Tensorflow |
+mikeroyal/Open-Source-Security-Guide | Open Source Security Guide. Learn all about Security Standards (FIPS, CIS, FedRAMP, FISMA, etc.), Frameworks, Threat Models, Encry | statistics,comparison,lifecycle,memory,async,report,correctness
+kenjis/php-framework-benchmark | PHP Framework Benchmark | statistics,lifecycle
+DigitalInBlue/Celero | C++ Benchmark Authoring Library/Framework | statistics,comparison,lifecycle,async,report,isolation
+capgym/cap-x | [ICML 2026] A Framework for Benchmarking and Improving Coding Agents for Robot Manipulation | comparison,lifecycle,memory,gpu,report
+eknkc/ssr-benchmark | Benchmarking JS web framework SSR performance | comparison,lifecycle,async
+caderek/benny | A dead simple benchmarking framework for JS/TS libs | statistics,lifecycle,async,report
+melix/jmh-gradle-plugin | Integrates the JMH benchmarking framework with Gradle |
+klen/py-frameworks-bench | Another benchmark for some python frameworks | async,report
+networknt/microservices-framework-benchmark | Raw benchmarks on throughput, latency and transfer of Hello World on popular microservices frameworks | async
+hyperledger-caliper/caliper |  A blockchain benchmark framework to measure performance of multiple blockchain solutions https://wiki.hyperledger.org/display/cal | async
+mroth/phoenix-showdown | :horse_racing: benchmark Sinatra-like web frameworks | async
+Picovoice/speech-to-text-benchmark | speech to text benchmark framework | async,report
+JuliaCI/BenchmarkTools.jl | A benchmarking framework for the Julia language | statistics,comparison,lifecycle,memory,report
+cmu-db/benchbase | Multi-DBMS SQL Benchmarking Framework via JDBC | async,report
+fastify/benchmarks | Fast and low overhead web framework fastify benchmarks | lifecycle,async,report
+ServiceNow/AgentLab | AgentLab: An open-source framework for developing, testing, and benchmarking web agents on diverse tasks, designed for scalability | lifecycle,report,correctness
+facebookresearch/MLGym | MLGym A New Framework and Benchmark for Advancing AI Research Agents | gpu
+amazon-archives/aws-security-benchmark | Open source demos, concept and guidance related to the AWS CIS Foundation framework. |
+SalesforceAIResearch/MCP-Universe | MCP-Universe is a comprehensive framework designed for RL training, benchmarking, and developing AI agents for general tool-use. | lifecycle,async,report
+allenai/vla-evaluation-harness | One framework to evaluate any VLA model on any robot simulation benchmark. | lifecycle,gpu,async,report,correctness,isolation
+SaltyAom/bun-http-framework-benchmark | Compare throughput benchmark from various Bun HTTP framework | memory,async,report,correctness
+petabridge/NBench | Performance benchmarking and testing framework for .NET applications :chart_with_upwards_trend: | correctness
+itbench-hub/ITBench | An open source benchmarking framework for IT automation | comparison,lifecycle,report,correctness
+shchur/gnn-benchmark | Framework for evaluating Graph Neural Network models on semi-supervised node classification task | comparison,lifecycle,gpu,report,correctness,isolation

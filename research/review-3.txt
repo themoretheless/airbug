@@ -1,0 +1,150 @@
+dotnet/performance | This repo contains benchmarks used for testing the performance of all .NET Runtimes |
+alibaba/mobileperf | Android performance test |
+swc-project/jest | Super-fast alternative for babel-jest or ts-jest without type checking. Please use main repository for issues |
+themidnightgospel/Imposter | Mocking library with the perfect balance of Performance and Intuitive API | lifecycle,memory,async
+MarathonLabs/marathon | Cross-platform test runner | statistics,report
+wix-incubator/DetoxInstruments | Detox Instruments is a performance–analysis and testing framework, designed to help developers profile their mobile apps in order  | memory,async
+piotrmurach/rspec-benchmark | Performance testing matchers for RSpec | comparison,lifecycle,memory,isolation
+lafikl/RWDPerf | Performance testing tool for Responsive web designs. | report
+jsdelivr/globalping | A global network of probes to run network tests like ping, traceroute and DNS resolve | lifecycle,async,report
+Zooz/predator | A powerful open-source platform for load testing APIs.  | statistics,comparison,lifecycle,async,report
+quii/mockingjay-server | Fake server, Consumer Driven Contracts and help with testing performance from one configuration file with zero system dependencies | report
+quick-perf/quickperf | QuickPerf is a testing library for Java to quickly evaluate and improve some performance-related properties | memory,report,correctness
+abstracta/jmeter-java-dsl | Simple JMeter performance tests API | memory,report,correctness
+kpdecker/six-speed | ES6 polyfill vs. feature performance tests | lifecycle,report,isolation
+krkn-chaos/krkn | Chaos and resiliency testing tool for Kubernetes with a focus on improving performance under failure conditions. A CNCF sandbox pr | lifecycle,report
+LucaCanali/Miscellaneous | Includes notes on using Apache Spark, with drill down on  Spark for Physics, how to run TPCDS on PySpark, how to create histograms | report
+cgoldberg/multi-mechanize | Performance Test Framework in Python | lifecycle
+jacksonh/manos | Manos is an easy to use, easy to test, high performance web application framework that stays out of your way and makes your life r |
+yswenli/SAEA | SAEA.Socket is a high-performance IOCP framework TCP based on dotnet standard 2.0; Src contains its application test scenarios, su | report
+patrickfav/BlurTestAndroid | This is a simple App to test some blur algorithms on their visual quality and performance. | statistics,lifecycle,memory
+mgasiorowski/performance_testing | Tools, articles, etc. related to performance/load/etc. testing. | statistics,memory,async,report
+serputko/performance-testing-framework | Framework allows to perform load testing with Apache Jmeter, view application/server metrics in real-time with Grafana, analyze er | async,report
+aws-solutions/distributed-load-testing-on-aws | Distributed Load Testing on AWS automates performance testing at scale, demonstrating how systems behave under different load cond | statistics,lifecycle,async,report,correctness
+xullexer/PYDNS-Scanner | A modern, high-performance DNS scanner with a beautiful Terminal User Interface (TUI) built with Textual. This tool can scan milli | lifecycle,memory,async,report
+techinz/browsers-benchmark | Browser automation engine benchmark - Test bypass rates, performance & stealth against Cloudflare, DataDome, reCAPTCHA, Kasada, Im | memory,async,report,correctness
+ZoranPandovski/awesome-testing-tools | A curated collection of the best software testing tools for QA, automation, accessibility, performance, API, security, and more. | comparison,lifecycle,async,report,correctness,isolation
+net-benchmark/dns-benchmark-tool | Fast, comprehensive DNS performance testing with DNSSEC validation, DoH/DoT support, and enterprise features | statistics,comparison,lifecycle,async,report,correctness
+arcprize/arc-agi-benchmarking | Testing baseline LLMs performance across various models | comparison,async,report
+lemire/fastmod | A C/C++ header file for fast 32-bit division remainders (and divisibility tests) on 64-bit hardware. | correctness
+zszszszsz/.config | # # Automatically generated file; DO NOT EDIT. # OpenWrt Configuration # CONFIG_MODULES=y CONFIG_HAVE_DOT_CONFIG=y # CONFIG_TARGET |
+linhay/harmony-next.skills | 🚀 Expert guidance for HarmonyOS NEXT (API 12+) development. Covers IDE operations, performance tuning, architecture (HAP/HAR/HSP), | report
+bartoszlenar/Validot | Validot is a performance-first, compact library for advanced model validation. Using a simple declarative fluent interface, it eff |
+DNS-OARC/flamethrower | a DNS performance and functional testing utility supporting UDP, TCP, DoT and DoH | lifecycle,async,report
+crossoverJie/ptg | 💥Performance testing tool (Go), It is also a GUI gRPC client. | report
+chrisneagu/FTC-Skystone-Dark-Angels-Romania-2020 | NOTICE This repository contains the public FTC SDK for the SKYSTONE (2019-2020) competition season. If you are looking for the cur | lifecycle,async,report,correctness
+cloudflare/telescope | Cross-browser web performance testing agent | lifecycle,report
+UCSBarchlab/PyRTL | A collection of classes providing simple hardware specification, simulation, tracing, and testing suitable for teaching and resear |
+testinggospels/camouflage | Camouflage is a backend mocking tool for HTTP, gRPC, Websockets and Thrift protocols, which helps you carry out your front end pro | report,correctness
+FyroxEngine/Fyrox | 3D and 2D game engine written in Rust |
+DioxusLabs/blitz | A radically modular HTML/CSS rendering engine | gpu
+linebender/resvg | An SVG rendering library. | comparison,correctness
+nical/lyon | 2D graphics rendering on the GPU in rust using path tessellation. | gpu
+cristicbz/rust-doom | A Doom Renderer written in Rust. |
+chinedufn/percy | Build frontend browser apps with Rust + WebAssembly. Supports server side rendering. | async
+framesurge/perseus | A state-driven web development framework for Rust with full support for server-side rendering and static generation. | correctness
+not-fl3/miniquad | Cross platform rendering in Rust | gpu
+face-hh/webx | An alternative for the World Wide Web - browse websites such as buss://yippie.rizz made in HTML, CSS and Lua. Custom web browser,  | report,correctness
+mbrubeck/robinson | A toy web rendering engine |
+StarArawn/bevy_ecs_tilemap | A tilemap rendering crate for bevy which is more ECS friendly. | gpu
+askama-rs/askama | A template rendering engine based on Jinja, generating type-safe Rust code at compile time. |
+BVE-Reborn/rend3 | MAINTENCE MODE ---- Easy to use, customizable, efficient 3D renderer library built on wgpu. | gpu
+fschutt/printpdf | Rust / WASM library for reading, writing and rendering PDF | report,correctness
+HakanSeven12/OpenCADStudio | A CAD application built with Rust — 2D/3D drawing, DWG/DXF support, and GPU-accelerated rendering | gpu,report,correctness,isolation
+josueBarretogit/manga-tui | Terminal-based manga reader and downloader with image rendering support  |
+dfrg/swash | Font introspection, complex text shaping and glyph rendering. | memory
+wahn/rs_pbrt | Rust crate to implement a counterpart to the PBRT book's (3rd edition) C++ code. See also https://www.rs-pbrt.org/about ... |
+alexheretic/glyph-brush | Fast GPU cached text rendering |
+milos-agathon/forge3d | Rust‑first, cross‑platform wgpu/WebGPU renderer exposed to Python for fast, headless 3D rendering. Built in Rust, shipped as Pytho | report
+galileo-map/galileo | General purpose cross-platform GIS-rendering library written in Rust | memory,gpu,report
+fintelia/terra | A large scale terrain rendering library written in Rust | gpu
+project-blinc/Blinc | A declarative, reactive UI system with first-class state machines, spring physics animations, and GPU-accelerated rendering | lifecycle,gpu
+chinedufn/webgl-water-tutorial | The source code for a tutorial on rendering water using WebGL + Rust + WebAssembly |
+faisalkindi/DLSS5oneclick | One-click setup of the leaked DLSS 5 neural-rendering build for any DX11/DX12 game on RTX 20–50, with or without DLSS. ReShade + R | lifecycle,gpu,report
+mkeeter/fidget | blazing fast implicit surface evaluation | gpu,correctness
+james-j-obrien/bevy_vector_shapes | A library for rendering vector shapes using the Bevy game engine | lifecycle,report
+renpenguin/display3d | A command line interface for rendering and animating 3D objects |
+Patryk27/strolle | Experimental real-time renderer with support for dynamic global illumination | statistics,lifecycle,gpu
+ekzhang/rpt | A physically-based path tracer | statistics,async
+gdt050579/AppCUI-rs | AppCUI is a fast, cross-platform console and text-based user interface (CUI/TUI) framework for Rust. It combines a low-level conso | gpu,report
+ratatui/ratatui-image | Ratatui widget for rendering image graphics in terminals that support it | memory,async
+bonsairobo/building-blocks | A voxel library for real-time applications. |
+veeenu/hudhook | A videogame overlay framework written in Rust, supporting DirectX and OpenGL |
+zesterer/euc | A software rendering crate that lets you write shaders with Rust | gpu,correctness
+cxreiff/bevy_ratatui_camera | A bevy plugin for rendering your bevy app to the terminal using ratatui. | lifecycle,gpu
+rustq/vue-skia | Skia based 2d graphics vue rendering library. It is based on Rust to implement software rasterization to perform rendering. 基于 Ski |
+thatmagicalcat/txm | Terminal Math rendering engine |
+kurtkuehnert/bevy_terrain | A terrain rendering plugin for the bevy game engine. |
+001TMF/ProteinView | Terminal protein structure viewer — interactive 3D visualization of PDB/mmCIF structures with cartoon ribbons, braille rendering,  | lifecycle,gpu,report
+toxoidengine/toxoid | A modern, cross-platform, highly modular / decoupled, data-driven, ECS-based game engine written in Rust with scripting support fo |
+guilhermeprokisch/see | A cute cat(1) for the terminal with advanced code viewing, Markdown rendering, 🌳  tree-sitter syntax highlighting, images view and | lifecycle
+staff-rs/staff | Music theory and score rendering library with midi, notes, chords, scales, and more. |
+Dicklesworthstone/frankentui | Minimal, high-performance terminal UI kernel with diff-based rendering, inline mode, and RAII terminal cleanup | statistics,comparison,lifecycle,memory,async,report,correctness
+Valerioageno/ssr-rs | Server side rendering on rust servers using the v8 engine for parse and evaluate the JavaScript code. | lifecycle,async
+lzanini/mdbook-katex | A preprocessor for mdBook, rendering LaTex equations to HTML at build time. | lifecycle
+TritonDataCenter/statemap | Software for rendering statemaps | report
+kazan-3d/kazan | Mirror; Work-in-progress software-rendering Vulkan implementation | gpu
+kurtkuehnert/terrain_renderer | Real-world terrain rendering prototype built in Rust with Bevy, developed as part of my Bachelor thesis on large-scale GPU terrain | gpu,report
+fu5ha/rendy-pbr | PBR rendering example/experiment with rendy | lifecycle,gpu
+fslabs/bevy_polyline | Polyline Rendering for Bevy | gpu
+openooxml/betteroffice | Native OOXML engines in Rust - DOCX, XLSX & PPTX editing, rendering and real-time collaboration, compiled to WASM for the web. |
+panxinmiao/myth | A High-Performance Rendering Engine for Rust | gpu
+teoxoy/encase | Provides a mechanism to lay out data into GPU buffers according to WGSL's memory layout rules | gpu
+junkdog/beamterm | A sub-millisecond terminal text rendering system for WebGL2 and OpenGL 3.3 | lifecycle,memory,gpu,async
+Dylanmurzello/zed-android-port | Native Android port of the Zed code editor,  gpui rendering through Vulkan, integrated Termux for LSPs and tooling, remote SSH sup | statistics,lifecycle,gpu,isolation
+radiant-labs/radiantkit | Cross-platform open-source framework to build graphics applications (like Figma, Canva, Miro, etc). Uses Rust, Wasm, wgpu and epai |
+Indosaram/hwpers | A Rust library for parsing Korean Hangul Word Processor (HWP) files with full layout rendering support | comparison,memory
+asinglebit/guitar | A terminal based git client with fast topological & chronological graph rendering | report,correctness
+nikomatsakis/skill-tree | Skill-tree rendering | correctness
+StarArawn/bevy_tiled | A plugin for rendering tiled maps. | lifecycle
+sarkahn/bevy_ascii_terminal | A simple terminal for rendering ascii in bevy. | lifecycle
+avsaase/walksnail-osd-tool | Cross-platform tool for rendering the flight controller OSD and SRT data from the Walksnail Avatar HD FPV system on top of the gog | lifecycle
+chinedufn/landon | A collection of tools, data structures and methods for exporting Blender data (such as meshes and armatures) and preparing it for  | report
+austintheriot/wrend | A framework-agnostic Rust/WASM + WebGL2 Rendering library, compatible with calling from both Rust and JavaScript on the web. | gpu
+m13253/FaithType | Modify fonts to remove bitmap and disable gridfit for Windows font rendering |
+manankarnik/bevy_generative | Real-time procedural generation of maps, textures, terrain, planets and more! | report
+Jesterhearts/ratatui-wgpu | A wgpu based rendering backend for ratatui. | gpu
+atuinsh/eye-declare | A declarative inline TUI rendering library for Rust, built on Ratatui | memory,async
+Logicalshift/flo_draw | 2D rendering libraries for Rust and FlowBetween | gpu
+DavidPeicho/albedo | Efficient and easy to use rendering framework for real-time visualization based on WebGPU | gpu
+gents83/INOX | Rust Game engine integrated in Blender [WebGPU ready] | gpu
+lcnr/crow | A simple pixel perfect 2D rendering engine | gpu
+Smithay/drm-rs | A low-level abstraction of the Direct Rendering Manager API | gpu
+fslabs/bevy_aabb_instancing | Fast AABB rendering plugin for Bevy Engine. |
+yeicor/sdf-viewer | A fast and cross-platform Signed Distance Function (SDF) viewer, easily integrated with your SDF library. | gpu,report
+skyzh/raytracer.rs | ⚡ A high-performance path tracer implemented in Rust based on "Ray Tracing in One Weekend" featuring static dispatch, multi-thread |
+kosumic/rustracer | Vulkan path tracing with Rust | gpu,async
+dtcristo/bevy_pixels | Bevy plugin that uses Pixels (a tiny pixel buffer) for rendering | gpu
+micahrj/ochre | high-quality anti-aliased vector graphics rendering on the GPU | gpu
+arcana-engine/sierra | Vulkan-lite GPU API | memory,gpu
+alibaba/font-toolkit | A Rust 🦀️ font loading, positioning and rendering toolkit |
+Dicklesworthstone/rich_rust | Beautiful terminal output for Rust inspired by Python's Rich: tables, panels, syntax highlighting, progress bars, and full-color r | memory,async,report,correctness
+microsoft/webui | Server Side Rendering without JavaScript on the server. No virtual DOM. No JSX. Just HTML, streamed from any language. | report,correctness
+riley-williams/buoyant | Declarative UI layout and rendering for no_std targets, inspired by SwiftUI |
+Panzerschrek/Square-Wheel | Advanced software renderer written in Rust | memory,gpu,report
+mikialex/rendiation | Rendiation Rendering Framework | memory,gpu
+o2sh/provok | Text rendering | report
+maplibre/maplibre-native-rs | Rust bindings to the MapLibre Native map rendering engine | gpu,report
+jadedbay/bevy_procedural_grass | A bevy plugin for rendering grass | lifecycle,memory,gpu
+beltegeuse/rustlight | physically-based rendering engine implemented with Rust. | statistics,report
+carloskiki/pulldown-latex | A pull parser for LaTeX parsing and mathml rendering. |
+num3ric/sol-rs | Vulkan rendering sandbox for raytracing | gpu
+Alex6357/alloy | A "No-DOM" GUI Runtime: SolidJS Logic driving Rust GPUI Rendering. | report,correctness
+ixlab/vidformer | A drop-in declarative optimization framework for rendering video data visualizations. |
+jinleili/sdf-text-view | Real time SDF (signed distance fields) calculate and rendering based on WebGPU. |
+FreddyWordingham/antler | Antler rendering engine |
+VisualGMQ/rs-cpurenderer | a cpu/gpu soft renderer in rust |
+mgth/Omniphony | Real-time spatial / object-based audio rendering engine (VBAP + binaural) for multichannel and 3D audio — speakers or headphones. | lifecycle
+meilisearch/meilisearch | A lightning-fast search engine API bringing AI-powered hybrid search to your sites and applications. | async
+qdrant/qdrant | Qdrant - High-performance, massive-scale Vector Database and Vector Search Engine for the next generation of AI. Also available in | gpu,async,report,isolation
+surrealdb/surrealdb | A scalable, distributed, collaborative, document-graph database, for the realtime web | memory,report
+influxdata/influxdb | Scalable datastore for metrics, events, and real-time analytics | report
+chroma-core/chroma | Search infrastructure for AI | lifecycle
+clockworklabs/SpacetimeDB | Development at the speed of light | async
+tursodatabase/turso | A SQL database in Rust: SQLite-compatible, now also speaking Postgres (experimental). The LLVM of databases. | lifecycle,async,report
+neondatabase/neon | Neon: Serverless Postgres. We separated storage and compute to offer autoscaling, code-like database branching, and scale to zero. | lifecycle
+valeriansaliou/sonic | 🦔 Fast, lightweight & schema-less search backend. An alternative to Elasticsearch that runs on a few MBs of RAM. | memory,report,correctness
+t8y2/dbx | 20 MB lightweight cross-platform database client for 90+ databases, including MySQL, PostgreSQL, SQLite, Redis, MongoDB, DuckDB, S | report,correctness
+tikv/tikv | Distributed transactional key-value database, originally created to complement TiDB | lifecycle,report,isolation
+pingcap/talent-plan | open source training courses about distributed database and distributed systems | report
+SeaQL/sea-orm | 🐚 A powerful relational ORM for Rust | async,report

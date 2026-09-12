@@ -1,0 +1,7 @@
+{
+  "budgets": [
+    {"case": "forma/static", "metric": "geometry.uploads", "unit": "calls", "max": 0},
+    {"case": "forma/hover", "metric": "geometry.uploads", "unit": "calls", "max": 0},
+    {"case": "forma/animation", "metric": "geometry.uploads", "unit": "calls", "max": 0}
+  ]
+}

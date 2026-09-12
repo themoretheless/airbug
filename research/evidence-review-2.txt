@@ -1,0 +1,213 @@
+austintheriot/wrend | Wrend is a wrapper library around raw WebGL2 code and is written in Rust, which then gets compiled to WebAssembly for running in the browser. Its goal is to make working with WebGL more convenient whe
+manankarnik/bevy_generative | ![CodeSize](https://img.shields.io/github/languages/code-size/manankarnik/bevy_generative?style=for-the-badge)
+Jesterhearts/ratatui-wgpu | This started out as a custom rendering backend for a game I'm developing, and I thought I'd make it
+atuinsh/eye-declare | - **Measured performance** — no dirty tracking, and none needed: ~780µs and ~2.3K allocations per frame with 10KB of live markdown; bursts of stream chunks coalesce into single frames.
+Logicalshift/flo_draw | If you want to render some 2D graphics in Rust to screen *right now* without having to deal with the usual palaver involved with setting up
+DavidPeicho/albedo | Albedo **isn't** a game engine. It's designed to be a rendering framework made for real-time visualization. It's possible to
+gents83/INOX | - The rendering engine should support different GFX API as well (like Vulkan, DirectX, Metal, etc)
+lcnr/crow | should allow users to do nearly everything they want without requiring custom renderers or unsafe code.
+Smithay/drm-rs | A safe interface to the Direct Rendering Manager.
+fslabs/bevy_aabb_instancing | Render millions of AABBs every frame with an instancing renderer.
+yeicor/sdf-viewer | in your designs. This application will take your code (written in any language) and quickly and interactively render it
+skyzh/raytracer.rs | **UPDATE** By using static dispatch (generics in Rust) and code generation, we achieved a 2x speedup in rendering most scenes.
+kosumic/rustracer | A PBR [glTF 2.0](https://www.khronos.org/gltf) renderer based on Vulkan ray-tracing, written in Rust.
+dtcristo/bevy_pixels | Add `bevy` and `bevy_pixels` to `Cargo.toml`. Be sure to disable `bevy`'s `render` and `bevy_wgpu` features (with `default-features = false`) as they will conflict with rendering provided by `bevy_pix
+micahrj/ochre | High-quality anti-aliased vector graphics rendering on the GPU.
+arcana-engine/sierra | sierra does both memory and descriptor allocation automatically.
+Dicklesworthstone/rich_rust | Instead of Python's duck typing, rich_rust uses explicit render methods and an
+microsoft/webui | **WebUI** is a high-performance, language-agnostic server-side rendering framework built in Rust. It compiles HTML templates into compact Protocol Buffer binaries at build time so runtime rendering ap
+riley-williams/buoyant | Buoyant is a library for writing and rendering SwiftUI-like views in Rust,
+Panzerschrek/Square-Wheel | This is a project of software renderer for video games, that uses power of modern CPUs.
+mikialex/rendiation | RRF is a rendering framework focused on performance and maintainability. "Rendiation" represents the concept of "rendering innovation".
+o2sh/provok | Text Renderer written in Rust using HarfBuzz for shaping, FreeType for rasterization and OpenGL for rendering.
+maplibre/maplibre-native-rs | Rust bindings to the [MapLibre Native](https://maplibre.org/projects/native/) map rendering engine.
+jadedbay/bevy_procedural_grass | - [Modern Foliage Rendering - Acerola](https://www.youtube.com/watch?v=jw00MbIJcrk)
+beltegeuse/rustlight | Physically-based rendering engine implemented with **Rust**.
+carloskiki/pulldown-latex | A pull parser for $\LaTeX$ parsing and `mathml` rendering.
+num3ric/sol-rs | `sol-rs` is a small rendering toolkit for Vulkan, with a focus on real-time raytracing (which is not currently available via other APIs such as WebGPU). It hosts convenience wrappers but also exposes
+Alex6357/alloy | > **A "No-DOM" GUI Runtime: SolidJS Logic driving Rust GPUI Rendering.**
+ixlab/vidformer | * **Lazy/Deferred Rendering:** Video results can be retrieved on-demand, allowing for practically instantaneous playback of video results.
+mgth/Omniphony | **A real-time spatial / object-based audio rendering engine.** Omniphony takes
+meilisearch/meilisearch | <a href="https://www.meilisearch.com/?utm_campaign=oss&utm_source=github&utm_medium=meilisearch&utm_content=logo#gh-light-mode-only" target="_blank">
+qdrant/qdrant | Qdrant is written in Rust 🦀, which makes it fast and reliable even under high load. See [benchmarks](https://qdrant.tech/benchmarks/).
+surrealdb/surrealdb | <a href="https://surrealdb.com#gh-dark-mode-only" target="_blank">
+influxdata/influxdb | - Diskless architecture with object storage support (or local disk with no dependencies)
+chroma-core/chroma | ![Chroma](./docs/assets/chroma-wordmark-color.png#gh-light-mode-only)
+clockworklabs/SpacetimeDB | SpacetimeDB is optimized for maximum speed and minimum latency. SpacetimeDB provides all the ACID guarantees of a traditional RDBMS, with all the speed of an optimized web server. All application stat
+tursodatabase/turso | * **`BEGIN CONCURRENT`** for improved write throughput using multi-version concurrency control (MVCC).
+neondatabase/neon | Neon is an open-source serverless Postgres database platform. It separates storage and compute and substitutes the PostgreSQL storage layer by redistributing data across a cluster of nodes.
+valeriansaliou/sonic | A strong attention to performance and code cleanliness has been given when designing Sonic. It aims at being crash-free, super-fast and puts minimum strain on server resources (our measurements have s
+t8y2/dbx | Qiniu Cloud provides DBX with object storage, CDN, and other cloud infrastructure resources.
+tikv/tikv | - Thanks [RocksDB](https://github.com/facebook/rocksdb) for their powerful storage engines.
+pingcap/talent-plan | - [TP 202: Distributed Systems in Rust](courses/dss/README.md). Adapted from the [MIT 6.824](http://nil.csail.mit.edu/6.824/2017/index.html) distributed systems coursework, this course focuses on impl
+SeaQL/sea-orm | // 1. SELECT FROM user JOIN profile WHERE id = $
+databendlabs/databend | <h3 align="center">Enterprise Data Warehouse for AI Agents</h3>
+risingwavelabs/risingwave | RisingWave is an event streaming platform for agentic AI. It continuously ingests data from databases, event streams, and webhooks, processes it incrementally, and serves fresh results at low latency,
+spacejam/sled | truncation for reducing the storage costs of long keys with shared
+warp-tech/warpgate | <img src="https://github.com/user-attachments/assets/89be835b-ff96-46df-94c7-ae2d176615e3" />
+erikgrinaker/toydb | * [Pluggable storage engine][storage] with [BitCask][bitcask] and [in-memory][memory] backends.
+GreptimeTeam/greptimedb | > A columnar database for metrics, logs, and traces on object storage.
+HelixDB/helix-db | You don't need a separate application DB, relational DB, vector DB, graph DB, or application layers to manage the multiple storage locations. HelixDB gives your agents federated access to company data
+trailbaseio/trailbase | Only the [benchmarks](https://github.com/trailbaseio/trailbase-benchmark) are
+pgdogdev/pgdog | It's important to use the release profile if you're deploying to production or want to run
+achristmascarl/rainfrog | [![Crate Badge]][Crate] [![Repo Badge]][Repo] [![License Badge]](./LICENSE) \
+readysettech/readyset | <img src="https://readyset.io/images/Brand_Logo_Dark.svg" width='80%'>
+malisper/pgrust | On sysbench-oltp, pgrust achieved 30% higher throughput than Postgres 18.3 on
+cberner/redb | and above, but not Cortex-M0. There is no filesystem, so storage is supplied by implementing
+typedb/typedb | [![TypeDB](https://github.com/typedb/.github/raw/master/profile/banner.png)](https://typedb.com/)
+Qovery/Replibyte | <p align="center"> <img src="assets/RepliByte%20Logo.png" alt="replibyte logo"/> </p>
+skyzh/mini-lsm | # Mini-LSM: Build a Database Storage Engine in Rust
+cozodb/cozo | * The index resides on disk as a regular relation (unless you use the purely in-memory storage option, of course).
+ekzhang/rustpad | [![Docker Pulls](https://img.shields.io/docker/pulls/ekzhang/rustpad)](https://hub.docker.com/r/ekzhang/rustpad/)
+vlcn-io/cr-sqlite | [![c-tests](https://github.com/vlcn-io/cr-sqlite/actions/workflows/c-tests.yaml/badge.svg)](https://github.com/vlcn-io/cr-sqlite/actions/workflows/c-tests.yaml)
+frectonz/sql-studio | Single binary, single command SQL database explorer. SQL studio supports *SQLite*, *libSQL*, *PostgreSQL*, *MySQL*, *DuckDB*, *ClickHouse*, *Microsoft SQL Server*, *Parquet* and *CSV*.
+AmrDeveloper/GQL | <h1 align="center">GitQL - Git Query Language</h1></br>
+slatedb/slatedb | [SlateDB](https://slatedb.io) is an embedded storage engine built as a [log-structured merge-tree](https://en.wikipedia.org/wiki/Log-structured_merge-tree). Unlike traditional LSM-tree storage engines
+TaKO8Ki/gobang | A cross-platform TUI database management tool written in Rust
+gluesql/gluesql | GlueSQL is a Rust library for SQL databases that includes a parser ([sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)), an execution layer, and a variety of storage options, both persistent
+orbitinghail/sqlsync | [![github actions](https://github.com/orbitinghail/sqlsync/actions/workflows/actions.yaml/badge.svg?branch=main)](https://github.com/orbitinghail/sqlsync/actions?query=branch%3Amain)
+obi1kenobi/trustfall | # Trustfall — Engine for Querying (Almost) Everything
+apache/horaedb | ![HoraeDB](docs/logo/horaedb-banner-white-small.jpg)
+skytable/skytable | Skytable is primarily in-memory, uses multithreaded asynchronous I/O and a custom AOF-based storage engine with advanced delayed durability transactions for efficient disk I/O. Skytable's data model i
+sfu-db/connector-x | In conclusion, ConnectorX uses up to **3x** less memory and **21x** less time (**3x** less memory and **13x** less time compared with Pandas.). More on [here](https://github.com/sfu-db/connector-x/blo
+sqlpage/SQLPage | - [handlebars](https://handlebarsjs.com/guide/) render HTML pages from readable templates for each component.
+indradb/indradb | <img src="https://indradb.github.io/logo.png">
+hydra-db/hydradb | It combines durable graph storage on SlateDB with snapshot-consistent
+fjall-rs/fjall | *Fjall* _(Nordic: "Mountain")_ is a log-structured, embeddable key-value storage engine written in Rust.
+tensorchord/pgvecto.rs | | Indexing | Handles the storage and memory of indexes separately from PostgreSQL | Relies on the native storage engine of PostgreSQL |
+rust-rocksdb/rust-rocksdb | [![RocksDB build](https://github.com/rust-rocksdb/rust-rocksdb/actions/workflows/rust.yml/badge.svg?branch=master)](https://github.com/rust-rocksdb/rust-rocksdb/actions/workflows/rust.yml)
+feldera/feldera | that exceed the available RAM by spilling efficiently to disk, taking advantage of recent advances in NVMe storage.
+toeverything/OctoBase | -   📚 **Multi-platform available** offline collaboration, Schemaless, structured/unstructured/rich text data storage.
+tranxuanthang/lrclib | LRCLIB server written in Rust with Axum and SQLite3 database.
+nubskr/walrus | Walrus is a distributed message streaming platform built on a high-performance log storage engine. It provides fault-tolerant streaming with automatic leadership rotation, segment-based partitioning,
+microsoft/DiskANN | - In-memory providers, for maximum performance. These are volatile and not intended for use in databases. DiskANN3 + in-memory providers [outperforms](https://github.com/microsoft/DiskANN/wiki/Perf:-I
+Brendonovich/prisma-client-rust | <p><b>Type-safe database access for Rust</b></p>
+oxigraph/oxigraph | A preliminary benchmark [is provided](bench/README.md). There is also [a document describing Oxigraph technical architecture](https://github.com/oxigraph/oxigraph/wiki/Architecture).
+risinglightdb/risinglight | [![CI](https://github.com/risinglightdb/risinglight/workflows/CI/badge.svg?branch=main)](https://github.com/risinglightdb/risinglight/actions)
+superfly/corrosion | - Storage and propagation of state from locally registered Consul services, replacing the central database with Corrosion's distributed state
+cnosdb/cnosdb | - **Cloud native**: CnosDB has a native distributed design, data sharding and partitioning, separation of storage and computing, Quorum mechanism, Kubernetes deployment and complete observability, ens
+SeaQL/sea-query | <img src="https://raw.githubusercontent.com/SeaQL/sea-query/master/docs/SeaQuery logo.png" width="280" alt="SeaQuery logo"/>
+cswinter/LocustDB | An experimental analytics database aiming to set a new standard for query performance and storage efficiency on commodity hardware.
+tonbo-io/tonbo | - **Async-first**: The entire storage and query engine is fully async, built for serverless and edge environments.
+losfair/mvsqlite | Distributed, MVCC SQLite that runs on top of [FoundationDB](https://github.com/apple/foundationdb).
+orbitinghail/graft | **Graft** is an open-source transactional storage engine designed for efficient data synchronization at the edge. It supports lazy, partial replication with strong consistency, ensuring applications r
+skyzh/type-exercise-in-rust | physical expressions, add checked nullable List storage, and defer one complete batch in a
+postgresml/korvus | 1. **Postgres-Native RAG**: Korvus leverages Postgres' robust capabilities, allowing you to perform complex RAG operations directly within your database. This approach eliminates the need for external
+tensorbase/tensorbase | 2. 2x faster write throughput than that of ClickHouse (based on [our bug fixed Rust client](https://github.com/tensorbase/tensorbase/tree/main/crates/client), you can get ~1.7x speedup by [our another
+lnx-search/lnx | - Multiple storage backends available for testing and developing.
+PumpkinDB/PumpkinDB | it has a Forth-inspired stack-based language, PumpkinScript. Instead of hierarchical keys, it has a flat key namespace and doesn't allow overriding values once they are set.  Core motivation for immut
+teodevgroup/teo | <a href="https://crates.io/crates/teo"><img src="https://img.shields.io/crates/v/teo?style=flat-square" /></a>
+exonum/exonum | but no specific effort is allocated into supporting them.
+PoloDB/PoloDB | PoloDB v5 uses RocksDB as its storage backend. A database path is a directory,
+stoolap/stoolap | It targets low-latency transactional workloads and real-time analytical queries, with modern SQL features and no external server process.
+cornucopia-rs/cornucopia | <img src="https://raw.githubusercontent.com/cornucopia-rs/cornucopia/main/assets/logo.svg" alt="Cornucopia logo" width=150 />
+joaoh82/rust_sqlite | - Internals: [File format](docs/file-format.md), [Pager](docs/pager.md), [Storage model](docs/storage-model.md), [SQL engine](docs/sql-engine.md)
+khonsulabs/bonsaidb | - ACID-compliant, transactional storage of [Collections][collection]
+Evokoa/pgGraph | requiring a separate graph database, graph-specific storage system, or a new
+GlareDB/glaredb | GlareDB is a fast, lightweight SQL database for running analytics.
+duckdb/duckdb-rs | - [Profile and Monitor](https://duckdb.org/docs/stable/clients/rust/profiling) — query profiling and interrupting long-running queries.
+ovexro/dockpanel | <img src=".github/screenshots/dp-dashboard.png" alt="DockPanel Dashboard" width="800">
+djc/bb8 | [![Documentation](https://docs.rs/bb8/badge.svg)](https://docs.rs/bb8/)
+feigeCode/navop | - Import SecureCRT sessions, monitor servers, and connect to remote desktops over RDP and VNC. On Windows, native MSTSC integration embeds the Microsoft RDP ActiveX control directly in the app via a C
+antoniosarosi/mkdb | is located in [`./src/storage/page.rs`](./src/paging/page.rs), which is the
+lanterndata/lantern | - There's three key metrics we track. `CREATE INDEX` time, `SELECT` throughput, and `SELECT` latency.
+supabase/wrappers | `Wrappers` is a development framework for Postgres Foreign Data Wrappers ([FDW](https://wiki.postgresql.org/wiki/Foreign_data_wrappers)), written in Rust. Its goal is to make Postgres FDW development
+sunng87/pgwire | [![CI](https://github.com/sunng87/pgwire/actions/workflows/ci.yml/badge.svg)](https://github.com/sunng87/pgwire/actions/workflows/ci.yml)
+GrafeoDB/grafeo | Grafeo is a graph database built in Rust from the ground up for speed and low memory use. It runs embedded as a library or as a standalone server, with in-memory or persistent storage and full ACID tr
+0b01/tectonicdb | To config the Google Cloud Storage and Data Collection Backend integration, the following environment variables are used:
+KipData/KiteSQL | KiteSQL supports direct SQL execution, typed ORM models, schema migration, and builder-style queries, so you can combine relational power with an API surface that feels natural in Rust. On native targ
+opral/lix | - 🧩 **Pluggable storage.** Local filesystem, SQLite on browser OPFS, or S3 behind a Lix server.
+s2-streamstore/s2 | s2 auth access-token set --stdin --insecure-storage
+vincent-herlemont/native_db | - Fast, see [`sqlite` vs `redb` vs `native_db`](./benches/README.md) benchmarks.
+blackbeam/rust-mysql-simple | that helps to avoid allocations for basic scenarios. You can control its characteristics using
+earth-mover/icechunk | > **Icechunk 2.0 is released!** Better consistency, performance, and reliability for tensor storage
+KOBA789/relly | 「WEB+DB PRESS Vol. 122『特集3 作って学ぶ RDBMS のしくみ』」の題材として開発されました。
+vrmiguel/pgpad | <img align="center" width="128px" src="https://github.com/user-attachments/assets/28f39044-185c-4750-b2e2-21f56abc773a" />
+Pometry/Raphtory | We host a page which triggers and saves the result of two benchmarks upon every push to the master branch.  View this [here](https://pometry.github.io/Raphtory/dev/bench/)
+Fullstop000/wickdb | - Adding benchmarks. The progress is tracked by this [issue](https://github.com/Fullstop000/wickdb/issues/21).
+ProjectPhysX/FluidX3D | - minor bug fix (workaround for Intel iGPU driver bug with triangle rendering)
+idealvin/coost | The above is the time of [printing 1 million logs with 1, 2, 4, and 8 threads](https://github.com/idealvin/coost/tree/benchmark), in seconds. Speedup is the performance improvement of co/log compared
+felixguendling/cista | Have a look at the [benchmark repository](https://github.com/felixguendling/cpp-serialization-benchmark) for more details.
+ashvardanian/less_slow.cpp | > The benchmarks in this repository don't aim to cover every topic entirely, but they help form a mindset and intuition for performance-oriented software design.
+JonMagon/KDiskMark | **KDiskMark** is an HDD and SSD benchmark tool with a very friendly graphical user interface. **KDiskMark** with its presets and powerful GUI calls [Flexible I/O Tester](https://github.com/axboe/fio)
+openai/procgen | #### [[Blog Post]](https://openai.com/blog/procgen-benchmark/) [[Paper]](https://arxiv.org/abs/1912.01588)
+kimwalisch/primesieve | It is very cache efficient, it detects your CPU's L1 & L2 cache sizes and allocates its main
+baidu-research/DeepBench | The primary purpose of DeepBench is to benchmark operations that are
+redis/memtier_benchmark | memtier_benchmark is a command line utility developed by [Redis](https://redis.io) (formerly Garantia Data Ltd.) for load generation and benchmarking NoSQL key-value databases. It offers the following
+travisdowns/uarch-bench | A collection of low level, fine-grained benchmarks intended to investigate micro-architectural details of a target CPU, or to precisely benchmark small functions in a repeatable manner.
+thekvs/cpp-serializers | -s, --serializers arg  comma separated list of serializers to benchmark
+Mellanox/sockperf | **sockperf** is a network benchmarking utility over socket API that was designed for testing performance (latency and throughput) of high-performance systems (it is also good for testing performance o
+openxrlab/xrslam | OpenXRLab Visual-inertial SLAM Toolbox and Benchmark. It is a part of the OpenXRLab project.
+QingyongHu/SensatUrban | # Towards Semantic Segmentation of Urban-Scale 3D Point Clouds: A Dataset, Benchmarks and Challenges
+p-ranav/alpaca | * Simple, fast (see [benchmarks](#performance-benchmarks)), and easy to use
+frol/completely-unscientific-benchmarks | For this benchmark we implemented [Treap](https://en.wikipedia.org/wiki/Treap)
+RRZE-HPC/gpu-benches | This is a collection of GPU micro benchmarks. Each test is designed to test a particular scenario or hardware mechanism. Some of the benchmarks have been used to produce data for these papers:
+krrishnarraj/clpeak | **clpeak &mdash; "Compute Latency PEAK".** A synthetic micro-benchmark for measuring the peak achievable compute performance of CPUs, GPUs and NPUs. It exercises tight vector, MAD, and MMA kernels, to
+zupat/related_post_gen | | Rust v3    | -               | 1.28s         | Preallocate and reuse map and unstable sort by [vdrmn](https://www.reddit.com/r/rust/comments/16plgok/comment/k1rzo7g/?utm_source=share&utm_medium=web2
+ekondis/mixbench | The purpose of this benchmark tool is to evaluate performance bounds of GPUs (or CPUs) on mixed operational intensity kernels. The executed kernel is customized on a range of different operational int
+davidstutz/superpixel-benchmark | [Project Page](http://davidstutz.de/projects/superpixel-benchmark/) |
+UWMILab/HA-VLN | <h1 align="center"><strong>HA-VLN 2.0: An Open Benchmark and Leaderboard for Human-Aware Navigation in Discrete and Continuous Environments with Dynamic Multi-Human Interactions</strong></h1>
+JokerJohn/PALoc | <h1>PALoc: Advancing SLAM Benchmarking with Prior-Assisted 6-DoF Trajectory Generation and Uncertainty Estimation</h1>
+sbeamer/gapbs | This is the reference implementation for the [GAP](http://gap.cs.berkeley.edu/) [Benchmark Suite](http://gap.cs.berkeley.edu/benchmark.html). It is designed to be a portable high-performance baseline
+XiaoMi/mobile-ai-bench | **Mobile AI Benchmark** (i.e. **MobileAIBench**) is an end-to-end benchmark tool
+UoB-HPC/BabelStream | This benchmark is similar in spirit, and based on, the STREAM benchmark [1] for CPUs.
+fastvideo/gpu-camera-sample | From the benchmarks on <strong>NVIDIA Quadro RTX 6000</strong> or <strong>GeForce RTX 4090</strong> we can see that GPU-based raw image processing is very fast and it could offer high image quality at
+Xingyu-Lin/softgym | - [12/06/2021] Support depth rendering. Example:`python examples/random_env.py --test_depth 1` to visualize the depth image.
+hpcg-benchmark/hpcg | # High Performance Conjugate Gradient Benchmark (HPCG) #
+1a1a11a/libCacheSim | * **Efficient Miss Ratio Curve profiler** - quickly build highly accurate miss ratio curves on large-scale workloads; see [here](/doc/quickstart_mrcProfiler.md).
+Compaile/ctrack | An open-source benchmark and tracking library for C++ projects, designed to provide deep insights into function performance with minimal overhead.
+ProjectPhysX/OpenCL-Benchmark | A small [OpenCL](https://github.com/ProjectPhysX/OpenCL-Wrapper "OpenCL-Wrapper") benchmark program to measure peak GPU/CPU performance.
+martinus/map_benchmark | [Please see here.](https://martin.ankerl.com/2019/04/01/hashmap-benchmarks-01-overview/)
+apigee/apib | 2. Allocate a subset of connections to each, and in each:
+learnedsystems/SOSD | [SOSD](https://learned.systems/papers/sosd.pdf) is a benchmark to compare (learned) index structures on equality lookup performance over densely packed, sorted data.
+ORNL/HeCBench | This repository contains a collection of heterogeneous computing benchmarks written with CUDA, HIP, SYCL/DPC++, and OpenMP-4.5 target offloading for studying performance, portability, and productivity
+VITA-Group/Open-L2O | This repository establishes the first comprehensive benchmark efforts of existing learning to optimize (L2O) approaches on a number of problems and settings. We release our software implementation and
+breuner/elbencho | **A distributed storage benchmark for files, objects & blocks with support for GPUs**
+t-dillon/tdoku | development. Lastly, it contains a benchmarking framework for comparing performance among these
+davidstutz/superpixels-revisited | **A more comprehensive comparison of superpixel algorithms, including the corresponding benchmark and implementations, can be found here: [davidstutz/superpixel-benchmark](https://github.com/davidstut
+jwlim/tracker_benchmark | - Default (for all trackers, all sequences, all evaltypes(OPE, SRE, TRE))
+google/uVkCompute | reachability not only benefits graphics rendering; it can also be leveraged
+miloyip/dtoa-benchmark | This benchmark evaluates the performance of conversion from double precision IEEE-754 floating point (`double`) to ASCII string. The function prototype is:
+zhouxian/FluidLab | # FluidLab: A Differentiable Environment for Benchmarking Complex Fluid Manipulation
+vkmark/vkmark | vkmark is an extensible Vulkan benchmarking suite with targeted,
+cmuratori/termbench | This is a simple benchmark you can use to see how your terminal sinks large outputs.  While it cannot time how long it takes your terminal to render (since it has no idea), it _can_ time how long it t
+johnmcfarlane/fixed_point | $ cmake -DCMAKE_BUILD_TYPE=Release -DPROFILE=ON
+SJTU-IPADS/ServerlessBench | ## <!-- render a nicely looking grey line to separate the logo from the content  -->
+leggedrobotics/SimBenchmark | SimBenchmark is a benchmark suite for state-of-the-art physics engines.
+ParAlg/gbbs | The code for these applications is located in the `benchmark` directory. The
+Aider-AI/polyglot-benchmark | This repository contains a curated collection of programming exercises extracted from Exercism's language tracks. These exercises are used for benchmarking and testing purposes.
+DBAIWangGroup/nns_benchmark | # NNS Benchmark: Evaluating Approximate Nearest Neighbor Search Algorithms in High Dimensional Euclidean Space
+url-kaist/Ground-Segmentation-Benchmark | * The benchmark calculates the performance of each method and save the results as *csv* files.
+openxrlab/xrsfm | title={OpenXRLab Structure-from-Motion Toolbox and Benchmark},
+rigtorp/c2clat | A tool to measure CPU core to core latency (inter-core latency).
+neurosim/DNN_NeuroSim_V2.1 | **_X. Peng, S. Huang, H. Jiang, A. Lu and S. Yu, ※[DNN+NeuroSim V2.0: An End-to-End Benchmarking Framework for Compute-in-Memory Accelerators for Training](https://ieeexplore-ieee-org.prx.library.gate
+ETH3D/dataset-pipeline | The tools additionally include support for semantic labeling of point clouds and limited support for scan-image alignment for depth images, which was not used for the ETH3D benchmark.
+serde-rs/json-benchmark | This is a partial port of [nativejson-benchmark] to Rust. The libraries tested
+cornell-zhang/rosetta | # Rosetta: A Realistic High-level Synthesis Benchmark Suite for Software Programmable FPGAs
+project-gemmi/benchmarking-fft | of other FFT libraries that FFTW was benchmarked against.
+learn-more/findpattern-bench | Simple benchmark for findpattern implementations.
+mattreecebentley/plf_nanotimer | A simple C++ 03/11/etc timer class for ~microsecond-precision cross-platform benchmarking. The implementation is as limited and simple as possible to afford the lowest amount of overhead.
+ivafanas/sltbench | C++ benchmark tool. Practical, stable and fast performance testing framework.
+ArashPartow/math-parser-benchmark-project | # The Great C++ Mathematical Expression Parser Benchmark
+TheLartians/EasyIterator | The performance of different methods and approaches can be compared with the included benchmark suite.
+qi7chen/timer-benchmarks | Benchmark               |        Time     |       CPU  | Iterations
+google/fleetbench | Fleetbench is a benchmarking suite for Google workloads. It's a
+NoAvailableAlias/signal-slot-benchmarks | Comprehensive benchmarks for a majority of GitHub c++ signal slot implementations and others.
+cksystemsgroup/scal | Scal is an open-source benchmarking framework that provides (1) software infrastructure for executing concurrent data structure algorithms, (2) workloads for benchmarking their performance and scalabi
+mmperf/mmperf | # Single CPU Core Matrix Multiplication Benchmarks
+lemire/StronglyUniversalStringHashing | # disable some processor features that add noise to benchmarks:
+Geekgineer/motcpp | Inspired by [BoxMOT](https://github.com/mikel-brostrom/boxmot), motcpp brings the same algorithmic breadth to C++ with a clean CMake integration, ONNX Runtime ReID backend, and built-in MOT benchmark
+RALC88/riscv-vectorized-benchmark-suite | The RiVEC Benchmark Suite is a collection composed of data-parallel applications from different domains. The suite focuses on benchmarking vector microarchitectures. Current implementation is targetin
+tuxalin/THST | - support for custom allocators for internal nodes
+guteksan/REST-CPP-benchmark | Before building the benchmark projects, its dependencies need to be installed. You may install them in the system or locally - in that case use ```-DCMAKE_PREFIX_PATH=<>``` can be used to indicate the
+ttvd/spatial-collision-datastructures | This project is a benchmark tool used to assess performance of different collision detection data structures.
+fraillt/cpp_serializers_benchmark | 7. check buffer size on reading, but writing buffer is preallocated std::array&lt;uint8\_t, 1000000&gt;
+emilk/ram_bench | A benchmark for random memory accesses, with the aim to prove that there is no such thing as `O(1)` memory accesses on modern hardware, but rather that it is `O(√N)`.
+4ku/Place-recognition-evaluation | This repository was made to perform comparison and evaluation between different approaches for place recognition. The goal is to provide a comprehensive benchmarking environment for researchers and pr
+NKU-MobFly-Robotics/local-planning-benchmark | > J. Wen, X. Zhang, Q. Bi, Z. Pan, Y. Feng, J. Yuan, and Y. Fang, "MRPB 1.0: A unified benchmark for the evaluation of mobile robot local planning approaches", ***2021 IEEE International Conference on
+HPMLL/NVIDIA-Hopper-Benchmark | # Dissecting the NVIDIA Hopper Architecture through Microbenchmarking and Multiple Level Analysis
+criterion-rs/criterion.rs | <div align="center">Statistics-driven Microbenchmarking in Rust</div>
+dotnet/BenchmarkDotNet | **BenchmarkDotNet** helps you to transform methods into benchmarks, track their performance, and share reproducible measurement experiments.
+imazen/zenbench | Interleaved microbenchmarking for Rust with paired statistics, CI regression testing, and hardware-adaptive measurement.
+envidera/zench | Zench is a lightweight benchmarking library for Rust, built for seamless workflow integration, speed, and productivity. Run benchmarks anywhere in your codebase and integrate performance checks direct
+tokio-rs/loom | Loom is a testing tool for concurrent Rust code. It runs a test many

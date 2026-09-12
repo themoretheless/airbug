@@ -1,0 +1,29 @@
+project-gemmi/benchmarking-fft | choosing FFT library... | lifecycle,gpu,report
+learn-more/findpattern-bench | Simple benchmark for findpattern implementations. |
+MCG-NKU/SalBenchmark | Salient Object Detection: A Benchmark | comparison
+mattreecebentley/plf_nanotimer | A simple C++ 03/11/etc timer class for ~microsecond-precision cross-platform benchmarking. The implementation is as limited and as |
+ivafanas/sltbench | C++ benchmark tool. Practical, stable and fast performance testing framework. | comparison,correctness
+ArashPartow/math-parser-benchmark-project | C++ Mathematical Expression Parser Benchmark | lifecycle,memory,correctness
+TheLartians/EasyIterator | 🏃 Iterators made easy! Zero cost abstractions for designing and using C++ iterators. |
+qi7chen/timer-benchmarks | Benchmark of different timer implementations(min-heap, red-black tree, timing wheel) 不同数据结构实现的定时器测试 | memory
+google/fleetbench | Benchmarking suite for Google workloads | statistics,comparison,lifecycle,memory,async,report,isolation
+NoAvailableAlias/signal-slot-benchmarks | Comprehensive benchmarks for a majority of GitHub c++ signal slot implementations and others. | correctness
+cksystemsgroup/scal | High-performance multicore-scalable data structures and benchmarks | async,report
+mmperf/mmperf | MatMul Performance Benchmarks for a Single CPU Core comparing both hand engineered and codegen kernels.  | gpu
+lemire/StronglyUniversalStringHashing | Benchmark showing the we can randomly hash strings very quickly with good universality  | correctness
+Geekgineer/motcpp | A blazing-fast, modern C++ multi-object tracking library featuring SORT, ByteTrack, OC-SORT, BoostTrack, and more built for real-t | comparison,async
+mattiaspaul/deedsBCV | new and more efficient version for 3D discrete deformable registration, reaching the highest accuracy in several benchmarks | correctness
+RALC88/riscv-vectorized-benchmark-suite | RiVEC Bencmark Suite | gpu
+tuxalin/THST | Templated hierarchical spatial trees designed for high-peformance. | lifecycle,memory,report
+guteksan/REST-CPP-benchmark | None | async,report
+ttvd/spatial-collision-datastructures | Benchmark of various spatial data structures for collision detection.  |
+fraillt/cpp_serializers_benchmark | C++ serializers benchmark with realistic data | lifecycle,memory
+emilk/ram_bench | A benchmark for random memory accesses | async
+4ku/Place-recognition-evaluation | Benchmarking and evaluation framework for place recognition methods, featuring SuperPoint+SuperGlue, LoGG3D-Net, Scan Context, DBo | lifecycle,gpu,correctness
+NKU-MobFly-Robotics/local-planning-benchmark | [ICRA2021] A unified benchmark for the evaluation of mobile robot local planning approaches | lifecycle
+HPMLL/NVIDIA-Hopper-Benchmark | None | gpu
+criterion-rs/criterion.rs | None | statistics,comparison,report
+dotnet/BenchmarkDotNet | None | statistics,comparison,lifecycle,report,correctness
+imazen/zenbench | None | statistics,comparison,lifecycle,memory,async,report
+envidera/zench | None | statistics,comparison,lifecycle,memory,report
+tokio-rs/loom | None | async

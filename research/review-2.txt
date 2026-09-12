@@ -1,0 +1,150 @@
+serokell/deploy-rs | A simple multi-profile Nix-flake deploy tool. | report,correctness
+EmbarkStudios/puffin | 🐦 Friendly little instrumentation profiler for Rust 🦀 |
+tikv/pprof-rs | A Rust CPU profiler implemented with the help of backtrace-rs | memory,report
+AlexEne/twiggy | Twiggy🌱 is a code size profiler |
+nnethercote/dhat-rs | Heap profiling and ad hoc profiling for Rust programs. | memory
+pythonspeed/filprofiler | A Python memory profiler for data processing and scientific computing applications | memory
+koute/not-perf | A sampling CPU profiler for Linux | report
+cmyr/cargo-instruments | A cargo plugin to generate Xcode Instruments trace files | memory,gpu,async
+westpoint-io/lazyrsync | 🦀 A friendly terminal UI for rsync, written in Rust. Reusable profiles, an honest dry-run diff, and live progress, even over SSH. | report,correctness
+llogiq/flame | An intrusive flamegraph profiling tool for rust. | report
+pop-os/system76-power | Power profile management for Linux | gpu,report
+supermemoryai/smfs | A filesystem designed for agents, with SOTA retrieval, automatic memory profiles, sync engine. Drop any file type (pdf, images, vi | report
+svenstaro/cargo-profiler | Cargo subcommand to profile binaries  |
+aclysma/profiling | Provides a very thin abstraction over instrumented profiling crates like puffin, optick, tracy, and superluminal-perf. | lifecycle,gpu
+rust-lang/measureme | Support crate for rustc's self-profiling feature |
+desbma/shh | Systemd Hardening Helper - Automatic systemd service hardening guided by strace profiling |
+HdrHistogram/HdrHistogram_rust | A port of HdrHistogram to Rust | statistics,memory,async,report
+nnethercote/counts | A tool for ad hoc profiling | memory
+ZakisM/bl3_save_edit | Borderlands 3 Save/Profile Editor for Windows/MacOS and Linux! |
+bluenote-1577/sylph | ultrafast taxonomic profiling and genome querying for metagenomic samples by abundance-corrected minhash. | statistics,comparison
+polarsignals/rust-jemalloc-pprof | Convert jemalloc heap profiles to pprof to understand memory usage, fix memory leaks, and fix OOM Kills. | lifecycle,memory,async
+TheYkk/git-switcher | Easily switch between your git profiles |
+grafana/pyroscope-rs | Pyroscope Profiler for Rust. Profile your Rust applications. |
+alexcrichton/coz-rs | Rust support for the coz Causal profiler, code now lives upstream -- https://github.com/plasma-umass/coz | async,report
+siketyan/ghr | 🚀 Yet another repository management with auto-attaching profiles. | report
+hw0lff/shikane | [mirror] A deterministic dynamic output configuration tool that automatically detects and configures connected outputs based on a  | lifecycle
+Wumpf/wgpu-profiler | Simple profiler scopes for wgpu using timer queries | gpu,report
+null-dev/firefox-profile-switcher-connector | Native connector software for the 'Profile Switcher for Firefox' extension. |
+elastic/devfiler | Universal Profiling as a desktop app |
+shvbsle/k10s | Profiler for ML Training jobs in pure Rust. See straggler ranks and idle GPUs.  | gpu,async
+thoren-d/tracing-chrome | A library for generating chrome://tracing traces in Rust. | report
+javierhonduco/rbperf | Low-overhead sampling profiler and tracer for Ruby for Linux |
+jzbor/nix-sweep | Utility to clean up old Nix profile generations and left-over garbage collection roots | report
+lucifer1004/VeloQ | Agent-friendly GPU profile-query CLI | lifecycle,gpu,async,report,correctness
+soth-ai/mcp-reticle | Reticle intercepts, visualizes, and profiles JSON-RPC traffic between your LLM and MCP servers in real-time, with zero latency ove | lifecycle,async,report
+sassman/amoxide-rs | amoxide (am) helps to manage your shell aliases either globally, profile- or project-specific. It loads context specific relevant  | lifecycle
+burakdede/aisw | AISW | AI Switcher - Switch between multiple Claude Code, Codex CLI, Antigravity and Gemini CLI accounts in one command. Named pro | statistics,lifecycle,report,isolation
+aralroca/aralroca | My GitHub profile |
+EmbarkStudios/superluminal-perf-rs | 🔆 Superluminal Performance profiler Rust API 🦀 |
+gyroflow/lens_profiles | Lens profile database for Gyroflow |
+0xdeafbeef/jeprofl | Allocations profiler built using ebpf | memory,report
+dr-dotnet/dr-dotnet | 🩺 One-click diagnosis of your dotnet applications. Works both locally or remotely as a web service. Based on the lowest level dotn |
+rogercoll/eprofiler-tui | eBPF profiler flamegraph based TUI 🐧🐝  |
+MarlinDiary/worklouder-input-cli | Full-configuration CLI for Codex Micro and Work Louder Input: profiles, layers, keymaps, actions, provider handoff, verified apply | comparison,report,correctness
+ShayBox/Wooting-Profile-Switcher | Automatically switch Wooting keyboard profiles based on focused window | report
+emberian/hprof | A real-time hierarchical profiler | lifecycle,gpu,report
+alumet-dev/alumet | Next-gen monitoring with high-frequency energy measurement. | lifecycle,memory,gpu
+yfractal/sdb | A Ruby stack profiler without GVL. | async
+Th0rgal/shard | Minecraft launcher with deduplicated mod storage. Content-addressed library stores mods once, shares across profiles. CLI + deskto | lifecycle,report,correctness
+AlexEne/rust_hawktracer | Rust bindings for Amazon's Hawktracer profiler | report
+zz85/profile-bee | 🐝🦀🔥 Rust-based eBPF CPU profiler, supports stack unwinding | lifecycle,async,report,correctness
+DataDog/libdatadog | Datadog shared rust-based library. For now only used in other products (e.g. Ruby or PHP libraries). | correctness
+kguardian-dev/kguardian | A Kubernetes tool leveraging eBPF for advanced Kubernetes security, auto-generating Network Policies, Seccomp Profiles, and more. | comparison,lifecycle,memory,report
+xjoker/codex-switch | Multi-account profile manager for OpenAI Codex CLI with usage dashboard and interactive TUI. | lifecycle,report
+zmitchell/proctrace | A high-level profiler for process-level events such as fork, exec, exit, setpgid, and setsid |
+naftulikay/aws-env | A utility script for exporting an AWS profile as environment variables. | report
+gleich/profile_stack | 🚀 Display your tech stack on your GitHub profile's README |
+LuoGroup2023/PanTax | PanTax: Strain-level metagenomic profiling using pangenome graphs | comparison,report
+kornelski/rust-lcms2 | ICC color profiles in Rust |
+coolreader18/flamescope | Export flame data to speedscope's format | report
+yaahc/spandoc | Proc macro for using doc comments as context for errors/logs/profiling/whatever via `tracing` | async
+cleyton1986/predator-sense | 🎮 Predator Sense for Linux — Unofficial hardware control for Acer Predator/Helios/Nitro gaming laptops. RGB keyboard, GPU monitori | statistics,lifecycle,gpu,report,correctness
+Tails8521/md-profiler | A tracing profiler for the Sega MegaDrive/Genesis | report
+wasmerio/loupe | Profiling tool for Rust code. |
+Arc-blroth/memory-stats | A cross-platform-ish memory profiler for Rust! | memory
+javierhonduco/lightswitch | Lightweight CPU profiler for Linux as a library | report
+terror/vim-profiler | A vim plugin profiler and data plotter | report
+roniel-rhack/envi | A terminal UI for managing .env files — diff, scan, edit, and validate environment variables across projects and profiles. | report,correctness
+inceptyon-labs/TARS | TARS is a centralized hub for discovering, creating, editing, and managing Claude Code resources. It provides a visual interface f | lifecycle,gpu,async,report,correctness
+Christopher-06/rustmeter | A profiling and tracing system for Embedded Rust that visualizes Embassy tasks, function calls, metrics and defmt logs in the Perf | lifecycle,memory,async,report
+camdenreslink/clr-profiler | A CLR (.NET Runtime) profiler written purely in Rust. | lifecycle,memory
+software-mansion/cairo-profiler | Profiler for Cairo programming language & Starknet | lifecycle,report
+Vedant-Asati03/Telelog | High-performance structured logging library for Rust and Python with rich visualization capabilities | memory,async,report
+AlexGladkov/quickai | Profiler for Claude Code — where your tokens, money and time go (CLI + HTML report + MCP) | async,report
+vobst/btf2json | Generate Volatility3 profiles from BTF. | report,correctness
+loocor/mcpmate | MCPMate is a progressive MCP management center for organizing servers, clients, profiles, capabilities, and runtime visibility in  | lifecycle,report
+emoon/remotery-rs | Realtime CPU Profiler with web browser viewer | gpu
+de-husk/cosm-orc | 👹 Cosmwasm integration testing and gas profiling library 👹 | statistics,report,correctness
+LyonSyonII/profi | Scope-based single and multithreaded profiling. |
+alexandretrotel/dotfiles-manager | Keep your dotfiles organized, safe, and consistent across machines using profiles. | lifecycle,report
+ImShyMike/hackatime-heatmap | Easy to set up Hackatime coding activity heatmap for your profile! |
+h3r2tic/gpu-profiler | Vulkan & OpenGL GPU profiler with `puffin` support |
+home-mangler/home-mangler | A friendly Nix profile manager |
+mstange/fxprof-perf-convert | Convert perf.data files to the Firefox Profiler format | report
+microsoft/one-collect | An extremely fast Rust based framework for collecting event and profiling data |
+sachinkg12/heaplens | Heap-dump analysis inside VS Code — a native Rust engine with interactive views, leak detection, HeapQL, source navigation, and AI | lifecycle,memory,async,report
+SparkyPotato/tracy_full | Safe, fully-featured bindings to the Tracy profiler | memory,gpu,async
+OCamlPro/memthol | Memthol is a visualizer for memory profiling data generated from OCaml programs. | statistics,memory
+mkmik/heappy | heap profiler for rust | memory
+tcr/macos-profiler | Profiler for Rust programs on macOS |
+ElNiak/cupp-rs | Common User Passwords Profiler (CUPP)  in Rust | report
+riverscn/any-switch | Safely switch local app accounts, profiles, and state for Claude Code, OpenAI Codex, and extensible app definitions. | lifecycle,report,correctness
+Ghostlock-AI/capsule | Generate VM's with kernel tracing, code sandboxing and security profiles for long running agents.  | gpu,async
+grafana/k6 | A modern load testing tool, using Go and JavaScript | report,correctness
+locustio/locust | Write scalable load tests in plain Python 🚗💨 | async,report
+promptfoo/promptfoo | Test your prompts, agents, and RAGs. Red teaming/pentesting/vulnerability scanning for AI. Compare performance of GPT, Claude, Gem | report
+avajs/ava | Node.js test runner that lets you develop with confidence 🚀 | lifecycle,async,report,isolation
+alibaba/MNN | MNN: A blazing-fast, lightweight inference engine battle-tested by Alibaba, powering high-performance on-device LLMs and Edge AI. | gpu,report
+webdriverio/webdriverio | Next-gen browser and mobile automation test framework for Node.js | lifecycle,memory,report,correctness
+apache/jmeter | Apache JMeter open-source load testing tool for analyzing and measuring the performance of a variety of services | async,report
+artilleryio/artillery | The complete load testing platform. Everything you need for production-grade load tests. Serverless & distributed. Load test with  |
+getanteon/anteon | Anteon (formerly Ddosify): eBPF-based Kubernetes Monitoring and Performance Testing | async
+Blazity/next-enterprise | 💼 An enterprise-grade Next.js boilerplate for high-performance, maintainable apps. Packed with features like Tailwind CSS, TypeScr | statistics,lifecycle
+baidu/dperf | dperf: High-Performance Network Load Testing Tool Based on DPDK | memory,async
+sitespeedio/sitespeed.io | sitespeed.io is an open-source tool for comprehensive web performance analysis, enabling you to test, monitor, and optimize your w | comparison,lifecycle,memory,report
+session-replay-tools/tcpcopy | An online request replication and TCP stream replay tool, ideal for real testing, performance testing, stability testing, stress t | comparison,lifecycle,async,correctness
+marmelab/awesome-rest | A collaborative list of great resources about RESTful API architecture, development, test, and performance | gpu,report,correctness
+fortio/fortio | Fortio load testing library, command line tool, advanced echo server and web UI in go (golang). Allows to specify a set query-per- | lifecycle,async,report
+LinShunKang/MyPerf4J | High performance Java APM. Powered by ASM. Try it. Test it. If you feel its better, use it. | report
+phoronix-test-suite/phoronix-test-suite | The Phoronix Test Suite open-source, cross-platform automated testing/benchmarking software. | comparison,lifecycle,report,correctness
+albinotonnina/albinotonnina.com | Personal portfolio website with interactive animations and visual storytelling. Built with React, featuring modular scene manageme | lifecycle,async,report
+pod4g/hiper | 🚀 A statistical analysis tool for performance testing  | statistics,report
+alexfernandez/loadtest | Runs a load test on the selected URL. Fast and easy to use. Can be integrated in your own workflow using the API. | async,report
+cleanbrowsing/dnsperftest | DNS Performance test |
+fcsonline/drill | Drill is an HTTP load testing application written in Rust | async,report
+dfeneyrou/palanteer | Visual Python and C++ nanosecond profiler, logger, tests enabler | statistics,memory
+Blazemeter/taurus | Automation-friendly framework for Continuous Testing by | async,report
+naver/ngrinder | enterprise level performance testing solution | statistics,async,report
+reactopt/reactopt | A CLI React performance optimization tool that identifies potential unnecessary re-rendering | async,report
+addyosmani/puppeteer-webperf | Automating Web Performance testing with Puppeteer 🎪 | memory,async,report
+sqlancer/sqlancer | Automated testing to find logic and performance bugs in database systems | lifecycle,report,correctness
+avoidwork/filesize.js | A lightweight, high-performance file size utility that converts bytes to human-readable strings. Zero dependencies. 100% test cove |
+bamlab/flashlight | 📱⚡️ Lighthouse for Mobile - audits your app and gives a performance score to your Android apps (native, React Native, Flutter..).  | lifecycle,report
+Inspiaaa/UnityHFSM | A fast, tried-and-tested hierarchical finite state machine library for Unity, designed to be easy to use yet powerful without comp | lifecycle,memory
+TraceMachina/nativelink | NativeLink is a Nix-powered, open source, high-performance build cache and remote execution server, compatible with Bazel, Soong,  | lifecycle,report
+callstack/reassure | Performance testing companion for React and React Native | statistics,comparison,lifecycle,async,report
+d3ward/toolz | Project Archived - Easy-to-use interface and extensive collection of testing tools for optimizing performance and user experience. |
+microsoft/diskspd | DISKSPD is a storage load generator / performance test tool from the Windows/Windows Server and Cloud Server Infrastructure Engine | lifecycle,memory,async,report,correctness,isolation
+shulieTech/Takin | Takin is an Java-based, open-source system designed to measure online environmental performance test for full-links, Especially fo | report
+treosh/lighthouse-ci-action | Audit URLs using Lighthouse and test performance with Lighthouse CI. | lifecycle,gpu,report,correctness
+dmaicher/doctrine-test-bundle | Symfony bundle to isolate your app's doctrine database tests and improve the test performance | statistics,memory
+YahooArchive/boomerang | End user oriented web performance testing and beaconing |
+DoneDeal0/superdiff | Superdiff provides a rich and readable diff for arrays, objects, texts and coordinates. It supports stream and file inputs for han | lifecycle,report
+fabienrenaud/java-json-benchmark | Performance testing of serialization and deserialization of Java JSON libraries | lifecycle,memory,async,report
+linux-rdma/perftest | Infiniband Verbs Performance Tests | statistics,lifecycle,memory,gpu,async,report,correctness,isolation
+tag1consulting/goose | Load testing framework, inspired by Locust | memory,correctness
+kubernetes/perf-tests | Performance tests and benchmarks | lifecycle,report
+HewlettPackard/netperf | Netperf is a benchmark that can be used to measure the performance of many different types of networking. It provides tests for bo | report
+alloy-rs/core | High-performance, well-tested & documented core libraries for Ethereum, in Rust | report
+janreges/siteone-crawler | SiteOne Crawler is a cross-platform website crawler and analyzer for SEO, security, accessibility, and performance optimization—id | comparison,lifecycle,memory,async,report,correctness,isolation
+ubugeeei-prod/vize | blazing fast Vue.js toolchain. compiler, linter, type checker, formatter, lsp, story system, editors.  already passed 13k+ tests. | lifecycle,report,correctness
+maxim-saplin/CrossPlatformDiskTest | Windows, macOS and Android storage (HDD, SSD, RAM) speed testing/performance benchmarking app | async
+andyedinborough/stress-css | JavaScript to test each CSS class on a page and report which are hindering performance |
+AirportR/fulltclash | General proxy performance testing tool based on Clash using Telegram API.  | async,report
+LucaCanali/sparkMeasure | This repository contains the development code for sparkMeasure, an Apache Spark performance analysis and troubleshooting library.  | comparison,lifecycle,memory,async,report,correctness
+dwyl/book | 📗 Our Book on Full-Stack Web Application Development covering User Experience (UX) Design, Mobile/Offline/Security First, Progress | report
+rogerwelin/cassowary | :rocket: Modern cross-platform HTTP load-testing tool written in Go | async,report
+grafana/k6-operator | An operator for running distributed k6 tests. | lifecycle
+YueChen-C/py-ios-device | IOS Professional Performance Testing Tool . You can get CPU, GPU, Memory , Lifecycle  and other metrics from real  iOS devices . i | gpu
+kube-burner/kube-burner | Kubernetes performance and scale test orchestration framework written in golang | report

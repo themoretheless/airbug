@@ -1,0 +1,220 @@
+JimZeyuYang/GPU_Power_Benchmark | Microbenchmark that unveals the mechanisms behind power readings reported by nvidia-smi/MVML on your NVIDIA GPU.
+peter-lawrey-admin/jvm-micro-benchmarks | Some benchmarks are hand written to compensate for co-ordinated ommission.
+biboudis/LambdaMicrobenchmarking | ## LambdaMicrobenchmarking: microbenchmarking tool for C# and F#.
+gormanm/pft | 0.01  - first version of pft_mpol for testing mempolicy fault/allocation
+peterszatmary/jmh-benchmark-demo | [Java Microbenchmark Harness (JMH)](http://openjdk.java.net/projects/code-tools/jmh/) that runs with Junit and Maven.
+lemire/microbenchmarks | java -cp target/microbenchmarks-0.0.1-jar-with-dependencies.jar me.lemire.microbenchmarks.rangequery.RangeMinimum
+bdice/python_microbenchmarks | Microbenchmarks showing relative performance of different Python functions/patterns.
+SEALABQualityGroup/icpe-data-challenge-jmh | The dataset contains performance measurements of JMH microbenchmarks from 30 Java open source projects. The list of projects, along with the revision at which the microbenchmarks were executed, can be
+nsrip-dd/profiler-overhead-testing | the effects of enabling the Go CPU profiler on CPU usage, benchmark latency,
+chrishantha/microbenchmarks | JMH projects http://openjdk.java.net/projects/code-tools/jmh/
+thomwiggers/microbenchmark-aarch64 | Relies on access to the cycle counter, so you may need [this kernel module][enable_arm_pmu].
+buchgr/rules_jmh | Bazel rules for generating and running microbenchmarks with [JMH](https://openjdk.java.net/projects/code-tools/jmh/).
+efficient/microservices_microbenchmarks | This repository contains the code for the benchmarks presented in our ATC '18 short paper, "Putting the 'Micro' Back in Microservice."
+rolfl/MicroBench | Enabling simpler microbenchmarks of Java8 and more traditional code.
+sjenning/zsmapbench | Microbenchmark for zsmalloc allocation mapping
+zhisbug/ray-scalable-ml-design | Some microbenchmarks and design docs before commencement
+mhirki/idq-bench2 | This is a microbenchmark suite designed to test the power consumption of the x86-64 instruction decoders. The code is specifically designed to run on Intel processors based on the Sandy Bridge and lat
+HicrestLaboratory/Blink-GPU | # Blink: A Benchmark for Large-Scale Multi-GPU Interconnects
+jeffzi/luamark | LuaMark is a lightweight, portable microbenchmarking library for Lua. It measures
+DiegoEliasCosta/spotjmhbugs | Our plugin detects five bad practices related to benchmark creation:
+vitinh0z/java-performance | - **Benchmarks** (medindo performance de verdade, não no achismo)
+epickrram/journalling-benchmark | 3. run java -jar ./build/libs/journalling-benchmark-all-0.0.3.jar -h
+karnajitsen/NVLink-benchmark | LATDATATYPE = int                                      : data type for latency experiement
+yushinliu/cuda-ptx-microbenchmark | A comprehensive microbenchmark suite for NVIDIA GPUs using CUDA and PTX assembly, specifically optimized for RTX 4070 (Compute Capability 8.9).
+YKTian-x2b/AmpereArchViaMicroBenchMark | |               | Size                    | Bandwidth                       | BW理论上限            | Latency     |
+yvt/farcri-rs | FarCri\.rs is a benchmark framework for constrained systems (e.g., microcontrollers) based on [Criterion.rs]. It includes a shrunken-down version of Criterion\.rs's measurement code that runs on a tar
+cameron314/atomic_bench | Measures the execution time of various atomic instruction primitives,
+neozhang307/SyncMicrobenchmark | The sleep function is only available after sm_70. We tried to use other instructions to control the kernel execute latency, but the result is not so stable as sleep instruction, and larger than sleep
+benfred/py-spy | py-spy is a sampling profiler for Python programs. It lets you visualize what your Python
+flamegraph-rs/flamegraph | Cargo projects! It can be used to profile anything,
+mstange/samply | samply is a command line CPU profiler which uses the [Firefox profiler](https://profiler.firefox.com/) as its UI.
+rbspy/rbspy | Have a running Ruby program that you want to profile without restarting it? Want to profile a Ruby
+EmbarkStudios/puffin | **The friendly little instrumentation profiler for Rust**
+tikv/pprof-rs | `pprof` is a cpu profiler that can be easily integrated into a rust program.
+AlexEne/twiggy | <strong>A code size profiler for Wasm</strong>
+nnethercote/dhat-rs | This crate provides heap profiling and ad hoc profiling capabilities to Rust
+pythonspeed/filprofiler | 2. What code was responsible for allocating the memory that was present at that peak moment.
+koute/not-perf | # A sampling CPU profiler for Linux similar to `perf`
+cmyr/cargo-instruments | Easily profile your rust crate with Xcode [Instruments].
+llogiq/flame | Flamegraphs are a great way to view profiling information.
+pop-os/system76-power | **system76-power** is a utility for managing graphics and power profiles.
+svenstaro/cargo-profiler | Then you can install `cargo-profiler` via `cargo install`.
+aclysma/profiling | Provides a very thin abstraction over instrumented profiling crates like `puffin`, `optick`, `tracy`, and `superluminal-perf`.
+rust-lang/measureme | Support crate for rustc's self-profiling feature
+desbma/shh | Automatic [systemd](https://systemd.io/) service hardening guided by [strace](https://strace.io/) profiling.
+HdrHistogram/HdrHistogram_rust | accurate analysis of the extreme ranges of data with non-normal distributions, like latency.
+nnethercote/counts | `counts` is a command line tool for ad hoc profiling. It tallies line
+grafana/pyroscope-rs | **Pyroscope Profiler for Rust. Profile your Rust applications.**
+alexcrichton/coz-rs | Rust support for the [`coz` Causal Profiler](https://github.com/plasma-umass/coz)
+Wumpf/wgpu-profiler | Simple profiler scopes for wgpu using timer queries
+elastic/devfiler | devfiler reimplements the whole collection, data storage, symbolization, and UI portion of
+shvbsle/k10s | 3. You see a performance profile of your custom CUDA Kernels
+thoren-d/tracing-chrome | [![Crates.io](https://img.shields.io/crates/v/tracing-chrome)](https://crates.io/crates/tracing-chrome)
+javierhonduco/rbperf | `rbperf` is a low-overhead sampling profiler and tracer for Ruby (CRuby) which runs in BPF
+lucifer1004/VeloQ | **Agent-friendly profile-query CLI family.** JSON by default, with
+EmbarkStudios/superluminal-perf-rs | [Superluminal Performance](https://superluminal.eu/) profiler Rust API for adding user events to captures.
+0xdeafbeef/jeprofl | jeprofl is a memory allocation profiling tool that uses eBPF technology to
+dr-dotnet/dr-dotnet | Dr. Dotnet is a profiling tool for .NET applications, created with a specific vision in mind. It aims to offer an alternative approach to conventional profiling methods, focusing on specific problem a
+rogercoll/eprofiler-tui | A terminal-based flamegraph viewer that receives profiling data via an OTLP gRPC endpoint and renders a live, interactive flamegraph in the terminal. It can be used to visualize profiling data generat
+emberian/hprof | than fine-tuned profiling data. Consider using `perf`, `SystemTap`, `DTrace`,
+alumet-dev/alumet | <img src="readme/alumet-banner.png" height="141px"></img>
+yfractal/sdb | <h1 align="center">SDB: High-accuracy stack profiler for Ruby</h1>
+AlexEne/rust_hawktracer | Rust bindings for the [Hawktracer](https://github.com/loganek/hawktracer) profiler.
+zz85/profile-bee | Profile Bee is an eBPF-based CPU profiler that ships as a single binary — no BCC, libbpf, or perf tooling needed on the target host. Built with Rust and [aya](https://aya-rs.dev/).
+DataDog/libdatadog | including [Continuous Profilers](https://docs.datadoghq.com/tracing/profiler/).
+zmitchell/proctrace | `proctrace` is a high level profiler for process lifecycle events such as `fork`, `exec`, `setpgid`, and `setsid`.
+coolreader18/flamescope | Export [flame](https://github.com/TyOverby/flame) data to
+yaahc/spandoc | [![Latest Version][version-badge]][version-url]
+Tails8521/md-profiler | # md-profiler, a tracing profiler for the Sega MegaDrive/Genesis
+wasmerio/loupe | README has no descriptive paragraph
+Arc-blroth/memory-stats | A cross-platform memory profiler for Rust, supporting Windows, Linux, and MacOS. This crate provides two metrics:
+javierhonduco/lightswitch | **lightswitch** is a profiler as a library for Linux suitable for on-demand and continuous on-CPU profiling. It's written in Rust with sprinkles of C for eBPF. Currently C, C++, Rust, Zig, and Go are
+terror/vim-profiler | `vim-profiler` is a wrapper around the `(n)vim --startuptime` command, written in Rust. The binary is called
+Christopher-06/rustmeter | **RustMeter** is a comprehensive profiling, tracing, and monitoring system designed specifically for **Embedded Rust** applications. It is highly integrated with the [Embassy](https://github.com/embas
+camdenreslink/clr-profiler | ## How to create the Profiler COM object in Rust
+software-mansion/cairo-profiler | Profiler for Cairo programming language &amp; Starknet.
+Vedant-Asati03/Telelog | Telelog is a Rust-first logging library that combines structured logging, performance profiling, and architectural visualization. It provides rich console output and generates Mermaid diagrams to help
+AlexGladkov/quickai | **Profiler for Claude Code.** See exactly where your tokens, money and *time* go —
+emoon/remotery-rs | Remotery is a realtime CPU/GPU profiler with a viewer that runs in a web browser. This lib is a [Rust](https://www.rust-lang.org) wrapper around the C API provided by Remotery and the original repo ov
+de-husk/cosm-orc | Rust Cosmwasm smart contract integration testing and gas profiling library.
+LyonSyonII/profi | README has no descriptive paragraph
+mstange/fxprof-perf-convert | A converter from the Linux perf `perf.data` format into the [Firefox Profiler](https://profiler.firefox.com/) format, specifically into the [processed profile format](https://crates.io/crates/fxprof-p
+microsoft/one-collect | # An extremely fast Rust based framework for collecting event and profiling data on Linux and Windows
+sachinkg12/heaplens | Built on a native Rust engine using zero-copy mmap parsing with a two-phase CSR architecture, HeapLens handles production-sized heap dumps with ease. A 1.5 GB heap dump analyzes in about 1 second; a 1
+SparkyPotato/tracy_full | Complete Rust bindings for the [Tracy](https://github.com/wolfpld/tracy) profiler.
+OCamlPro/memthol | Memthol is a visualizer for memory profiling data generated from [OCaml] programs.
+mkmik/heappy | `heappy` is an experimental rust crate for in-process memory profiling.
+tcr/macos-profiler | A very basic profiler for Rust on macOS. It uses dtrace under the hood (invoked via shell, no less!) to log function calls every 1000Hz. This can give an approximate amount of information needed to de
+grafana/k6 | - **Flexible metrics storage and visualization**. Summary statistics or granular metrics, exported to the service of your choice.
+locustio/locust | Locust tests can be run from command line or using its web-based UI. Throughput, response times and errors can be viewed in real time and/or exported for later analysis.
+avajs/ava | *[Please support our friend Vadim Demedes and the people in Ukraine.](https://stand-with-ukraine.pp.ua/)*
+alibaba/MNN | Inside Alibaba, [MNN](https://mp.weixin.qq.com/s/5I1ISpx8lQqvCS8tGd6EJw) works as the basic module of the compute container in the [Walle](https://mp.weixin.qq.com/s/qpeCETty0BqqNJV9CMJafA) System, th
+webdriverio/webdriverio | - [@wdio/firefox-profile-service](https://github.com/webdriverio/webdriverio/tree/main/packages/wdio-firefox-profile-service) - A WebdriverIO service that lets you define your Firefox profile in your
+apache/jmeter | <h1 align="center"><img src="https://jmeter.apache.org/images/logo.svg" alt="Apache JMeter logo" /></h1>
+artilleryio/artillery | <a href="./packages/artillery#readme"><img src="./packages/artillery/artillery-logo.svg" width="80"></a>
+getanteon/anteon | <i>Anteon automatically generates Service Map of your K8s cluster without code instrumentation or sidecars. So you can easily find the bottlenecks in your system. Red lines indicate the high latency b
+baidu/dperf | Built on DPDK, dperf can generate massive traffic using a single x86 server — achieving tens of millions of HTTP Connections Per Second (CPS), hundreds of Gbps throughput, and billions of concurrent c
+sitespeedio/sitespeed.io | [Website](https://www.sitespeed.io/) | [Documentation](https://www.sitespeed.io/documentation/sitespeed.io/) | [Changelog](https://github.com/sitespeedio/sitespeed.io/blob/main/CHANGELOG.md) | [Bluesk
+session-replay-tools/tcpcopy | TCPCopy minimally impacts the production system, consuming only additional CPU, memory, and bandwidth. The reproduced workload mirrors the production environment in terms of request diversity, network
+fortio/fortio | the server includes a simple web UI and REST API to trigger run and see graphical representation of the results (both a single latency graph and a multiple results comparative min, max, avg, qps and p
+LinShunKang/MyPerf4J | * [TProfiler](https://github.com/alibaba/TProfiler)
+phoronix-test-suite/phoronix-test-suite | The **Phoronix Test Suite** is the most comprehensive testing and benchmarking
+pod4g/hiper | > At the same time, this tool is also a good tool for us to learn about the "browser's process of load and rendering" and "performance optimization", so that we don't get wrong conclusions when there
+alexfernandez/loadtest | the latency in answering requests and the headers for selected requests.
+cleanbrowsing/dnsperftest | Shell script to test the performance of the most popular DNS resolvers from your location.
+fcsonline/drill | You can write benchmark files, in YAML format, describing all the stuff you
+dfeneyrou/palanteer | - [Automatic instrumentation](https://dfeneyrou.github.io/palanteer/instrumentation_api_python.md.html#automaticinstrumentationwithoutcodemodification) of functions enter/leave, memory allocations, ra
+Blazemeter/taurus | Quick links: [Taurus Documentation](https://gettaurus.org/docs/) | [Knowledge Base](https://gettaurus.org/kb/) | [GitHub Issues](https://github.com/Blazemeter/taurus/issues)
+naver/ngrinder | * Please post questions in [Discussions](https://github.com/naver/ngrinder/discussions) not Issues.
+reactopt/reactopt | A CLI React performance optimization tool that identifies potential unnecessary re-rendering.
+addyosmani/puppeteer-webperf | * [Get a DevTools performance trace for a page load](#devtools-profile)
+sqlancer/sqlancer | [![Build Status](https://github.com/sqlancer/sqlancer/workflows/ci/badge.svg)](https://github.com/sqlancer/sqlancer/actions)
+bamlab/flashlight | <img src="./website/static/img/logo-black.svg" alt="Flashlight" width="50%" ><br />
+Inspiaaa/UnityHFSM | - **No GC Allocations** for state changes / updates / ... after setting up the state machine (-> No unwanted GC related lag spikes because of the state machine)
+TraceMachina/nativelink | > * **Active shell environment**: If the installer finishes but your shell doesn't recognize `nix` commands, you need to either restart your terminal session or source the daemon profile manually:
+callstack/reassure | - [`measureRenders` function](#measurerenders-function)
+microsoft/diskspd | DiskSpd is a storage performance tool from the Windows, Windows Server and Cloud Server Infrastructure engineering teams at Microsoft. Please visit <https://github.com/Microsoft/diskspd/wiki> for upda
+shulieTech/Takin | [![LICENSE](https://img.shields.io/github/license/pingcap/tidb.svg)](https://github.com/pingcap/tidb/blob/master/LICENSE)
+treosh/lighthouse-ci-action | - 💾 Upload results to a private LHCI server, Temporary Public Storage, or as artifacts
+YahooArchive/boomerang | Copyright (c) 2011, Yahoo! Inc.  All rights reserved.
+fabienrenaud/java-json-benchmark | This project benchmarks the throughput performance of a variety of Java Json libraries
+linux-rdma/perftest | performance micro-benchmark. The tests may be used for HW or SW tuning
+tag1consulting/goose | Load testing is a critical step in ensuring your web application can handle real-world traffic patterns. It helps you identify performance bottlenecks, optimize resource allocation, and ensure a seaml
+kubernetes/perf-tests | This repo is dedicated for storing various Kubernetes-related performance test related tools. If you want to add your own load-test, benchmark, framework or other tool please contact with one of the O
+HewlettPackard/netperf | performance benchmark. This is here mostly as a boot-strap. The real
+alloy-rs/core | Core libraries at the root of the Rust Ethereum ecosystem.
+ubugeeei-prod/vize | `tools/benchmarks/results/tool-benchmark-latest.json`
+maxim-saplin/CrossPlatformDiskTest | Measuring storage performance (SSD, HDD, USB Flash etc.) and RAM speed across Windows, macOS and Android devices. Random and sequential throughput (read/write operations) is calculted in MB/s and can
+LucaCanali/sparkMeasure | - **[TPC-DS Benchmark with PySpark](https://github.com/LucaCanali/Miscellaneous/tree/master/Performance_Testing/TPCDS_PySpark)**
+rogerwelin/cassowary | <p align="center"><a href="https://github.com/rogerwelin/cassowary"><img src="https://i.imgur.com/V9BaioC.png" alt="cassowary"></a></p>
+grafana/k6-operator | `grafana/k6-operator` is a Kubernetes operator for running distributed [k6](https://github.com/grafana/k6) tests in your cluster. k6 Operator introduces two CRDs:
+YueChen-C/py-ios-device | - [x] Profiles & Device Management. eg: Install and uninstall Fiddler certificate
+kube-burner/kube-burner | <img src='./media/horizontal/kube-burner-horizontal-color.png' width='65%'>
+dotnet/performance | This repo contains benchmarks used for testing the performance of all .NET Runtimes: .NET Core, Full .NET Framework, Mono and NativeAOT.
+alibaba/mobileperf | mobileperf is a Python PC tool  that can collect Android performance data: cpu,memory,fps,logcat log,traffic,process thread number,process launch log.mobileperf also support monkey test.
+MarathonLabs/marathon | <img src="docs/static/img/marathon-banner.svg" alt="Marathon Logo" />
+wix-incubator/DetoxInstruments | Detox Instruments is a performance–analysis and testing framework, designed to help developers profile their mobile apps in order to better understand and optimize their app's behavior and performance
+piotrmurach/rspec-benchmark | [gh_actions_ci]: https://github.com/piotrmurach/rspec-benchmark/actions?query=workflow%3ACI
+lafikl/RWDPerf | Performance testing for Responsive web design websites.
+jsdelivr/globalping | - Increase the reliability of network endpoint comparisons, such as CDN, DNS, and edge compute benchmarking, as well as provider comparisons.
+Zooz/predator | | Real time reports              | :sparkle:          |Predator aggregates all concurrent runs into a single beautiful report in real time (latency, rps, status codes and more).
+quick-perf/quickperf | @HeapSize(value = 1, unit = AllocationUnit.GIGA_BYTE)
+abstracta/jmeter-java-dsl | [![Maven Central](https://img.shields.io/maven-central/v/us.abstracta.jmeter/jmeter-java-dsl.svg?label=Maven%20Central)](https://search.maven.org/artifact/us.abstracta.jmeter/jmeter-java-dsl)
+kpdecker/six-speed | npm run profile:node -- --testName=$name --type=$type --count=$iterationCount
+krkn-chaos/krkn | ![Workflow-Status](https://github.com/krkn-chaos/krkn/actions/workflows/docker-image.yml/badge.svg)
+LucaCanali/Miscellaneous | | [**Performance Testing**](Performance_Testing)                   | Includes: <br>- TPCDS-PySpark, run TPCDS bemchmark at scale with PySpark and collect execution metrics<br>- Load testing tools for
+cgoldberg/multi-mechanize | ================================================
+yswenli/SAEA | [![NuGet version (SAEA)](https://img.shields.io/nuget/v/SAEA.Sockets.svg?style=flat-square)](https://www.nuget.org/packages?q=saea)
+patrickfav/BlurTestAndroid | This is a simple benchmark and showcase app on what's possible with blurring in Android 2016. Noteably this app uses Android's Renderscript v8 support library for fast blurring.
+mgasiorowski/performance_testing | * [Apache Benchmark](https://httpd.apache.org/docs/2.4/programs/ab.html)
+serputko/performance-testing-framework | #43	Threads: 3/10	Samples: 16	Latency: 23	Resp.Time: 197	Errors: 2
+aws-solutions/distributed-load-testing-on-aws | 3. These microservices interact with [Amazon Simple Storage Service](https://aws.amazon.com/s3) (Amazon S3), [Amazon DynamoDB](https://aws.amazon.com/dynamodb), and [AWS Step Functions](https://aws.am
+net-benchmark/dns-benchmark-tool | > install the successor: `pip install net-benchmark`
+lemire/fastmod | In hashing benchmarks on Intel Skylake with Clang, this library outperforms compiler optimizations.
+DNS-OARC/flamethrower | Flamethrower is a small, fast, configurable tool for functional testing, benchmarking, and stress testing DNS servers and networks. It supports IPv4, IPv6, UDP, TCP, DoT, and DoH and has a modular sys
+crossoverJie/ptg | Benchmark test for 10 seconds, using 20 goroutines.
+cloudflare/telescope | A cross-browser web performance testing toolkit built on [Playwright](https://playwright.dev/). This repository is a monorepo containing two packages:
+UCSBarchlab/PyRTL | waveform rendered right on the terminal for a [small state
+FyroxEngine/Fyrox | <img src="pics/logo.png" width="128" height="128" alt="Fyrox" />
+DioxusLabs/blitz | Blitz is currently in a **beta** state. It can already render many popular no-JS websites (Wikipedia, (Old) Reddit, etc), and is usable for making apps if you are an early adopter and willing to live
+linebender/resvg | *resvg* is an [SVG](https://en.wikipedia.org/wiki/Scalable_Vector_Graphics) rendering library.
+nical/lyon | A path tessellation library written in rust for GPU-based 2D graphics rendering.
+cristicbz/rust-doom | A little Doom 1 & 2 Renderer written in [Rust](https://github.com/rust-lang/rust). Mostly written while I was learning the language starting around 6 years ago, so it might not the best example of Rus
+chinedufn/percy | > Build frontend browser apps with Rust + WebAssembly. Supports server side rendering.
+framesurge/perseus | -   🗼 Supports server-side rendering (serving dynamic resources)
+not-fl3/miniquad | [![Github Actions](https://github.com/not-fl3/miniquad/workflows/Cross-compile/badge.svg)](https://github.com/not-fl3/miniquad/actions?query=workflow%3A)
+face-hh/webx | An alternative to the World Wide Web (`http(s)://`), with:
+mbrubeck/robinson | A toy web rendering engine written in the Rust language, by Matt Brubeck
+StarArawn/bevy_ecs_tilemap | A tilemap rendering plugin for [`bevy`](https://bevyengine.org/). It is more ECS friendly as it makes tiles entities.
+askama-rs/askama | **Askama** implements a template rendering engine based on [Jinja](https://jinja.palletsprojects.com/),
+BVE-Reborn/rend3 | Easy to use, customizable, efficient 3D renderer library built on wgpu.
+fschutt/printpdf | `printpdf` is a Rust library for creating, reading, writing and rendering PDF documents.
+HakanSeven12/OpenCADStudio | - **GPU rendering** — accelerated 2D and 3D viewports through `wgpu`, with orthographic and perspective cameras.
+josueBarretogit/manga-tui | nix profile install 'github:josueBarretogit/manga-tui'
+dfrg/swash | hardware dependent. Glyph caching, geometry batching and rendering all belong
+wahn/rs_pbrt | -t, --nthreads <NTHREADS>      use specified number of threads for rendering [default: 0]
+alexheretic/glyph-brush | Render API agnostic rasterization & draw caching text rendering. See [readme](glyph-brush), [changelog](glyph-brush/CHANGELOG.md).
+milos-agathon/forge3d | Every map below is rendered end to end by forge3d — titles, legends and scale bars
+galileo-map/galileo | **Galileo** is a general purpose cross-platform geo-rendering library.
+fintelia/terra | Terra is work in progress large scale terrain rendering library built on top of
+project-blinc/Blinc | - **GPU-Accelerated**: SDF rendering, glassmorphism, spring physics, @flow custom shaders
+chinedufn/webgl-water-tutorial | If you have any questions or run into any stumbling blocks please feel free to
+mkeeter/fidget | - Bitmap rendering of implicit surfaces in 2D (with a variety of rendering
+james-j-obrien/bevy_vector_shapes | - Supports various bevy rendering features: 2D and 3D pipelines, transparency, alpha modes, render layers, bloom.
+renpenguin/display3d | display3d is a command line interface for rendering and animating 3D objects using ANSI escape codes, written using [gemini-engine](https://crates.io/crates/gemini-engine) in the Rust programming lang
+Patryk27/strolle | Strolle (from _strålspårning_) is a real-time renderer with support for dynamic
+ekzhang/rpt | This is a physically based, CPU-only rendering engine written in Rust. It uses path tracing to generate realistic images of 3D scenes.
+gdt050579/AppCUI-rs | - **GraphView** — nodes-and-edges graph rendering
+ratatui/ratatui-image | **Unify terminal image rendering across Sixels, Kitty, and iTerm2 protocols.**
+bonsairobo/building-blocks | - [`Array`](crate::storage::array) with structure-of-arrays (`SoA`) storage of multiple data channels per spatial
+veeenu/hudhook | A Rust renderer hook library for building [Dear ImGui](https://github.com/ocornut/imgui) overlays.
+zesterer/euc | // A type that specifies a rendering pipeline.
+cxreiff/bevy_ratatui_camera | application's rendered frames to the terminal.
+rustq/vue-skia | The `vue-skia` is a `skia` based 2d graphics `vue` rendering library. It is based on `Rust` to implement software rasterization to perform rendering. It takes up less memory than the native canvas, ho
+thatmagicalcat/txm | <p>TXM (Terminal TeX Math) is a math rendering engine with LaTeX support.</p>
+kurtkuehnert/bevy_terrain | Bevy Terrain is a plugin for rendering terrains with the Bevy game engine.
+001TMF/ProteinView | <sub>Nucleosome core particle — histone octamer wrapped in DNA, rendered with Kitty graphics protocol</sub>
+toxoidengine/toxoid | - [Sokol](https://github.com/floooh/sokol): Headers-only cross-platform C renderer with WebGPU support.
+guilhermeprokisch/see | see is a powerful file visualization tool for the terminal, offering advanced code viewing capabilities, Markdown rendering, and more. It provides syntax highlighting, emoji support, and image renderi
+staff-rs/staff | Music theory and score rendering library with midi, notes, chords, scales, and more.
+Dicklesworthstone/frankentui | **The Problem:** Most TUI stacks make it easy to draw widgets, but hard to build *correct*, *flicker‑free*, *inline* UIs with strict terminal cleanup and deterministic rendering.
+Valerioageno/ssr-rs | The crate aims to enable server side rendering on rust servers in the simplest and lightest way possible.
+lzanini/mdbook-katex | mdBook-KaTeX is a preprocessor for [mdBook](https://github.com/rust-lang/mdBook), using KaTeX to render LaTeX math expressions.
+TritonDataCenter/statemap | This repository contains the software for rendering _statemaps_, a
+kazan-3d/kazan | Kazan is an in-progress Vulkan driver that supports cross-platform software rendering, and (eventually) is a driver for [libre-riscv.org's RISC-V based GPU](https://libre-riscv.org/3d_gpu/).
+kurtkuehnert/terrain_renderer | A large-scale real-world terrain renderer written in Rust using the Bevy game engine.
+fu5ha/rendy-pbr | This is a small, realtime physically-based renderer written with `rendy`, a 'make-your-own-renderer' toolkit
+fslabs/bevy_polyline | **High performance instanced polyline rendering for bevy**
+openooxml/betteroffice | | [`betteroffice-xlsx`](https://crates.io/crates/betteroffice-xlsx) | crates.io | typed Rust API for opening, editing, calculating, rendering, and saving XLSX workbooks |
+panxinmiao/myth | **A high-performance Rust rendering engine based on wgpu.**
+teoxoy/encase | The [`UniformBuffer`], [`StorageBuffer`], [`DynamicUniformBuffer`] and [`DynamicStorageBuffer`] structs are wrappers around an underlying raw buffer (a type implementing [`BufferRef`] and/or [`BufferM
+junkdog/beamterm | ## beamterm - A GPU-Accelerated Terminal Renderer
+Dylanmurzello/zed-android-port | Vulkan via wgpu. AChoreographer-driven vsync, no JNI hop per frame. Opt-in 120Hz with Mailbox present mode. Glyph fallback into `/system/fonts` so Powerline arrows and CJK render without bundling font
+radiant-labs/radiantkit | It introduces a node-component-system for efficient rendering, while ensuring complete extensibility. It can support both native and web (via WebAssembly) platforms.
+Indosaram/hwpers | A Rust library for parsing Korean Hangul Word Processor (HWP) files with full layout rendering support.
+asinglebit/guitar | The graph is the central history view. It can render:
+StarArawn/bevy_tiled | This is a plugin for rendering tiled maps. Specfically, maps from the "Tiled" editor which can be found here:
+sarkahn/bevy_ascii_terminal | fast method for rendering colorful ascii in bevy. It was made with "traditional
+avsaase/walksnail-osd-tool | Cross-platform tool for rendering the flight controller OSD and SRT data from the Walksnail Avatar HD FPV system on top of the goggle or VRX recording.
+chinedufn/landon | > A collection of tools, data structures and methods for exporting Blender data (such as meshes and armatures) and preparing it for your rendering pipeline.

@@ -1,0 +1,780 @@
+repository	disposition	category	reason
+sharkdp/hyperfine	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+hatoo/oha	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+bheisler/criterion.rs	alias	benchmark/testing candidate	Historical Criterion location; canonical criterion-rs/criterion.rs counted separately.
+pawurb/hotpath-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nvzqz/divan	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+djkoloski/rust_serialization_benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+us/crw	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bencherdev/bencher	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+suyoumo/ClawProBench	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bheisler/iai	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lnx-search/rewrk	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Voultapher/sort-research-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lance0/xfr	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+reyamira/models	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+twitter/rpc-perf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alacritty/vtebench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+BurntSushi/cargo-benchcmp	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+CodSpeedHQ/codspeed	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gungraun/gungraun	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+hoodie/concatenation_benchmarks-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+MystenLabs/fastcrypto	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+programatik29/rust-web-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+BurntSushi/critcmp	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rsasaki0109/rust_robotics	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+datafusion-contrib/tpcgen-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rosetta-rs/template-benchmarks-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wfxr/rlt	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+bheisler/cargo-criterion	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+facebookexperimental/resctl-demo	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+beling/bsuccinct-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+huggingface/inference-benchmarker	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+OxidizeLabs/cachekit	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ashvardanian/StringWars	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+abundant-ai/swe-marathon	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+jcaromiq/goku	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+flashbots/contender	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+raphaelmansuy/edgeparse	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+delendum-xyz/zk-benchmarking	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ashvardanian/less_slow.rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wkwan/flo	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+anoma/zkp-compiler-shootout	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jonhoo/bustle	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rousan/rust-web-frameworks-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Proryanator/encoder-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fede1024/kafka-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+goobolabs/somali-language-standard	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+khvzak/script-bench-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+erickt/rust-serialization-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+optuna/kurobako	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+bluss/bencher	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+omarmhaimdat/pepe	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sharkbench/sharkbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+clouedoc/hzfind	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+klingtnet/rb	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+trinhminhtriet/spiko	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+solstackapp/geyserbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gamelife1314/rsb	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+CodSpeedHQ/codspeed-rust	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lschmierer/ecs_bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+marvin-j97/rust-storage-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+TeXitoi/benchmarksgame-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tczajka/bigint-benchmark-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+briansmith/crypto-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ultralytics/template-rust	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bluss/twoway	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SwiftyPop/TimerResBenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+a16z/zkvm-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+EmbarkStudios/tiny-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+unixpickle/Benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rust-lang/libtest	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rylev/welle	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+samuell/gccontent-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sassman/ssd-benchmark-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+surrealdb/crud-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fereidani/rust-channel-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+PSeitz/binggan	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+BurntSushi/rust-sorts	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+egraphs-good/extraction-gym	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+xemantic/java-2-times-faster-than-c	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+vllm-project/vllm-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tempoxyz/schelk	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+apitap/apitap-lib	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+haraldh/rust_echo_bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kaist-cp/smr-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+polybase/zk-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+apache/sedona-spatialbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+eth-act/zkevm-benchmark-workload	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+deepu105/concurrency-benchmarks	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+Canop/glassbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+privacy-ethereum/nova-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+askama-rs/template-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+xnuter/perf-gauge	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nu11ptr/criterion-table	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dmitryikh/rust-vs-cpp-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ruvnet/rupixel	excluded	benchmark/testing candidate	Visual RAG product; outside the selected workload scope
+SpaceCell/lightstream	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nuald/simple-web-benchmark	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+codecrafters-io/ccbench	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+DoHoonKim8/halo2-lasso	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+danoctavian/c10k-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+openai/evals	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+TechEmpower/FrameworkBenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+krausest/js-framework-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+the-benchmarker/web-frameworks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+AgentOps-AI/agentops	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+modelscope/evalscope	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+mani-skill/ManiSkill	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+llm-as-a-verifier/llm-as-a-verifier	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+microsoftarchive/promptbench	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+processone/tsung	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yandex/yandex-tank	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ARISE-Initiative/robosuite	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+EMI-Group/evox	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+IBM/AssetOpsBench	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+hexo-ai/sia	excluded	benchmark/testing candidate	AI task-quality evaluation, not a systems performance harness
+smallnest/go-web-framework-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+phpbench/phpbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Elanis/web-to-desktop-framework-comparison	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+IntelLabs/fastRAG	excluded	benchmark/testing candidate	RAG framework; no benchmark architecture evidence selected
+julienschmidt/go-http-routing-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yoshitomo-matsubara/torchdistill	excluded	benchmark/testing candidate	Model-quality evaluation outside current scope
+kengz/SLM-Lab	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+ZJU-REAL/ClawGUI	excluded	benchmark/testing candidate	GUI-agent training and task success evaluation
+flow-project/flow	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+PKU-Alignment/omnisafe	excluded	benchmark/testing candidate	Safe RL quality benchmark outside current scope
+tensorflow/benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mikeroyal/Open-Source-Security-Guide	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+kenjis/php-framework-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+DigitalInBlue/Celero	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+capgym/cap-x	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+eknkc/ssr-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+caderek/benny	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+melix/jmh-gradle-plugin	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+klen/py-frameworks-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+networknt/microservices-framework-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+hyperledger-caliper/caliper	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mroth/phoenix-showdown	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Picovoice/speech-to-text-benchmark	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+JuliaCI/BenchmarkTools.jl	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cmu-db/benchbase	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fastify/benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ServiceNow/AgentLab	excluded	benchmark/testing candidate	Agent task evaluation outside current scope
+facebookresearch/MLGym	excluded	benchmark/testing candidate	AI research agent evaluation
+amazon-archives/aws-security-benchmark	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+SalesforceAIResearch/MCP-Universe	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+allenai/vla-evaluation-harness	excluded	benchmark/testing candidate	Robot policy evaluation outside current scope
+SaltyAom/bun-http-framework-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+petabridge/NBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+itbench-hub/ITBench	excluded	benchmark/testing candidate	IT agent evaluation outside current scope
+shchur/gnn-benchmark	excluded	benchmark/testing candidate	Graph model quality evaluation
+BuilderIO/framework-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+openml/automlbenchmark	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+openmessaging/benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+0ca/BoxPwnr	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+layoutBox/LayoutFrameworkBenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+harsha-simhadri/big-ann-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wil3/gymfc	excluded	benchmark/testing candidate	Controller training benchmark outside current scope
+u39kun/deep-learning-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+oltpbenchmark/oltpbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+the-benchmarker/website	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+irobot-ros/ros2-performance	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+NVIDIA/SkillEvaluator	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+isri-aist/RoboManipBaselines	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+qdrant/vector-db-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+libnonius/nonius	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nickbruun/hayai	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+AlexeyZatsepin/Android-ORM-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+openstack/rally	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chronoxor/CppBenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+remotebiosensing/rppg	excluded	benchmark/testing candidate	Physiological prediction quality evaluation
+fperf/fperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+MILVLG/openvqa	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+Project-AgML/AgML	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+benchopt/benchopt	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cavalab/srbench	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+OpenBMB/UltraEval-Audio	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bark-simulator/bark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+abeimler/ecs_benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+android-bench/android-bench	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+pathwaycom/pathway-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chaoran/fast-wait-free-queue	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+numbbo/coco	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+polyfractal/athletic	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+seedifferently/the-great-web-framework-shootout	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sosy-lab/benchexec	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+arey/java-object-mapper-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+reframe-hpc/reframe	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+a-r-j/ProteinWorkshop	excluded	benchmark/testing candidate	Protein representation learning benchmark
+ARM-software/Tool-Solutions	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sheredom/ubench.h	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+efficientgo/e2e	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gormanm/mmtests	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alirezazareian/ovr-cnn	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+stalkermustang/llm-bulls-and-cows-benchmark	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+neurosim/MLP_NeuroSim_V3.0	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+codefuse-ai/OpAgent	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+google/benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+evanwashere/mitata	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+martinus/nanobench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+attaswift/Attabench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+atemerev/skynet	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sbt/sbt-jmh	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+andreas-abel/nanoBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alco/benchfella	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+scalameter/scalameter	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+p-ranav/criterion	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+iboB/picobench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+clamchowder/Microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+clamchowder/MicrobenchmarksGui	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Ichoran/thyme	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+bazhenov/tango	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tylertreat/go-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+aayasin/perf-tools	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sjfeng1999/gpu-arch-microbenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+svanoort/python-client-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ChipsandCheese/Microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+joshuaulrich/microbenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+JuliaLang/Microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mp911de/microbenchmark-runner	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Dr-Noob/peakperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+frappe/caffeine	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ucb-bar/ccbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+stanford-mast/iBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ibireme/yybench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+forresti/osu-micro-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Vitorian/hft-challenges	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+VerticalResearchGroup/microbench	excluded	benchmark/testing candidate	README too thin for content analysis
+openjdk/jmh-jdk-microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ldbc/lsqb	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Sayi/jmh-visual-chart	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+hax/my-benchmark	excluded	benchmark/testing candidate	README too thin for content analysis
+junkdog/entity-system-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+shoaibkamil/stencilprobe	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SFU-HiAccel/uBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+PeterTh/uCLbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+scivision/python-performance	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+IBM/microprobe	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tycho/clockperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+adoptium/bumblebench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+shen203/GPU_Microbenchmark	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+AI-Hypercomputer/accelerator-microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+berestovskyy/applied-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jorendorff/dht	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rdyro/tune-jax	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+maximenajim/java-vs-node-react-rendering-microbenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+arkanis/syscall-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wsargent/slf4j-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+eigenform/lamina	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Deleplace/microbenchmarks	excluded	benchmark/testing candidate	README too thin for content analysis
+pyk/bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+RealTimeChris/benchmarksuite	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+seriyps/rebar3_bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ning/ub	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+biboudis/clashofthelambdas	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+blitz/kernel_entry_benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+vickiegpt/A16-microbenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+martinbonnin/run-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+timoheimonen/macOS-memory-benchmark	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+spthm/cudabmk	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+RasterDuck/vectormathbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+softprops/cappi	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+silversquirl/benchmark.zig	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+maxim-saplin/mandelbrot	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fullzer4/pybenchx	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chrirocca/GPUNetBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+JimZeyuYang/GPU_Power_Benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+peter-lawrey-admin/jvm-micro-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+biboudis/LambdaMicrobenchmarking	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gormanm/pft	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+peterszatmary/jmh-benchmark-demo	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lemire/microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+CoreyLeath-code/AutoGuard-AI-Real-Time-Autonomous-Vehicle-Safety-Geofencing-Platform	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bdice/python_microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SEALABQualityGroup/icpe-data-challenge-jmh	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nsrip-dd/profiler-overhead-testing	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chrishantha/microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+thomwiggers/microbenchmark-aarch64	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+buchgr/rules_jmh	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+efficient/microservices_microbenchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rolfl/MicroBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sjenning/zsmapbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+zhisbug/ray-scalable-ml-design	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mhirki/idq-bench2	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+HicrestLaboratory/Blink-GPU	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jeffzi/luamark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+DiegoEliasCosta/spotjmhbugs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+vitinh0z/java-performance	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mazalves/microbenchmarks	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+epickrram/journalling-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+karnajitsen/NVLink-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yushinliu/cuda-ptx-microbenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+YKTian-x2b/AmpereArchViaMicroBenchMark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yvt/farcri-rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cameron314/atomic_bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+neozhang307/SyncMicrobenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+benfred/py-spy	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+flamegraph-rs/flamegraph	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mstange/samply	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+edison7009/EchoBird	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+rbspy/rbspy	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+serokell/deploy-rs	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+EmbarkStudios/puffin	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tikv/pprof-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+AlexEne/twiggy	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nnethercote/dhat-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+pythonspeed/filprofiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+koute/not-perf	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cmyr/cargo-instruments	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+westpoint-io/lazyrsync	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+llogiq/flame	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+pop-os/system76-power	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+supermemoryai/smfs	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+svenstaro/cargo-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+aclysma/profiling	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rust-lang/measureme	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+desbma/shh	excluded	profiling	Systemd hardening rather than performance measurement
+HdrHistogram/HdrHistogram_rust	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nnethercote/counts	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ZakisM/bl3_save_edit	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+bluenote-1577/sylph	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+polarsignals/rust-jemalloc-pprof	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+TheYkk/git-switcher	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+grafana/pyroscope-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alexcrichton/coz-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+siketyan/ghr	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+hw0lff/shikane	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+Wumpf/wgpu-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+null-dev/firefox-profile-switcher-connector	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+elastic/devfiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+shvbsle/k10s	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+thoren-d/tracing-chrome	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+javierhonduco/rbperf	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jzbor/nix-sweep	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+lucifer1004/VeloQ	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+soth-ai/mcp-reticle	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+sassman/amoxide-rs	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+burakdede/aisw	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+aralroca/aralroca	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+EmbarkStudios/superluminal-perf-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gyroflow/lens_profiles	unavailable	profiling	No README body; excluded from content-review count.
+0xdeafbeef/jeprofl	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dr-dotnet/dr-dotnet	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rogercoll/eprofiler-tui	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+MarlinDiary/worklouder-input-cli	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+ShayBox/Wooting-Profile-Switcher	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+emberian/hprof	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alumet-dev/alumet	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yfractal/sdb	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Th0rgal/shard	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+AlexEne/rust_hawktracer	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+zz85/profile-bee	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+DataDog/libdatadog	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kguardian-dev/kguardian	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+xjoker/codex-switch	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+zmitchell/proctrace	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+naftulikay/aws-env	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+gleich/profile_stack	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+LuoGroup2023/PanTax	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+kornelski/rust-lcms2	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+coolreader18/flamescope	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yaahc/spandoc	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cleyton1986/predator-sense	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+Tails8521/md-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wasmerio/loupe	excluded	profiling	README too thin for content analysis
+Arc-blroth/memory-stats	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+javierhonduco/lightswitch	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+terror/vim-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+roniel-rhack/envi	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+inceptyon-labs/TARS	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+Christopher-06/rustmeter	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+camdenreslink/clr-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+software-mansion/cairo-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Vedant-Asati03/Telelog	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+AlexGladkov/quickai	excluded	profiling	Coding assistant usage profiler outside current scope
+vobst/btf2json	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+loocor/mcpmate	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+emoon/remotery-rs	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+de-husk/cosm-orc	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+LyonSyonII/profi	excluded	profiling	README too thin for content analysis
+alexandretrotel/dotfiles-manager	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+ImShyMike/hackatime-heatmap	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+h3r2tic/gpu-profiler	unavailable	profiling	No README body; excluded from content-review count.
+home-mangler/home-mangler	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+mstange/fxprof-perf-convert	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+microsoft/one-collect	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sachinkg12/heaplens	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SparkyPotato/tracy_full	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+OCamlPro/memthol	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mkmik/heappy	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tcr/macos-profiler	retained	profiling	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ElNiak/cupp-rs	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+riverscn/any-switch	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+Ghostlock-AI/capsule	excluded	profiling	Search false positive or domain outside Rust performance harness requirements.
+grafana/k6	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+locustio/locust	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+promptfoo/promptfoo	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+avajs/ava	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alibaba/MNN	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+webdriverio/webdriverio	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+apache/jmeter	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+artilleryio/artillery	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+getanteon/anteon	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Blazity/next-enterprise	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+baidu/dperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sitespeedio/sitespeed.io	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+session-replay-tools/tcpcopy	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+marmelab/awesome-rest	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+fortio/fortio	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+LinShunKang/MyPerf4J	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+phoronix-test-suite/phoronix-test-suite	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+albinotonnina/albinotonnina.com	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+pod4g/hiper	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alexfernandez/loadtest	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cleanbrowsing/dnsperftest	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fcsonline/drill	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dfeneyrou/palanteer	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Blazemeter/taurus	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+naver/ngrinder	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+reactopt/reactopt	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+addyosmani/puppeteer-webperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sqlancer/sqlancer	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+avoidwork/filesize.js	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bamlab/flashlight	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Inspiaaa/UnityHFSM	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+TraceMachina/nativelink	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+callstack/reassure	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+d3ward/toolz	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+microsoft/diskspd	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+shulieTech/Takin	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+treosh/lighthouse-ci-action	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dmaicher/doctrine-test-bundle	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+YahooArchive/boomerang	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+DoneDeal0/superdiff	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+fabienrenaud/java-json-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+linux-rdma/perftest	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tag1consulting/goose	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kubernetes/perf-tests	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+HewlettPackard/netperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alloy-rs/core	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+janreges/siteone-crawler	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+ubugeeei-prod/vize	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+maxim-saplin/CrossPlatformDiskTest	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+andyedinborough/stress-css	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+AirportR/fulltclash	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+LucaCanali/sparkMeasure	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dwyl/book	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+rogerwelin/cassowary	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+grafana/k6-operator	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+YueChen-C/py-ios-device	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kube-burner/kube-burner	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dotnet/performance	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alibaba/mobileperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+swc-project/jest	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+themidnightgospel/Imposter	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+MarathonLabs/marathon	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wix-incubator/DetoxInstruments	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+piotrmurach/rspec-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lafikl/RWDPerf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jsdelivr/globalping	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Zooz/predator	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+quii/mockingjay-server	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+quick-perf/quickperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+abstracta/jmeter-java-dsl	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kpdecker/six-speed	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+krkn-chaos/krkn	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+LucaCanali/Miscellaneous	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cgoldberg/multi-mechanize	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jacksonh/manos	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+yswenli/SAEA	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+patrickfav/BlurTestAndroid	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mgasiorowski/performance_testing	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+serputko/performance-testing-framework	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+aws-solutions/distributed-load-testing-on-aws	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+xullexer/PYDNS-Scanner	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+techinz/browsers-benchmark	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+ZoranPandovski/awesome-testing-tools	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+net-benchmark/dns-benchmark-tool	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+arcprize/arc-agi-benchmarking	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+lemire/fastmod	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+zszszszsz/.config	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+linhay/harmony-next.skills	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+bartoszlenar/Validot	unavailable	benchmark/testing candidate	No README body; excluded from content-review count.
+DNS-OARC/flamethrower	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+crossoverJie/ptg	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chrisneagu/FTC-Skystone-Dark-Angels-Romania-2020	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+cloudflare/telescope	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+UCSBarchlab/PyRTL	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+testinggospels/camouflage	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+FyroxEngine/Fyrox	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+DioxusLabs/blitz	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+linebender/resvg	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nical/lyon	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cristicbz/rust-doom	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chinedufn/percy	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+framesurge/perseus	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+not-fl3/miniquad	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+face-hh/webx	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mbrubeck/robinson	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+StarArawn/bevy_ecs_tilemap	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+askama-rs/askama	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+BVE-Reborn/rend3	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fschutt/printpdf	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+HakanSeven12/OpenCADStudio	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+josueBarretogit/manga-tui	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dfrg/swash	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+wahn/rs_pbrt	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alexheretic/glyph-brush	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+milos-agathon/forge3d	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+galileo-map/galileo	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fintelia/terra	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+project-blinc/Blinc	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chinedufn/webgl-water-tutorial	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+faisalkindi/DLSS5oneclick	excluded	workload: graphics	Search false positive or domain outside Rust performance harness requirements.
+mkeeter/fidget	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+james-j-obrien/bevy_vector_shapes	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+renpenguin/display3d	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Patryk27/strolle	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ekzhang/rpt	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gdt050579/AppCUI-rs	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ratatui/ratatui-image	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+bonsairobo/building-blocks	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+veeenu/hudhook	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+zesterer/euc	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cxreiff/bevy_ratatui_camera	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rustq/vue-skia	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+thatmagicalcat/txm	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kurtkuehnert/bevy_terrain	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+001TMF/ProteinView	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+toxoidengine/toxoid	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+guilhermeprokisch/see	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+staff-rs/staff	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Dicklesworthstone/frankentui	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Valerioageno/ssr-rs	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lzanini/mdbook-katex	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+TritonDataCenter/statemap	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kazan-3d/kazan	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kurtkuehnert/terrain_renderer	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fu5ha/rendy-pbr	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fslabs/bevy_polyline	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+openooxml/betteroffice	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+panxinmiao/myth	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+teoxoy/encase	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+junkdog/beamterm	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Dylanmurzello/zed-android-port	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+radiant-labs/radiantkit	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Indosaram/hwpers	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+asinglebit/guitar	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nikomatsakis/skill-tree	excluded	workload: graphics	Search false positive or domain outside Rust performance harness requirements.
+StarArawn/bevy_tiled	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sarkahn/bevy_ascii_terminal	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+avsaase/walksnail-osd-tool	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chinedufn/landon	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+austintheriot/wrend	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+m13253/FaithType	unavailable	workload: graphics	No README body; excluded from content-review count.
+manankarnik/bevy_generative	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Jesterhearts/ratatui-wgpu	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+atuinsh/eye-declare	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Logicalshift/flo_draw	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+DavidPeicho/albedo	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gents83/INOX	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lcnr/crow	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Smithay/drm-rs	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fslabs/bevy_aabb_instancing	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+yeicor/sdf-viewer	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+skyzh/raytracer.rs	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+kosumic/rustracer	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dtcristo/bevy_pixels	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+micahrj/ochre	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+arcana-engine/sierra	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+alibaba/font-toolkit	unavailable	workload: graphics	No README body; excluded from content-review count.
+Dicklesworthstone/rich_rust	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+microsoft/webui	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+riley-williams/buoyant	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Panzerschrek/Square-Wheel	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mikialex/rendiation	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+o2sh/provok	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+maplibre/maplibre-native-rs	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jadedbay/bevy_procedural_grass	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+beltegeuse/rustlight	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+carloskiki/pulldown-latex	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+num3ric/sol-rs	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Alex6357/alloy	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ixlab/vidformer	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+jinleili/sdf-text-view	unavailable	workload: graphics	No README body; excluded from content-review count.
+FreddyWordingham/antler	unavailable	workload: graphics	No README body; excluded from content-review count.
+VisualGMQ/rs-cpurenderer	unavailable	workload: graphics	No README body; excluded from content-review count.
+mgth/Omniphony	retained	workload: graphics	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+meilisearch/meilisearch	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+qdrant/qdrant	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+surrealdb/surrealdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+influxdata/influxdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+chroma-core/chroma	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+clockworklabs/SpacetimeDB	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tursodatabase/turso	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+neondatabase/neon	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+valeriansaliou/sonic	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+t8y2/dbx	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tikv/tikv	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+pingcap/talent-plan	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SeaQL/sea-orm	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+databendlabs/databend	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+risingwavelabs/risingwave	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+spacejam/sled	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+warp-tech/warpgate	excluded	workload: storage	Access gateway; no relevant benchmark design evidence
+erikgrinaker/toydb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+GreptimeTeam/greptimedb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+MaterializeInc/materialize	excluded	workload: storage	Search false positive or domain outside Rust performance harness requirements.
+FalkorDB/FalkorDB	excluded	workload: storage	Search false positive or domain outside Rust performance harness requirements.
+HelixDB/helix-db	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+trailbaseio/trailbase	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+pgdogdev/pgdog	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+achristmascarl/rainfrog	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+readysettech/readyset	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+malisper/pgrust	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cberner/redb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+typedb/typedb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Qovery/Replibyte	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+skyzh/mini-lsm	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cozodb/cozo	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ekzhang/rustpad	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+vlcn-io/cr-sqlite	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+frectonz/sql-studio	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+AmrDeveloper/GQL	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+slatedb/slatedb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+TaKO8Ki/gobang	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+gluesql/gluesql	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+spiceai/spiceai	excluded	workload: storage	Search false positive or domain outside Rust performance harness requirements.
+orbitinghail/sqlsync	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+obi1kenobi/trustfall	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+apache/horaedb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+skytable/skytable	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sfu-db/connector-x	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sqlpage/SQLPage	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+indradb/indradb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+hydra-db/hydradb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fjall-rs/fjall	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tensorchord/pgvecto.rs	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rust-rocksdb/rust-rocksdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+feldera/feldera	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+toeverything/OctoBase	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tranxuanthang/lrclib	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+nubskr/walrus	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+microsoft/DiskANN	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Brendonovich/prisma-client-rust	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+oxigraph/oxigraph	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+risinglightdb/risinglight	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+superfly/corrosion	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cnosdb/cnosdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SeaQL/sea-query	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cswinter/LocustDB	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tonbo-io/tonbo	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+losfair/mvsqlite	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+orbitinghail/graft	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+skyzh/type-exercise-in-rust	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+postgresml/korvus	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tensorbase/tensorbase	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lnx-search/lnx	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+PumpkinDB/PumpkinDB	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+teodevgroup/teo	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+exonum/exonum	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+PoloDB/PoloDB	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+stoolap/stoolap	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cornucopia-rs/cornucopia	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+joaoh82/rust_sqlite	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+khonsulabs/bonsaidb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Evokoa/pgGraph	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+GlareDB/glaredb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+duckdb/duckdb-rs	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ovexro/dockpanel	excluded	workload: storage	Server administration product outside selected scope
+djc/bb8	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+feigeCode/navop	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+antoniosarosi/mkdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lanterndata/lantern	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+supabase/wrappers	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+sunng87/pgwire	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+GrafeoDB/grafeo	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+0b01/tectonicdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+KipData/KiteSQL	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+opral/lix	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+s2-streamstore/s2	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+vincent-herlemont/native_db	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+blackbeam/rust-mysql-simple	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+earth-mover/icechunk	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+KOBA789/relly	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+vrmiguel/pgpad	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Pometry/Raphtory	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Fullstop000/wickdb	retained	workload: storage	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ProjectPhysX/FluidX3D	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+idealvin/coost	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+felixguendling/cista	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ashvardanian/less_slow.cpp	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+JonMagon/KDiskMark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+openai/procgen	excluded	benchmark/testing candidate	Policy training environment benchmark
+kimwalisch/primesieve	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+baidu-research/DeepBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+redis/memtier_benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+travisdowns/uarch-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+thekvs/cpp-serializers	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Mellanox/sockperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Jittor/JNeRF	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+openxrlab/xrslam	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+openxrlab/xrnerf	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+QingyongHu/SensatUrban	excluded	benchmark/testing candidate	Semantic segmentation dataset
+p-ranav/alpaca	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+frol/completely-unscientific-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+RRZE-HPC/gpu-benches	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+krrishnarraj/clpeak	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+zupat/related_post_gen	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ekondis/mixbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+davidstutz/superpixel-benchmark	excluded	benchmark/testing candidate	Segmentation quality evaluation
+UWMILab/HA-VLN	excluded	benchmark/testing candidate	Navigation task-quality benchmark
+JokerJohn/PALoc	excluded	benchmark/testing candidate	SLAM trajectory accuracy benchmark
+sbeamer/gapbs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+XiaoMi/mobile-ai-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+UoB-HPC/BabelStream	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fastvideo/gpu-camera-sample	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Xingyu-Lin/softgym	excluded	benchmark/testing candidate	Robot policy manipulation environments
+hpcg-benchmark/hpcg	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+1a1a11a/libCacheSim	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Compaile/ctrack	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ProjectPhysX/OpenCL-Benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+martinus/map_benchmark	excluded	benchmark/testing candidate	README redirects to article; article not analysed in this corpus
+apigee/apib	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+learnedsystems/SOSD	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+FrontierCS/Frontier-CS	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+ORNL/HeCBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+VITA-Group/Open-L2O	excluded	benchmark/testing candidate	Learned optimizer quality benchmark
+rcedgar/muscle	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+breuner/elbencho	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+t-dillon/tdoku	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+davidstutz/superpixels-revisited	excluded	benchmark/testing candidate	Segmentation quality evaluation
+jwlim/tracker_benchmark	excluded	benchmark/testing candidate	Visual tracking accuracy benchmark
+google/uVkCompute	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+miloyip/dtoa-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+zhouxian/FluidLab	excluded	benchmark/testing candidate	Differentiable manipulation environments
+vkmark/vkmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cmuratori/termbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+johnmcfarlane/fixed_point	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+SJTU-IPADS/ServerlessBench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+leggedrobotics/SimBenchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ParAlg/gbbs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Aider-AI/polyglot-benchmark	excluded	benchmark/testing candidate	Programming problem success evaluation
+DBAIWangGroup/nns_benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+url-kaist/Ground-Segmentation-Benchmark	excluded	benchmark/testing candidate	Ground segmentation quality benchmark
+openxrlab/xrsfm	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+rigtorp/c2clat	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+neurosim/DNN_NeuroSim_V2.1	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ETH3D/dataset-pipeline	excluded	benchmark/testing candidate	Image reconstruction dataset preparation
+serde-rs/json-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cornell-zhang/rosetta	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+project-gemmi/benchmarking-fft	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+learn-more/findpattern-bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+MCG-NKU/SalBenchmark	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+mattreecebentley/plf_nanotimer	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ivafanas/sltbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ArashPartow/math-parser-benchmark-project	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+TheLartians/EasyIterator	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+qi7chen/timer-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+google/fleetbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+NoAvailableAlias/signal-slot-benchmarks	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+cksystemsgroup/scal	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mmperf/mmperf	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+lemire/StronglyUniversalStringHashing	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+Geekgineer/motcpp	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+mattiaspaul/deedsBCV	excluded	benchmark/testing candidate	Search false positive or domain outside Rust performance harness requirements.
+RALC88/riscv-vectorized-benchmark-suite	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tuxalin/THST	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+guteksan/REST-CPP-benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+ttvd/spatial-collision-datastructures	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+fraillt/cpp_serializers_benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+emilk/ram_bench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+4ku/Place-recognition-evaluation	excluded	benchmark/testing candidate	Place recognition quality evaluation
+NKU-MobFly-Robotics/local-planning-benchmark	excluded	benchmark/testing candidate	Navigation algorithm evaluation outside current scope
+HPMLL/NVIDIA-Hopper-Benchmark	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+criterion-rs/criterion.rs	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+dotnet/BenchmarkDotNet	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+imazen/zenbench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+envidera/zench	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.
+tokio-rs/loom	retained	benchmark/testing candidate	Benchmark design, diagnostic integration, or representative workload candidate; not a certification of repository quality.

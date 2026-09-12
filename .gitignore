@@ -1,4 +1,11 @@
 /target/
-
+**/target/
+.cargo-home/
+.DS_Store
+.rbench/
+.rbench-git-leftover/
+research/private/
+research/focused/
+research/sources/
 __pycache__/
 *.pyc

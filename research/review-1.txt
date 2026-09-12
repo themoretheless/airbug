@@ -1,0 +1,150 @@
+BuilderIO/framework-benchmarks | Test each framework for it's performance cost | lifecycle,async,report
+openml/automlbenchmark | OpenML AutoML Benchmarking Framework |
+openmessaging/benchmark | OpenMessaging Benchmark Framework |
+0ca/BoxPwnr | A modular framework for benchmarking LLMs and agentic strategies on security challenges across HackTheBox, TryHackMe, PortSwigger  | lifecycle,report,isolation
+layoutBox/LayoutFrameworkBenchmark | Benchmark the performances of various Swift layout frameworks (autolayout, UIStackView, PinLayout, LayoutKit, FlexLayout, Yoga, .. |
+harsha-simhadri/big-ann-benchmarks | Framework for evaluating ANNS algorithms on billion scale datasets. |
+wil3/gymfc | A universal flight control tuning framework | comparison,lifecycle,report
+u39kun/deep-learning-benchmark | Deep Learning Benchmark for comparing the performance of DL frameworks, GPUs, and single vs half precision  | lifecycle,gpu
+oltpbenchmark/oltpbench | Database Benchmarking Framework | async,isolation
+the-benchmarker/website | Source Code for Web Frameworks Benchmark Website | report
+irobot-ros/ros2-performance | Framework to evaluate peformance of ROS 2 | lifecycle,memory,async,report
+NVIDIA/SkillEvaluator | Multi-tier framework for evaluating AI agent skills with quality gates, semantic overlap detection, synthetic evaluation dataset g | lifecycle,report,correctness
+isri-aist/RoboManipBaselines | A software framework integrating various imitation learning methods and benchmark environments for robotic manipulation | comparison,lifecycle
+qdrant/vector-db-benchmark | Framework for benchmarking vector search engines | lifecycle,report
+libnonius/nonius | A C++ micro-benchmarking framework | statistics
+nickbruun/hayai | C++ benchmarking framework |
+AlexeyZatsepin/Android-ORM-benchmark | Performance comparison of Android ORM Frameworks |
+openstack/rally | Rally provides a framework for performance analysis and benchmarking of individual OpenStack components as well as full production | report,correctness
+chronoxor/CppBenchmark | Performance benchmark framework for C++ with nanoseconds measure precision | lifecycle,async,report
+remotebiosensing/rppg | Benchmark Framework for fair evaluation of rPPG | statistics,correctness
+fperf/fperf | Framework of performance testing | async,report
+MILVLG/openvqa | A lightweight, scalable, and general framework for visual question answering research |
+Project-AgML/AgML | AgML is a centralized framework for agricultural machine learning. AgML provides access to public agricultural datasets for common | report,correctness
+benchopt/benchopt | A framework for reproducible, comparable benchmarks | comparison,memory,correctness
+cavalab/srbench | A living benchmark framework for symbolic regression  | statistics,comparison,lifecycle,report
+OpenBMB/UltraEval-Audio | Your faithful, impartial partner for audio evaluation — know yourself, know your rivals. 真实评测，知己知彼。A unified benchmark framework f | gpu,report,correctness
+bark-simulator/bark | Open-Source Framework for Development, Simulation and Benchmarking of Behavior Planning Algorithms for Autonomous Driving | memory,report,correctness
+abeimler/ecs_benchmark | Benchmarks of common ECS (Entity-Component-System)-Frameworks in C++ (or C) | lifecycle,report
+android-bench/android-bench | Android Bench is a framework for benchmarking Large Language Models (LLMs) on Android development tasks. It evaluates an AI model' | comparison,lifecycle,report
+pathwaycom/pathway-benchmarks | Benchmarks for data processing systems: Pathway Live Data Framework, Spark, Flink, Kafka Streams | lifecycle,memory,async,report,correctness
+chaoran/fast-wait-free-queue | A benchmark framework for concurrent queue implementations | memory,async,report,correctness,isolation
+numbbo/coco | Numerical Black-Box Optimization Benchmarking Framework | lifecycle
+polyfractal/athletic | PHP Benchmarking Framework | statistics,lifecycle,report
+seedifferently/the-great-web-framework-shootout | Benchmarks and test code for The Great Web Framework Shootout [DEPRECATED -- See techempower's benchmarks instead] | comparison,lifecycle
+sosy-lab/benchexec | BenchExec: A Framework for Reliable Benchmarking and Resource Measurement | statistics,comparison,lifecycle,memory,report,correctness,isolation
+arey/java-object-mapper-benchmark | JMH benchmark of Java object-to-object mapping frameworks | async,report
+reframe-hpc/reframe | A powerful Python framework for writing and running portable regression tests and benchmarks for HPC systems. | comparison,lifecycle,gpu
+a-r-j/ProteinWorkshop | Benchmarking framework for protein representation learning. Includes a large number of pre-training and downstream task datasets,  | comparison,lifecycle,gpu,correctness
+ARM-software/Tool-Solutions | Scripts to build a wheel and a Docker image containing a complete ML framework stack, including dependencies, for AArch64 CPUs, as |
+sheredom/ubench.h | ⏱️ single header benchmark framework for C and C++  | statistics,lifecycle,report,correctness
+efficientgo/e2e | Robust framework for running complex workload scenarios in isolation, using Go; for integration, e2e tests, benchmarks and more! 💪 | lifecycle,memory,isolation
+gormanm/mmtests | MMTests: Benchmarking framework primarily aimed at Linux kernel testing | statistics,comparison,gpu,async,report,correctness
+alirezazareian/ovr-cnn | A new framework for open-vocabulary object detection, based on maskrcnn-benchmark | report
+stalkermustang/llm-bulls-and-cows-benchmark | A mini-framework for evaluating LLM performance on the Bulls and Cows number guessing game, supporting multiple LLM providers. | statistics,memory,async,report,correctness
+neurosim/MLP_NeuroSim_V3.0 | Benchmark framework of synaptic device technologies for a simple neural network | lifecycle,async
+codefuse-ai/OpAgent | The OpAgent framework is used to automate web browser operations, achieving State-of-the-Art (SOTA) performance on the WebArena be | comparison,lifecycle,gpu,report
+google/benchmark | A microbenchmark support library | lifecycle
+evanwashere/mitata | benchmark tooling that loves you ❤️ | statistics,lifecycle,memory,async,report
+martinus/nanobench | Simple, fast, accurate single-header microbenchmarking functionality for C++11/14/17/20 | statistics
+attaswift/Attabench | Microbenchmarking app for Swift with nice log-log plots | statistics,comparison,lifecycle,memory,report
+atemerev/skynet | Skynet 1M threads microbenchmark | lifecycle,async
+sbt/sbt-jmh | "Trust no one, bench everything." - sbt plugin for JMH (Java Microbenchmark Harness) | statistics,comparison,lifecycle,async,report
+andreas-abel/nanoBench | A tool for running small microbenchmarks on recent Intel and AMD x86 CPUs. | statistics,lifecycle,async,report
+alco/benchfella | Microbenchmarking tool for Elixir | lifecycle
+scalameter/scalameter | Microbenchmarking and performance regression testing framework for the JVM platform. | comparison,report
+p-ranav/criterion | Microbenchmarking for Modern C++ | statistics,lifecycle,report
+iboB/picobench | A micro microbenchmarking library for C++11 in a single header file | comparison,memory,report
+clamchowder/Microbenchmarks | Trying to figure various CPU things out | gpu,async
+clamchowder/MicrobenchmarksGui | An attempt to make a more accessible microbenchmark | memory,async
+Ichoran/thyme | Thyme is a microbenchmark utility for Scala.  It includes Parsley, a (simple) local profiling tool. | lifecycle
+bazhenov/tango | Rust microbenchmarking harness based on paired-testing methodology | statistics,comparison,lifecycle,async,report
+tylertreat/go-benchmarks | A few miscellaneous Go microbenchmarks. |
+aayasin/perf-tools | A collection of performance analysis tools, recipes, handy scripts, microbenchmarks & more | lifecycle,report,isolation
+sjfeng1999/gpu-arch-microbenchmark | Dissecting NVIDIA GPU Architecture | lifecycle,gpu,async
+svanoort/python-client-benchmarks | Microbenchmark of different python HTTP clients | lifecycle,async,report
+ChipsandCheese/Microbenchmarks | Trying to figure various CPU things out | async
+joshuaulrich/microbenchmark | Infrastructure to accurately measure and compare the execution time of R expressions |
+JuliaLang/Microbenchmarks | Microbenchmarks comparing the Julia Programming language with other languages |
+mp911de/microbenchmark-runner | JUnit extensions to launch JMH benchmarks from your IDE during development | lifecycle,report
+Dr-Noob/peakperf | Achieve peak performance on x86 CPUs and NVIDIA GPUs | lifecycle,gpu,async,report,correctness
+frappe/caffeine | Microbenchmarks and load testing for Frappe Framework | statistics,lifecycle,async,report
+ucb-bar/ccbench | Memory System Microbenchmarks | comparison,async,report
+stanford-mast/iBench | Suite of contentious microbenchmarks |
+ibireme/yybench | A microbenchmark library for C |
+forresti/osu-micro-benchmarks | MPI Microbenchmarks | comparison,lifecycle,memory,gpu,async,report,isolation
+Vitorian/hft-challenges | C++ microbenchmark challenges for HFT University | lifecycle
+VerticalResearchGroup/microbench | Extremely Simple Microbenchmarks |
+openjdk/jmh-jdk-microbenchmarks | https://openjdk.org/projects/code-tools/jmh-jdk-microbenchmarks | comparison
+ldbc/lsqb | Labelled Subgraph Query Benchmark – A lightweight benchmark suite focusing on subgraph matching queries. Note: This is a microbenc | lifecycle,correctness
+Sayi/jmh-visual-chart | :bar_chart: A visual chart for Java MicroBenchmark Harness. | lifecycle,async,report
+hax/my-benchmark | A JavaScript microbenchmark support library |
+junkdog/entity-system-benchmarks | microbenchmarks comparing ECS (entity component system) frameworks for java | comparison,async
+shoaibkamil/stencilprobe | Stencil Probe - a stencil microbenchmark |
+SFU-HiAccel/uBench | [FPGA'21] Microbenchmarks for Demystifying the Memory System of Modern Datacenter FPGAs for Software Programmers | lifecycle,gpu,async
+PeterTh/uCLbench | Set of OpenCL microbenchmarks | gpu
+scivision/python-performance | Performance benchmarks of Python, Numpy, etc. vs. other languages such as Matlab, Julia, Fortran. | gpu
+IBM/microprobe | Microprobe: Microbenchmark generation framework | statistics,report
+tycho/clockperf | clocksource behavior microbenchmarks |
+adoptium/bumblebench | A microbenchmarking test framework for Eclipse Adoptium | comparison
+shen203/GPU_Microbenchmark | None |
+AI-Hypercomputer/accelerator-microbenchmarks | None | lifecycle,async,report
+berestovskyy/applied-benchmarks | Microbenchmarks and Google Benchmark library |
+jorendorff/dht | Deterministic hash table (implementation and microbenchmarks) | memory,report
+rdyro/tune-jax | Microbenchmarking hyperparameter tuning for JAX functions. | gpu
+maximenajim/java-vs-node-react-rendering-microbenchmark | Isomorphic (server-side) rendering of a simple react (comment box) component - Java 8's nashorn vs node.js microbenchmark  | comparison,lifecycle
+arkanis/syscall-benchmark | A set of small system call microbenchmarks. Just for fun, nothing serious. |
+wsargent/slf4j-benchmark | Microbenchmark of SLF4J / Logback using JMH | statistics,memory,async
+eigenform/lamina | Microbenchmarking experiments on Zen 2 machines |
+Deleplace/microbenchmarks | Benchmarks in Go |
+pyk/bench | Fast & Accurate Microbenchmarking for Zig | statistics,comparison,lifecycle,memory,async,report
+RealTimeChris/benchmarksuite | Header-only C++20/CUDA microbenchmarking with hardware performance counters, adaptive iteration sampling, and 95% confidence-inter |
+seriyps/rebar3_bench | Microbenchmark plugin for rebar3 | statistics,comparison,memory,report,isolation
+ning/ub | PHP Microbenchmarking Framework | lifecycle,report
+biboudis/clashofthelambdas | Microbenchmarking Stream APIs of Java 8, Scala, C#, F#. | memory
+blitz/kernel_entry_benchmark | Microbenchmarks for x86_64 kernel entry methods | report
+vickiegpt/A16-microbenchmark | A repo to store what M1 explainer does and ~Armv9~ Armv8.6 ISA on A16 | gpu,async
+martinbonnin/run-benchmarks | A GitHub action that runs and publishes your Android microbenchmarks | lifecycle,memory,report
+timoheimonen/macOS-memory-benchmark | Low-level command-line tool for measuring CPU and Metal GPU memory bandwidth, synthetic LLM decode and prefill memory traffic, cac | statistics,comparison,lifecycle,memory,gpu,async,report,correctness
+spthm/cudabmk | Source for Demystifying GPU Microarchitecture through Microbenchmarking | gpu
+RasterDuck/vectormathbench | A collection of microbenchmarks for various game- and graphics-centric vectormath libraries. | comparison,lifecycle,async,report
+softprops/cappi | the sweetest sbt plugin your microbenchmarks will ever meet |
+silversquirl/benchmark.zig | Tiny Zig package for writing microbenchmarks | lifecycle,memory
+maxim-saplin/mandelbrot | Microbenchmark testing Python, Numba, Mojo, Dart, C/gcc, Rust, Go, JavaScript, C#, Java, Kotlin, Pascal, Ruby, Haskell performance |
+fullzer4/pybenchx | Microbenchmarks that mean it | comparison,lifecycle,report
+chrirocca/GPUNetBench | Collection of memory microbenchmarks to investigate NVIDIA GPUs Network on Chip architectures | gpu,async
+JimZeyuYang/GPU_Power_Benchmark | Microbenchmark that unveals the mechanisms behind power readings reported by nvidia-smi on your NVIDIA GPU. | lifecycle,gpu,report
+peter-lawrey-admin/jvm-micro-benchmarks | Microbenchmarks for JVM code. | async
+biboudis/LambdaMicrobenchmarking | A library to microbenchmark lambdas in C# and F# that runs on both Windows (clr) and Linux (mono). |
+gormanm/pft | Page fault test microbenchmark | memory,report
+peterszatmary/jmh-benchmark-demo | Java Microbenchmark Harness (JMH) that runs with Junit and Maven. |
+lemire/microbenchmarks | Private microbenchmarks | comparison,memory
+CoreyLeath-code/AutoGuard-AI-Real-Time-Autonomous-Vehicle-Safety-Geofencing-Platform | Prototype geofencing and telemetry reference with Haversine radius checks, FastAPI health/readiness, reproducible microbenchmarks, | async,report,correctness
+bdice/python_microbenchmarks | Microbenchmarks showing relative performance of different Python functions/patterns. |
+SEALABQualityGroup/icpe-data-challenge-jmh | Dataset for the ICPE 2023 Data Challenge track: JMH microbenchmarks measurements from Java open source projects. | report
+nsrip-dd/profiler-overhead-testing | Testing effects of the Go CPU profiler on microbenchmarks | memory,async,report
+chrishantha/microbenchmarks | JMH projects http://openjdk.java.net/projects/code-tools/jmh/ |
+thomwiggers/microbenchmark-aarch64 | Microbenchmarks for Aarch64 (Cortex A53) |
+buchgr/rules_jmh | Bazel rules for generating and running microbenchmarks with JMH |
+efficient/microservices_microbenchmarks | Code for the benchmarks presented in https://www.usenix.org/conference/atc18/presentation/boucher | statistics,lifecycle,async,report,isolation
+rolfl/MicroBench | Enabling simpler microbenchmarks of Java8 code | report
+sjenning/zsmapbench | Microbenchmark for zsmalloc allocation mapping | memory
+zhisbug/ray-scalable-ml-design | Some microbenchmarks and design docs before commencement |
+mhirki/idq-bench2 | Instruction decoder microbenchmark suite |
+HicrestLaboratory/Blink-GPU | A suite of microbenchmarks developed for systems with multi-GPU per node. | comparison,lifecycle,gpu,report,correctness
+jeffzi/luamark | A lightweight, portable microbenchmarking library for Lua | statistics,lifecycle,memory
+DiegoEliasCosta/spotjmhbugs | A SpotBugs plugin that detects bad practices on JMH microbenchmarks. |
+vitinh0z/java-performance | Estudos aprofundados de performance em Java: Microbenchmarks (JMH), Concorrência e otimizações na JVM |
+mazalves/microbenchmarks | Microbenchmarks to evaluate architectural details |
+epickrram/journalling-benchmark | Microbenchmark for comparing the cost of seek/write vs pwrite from Java | isolation
+karnajitsen/NVLink-benchmark | NVLink microbenchmark  with IBM Power8 and NVIDIA P100 GPU - Master Thesis  | gpu,async,report
+yushinliu/cuda-ptx-microbenchmark | CUDA+PTX Microbenchmark for RTX 4070 GPU | lifecycle,gpu,async
+YKTian-x2b/AmpereArchViaMicroBenchMark | 通过MicroBenchmark获悉Ampere微架构知识 | gpu,async
+yvt/farcri-rs | FarCri.rs: Criterion.rs-based microbenchmarking library for remote resource-constrained systems | async
+cameron314/atomic_bench | Microbenchmarks for some C++11 atomic primitives |
+neozhang307/SyncMicrobenchmark | This work aims at characterizing the synchronization methods in CUDA. | gpu,async
+benfred/py-spy | Sampling profiler for Python programs | isolation
+flamegraph-rs/flamegraph | Easy flamegraphs for Rust projects and everything else, without Perl or pipes <3 | memory,async,report
+mstange/samply | Command-line sampling profiler for macOS, Linux, and Windows | lifecycle,report,isolation
+edison7009/EchoBird | One-click install + model switch:Claude Code,Codex CLI (OpenAI), Grok Build (xAI), DeepSeek Harness, Kimi Code (Moonshot) ,Qwen Co | lifecycle,async,report
+rbspy/rbspy | Sampling CPU profiler for Ruby |

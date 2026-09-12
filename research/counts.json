@@ -1,0 +1,15 @@
+{
+  "unique_repositories": 779,
+  "readmes": 763,
+  "signals": {
+    "statistics": 88,
+    "comparison": 115,
+    "lifecycle": 251,
+    "report": 393,
+    "async": 242,
+    "memory": 154,
+    "correctness": 160,
+    "gpu": 134,
+    "isolation": 48
+  }
+}

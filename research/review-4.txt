@@ -1,0 +1,150 @@
+databendlabs/databend | Data Agent Ready Warehouse : One for  Analytics, Search, AI, Python Sandbox.  — rebuilt from scratch. Unified architecture on your | correctness
+risingwavelabs/risingwave | Event streaming platform for agentic AI. Continuously ingest, transform, and serve event streams in real time, at scale. | memory,async,report
+spacejam/sled | the champagne of beta embedded databases | async
+warp-tech/warpgate | Fully transparent SSH, HTTPS, Kubernetes, database and RDP/VNC bastion/PAM that doesn't need additional client-side software | statistics,lifecycle,memory,report
+erikgrinaker/toydb | Distributed SQL database in Rust, written as an educational project | report,isolation
+GreptimeTeam/greptimedb | The open-source observability database. One columnar engine for metrics, logs, and traces, on object storage. | comparison,report,isolation
+MaterializeInc/materialize | The live data layer for apps and AI agents. Create up-to-the-second views into your business, just using SQL | async,report,correctness,isolation
+FalkorDB/FalkorDB | A super fast Graph Database uses GraphBLAS under the hood for its sparse adjacency matrix graph representation. Our goal is to pro | lifecycle,async
+HelixDB/helix-db | HelixDB is an OLTP graph database with native vector and full-text search built in Rust on Object Storage. | statistics,lifecycle,async,report
+trailbaseio/trailbase | An open, sub-millisecond, single-executable Firebase alternative with type-safe APIs, built-in WebAssembly runtime, realtime subsc | statistics,lifecycle,report
+pgdogdev/pgdog | PostgreSQL connection pooler, load balancer and database sharder. | statistics,comparison,memory,report
+achristmascarl/rainfrog | 🐸 a database tool for the terminal | report,correctness
+readysettech/readyset | Readyset is a MySQL and Postgres wire-compatible caching layer that sits in front of existing databases to speed up queries and ho | report,correctness
+malisper/pgrust | Postgres rewritten in Rust, now faster than Postgres and Clickhouse | comparison,lifecycle,async,report,correctness
+cberner/redb | An embedded key-value database in pure Rust | lifecycle,async
+typedb/typedb | TypeDB: Built for systems, not records |
+Qovery/Replibyte | Seed your development database with real data ⚡️ | lifecycle
+skyzh/mini-lsm | learn database internals by building a storage engine in Rust | async,correctness,isolation
+cozodb/cozo | A transactional, relational-graph-vector database that uses Datalog for query. The hippocampus for AI! | lifecycle,memory,async,report
+ekzhang/rustpad | Efficient and minimal collaborative code editor, self-hosted, no database required | lifecycle
+vlcn-io/cr-sqlite | Convergent, Replicated SQLite. Multi-writer and CRDT support for SQLite | lifecycle,correctness
+frectonz/sql-studio | SQL Database Explorer [SQLite, libSQL, PostgreSQL, MySQL/MariaDB, ClickHouse, DuckDB, Microsoft SQL Server] | report
+AmrDeveloper/GQL | GitQL is a extensible SQL-like query language and SDK to perform queries on various data sources such .git files with supports of  | lifecycle
+slatedb/slatedb | A cloud native embedded storage engine built on object storage. | lifecycle,async
+TaKO8Ki/gobang | A cross-platform TUI database management tool written in Rust | report
+gluesql/gluesql | GlueSQL is quite sticky. It sticks to anything. | async,report,correctness
+spiceai/spiceai | Add a real-time analytics node to your operational database. Spice is a portable, accelerated SQL query, search, and LLM-inference | statistics,gpu,async,report,isolation
+orbitinghail/sqlsync | SQLSync is a collaborative offline-first wrapper around SQLite. It is designed to synchronize web application state between users, |
+obi1kenobi/trustfall | A query engine for any combination of data sources. Query your files and APIs as if they were databases! | memory,report
+apache/horaedb | Apache HoraeDB (incubating) is a high-performance, distributed, cloud native time-series database. |
+skytable/skytable | Skytable is a modern scalable NoSQL database with BlueQL, designed for performance, scalability and flexibility. Skytable gives yo | lifecycle
+sfu-db/connector-x | Fastest library to load data from DB to DataFrames in Rust and Python | lifecycle,memory
+sqlpage/SQLPage | Fast SQL-only data application builder. Automatically build a UI on top of SQL queries.  | lifecycle,memory,report,correctness
+indradb/indradb | A graph database written in rust | report
+hydra-db/hydradb | HydraDB - fast graph database on object storage | comparison,async,report,correctness
+fjall-rs/fjall | 🗻 Log-structured, embeddable key-value storage engine written in Rust | memory,async,report,isolation
+tensorchord/pgvecto.rs | Scalable, Low-latency and Hybrid-enabled Vector Search in Postgres. Revolutionize Vector Search, not Database. | memory,report
+rust-rocksdb/rust-rocksdb | rust wrapper for rocksdb | async
+feldera/feldera | The Feldera Incremental Computation Engine | async,report
+toeverything/OctoBase | 🐙 OctoBase is the open-source database behind AFFiNE, local-first, yet collaborative. A light-weight, scalable, data engine writte |
+tranxuanthang/lrclib | LRCLIB server written in Rust with Axum and SQLite3 database | lifecycle,memory
+nubskr/walrus | 🦭 Distributed log streaming engine built from first principles | statistics,async,report,correctness,isolation
+microsoft/DiskANN | A vector indexing library to bring fast, fresh and filtered search to your database | async,report
+Brendonovich/prisma-client-rust | Type-safe database access for Rust | lifecycle
+oxigraph/oxigraph | SPARQL graph database | memory,report
+risinglightdb/risinglight | An educational OLAP database system. | report
+superfly/corrosion | Gossip-based service discovery (and more) for large distributed systems. |
+cnosdb/cnosdb | A cloud-native open source distributed time series database with high performance, high compression ratio and high availability. | report
+SeaQL/sea-query | 🔱 A dynamic SQL query builder for MySQL, Postgres and SQLite | async,report
+cswinter/LocustDB | Blazingly fast analytics database that will rapidly devour all of your data. | lifecycle,memory,async,report
+tonbo-io/tonbo | Tonbo is an embedded database for serverless and edge runtimes. | comparison,lifecycle,async,report,isolation
+losfair/mvsqlite | Distributed, MVCC SQLite that runs on FoundationDB. | async,correctness
+orbitinghail/graft | Graft is an open-source transactional storage engine optimized for lazy, partial, and strongly consistent replication—perfect for  | isolation
+skyzh/type-exercise-in-rust | Learn advanced Rust by building a type-safe, auto-vectorized database expression engine | comparison,lifecycle,async
+postgresml/korvus | Korvus is a search SDK that unifies the entire RAG pipeline in a single database query. Built on top of Postgres with bindings for | async
+tensorbase/tensorbase | TensorBase is a new big data warehousing with modern efforts. | async
+lnx-search/lnx | A flexible, performant and reliable search database without the AI bullshit. | async,report
+PumpkinDB/PumpkinDB | Immutable Ordered Key-Value Database Engine | async,report
+teodevgroup/teo | High performance ergonomic ORM for Rust. |
+exonum/exonum | An extensible open-source framework for creating private/permissioned blockchain applications | memory
+PoloDB/PoloDB | PoloDB is an embedded document database. | async
+stoolap/stoolap | A Modern Embedded SQL Database written in Rust | async,correctness,isolation
+cornucopia-rs/cornucopia | Generate type-checked Rust from your PostgreSQL. | async,correctness
+joaoh82/rust_sqlite | SQLRite - Simple embedded database modeled off SQLite in Rust | lifecycle,memory,async,report,correctness
+khonsulabs/bonsaidb | A developer-friendly document database that grows with you, written in Rust | async,report
+Evokoa/pgGraph | Open-source graph database superpowers for your existing Postgres data. | lifecycle,async,correctness
+GlareDB/glaredb | GlareDB: A light and fast SQL database for analytics |
+duckdb/duckdb-rs |  Ergonomic bindings to duckdb for Rust  | memory,report
+ovexro/dockpanel | Modern server management panel built with Rust and React. Sites, databases, Docker apps, Git deploy, mail, DNS, monitoring, backup | comparison,lifecycle,gpu,report,isolation
+djc/bb8 | Full-featured async (tokio-based) postgres connection pool (like r2d2) | async
+feigeCode/navop | A native, all-in-one workspace for databases, SSH, SFTP, terminals, remote desktop, monitoring, and AI. | statistics,gpu,report,correctness
+antoniosarosi/mkdb | Toy Database |
+lanterndata/lantern | PostgreSQL vector database extension for building AI applications | async,report
+supabase/wrappers | Postgres Foreign Data Wrapper development framework in Rust. | async
+sunng87/pgwire | PostgreSQL wire protocol implemented as a rust library. |
+GrafeoDB/grafeo | Grafeo is a pure-Rust, high-performance graph database that can be embedded as a library or run as a standalone database, with opt | lifecycle,memory,async,report,correctness,isolation
+0b01/tectonicdb | Database for L2 orderbook | lifecycle,async,report
+KipData/KiteSQL | Embedded relational database and native Rust data API. | lifecycle,memory,isolation
+opral/lix | Embeddable repository that combines files, database, and version control. | report
+s2-streamstore/s2 | Durable Streams API | async
+vincent-herlemont/native_db | Drop-in embedded database in Rust |
+blackbeam/rust-mysql-simple | Mysql client library implemented in rust. | memory,report
+earth-mover/icechunk | Open-source, cloud-native transactional tensor storage engine | async,report,isolation
+KOBA789/relly | RDBMS のしくみを学ぶための小さな RDBMS 実装 |
+vrmiguel/pgpad | A small, fast cross-platform database client | lifecycle,report
+Pometry/Raphtory | Scalable graph analytics database powered by a multithreaded, vectorized temporal engine, written in Rust | report
+Fullstop000/wickdb | Pure Rust LSM-tree based embedded storage engine |
+ProjectPhysX/FluidX3D | The fastest and most memory efficient lattice Boltzmann CFD software, running on all GPUs and CPUs via OpenCL. Free for non-commer | lifecycle,memory,gpu,report,correctness
+idealvin/coost | A tiny boost library in C++11. | memory,report
+felixguendling/cista | Cista is a simple, high-performance, zero-copy C++ serialization & reflection library. | report
+ashvardanian/less_slow.cpp | Playing around "Less Slow" coding practices in C++ 20, C, CUDA, PTX, & Assembly, from numerics & SIMD to coroutines, ranges, excep | comparison,lifecycle,memory,gpu,async,report,correctness
+JonMagon/KDiskMark | A simple open-source disk benchmark tool for Linux distros | report
+openai/procgen | Procgen Benchmark: Procedurally-Generated Game-Like Gym-Environments | lifecycle,correctness
+kimwalisch/primesieve | 🚀 Fast prime number generator | memory,async,correctness
+baidu-research/DeepBench | Benchmarking Deep Learning operations on different hardware | comparison,gpu,async,report
+redis/memtier_benchmark | NoSQL Redis and Memcache traffic generation and benchmarking tool. | statistics,lifecycle,memory,async,report
+travisdowns/uarch-bench | A benchmark for low-level CPU micro-architectural features | statistics,report,correctness
+thekvs/cpp-serializers | Benchmark comparing various data serialization libraries (thrift, protobuf etc.) for C++ | report
+Mellanox/sockperf | Network Benchmarking Utility | async
+Jittor/JNeRF | JNeRF is a NeRF benchmark based on Jittor. JNeRF re-implemented instant-ngp and achieved same performance with original paper. | comparison,gpu,report,correctness
+openxrlab/xrslam | OpenXRLab Visual-inertial SLAM Toolbox and Benchmark |
+openxrlab/xrnerf | OpenXRLab Neural Radiance Field (NeRF) Toolbox and Benchmark |
+QingyongHu/SensatUrban | 🔥Urban-scale point cloud dataset (CVPR 2021 & IJCV 2022) | lifecycle,gpu
+p-ranav/alpaca | Serialization library written in C++17 - Pack C++ structs into a compact byte-array without any macros or boilerplate code | report,correctness
+frol/completely-unscientific-benchmarks | Naive performance comparison of a few programming languages (JavaScript, Kotlin, Rust, Swift, Nim, Python, Go, Haskell, D, C++, Ja | comparison,memory,gpu,correctness
+RRZE-HPC/gpu-benches | collection of benchmarks to measure basic GPU capabilities | memory,gpu,async
+krrishnarraj/clpeak | A synthetic micro-benchmark that measures peak compute, bandwidth, and matrix throughput of GPUs and CPUs | comparison,gpu,async,report
+zupat/related_post_gen | Data Processing benchmark featuring Rust, Go, Swift, Zig, Julia etc. | lifecycle,memory,async,report
+ekondis/mixbench | A GPU benchmark tool for evaluating GPUs and CPUs on mixed operational intensity kernels (CUDA, OpenCL, HIP, SYCL, OpenMP) | gpu,async,report
+davidstutz/superpixel-benchmark | An extensive evaluation and comparison of 28 state-of-the-art superpixel algorithms on 5 datasets. | report
+UWMILab/HA-VLN | Official implementation for "HA-VLN 2.0: An Open Benchmark and Leaderboard for Human-Aware Navigation in Discrete and Continuous E | comparison,lifecycle,report,correctness
+JokerJohn/PALoc | [TMECH'2024] PALoc: Advancing SLAM Benchmarking with Prior-Assisted 6-DoF Trajectory Generation and Uncertainty Estimation | statistics,lifecycle
+sbeamer/gapbs | GAP Benchmark Suite | comparison
+XiaoMi/mobile-ai-bench | Benchmarking Neural Network Inference on Mobile Devices | statistics,lifecycle,gpu,report
+UoB-HPC/BabelStream | STREAM, for lots of devices written in many programming models | memory,gpu
+fastvideo/gpu-camera-sample | Image processing software on GPU (Windows, Linux, ARM) for real time machine vision camera applications. Performance benchmarks an | lifecycle,memory,gpu,async,correctness,isolation
+Xingyu-Lin/softgym | SoftGym is a set of benchmark environments for deformable object manipulation. |
+hpcg-benchmark/hpcg | Official HPCG benchmark source code | report
+1a1a11a/libCacheSim | a high performance library for building cache simulators | lifecycle,report
+Compaile/ctrack | A lightweight, high-performance C++ benchmarking and tracking library for effortless function profiling in both development and pr | statistics,comparison,lifecycle,memory,async,report,correctness
+ProjectPhysX/OpenCL-Benchmark | A small OpenCL benchmark program to measure peak GPU/CPU performance. | gpu,report
+martinus/map_benchmark | Comprehensive benchmarks of C++ maps |
+apigee/apib | A simple, fast HTTP and API benchmarking tool | memory,async,report
+learnedsystems/SOSD | A Benchmark for Learned Indexes | comparison,report
+FrontierCS/Frontier-CS | A benchmark for evaluating LLMs on open-ended CS problems. Exploring the Next Frontier of Computer Science. | lifecycle,report
+ORNL/HeCBench | None | statistics,comparison,lifecycle,memory,gpu,async,report,correctness
+VITA-Group/Open-L2O | Open-L2O: A Comprehensive and Reproducible Benchmark for Learning to Optimize Algorithms | comparison,correctness
+rcedgar/muscle | Multiple sequence and structure alignment with top benchmark scores scalable to thousands of sequences. Generates replicate alignm |
+breuner/elbencho | A distributed storage benchmark for file systems, object stores & block devices with support for GPUs | memory,gpu,async,report
+t-dillon/tdoku | A fast Sudoku solver and generator with a benchmark suite for comparing the fastest known solvers. | lifecycle,report,correctness
+davidstutz/superpixels-revisited | Library containing 7 state-of-the-art superpixel algorithms with a total of 9 implementations used for evaluation purposes in [1]  | report
+jwlim/tracker_benchmark | None |
+google/uVkCompute | A micro Vulkan compute pipeline and a collection of benchmarking compute shaders | memory,gpu
+miloyip/dtoa-benchmark | C++ double-to-string conversion benchmark | memory,report,correctness
+zhouxian/FluidLab | [ICLR 2023] FluidLab: A Differentiable Environment for Benchmarking Complex Fluid Manipulation | gpu
+vkmark/vkmark | Vulkan benchmark | comparison,gpu
+cmuratori/termbench | Simple benchmark for terminal output | async
+johnmcfarlane/fixed_point | C++ Binary Fixed-Point Arithmetic | report
+SJTU-IPADS/ServerlessBench | A benchmark suite for serverless computing | async,report
+leggedrobotics/SimBenchmark | Physics engine benchmark for robotics applications: RaiSim vs Bullet vs ODE vs MuJoCo vs DartSim |
+ParAlg/gbbs | GBBS: Graph Based Benchmark Suite |
+Aider-AI/polyglot-benchmark | Coding problems used in aider's polyglot benchmark |
+DBAIWangGroup/nns_benchmark | Benchmark of Nearest Neighbor Search on High Dimensional Data | lifecycle,report
+url-kaist/Ground-Segmentation-Benchmark | Ground segmentation benchmark in SemanticKITTI dataset | comparison,lifecycle,report
+openxrlab/xrsfm | OpenXRLab Structure-from-Motion Toolbox and Benchmark |
+rigtorp/c2clat | A tool to measure CPU core to core latency | async
+neurosim/DNN_NeuroSim_V2.1 | Benchmark framework of compute-in-memory based accelerators for deep neural network (on-chip training chip focused) | lifecycle,report
+ETH3D/dataset-pipeline | Pipeline for creating multi-view benchmark datasets from laser scans and images. | statistics,lifecycle,report,correctness
+serde-rs/json-benchmark | nativejson-benchmark in Rust | report
+cornell-zhang/rosetta | Rosetta: A Realistic High-level Synthesis Benchmark Suite for Software Programmable FPGAs (FPGA'18) | lifecycle,async,report

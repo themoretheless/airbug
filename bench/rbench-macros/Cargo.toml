@@ -1,0 +1,15 @@
+[package]
+name = "rbench-macros"
+version = "0.1.1"
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+rust-version.workspace = true
+repository = "https://github.com/themoretheless/rbench"
+description = "Attribute macros for the rbench benchmark library"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "3", features = ["full"] }
+quote = "1"
