@@ -1,15 +1,26 @@
 //! Reusable validators that collect field errors without panicking.
 use std::fmt;
 
+/// One rule that a value failed.
+///
+/// `message` is for people and may be localised; `code` is stable and is what
+/// application code and tests should match on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationError {
+    /// Dotted path to the field, such as `address.city` or `items[1]`.
     pub field: String,
+    /// Human-readable explanation.
     pub message: String,
+    /// Stable identifier of the rule, such as `not_empty`.
     pub code: String,
 }
 
+/// Every failure from one validation run, in rule declaration order.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ValidationErrors(pub Vec<ValidationError>);
+pub struct ValidationErrors(
+    /// The failures, in the order the rules ran.
+    pub Vec<ValidationError>,
+);
 impl fmt::Display for ValidationErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (index, error) in self.0.iter().enumerate() {
@@ -61,12 +72,16 @@ impl<T: 'static> Default for Validator<T> {
     }
 }
 impl<T: 'static> Validator<T> {
+    /// A validator with no rules, which accepts everything.
     pub fn new() -> Self {
         Self {
             rules: Vec::new(),
             max_errors: usize::MAX,
         }
     }
+    /// Begin a group of checks on one field. `field` names it in errors, and
+    /// `select` borrows it out of the value. Finish with
+    /// [`done`](FieldRule::done).
     pub fn rule_for<F: ?Sized + 'static>(
         self,
         field: impl Into<String>,
@@ -81,6 +96,8 @@ impl<T: 'static> Validator<T> {
             stop_on_failure: false,
         }
     }
+    /// Run every rule and collect all failures, rather than stopping at the
+    /// first one. Never panics.
     pub fn validate(&self, value: &T) -> Result<(), ValidationErrors> {
         self.validate_limit(value, self.max_errors)
     }
@@ -102,11 +119,14 @@ impl<T: 'static> Validator<T> {
         }
     }
     /// Positive error budget, shared across fields and children. Later rules are skipped.
+    /// Stop after `limit` failures, skipping the remaining rules, including
+    /// nested ones. Panics if `limit` is zero.
     pub fn max_errors(mut self, limit: usize) -> Self {
         assert!(limit > 0, "error limit must be positive");
         self.max_errors = limit;
         self
     }
+    /// [`max_errors(1)`](Validator::max_errors): report only the first failure.
     pub fn stop_on_first_failure(self) -> Self {
         self.max_errors(1)
     }
@@ -147,6 +167,8 @@ pub struct FieldRule<T, F: ?Sized> {
     stop_on_failure: bool,
 }
 impl<T: 'static, F: ?Sized + 'static> FieldRule<T, F> {
+    /// Add a custom predicate with a human-readable message. The code defaults
+    /// to `must` unless [`with_code`](FieldRule::with_code) overrides it.
     pub fn must(
         mut self,
         predicate: impl Fn(&F) -> bool + Send + Sync + 'static,
@@ -159,6 +181,7 @@ impl<T: 'static, F: ?Sized + 'static> FieldRule<T, F> {
         });
         self
     }
+    /// Override the stable code of the most recently added check.
     pub fn with_code(mut self, code: impl Into<String>) -> Self {
         self.checks
             .last_mut()
@@ -167,6 +190,8 @@ impl<T: 'static, F: ?Sized + 'static> FieldRule<T, F> {
         self
     }
     /// Replaces the last check's message. Panics if no check has been added.
+    /// Override the message of the most recently added check, leaving its code
+    /// alone so tests keep matching.
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.checks
             .last_mut()
@@ -175,14 +200,18 @@ impl<T: 'static, F: ?Sized + 'static> FieldRule<T, F> {
         self
     }
     /// Applies to all checks on this field. Replaces any previous condition.
+    /// Run this field's checks only when `condition` holds for the whole value.
     pub fn when(mut self, condition: impl Fn(&T) -> bool + Send + Sync + 'static) -> Self {
         self.condition = Some(Box::new(condition));
         self
     }
+    /// Skip this field's remaining checks after its first failure. Other
+    /// fields still run.
     pub fn stop_on_first_failure(mut self) -> Self {
         self.stop_on_failure = true;
         self
     }
+    /// Attach the accumulated checks and return to the validator.
     pub fn done(mut self) -> Validator<T> {
         self.validator.rules.push(Box::new(move |value, errors| {
             if self
@@ -213,11 +242,13 @@ impl<T: 'static, F: ?Sized + 'static> FieldRule<T, F> {
     }
 }
 impl<T: 'static, F: PartialOrd + fmt::Debug + Send + Sync + 'static> FieldRule<T, F> {
+    /// Require the field to be strictly greater than `bound`. Code `greater_than`.
     pub fn greater_than(self, bound: F) -> Self {
         let message = format!("must be greater than {bound:?}");
         self.must(move |value| value > &bound, message)
             .with_code("greater_than")
     }
+    /// Require the field to lie in `min..=max`. Code `inclusive_between`.
     pub fn inclusive_between(self, min: F, max: F) -> Self {
         assert!(min <= max, "inclusive_between requires ordered bounds");
         let message = format!("must be between {min:?} and {max:?} (inclusive)");
@@ -226,6 +257,8 @@ impl<T: 'static, F: PartialOrd + fmt::Debug + Send + Sync + 'static> FieldRule<T
     }
 }
 impl<T: 'static, F: AsRef<str> + ?Sized + 'static> FieldRule<T, F> {
+    /// Require a non-blank string: at least one non-whitespace character.
+    /// Code `not_empty`.
     pub fn not_empty(self) -> Self {
         self.must(
             |value| !value.as_ref().trim().is_empty(),
@@ -234,6 +267,7 @@ impl<T: 'static, F: AsRef<str> + ?Sized + 'static> FieldRule<T, F> {
         .with_code("not_empty")
     }
     /// Counts Unicode scalar values, not bytes or grapheme clusters.
+    /// Require a character count in `min..=max`. Code `length`.
     pub fn length(self, min: usize, max: usize) -> Self {
         assert!(min <= max, "length requires min <= max");
         self.must(
@@ -244,6 +278,7 @@ impl<T: 'static, F: AsRef<str> + ?Sized + 'static> FieldRule<T, F> {
     }
 }
 impl<T: 'static, F: 'static> FieldRule<T, Option<F>> {
+    /// Require the field to be `Some`. Code `not_none`.
     pub fn not_none(self) -> Self {
         self.must(Option::is_some, "must be present")
             .with_code("not_none")
@@ -252,6 +287,8 @@ impl<T: 'static, F: 'static> FieldRule<T, Option<F>> {
 
 impl<T: 'static> Validator<T> {
     /// Validates every element and produces paths such as `items[2].name`.
+    /// Apply a validator to every element of a collection, naming failures
+    /// `field[index]`.
     pub fn for_each<U: 'static>(
         mut self,
         field: impl Into<String>,
@@ -278,12 +315,15 @@ impl<T: 'static> Validator<T> {
 }
 
 impl ValidationErrors {
+    /// Convert each error into the application's own error type.
     pub fn map<E>(self, convert: impl FnMut(ValidationError) -> E) -> Vec<E> {
         self.0.into_iter().map(convert).collect()
     }
 }
 impl<T: 'static> Validator<T> {
     /// Object-level predicate can compare any number of fields.
+    /// A rule over the whole value rather than one field, for comparisons
+    /// between fields. Reports under `field` with the given `code`.
     pub fn check(
         mut self,
         path: impl Into<String>,
@@ -306,6 +346,8 @@ impl<T: 'static> Validator<T> {
         self
     }
     /// Conditionally execute a complete reusable group of rules in declaration order.
+    /// Run a nested validator only when `condition` holds, preserving the
+    /// position of its errors in the overall order.
     pub fn group_when(
         mut self,
         condition: impl Fn(&T) -> bool + Send + Sync + 'static,
@@ -321,6 +363,7 @@ impl<T: 'static> Validator<T> {
         self
     }
     /// None is skipped; use a separate not_none rule when presence is required.
+    /// Apply a validator to an `Option` field only when it is `Some`.
     pub fn optional<U: 'static>(
         mut self,
         field: impl Into<String>,
@@ -342,6 +385,8 @@ impl<T: 'static> Validator<T> {
         self
     }
     /// Report duplicate element indexes using keys; first occurrence remains valid.
+    /// Require the selected key to be unique across a collection, reporting
+    /// each later duplicate at `field[index]` with code `unique`.
     pub fn unique_by<U: 'static, K: Eq + std::hash::Hash + 'static>(
         mut self,
         field: impl Into<String>,

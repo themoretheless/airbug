@@ -1,4 +1,4 @@
-use runit::{Mock, assert_contains, assert_same_items, check_all, with_mocks};
+use airbug::{Mock, assert_contains, assert_same_items, check_all, with_mocks};
 #[test]
 fn collection_macros_preserve_duplicates() {
     assert_contains!(vec![1, 2], 2);

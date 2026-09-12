@@ -4,29 +4,47 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime},
 };
+/// Why a clock refused an operation, for instance an overflowing advance.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClockError(pub &'static str);
+pub struct ClockError(
+    /// Static description of the refusal.
+    pub &'static str,
+);
 impl fmt::Display for ClockError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.0)
     }
 }
 impl std::error::Error for ClockError {}
+/// The time source code under test should depend on, so tests can drive it.
+///
+/// [`ManualClock`] advances only when told to; [`RealClock`] delegates to the
+/// operating system. Monotonic [`elapsed`](Clock::elapsed) and wall
+/// [`wall_time`](Clock::wall_time) are separate, so a wall-clock jump cannot
+/// move a timeout.
 pub trait Clock {
+    /// Monotonic time since the clock was created. Never goes backwards.
     fn elapsed(&self) -> Duration;
+    /// Current wall-clock time, which may jump in either direction.
     fn wall_time(&self) -> SystemTime;
+    /// Wait for `duration`, however this clock chooses to represent waiting.
     fn sleep(&self, duration: Duration) -> Result<(), ClockError>;
 }
+/// A clock that only moves when the test moves it, so no test sleeps.
+/// Clones share one timeline.
 #[derive(Clone)]
 pub struct ManualClock {
     state: Arc<Mutex<(Duration, SystemTime)>>,
 }
 impl ManualClock {
+    /// Start at zero elapsed and the given wall time.
     pub fn new(wall_time: SystemTime) -> Self {
         Self {
             state: Arc::new(Mutex::new((Duration::ZERO, wall_time))),
         }
     }
+    /// Move both monotonic and wall time forward. Errors instead of wrapping
+    /// on overflow.
     pub fn advance(&self, duration: Duration) -> Result<(), ClockError> {
         let mut state = self.state.lock().expect("clock lock poisoned");
         let elapsed = state
@@ -41,6 +59,8 @@ impl ManualClock {
         Ok(())
     }
     /// Calendar correction does not change elapsed time or deadlines.
+    /// Jump wall time without touching monotonic time, to model an NTP
+    /// correction or a user changing the system clock.
     pub fn set_wall_time(&self, wall_time: SystemTime) {
         self.state.lock().expect("clock lock poisoned").1 = wall_time;
     }
@@ -56,6 +76,8 @@ impl Clock for ManualClock {
         self.advance(duration)
     }
 }
+/// The system clock: [`Instant`] for elapsed time, [`SystemTime`] for wall
+/// time, and a real thread sleep. Use it in production wiring, not in tests.
 pub struct RealClock {
     start: Instant,
 }
@@ -78,15 +100,23 @@ impl Clock for RealClock {
         Ok(())
     }
 }
+/// One probe result kept for the failure report of [`Eventually::check`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Observation {
+    /// Clock time when the probe ran.
     pub elapsed: Duration,
+    /// `Debug` rendering of what the probe returned.
     pub value: String,
 }
+/// A condition that never held, reported with what was actually seen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventuallyError {
+    /// Why polling stopped, for instance a timeout or a rejected interval.
     pub reason: String,
+    /// How many times the probe ran.
     pub attempts: usize,
+    /// The most recent observations, capped by
+    /// [`Eventually::history_limit`].
     pub history: Vec<Observation>,
 }
 impl fmt::Display for EventuallyError {
@@ -99,13 +129,19 @@ impl fmt::Display for EventuallyError {
     }
 }
 impl std::error::Error for EventuallyError {}
+/// Poll a condition until it holds or a deadline passes, on a [`Clock`] the
+/// test controls, so retries need no real waiting.
 #[derive(Debug, Clone)]
 pub struct Eventually {
+    /// Give up once this much clock time has passed.
     pub timeout: Duration,
+    /// Wait this long between probes. Must be nonzero.
     pub interval: Duration,
+    /// How many observations to keep for the failure report. Defaults to 16.
     pub history_limit: usize,
 }
 impl Eventually {
+    /// A poller with the default history limit of 16 observations.
     pub fn new(timeout: Duration, interval: Duration) -> Self {
         Self {
             timeout,

@@ -1,7 +1,5 @@
 //! Baseline: same happy path with standard Rust assertions and handwritten doubles.
-#[path = "../examples/checkout/domain.rs"]
-mod domain;
-use domain::*;
+use checkout_domain::*;
 use std::sync::{Arc, Mutex};
 #[derive(Debug, PartialEq)]
 enum Call {

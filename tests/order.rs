@@ -1,4 +1,4 @@
-use runit::{CallSequence, Mock, with_mocks};
+use airbug::{CallSequence, Mock, with_mocks};
 use std::sync::{Arc, Barrier};
 #[test]
 fn order_across_objects_and_methods() {
@@ -22,7 +22,7 @@ fn wrong_order_does_not_execute_answer_capture_or_consume_counts() {
     let order = CallSequence::new("flow");
     let a = Mock::<(), ()>::new("first");
     let b = Mock::<(), ()>::new("second");
-    let capture = runit::mock::Capture::new(3);
+    let capture = airbug::mock::Capture::new(3);
     let executed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let count = executed.clone();
     a.expect("first", |_| true).in_sequence(&order).returns(());

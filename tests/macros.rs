@@ -1,5 +1,5 @@
 #![cfg(feature = "macros")]
-use runit::{FixtureContext, Generate, GenerationError, VerifyMocks, with_mocks};
+use airbug::{FixtureContext, Generate, GenerationError, VerifyMocks, with_mocks};
 
 #[derive(Debug, Generate)]
 struct Order {
@@ -82,7 +82,7 @@ fn override_skips_failing_generator_and_tracks_root_depth() {
     ctx.max_depth(0);
     assert!(ctx.builder::<Fallible>().with_value(7).try_build().is_err());
 }
-#[runit::mock]
+#[airbug::mock]
 trait Repository: Send + Sync {
     fn lookup(&self, name: &str) -> Option<u64>;
     fn save(&mut self, id: u64, labels: &[String]) -> Result<(), String>;
@@ -120,22 +120,22 @@ fn optional_verification_wrapper_preserves_native_assertions() {
         assert_eq!(repository.lookup("Alice"), Some(1));
     });
 }
-#[runit::cases(zero(0, 0), positive(2, 4), negative(-3, -6))]
+#[airbug::cases(zero(0, 0), positive(2, 4), negative(-3, -6))]
 fn doubles(input: i32, expected: i32) {
     assert_eq!(input * 2, expected);
 }
-#[runit::cases(valid("42"))]
+#[airbug::cases(valid("42"))]
 fn parsing(value: &str) -> Result<(), std::num::ParseIntError> {
     assert_eq!(value.parse::<u8>()?, 42);
     Ok(())
 }
-#[runit::cases(wrong(0))]
+#[airbug::cases(wrong(0))]
 #[should_panic(expected = "positive")]
 fn requires_positive(value: i32) {
     assert!(value > 0, "positive");
 }
 
-#[runit::mock]
+#[airbug::mock]
 trait AsyncStore {
     async fn get(&self, id: u64) -> String;
 }
@@ -151,7 +151,7 @@ fn async_mock_and_verification_use_callers_executor() {
         .expect("id", |(id,)| *id == 1)
         .returns("found".into());
     let mocks: [&dyn VerifyMocks; 1] = [&store];
-    let future = runit::with_mocks_async(&mocks, async {
+    let future = airbug::with_mocks_async(&mocks, async {
         assert_eq!(store.get(1).await, "found");
     });
     let mut future = std::pin::pin!(future);

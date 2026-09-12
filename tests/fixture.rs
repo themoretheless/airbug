@@ -1,5 +1,5 @@
-use runit::GenerationErrorKind;
-use runit::prelude::*;
+use airbug::GenerationErrorKind;
+use airbug::prelude::*;
 #[test]
 fn prelude_supports_native_tests() {
     assert_contains!([1, 2], 2);
@@ -75,7 +75,7 @@ fn sequential_ids_stop_at_overflow() {
 }
 #[test]
 fn boundary_sets_include_special_values() {
-    use runit::fixture::boundaries::*;
+    use airbug::fixture::boundaries::*;
     assert!(I64.contains(&i64::MIN) && I64.contains(&0) && I64.contains(&i64::MAX));
     assert_eq!(U64[0], 0);
     assert!(F64.iter().any(|x| x.is_nan()));

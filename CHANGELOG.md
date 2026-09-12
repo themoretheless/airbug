@@ -1,3 +1,22 @@
+# Unreleased
+
+- Renamed the crates: `runit` is now `airbug`, `runit-macros` is now
+  `airbug-macros`. Breaking for every user; update the dependency name and any
+  `runit::` paths.
+- Documented the whole public API and enabled `missing_docs` plus
+  `rustdoc::broken_intra_doc_links`; CI now fails on either.
+- `docs.rs` builds with all features, so the macro API appears in the published
+  documentation.
+- `Assertion::check` and `Assertion::subject` are public, so downstream crates
+  can add assertions in an extension trait with the same failure formatting.
+- Split `mock.rs` into submodules and moved `MockError`, `VerificationErrors`
+  and `VerifyMocks` to a new `airbug::verify`, removing the `mock` <-> `order`
+  module cycle. `airbug::mock::MockError` still resolves.
+- `prelude` lists its `checks` imports explicitly instead of glob-importing.
+- Tests renamed by subject rather than by origin; the shared checkout domain is
+  a `checkout-domain` dev-dependency crate instead of a file the tests reached
+  into with `#[path]`.
+
 # 0.5.0
 
 ## Unreleased

@@ -1,11 +1,11 @@
-use runit::{FixtureContext, Generate, Validator, with_mocks};
+use airbug::{FixtureContext, Generate, Validator, with_mocks};
 
 #[derive(Generate)]
 struct Order {
     customer: String,
     quantity: u32,
 }
-#[runit::mock]
+#[airbug::mock]
 trait Repository: Send + Sync {
     fn save(&self, customer: &str, quantity: u32) -> Result<u64, String>;
 }

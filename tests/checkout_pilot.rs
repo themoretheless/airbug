@@ -1,8 +1,6 @@
 #![cfg(feature = "macros")]
-#[path = "../examples/checkout/domain.rs"]
-mod domain;
-use domain::*;
-use runit::{CallSequence, with_mocks};
+use airbug::{CallSequence, with_mocks};
+use checkout_domain::*;
 
 struct Harness {
     payments: MockPayments,
@@ -86,7 +84,7 @@ fn success_charges_saves_then_publishes_exact_payload() {
         .returns(Ok(()));
     assert_eq!(test.run(&request()), Ok(saved().receipt()));
 }
-#[runit::cases(
+#[airbug::cases(
     no_id(0, "Alice", 2500),
     no_customer(7, " ", 2500),
     no_amount(7, "Alice", 0)

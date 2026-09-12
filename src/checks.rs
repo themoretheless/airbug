@@ -1,13 +1,25 @@
 //! Native-style checks and structured failures, without fluent syntax.
 use std::{error::Error, fmt::Debug};
+/// One mismatch recorded by a [`CheckReport`], already rendered to strings so
+/// the report can hold failures about differently typed fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckFailure {
+    /// Where the mismatch is, as given to [`CheckReport::equal`], e.g. `order.total`.
     pub path: String,
+    /// `Debug` rendering of the expected value.
     pub expected: String,
+    /// `Debug` rendering of the actual value.
     pub actual: String,
 }
+/// Accumulates mismatches so one test run reports every wrong field at once,
+/// instead of stopping at the first `assert_eq!`.
+///
+/// Record with [`equal`](CheckReport::equal) or
+/// [`field_equal`](CheckReport::field_equal), then finish with
+/// [`assert`](CheckReport::assert).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheckReport {
+    /// Recorded mismatches, in the order they were checked.
     pub failures: Vec<CheckFailure>,
 }
 impl std::fmt::Display for CheckReport {
@@ -23,9 +35,11 @@ impl std::fmt::Display for CheckReport {
     }
 }
 impl CheckReport {
+    /// True when nothing has been recorded as failing.
     pub fn is_success(&self) -> bool {
         self.failures.is_empty()
     }
+    /// Record a mismatch at `path` unless the two values are equal.
     pub fn equal<T: PartialEq + Debug + ?Sized>(
         &mut self,
         path: impl Into<String>,
@@ -41,6 +55,8 @@ impl CheckReport {
         }
         self
     }
+    /// [`equal`](CheckReport::equal) on a field picked out of `actual`, so a
+    /// chain of checks over one struct does not repeat the binding.
     pub fn field_equal<T, F: PartialEq + Debug + ?Sized>(
         &mut self,
         actual: &T,
@@ -50,6 +66,7 @@ impl CheckReport {
     ) -> &mut Self {
         self.equal(path, select(actual), expected)
     }
+    /// Panic listing every recorded mismatch, or return if there are none.
     #[track_caller]
     pub fn assert(&self) {
         if crate::report::is_enabled() {
@@ -60,6 +77,7 @@ impl CheckReport {
         assert!(self.is_success(), "{self}");
     }
 }
+/// Panic on the first value that repeats an earlier one. O(n²).
 #[track_caller]
 pub fn assert_unique<T: PartialEq + Debug>(values: &[T]) {
     for (i, value) in values.iter().enumerate() {
@@ -68,6 +86,8 @@ pub fn assert_unique<T: PartialEq + Debug>(values: &[T]) {
         }
     }
 }
+/// Panic at the first adjacent pair that is out of ascending order. Values that
+/// do not compare at all (such as NaN) also fail.
 #[track_caller]
 pub fn assert_sorted<T: PartialOrd + Debug>(values: &[T]) {
     for (i, pair) in values.windows(2).enumerate() {
@@ -79,12 +99,14 @@ pub fn assert_sorted<T: PartialOrd + Debug>(values: &[T]) {
         );
     }
 }
+/// Panic at the first element failing `predicate`, naming its index.
 #[track_caller]
 pub fn assert_all<T: Debug>(values: &[T], predicate: impl Fn(&T) -> bool) {
     for (i, value) in values.iter().enumerate() {
         assert!(predicate(value), "predicate failed at [{i}]: {value:?}");
     }
 }
+/// Panic unless exactly `expected` elements satisfy `predicate`.
 #[track_caller]
 pub fn assert_count<T: Debug>(values: &[T], expected: usize, predicate: impl Fn(&T) -> bool) {
     let count = values.iter().filter(|v| predicate(v)).count();
@@ -105,6 +127,7 @@ pub fn assert_subset<T: PartialEq + Debug>(subset: &[T], superset: &[T]) {
         }
     }
 }
+/// Multiset superset: the arguments of [`assert_subset`] the other way round.
 #[track_caller]
 pub fn assert_superset<T: PartialEq + Debug>(superset: &[T], subset: &[T]) {
     assert_subset(subset, superset);
@@ -122,9 +145,12 @@ pub fn assert_relative_eq(actual: f64, expected: f64, tolerance: f64) {
         "expected {actual:?} within relative tolerance {tolerance:?} of {expected:?}"
     );
 }
+/// Convert CRLF and lone CR to LF, so text compares the same on every platform.
 pub fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n").replace('\r', "\n")
 }
+/// Compare two strings after [`normalize_newlines`], so a checkout that
+/// rewrote line endings does not fail the test.
 #[track_caller]
 pub fn assert_text_eq(actual: &str, expected: &str) {
     assert_eq!(

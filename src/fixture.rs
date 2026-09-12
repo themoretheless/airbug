@@ -9,23 +9,39 @@ use std::{
 type Factory = Rc<dyn Fn(&mut FixtureContext) -> Result<Box<dyn Any>, GenerationError>>;
 /// Implement with `ctx.try_build()?` for each child. Use `build` only at test boundaries.
 pub trait Generate: Sized + 'static {
+    /// Build one value, asking `ctx` for each child with
+    /// [`try_build`](FixtureContext::try_build) so limits and cycle detection
+    /// apply to the whole graph.
     fn generate(ctx: &mut FixtureContext) -> Result<Self, GenerationError>;
 }
+/// Why generation stopped. The graph limits exist so a mistake in a factory
+/// fails the test instead of hanging or exhausting memory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerationErrorKind {
+    /// A type asked to build itself, directly or through its children.
     Cycle,
+    /// Nesting passed [`FixtureContext::max_depth`].
     DepthLimit,
+    /// No factory was registered for a type built by registration.
     MissingFactory,
+    /// The graph produced more values than [`FixtureContext::max_nodes`].
     NodeLimit,
+    /// A factory rejected the request itself, via [`GenerationError::custom`].
     Custom(String),
 }
+/// A failed generation, with enough context to reproduce it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenerationError {
+    /// Type names from the root down to where it failed.
     pub path: Vec<&'static str>,
+    /// What went wrong.
     pub kind: GenerationErrorKind,
+    /// Seed of the context, so the failure can be replayed exactly.
     pub seed: Option<u64>,
 }
 impl GenerationError {
+    /// An error raised by a factory itself. The path and seed are filled in as
+    /// it propagates back up.
     pub fn custom(message: impl Into<String>) -> Self {
         Self {
             path: Vec::new(),
@@ -63,9 +79,12 @@ impl Default for FixtureContext {
     }
 }
 impl FixtureContext {
+    /// A context seeded with 1, so an unseeded test is still reproducible.
     pub fn new() -> Self {
         Self::default()
     }
+    /// A context whose random choices are determined by `seed`. The same seed
+    /// always produces the same values.
     pub fn with_seed(seed: u64) -> Self {
         Self {
             factories: HashMap::new(),
@@ -78,20 +97,25 @@ impl FixtureContext {
             seed,
         }
     }
+    /// How many elements generated collections get. Defaults to 3.
     pub fn collection_len(&mut self, len: usize) -> &mut Self {
         self.collection_len = len;
         self
     }
+    /// Deepest nesting allowed before [`GenerationErrorKind::DepthLimit`].
+    /// Defaults to 64.
     pub fn max_depth(&mut self, depth: usize) -> &mut Self {
         self.max_depth = depth;
         self
     }
+    /// Supply values of `T` from a factory instead of its [`Generate`] impl.
     pub fn register<T: 'static>(
         &mut self,
         factory: impl Fn(&mut Self) -> T + 'static,
     ) -> &mut Self {
         self.register_fallible(move |ctx| Ok(factory(ctx)))
     }
+    /// [`register`](FixtureContext::register) for a factory that can refuse.
     pub fn register_fallible<T: 'static>(
         &mut self,
         factory: impl Fn(&mut Self) -> Result<T, GenerationError> + 'static,
@@ -102,6 +126,7 @@ impl FixtureContext {
         );
         self
     }
+    /// Drop the factory for `T`, returning whether there was one.
     pub fn remove<T: 'static>(&mut self) -> bool {
         self.factories.remove(&TypeId::of::<T>()).is_some()
     }
@@ -109,18 +134,27 @@ impl FixtureContext {
     pub fn reuse<T: Clone + 'static>(&mut self, value: T) -> &mut Self {
         self.register(move |_| value.clone())
     }
+    /// [`try_build`](FixtureContext::try_build), panicking on failure. Use it
+    /// at the top of a test, not inside a [`Generate`] impl.
     #[track_caller]
     pub fn build<T: Generate>(&mut self) -> T {
         self.try_build().unwrap_or_else(|e| panic!("{e}"))
     }
+    /// Build a `T`, counting it against the depth, node and cycle limits.
+    /// This is what a [`Generate`] impl should call for its children.
     pub fn try_build<T: Generate>(&mut self) -> Result<T, GenerationError> {
         self.run(true, T::generate)
     }
+    /// [`try_build_registered`](FixtureContext::try_build_registered),
+    /// panicking on failure.
     #[track_caller]
     pub fn build_registered<T: 'static>(&mut self) -> T {
         self.try_build_registered()
             .unwrap_or_else(|e| panic!("{e}"))
     }
+    /// Build a `T` from its registered factory, failing with
+    /// [`GenerationErrorKind::MissingFactory`] if there is none. Unlike
+    /// [`try_build`](FixtureContext::try_build) this needs no [`Generate`] impl.
     pub fn try_build_registered<T: 'static>(&mut self) -> Result<T, GenerationError> {
         self.run(true, |_| {
             Err(GenerationError {
@@ -262,10 +296,13 @@ impl<T: Generate> Generate for std::sync::Arc<T> {
 
 /// Implemented by derive(Generate) for structs. Builders override individual fields.
 pub trait FixtureBuild: Sized + 'static {
+    /// Generated builder type, borrowing the context it will build from.
     type Builder<'ctx>;
+    /// Start a builder whose fields default to generated values.
     fn fixture_builder(ctx: &mut FixtureContext) -> Self::Builder<'_>;
 }
 impl FixtureContext {
+    /// A builder for `T`, to set some fields explicitly and generate the rest.
     pub fn builder<T: FixtureBuild>(&mut self) -> T::Builder<'_> {
         T::fixture_builder(self)
     }
@@ -291,13 +328,19 @@ pub struct FixtureCheckpoint {
     max_nodes: usize,
 }
 impl FixtureContext {
+    /// The seed this context was created with, worth printing when a
+    /// generated test fails.
     pub fn seed(&self) -> u64 {
         self.seed
     }
+    /// Most values one build may produce before
+    /// [`GenerationErrorKind::NodeLimit`]. Defaults to 100_000.
     pub fn max_nodes(&mut self, limit: usize) -> &mut Self {
         self.max_nodes = limit;
         self
     }
+    /// Capture factories, configuration and random state, to replay the same
+    /// values later. Panics unless the fixture is idle.
     pub fn checkpoint(&self) -> FixtureCheckpoint {
         assert!(self.stack.is_empty(), "checkpoint requires an idle fixture");
         FixtureCheckpoint {
@@ -309,6 +352,8 @@ impl FixtureContext {
             max_nodes: self.max_nodes,
         }
     }
+    /// Rewind to a [`checkpoint`](FixtureContext::checkpoint). Panics unless
+    /// the fixture is idle.
     pub fn restore(&mut self, checkpoint: FixtureCheckpoint) {
         assert!(self.stack.is_empty(), "restore requires an idle fixture");
         self.factories = checkpoint.factories;
@@ -398,8 +443,12 @@ impl FixtureContext {
 }
 /// Deterministic edge sets for table-driven tests, not random distributions.
 pub mod boundaries {
+    /// Extremes and their neighbours, plus the signs and zero.
     pub const I64: [i64; 7] = [i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX];
+    /// Zero, one, and the top of the range with its neighbour.
     pub const U64: [u64; 4] = [0, 1, u64::MAX - 1, u64::MAX];
+    /// Infinities, both zeros, the smallest positive value and NaN, which are
+    /// the cases naive float code tends to get wrong.
     pub const F64: [f64; 10] = [
         f64::NEG_INFINITY,
         f64::MIN,

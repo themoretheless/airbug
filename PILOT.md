@@ -3,7 +3,7 @@
 ## Scope
 
 This is a local demonstration service, not an integration into an existing user
-application. The RUnit repository contained library code and examples only; a
+application. The Airbug repository contained library code and examples only; a
 repository/module path is still needed for a real-service adoption pilot. No
 payment provider, database or event broker is contacted.
 
@@ -30,18 +30,18 @@ The pilot contains 12 named tests in [tests/checkout_pilot.rs](tests/checkout_pi
 The order engine has separate tests for missing/excessive calls, repeats, ranges,
 late registration, cross-thread admission, re-entry, reset and panic behavior.
 
-## Native baseline versus RUnit
+## Native baseline versus Airbug
 
 [tests/checkout_native.rs](tests/checkout_native.rs) tests the same service's happy
 path and lookup failure using standard Rust alone: five handwritten trait methods,
 a shared call log and an enum describing the recorded interactions.
 
-The RUnit pilot replaces those five handwritten adapters with three mock
+The Airbug pilot replaces those five handwritten adapters with three mock
 attributes. Each scenario declares answers, argument matchers and ordered steps.
 `with_mocks` checks all supplied mocks plus the sequence after the test body,
 including when the service normally returns an Err. Assertions remain assert_eq.
 
-This does not establish a universal reduction in line count: RUnit expectations
+This does not establish a universal reduction in line count: Airbug expectations
 still take space, and a reusable handwritten fake can be concise. The observed
 benefit here is removing adapter/logging code and reporting wrong order at the
 violating call rather than after a final whole-log comparison. The native baseline

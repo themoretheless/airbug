@@ -3,6 +3,31 @@
 version = 4
 
 [[package]]
+name = "airbug"
+version = "0.5.0"
+dependencies = [
+ "airbug-macros",
+ "checkout-domain",
+]
+
+[[package]]
+name = "airbug-macros"
+version = "0.5.0"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "checkout-domain"
+version = "0.5.0"
+dependencies = [
+ "airbug",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -55,23 +80,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "runit"
-version = "0.5.0"
-dependencies = [
- "runit-macros",
-]
-
-[[package]]
-name = "runit-macros"
-version = "0.5.0"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]

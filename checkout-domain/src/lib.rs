@@ -1,4 +1,4 @@
-//! Demonstration service for testing RUnit ergonomics, not a production payment integration.
+//! Demonstration service for testing Airbug ergonomics, not a production payment integration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrderRequest {
     pub id: u64,
@@ -48,17 +48,17 @@ pub enum CheckoutError {
         cause: Failure,
     },
 }
-#[cfg_attr(feature = "macros", runit::mock)]
+#[cfg_attr(feature = "macros", airbug::mock)]
 pub trait Payments: Send + Sync {
     fn charge(&self, order_id: u64, amount_cents: u64) -> Result<String, Failure>;
     fn refund(&self, charge_id: &str) -> Result<(), Failure>;
 }
-#[cfg_attr(feature = "macros", runit::mock)]
+#[cfg_attr(feature = "macros", airbug::mock)]
 pub trait Orders: Send + Sync {
     fn find(&self, id: u64) -> Result<Option<SavedOrder>, Failure>;
     fn save(&self, order: &SavedOrder) -> Result<(), Failure>;
 }
-#[cfg_attr(feature = "macros", runit::mock)]
+#[cfg_attr(feature = "macros", airbug::mock)]
 pub trait Events: Send + Sync {
     fn publish(&self, event: &OrderPlaced) -> Result<(), Failure>;
 }

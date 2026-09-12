@@ -13,12 +13,12 @@ fn consumer_macros_and_compile_fail_diagnostics() {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let directory = std::env::temp_dir().join(format!("runit-ui-{}-{stamp}", std::process::id()));
+    let directory = std::env::temp_dir().join(format!("airbug-ui-{}-{stamp}", std::process::id()));
     fs::create_dir(&directory).unwrap();
     let _cleanup = Cleanup(directory.clone());
     fs::create_dir(directory.join("src")).unwrap();
     fs::write(directory.join("Cargo.toml"), format!(
-        "[package]\nname = \"runit-ui\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[workspace]\n[dependencies]\nhelpers = {{ package = \"runit\", path = {:?}, features = [\"macros\"] }}\n",
+        "[package]\nname = \"airbug-ui\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[workspace]\n[dependencies]\nhelpers = {{ package = \"airbug\", path = {:?}, features = [\"macros\"] }}\n",
         env!("CARGO_MANIFEST_DIR")
     )).unwrap();
     let cases = [

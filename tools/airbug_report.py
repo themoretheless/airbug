@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run native libtest cases and produce a portable RUnit HTML report (Python 3.9+)."""
+"""Run native libtest cases and produce a portable Airbug HTML report (Python 3.9+)."""
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
@@ -172,8 +172,8 @@ def collect_diagnostics(directory):
 
 
 def execute_case(command, cwd, timeout, environment):
-    with tempfile.TemporaryDirectory(prefix="runit-diagnostics-") as directory:
-        result = execute(command, cwd, timeout, env=dict(environment, RUNIT_REPORT_DIR=directory))
+    with tempfile.TemporaryDirectory(prefix="airbug-diagnostics-") as directory:
+        result = execute(command, cwd, timeout, env=dict(environment, AIRBUG_REPORT_DIR=directory))
         result.update(collect_diagnostics(Path(directory)))
         return result
 
@@ -279,7 +279,7 @@ def runtime_environment(package, artifact, messages, target_dir, rust_lib):
 
 def atomic_write(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=".runit-")
+    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=".airbug-")
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write(content)
@@ -292,7 +292,7 @@ def atomic_write(path, content):
 def render(report, template):
     # HTML script raw-text parsing must never see an input-provided closing tag.
     data = json.dumps(report, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
-    return template.replace("__RUNIT_DATA__", data)
+    return template.replace("__AIRBUG_DATA__", data)
 
 
 def valid_history(runs):
@@ -360,8 +360,8 @@ def positive(value):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest-path", type=Path, default=Path("Cargo.toml"))
-    parser.add_argument("--output", type=Path, default=Path("target/runit-report"))
-    parser.add_argument("--title", default="RUnit test report")
+    parser.add_argument("--output", type=Path, default=Path("target/airbug-report"))
+    parser.add_argument("--title", default="Airbug test report")
     parser.add_argument("--workspace", action="store_true")
     parser.add_argument("--package", action="append", default=[])
     parser.add_argument("--features")
@@ -500,5 +500,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (OSError, RuntimeError) as error:
-        print("runit-report: " + str(error), file=sys.stderr)
+        print("airbug-report: " + str(error), file=sys.stderr)
         sys.exit(2)

@@ -1,4 +1,4 @@
-use runit::checks::*;
+use airbug::checks::*;
 #[test]
 fn field_report_preserves_path_actual_and_expected() {
     struct User {

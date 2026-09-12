@@ -1,6 +1,6 @@
 //! Optional structured diagnostics for the web report. Ordinary `cargo test`
 //! needs no setup: steps still execute and assertions still assert, but no files
-//! are written unless the reporter configures `RUNIT_REPORT_DIR` for the process.
+//! are written unless the reporter configures `AIRBUG_REPORT_DIR` for the process.
 use std::{
     cell::RefCell,
     fmt::Debug,
@@ -25,7 +25,7 @@ static ATTACHED_BYTES: Mutex<usize> = Mutex::new(0);
 thread_local! { static PARENTS: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) }; }
 
 fn directory() -> Option<PathBuf> {
-    std::env::var_os("RUNIT_REPORT_DIR").map(PathBuf::from)
+    std::env::var_os("AIRBUG_REPORT_DIR").map(PathBuf::from)
 }
 fn id() -> u64 {
     NEXT.fetch_add(1, Ordering::Relaxed)
@@ -72,13 +72,13 @@ fn emit(event: &str) -> io::Result<()> {
         .append(true)
         .open(dir.join("events.jsonl"))?;
     if file.metadata()?.len() + event.len() as u64 + 1 > MAX_EVENTS {
-        return Err(io::Error::other("RUnit report event limit exceeded"));
+        return Err(io::Error::other("Airbug report event limit exceeded"));
     }
     writeln!(file, "{event}")
 }
 fn record(event: &str) {
     if let Err(error) = emit(event) {
-        let message = format!("RUnit diagnostics could not be recorded: {error}");
+        let message = format!("Airbug diagnostics could not be recorded: {error}");
         let _ = writeln!(io::stderr(), "{message}");
         if let Some(dir) = directory() {
             // A fixed marker lets the collector flag incomplete diagnostics.
@@ -171,7 +171,7 @@ pub fn attach_bytes(name: &str, media_type: &str, bytes: &[u8]) -> io::Result<()
     };
     let mut total = ATTACHED_BYTES.lock().unwrap_or_else(|e| e.into_inner());
     if bytes.len() > MAX_ATTACHMENT || *total + bytes.len() > MAX_ATTACHMENTS {
-        return Err(io::Error::other("RUnit attachment size limit exceeded"));
+        return Err(io::Error::other("Airbug attachment size limit exceeded"));
     }
     let id = id();
     let file = format!("attachment-{}-{id}.bin", std::process::id());

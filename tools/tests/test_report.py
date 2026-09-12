@@ -7,8 +7,8 @@ import sys
 import tempfile
 import unittest
 
-TOOL = Path(__file__).resolve().parents[1] / "runit_report.py"
-SPEC = importlib.util.spec_from_file_location("runit_report", TOOL)
+TOOL = Path(__file__).resolve().parents[1] / "airbug_report.py"
+SPEC = importlib.util.spec_from_file_location("airbug_report", TOOL)
 reporter = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(reporter)
 
@@ -45,7 +45,7 @@ class ReporterTests(unittest.TestCase):
             data = reporter.collect_diagnostics(root)
             self.assertFalse(data['diagnosticErrors'])
             self.assertEqual(data['attachments'][0]['text'], content.decode())
-            self.assertNotIn('</script>', reporter.render(data, '__RUNIT_DATA__'))
+            self.assertNotIn('</script>', reporter.render(data, '__AIRBUG_DATA__'))
             (root / 'attachment-1-1.bin').write_bytes(b'x' * (1024 * 1024 + 1))
             self.assertTrue(reporter.collect_diagnostics(root)['diagnosticErrors'])
 
@@ -66,29 +66,29 @@ class ReporterTests(unittest.TestCase):
             root = Path(directory)
             (root / 'src').mkdir()
             dependency = json.dumps(str(TOOL.parents[1]))
-            (root / 'Cargo.toml').write_text('[package]\nname="rich-report-fixture"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[dependencies]\nrunit={path=' + dependency + '}\n')
+            (root / 'Cargo.toml').write_text('[package]\nname="rich-report-fixture"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[dependencies]\nairbug={path=' + dependency + '}\n')
             (root / 'src/lib.rs').write_text(r'''
 #[test] fn successful() {
-    runit::report::step("parent", || {
-        runit::report::step("child", || {
-            runit::report::attach_bytes("payload.json", "application/json", br#"{"ok":true}"#).unwrap();
-            runit::report::assert_text_equal("body", "ok", "ok");
+    airbug::report::step("parent", || {
+        airbug::report::step("child", || {
+            airbug::report::attach_bytes("payload.json", "application/json", br#"{"ok":true}"#).unwrap();
+            airbug::report::assert_text_equal("body", "ok", "ok");
         });
     });
 }
 #[test] fn failed() {
-    runit::report::step("parent", || runit::report::step("child", || {
-        runit::report::assert_text_equal("body", "paid\n2500\n", "pending\n2400\n");
+    airbug::report::step("parent", || airbug::report::step("child", || {
+        airbug::report::assert_text_equal("body", "paid\n2500\n", "pending\n2400\n");
     }));
 }
 #[test] fn recovery() {
-    runit::report::step("parent", || {
-        let _ = std::panic::catch_unwind(|| runit::report::step("failed child", || panic!("expected")));
-        runit::report::step("next child", || {});
+    airbug::report::step("parent", || {
+        let _ = std::panic::catch_unwind(|| airbug::report::step("failed child", || panic!("expected")));
+        airbug::report::step("next child", || {});
     });
 }
-#[test] fn timeout() { runit::report::step("unfinished", || std::thread::sleep(std::time::Duration::from_secs(30))); }
-#[test] fn attachment_limit() { assert!(runit::report::attach_bytes("large", "application/octet-stream", &vec![0; 1024*1024+1]).is_err()); }
+#[test] fn timeout() { airbug::report::step("unfinished", || std::thread::sleep(std::time::Duration::from_secs(30))); }
+#[test] fn attachment_limit() { assert!(airbug::report::attach_bytes("large", "application/octet-stream", &vec![0; 1024*1024+1]).is_err()); }
 ''')
             result = subprocess.run([sys.executable, str(TOOL), '--manifest-path', str(root / 'Cargo.toml'),
                                      '--output', str(root / 'report'), '--offline', '--timeout', '1'],
@@ -140,7 +140,7 @@ class ReporterTests(unittest.TestCase):
 
     def test_report_data_cannot_close_script_element(self):
         payload = {"title": "</script><script>alert(1)</script> & 中文"}
-        rendered = reporter.render(payload, "<script>__RUNIT_DATA__</script>")
+        rendered = reporter.render(payload, "<script>__AIRBUG_DATA__</script>")
         self.assertEqual(rendered.count("</script>"), 1)
         self.assertEqual(json.loads(rendered[8:-9]), payload)
 
@@ -156,7 +156,7 @@ class ReporterTests(unittest.TestCase):
         self.assertLess(result["duration"], 5)
 
     def test_missing_executable(self):
-        result = reporter.execute(["runit-executable-that-does-not-exist"], Path.cwd(), 1)
+        result = reporter.execute(["airbug-executable-that-does-not-exist"], Path.cwd(), 1)
         self.assertEqual(reporter.classify(result), "broken")
 
     def test_output_lock_preserves_existing_report(self):

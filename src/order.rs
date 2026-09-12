@@ -1,5 +1,5 @@
 //! Shared, strict admission order across mock methods and objects.
-use crate::mock::{MockError, VerificationErrors, VerifyMocks};
+use crate::verify::{MockError, VerificationErrors, VerifyMocks};
 use std::sync::{Arc, Mutex};
 
 struct Entry {
@@ -21,6 +21,7 @@ pub struct CallSequence {
     state: Arc<Mutex<State>>,
 }
 impl CallSequence {
+    /// An empty sequence; `name` appears in its failure messages.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: Arc::from(name.into()),
@@ -55,6 +56,7 @@ impl CallSequence {
         }
     }
     /// Includes missing steps and retained order violations. No reset or Drop verification.
+    /// Report out-of-order admissions plus any step that never ran enough times.
     pub fn verify(&self) -> Result<(), MockError> {
         let state = self.state.lock().expect("sequence lock poisoned");
         let mut details = state.failures.clone();
@@ -80,6 +82,7 @@ impl CallSequence {
             Err(self.error(details))
         }
     }
+    /// [`verify`](CallSequence::verify), panicking on failure.
     #[track_caller]
     pub fn assert_verified(&self) {
         self.verify().unwrap_or_else(|error| panic!("{error}"));

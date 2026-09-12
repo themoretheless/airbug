@@ -1,4 +1,4 @@
-use runit::prelude::*;
+use airbug::prelude::*;
 use std::time::{Duration, SystemTime};
 fn main() {
     let mut fixture = FixtureContext::with_seed(42);

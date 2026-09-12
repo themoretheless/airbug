@@ -1,18 +1,18 @@
-# RUnit web reports
+# Airbug web reports
 
 Generate an Allure-inspired, self-contained report from real native Rust tests:
 
 ```sh
-python3 tools/runit_report.py --workspace --all-features --locked --doc-tests
+python3 tools/airbug_report.py --workspace --all-features --locked --doc-tests
 ```
 
-Open `target/runit-report/index.html` in a browser. No server, Node.js, npm,
+Open `target/airbug-report/index.html` in a browser. No server, Node.js, npm,
 external assets or network connection is needed to view the report. The CLI needs
 Python 3.9+ and Cargo/Rust on PATH. Add `--offline` when dependencies are cached.
-The tool also works with ordinary Rust projects that do not depend on RUnit:
+The tool also works with ordinary Rust projects that do not depend on Airbug:
 
 ```sh
-python3 /path/to/runit/tools/runit_report.py \
+python3 /path/to/airbug/tools/airbug_report.py \
   --manifest-path /path/to/project/Cargo.toml \
   --output /path/to/reports/project --workspace --all-features
 ```
@@ -24,7 +24,7 @@ python3 /path/to/runit/tools/runit_report.py \
 - Test cases: search names, suites and output; filter status/suite; sort by name,
   duration or failures first; paginate large runs.
 - Details: stdout/stderr, exit code, timeout/truncation indicators, recent
-  outcomes for the same test. `#[runit::cases]` cases are individual entries.
+  outcomes for the same test. `#[airbug::cases]` cases are individual entries.
 - Timeline: measured monotonic start/end offsets for each case, chronological
   bars, exact duration, suite/status/search filters, zoom up to 64× and an option
   to fit the time range to filtered entries. Optional build/discovery intervals
@@ -110,7 +110,7 @@ and a multi-user report service are not yet implemented.
 ## Structured steps, attachments and comparisons
 
 ```rust
-use runit::report;
+use airbug::report;
 
 #[test]
 fn checkout() {
@@ -156,7 +156,7 @@ at most 64 KiB on UTF-8 boundaries, with an explicit truncation flag. Diff
 calculation uses at most 2048 lines per side and retains at most 256 KiB. Text
 attachment previews retain 64 KiB; downloads retain complete accepted files.
 Raw sidecar files live in a temporary per-test directory and are removed after
-collection. `RUNIT_REPORT_DIR` is set only by the runner; no files are emitted by
+collection. `AIRBUG_REPORT_DIR` is set only by the runner; no files are emitted by
 ordinary `cargo test`. Subprocesses should remove this variable before starting
 another independently instrumented test process; the sidecar belongs to one
 process, with thread-safe writes inside it. Doctests are still aggregate entries

@@ -1,4 +1,4 @@
-use runit::{assert_that, report};
+use airbug::{assert_that, report};
 
 #[test]
 fn nested_checkout_steps_include_payload_and_comparison() {
@@ -66,7 +66,7 @@ fn caught_panic_restores_step_parent_and_preserves_payload() {
 
 #[test]
 fn check_report_records_each_field_failure() {
-    let mut checks = runit::checks::CheckReport::default();
+    let mut checks = airbug::checks::CheckReport::default();
     checks
         .equal("order.quantity", &1, &2)
         .equal("order.total", &100, &200);
