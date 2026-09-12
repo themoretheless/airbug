@@ -1,3 +1,9 @@
+//! Fluent assertions that read as one chained sentence and fail with the
+//! subject, the expectation and any `because` reason in the panic message.
+//!
+//! Every method borrows and returns the [`Assertion`], so checks chain. To add
+//! your own, write an extension trait over `Assertion<'_, YourType>` and report
+//! through [`Assertion::check`] to get the same failure formatting.
 use std::fmt::Debug;
 
 /// Borrows the subject so assertions never consume test data.
@@ -7,11 +13,17 @@ pub fn assert_that<T: ?Sized>(actual: &T) -> Assertion<'_, T> {
         reason: None,
     }
 }
+/// A borrowed subject plus an optional reason, awaiting assertions.
+///
+/// Created by [`assert_that`]. Which methods exist depends on the subject type:
+/// `is_true` only on `bool`, `contains` on slices and `Vec`, and so on.
 pub struct Assertion<'a, T: ?Sized> {
     actual: &'a T,
     reason: Option<&'a str>,
 }
 impl<'a, T: ?Sized> Assertion<'a, T> {
+    /// Append `because <reason>` to the panic message if a later check fails.
+    /// Set it before the checks it should explain.
     pub fn because(mut self, reason: &'a str) -> Self {
         self.reason = Some(reason);
         self
@@ -35,6 +47,7 @@ impl<'a, T: ?Sized> Assertion<'a, T> {
     }
 }
 impl<T: Debug + PartialEq + ?Sized> Assertion<'_, T> {
+    /// Fail unless the subject equals `expected`.
     #[track_caller]
     pub fn is_equal_to(self, expected: &T) -> Self {
         self.check(
@@ -43,6 +56,7 @@ impl<T: Debug + PartialEq + ?Sized> Assertion<'_, T> {
         );
         self
     }
+    /// Fail if the subject equals `expected`.
     #[track_caller]
     pub fn is_not_equal_to(self, expected: &T) -> Self {
         self.check(
@@ -53,6 +67,7 @@ impl<T: Debug + PartialEq + ?Sized> Assertion<'_, T> {
     }
 }
 impl<T: Debug + PartialOrd> Assertion<'_, T> {
+    /// Fail unless the subject is strictly greater than `expected`.
     #[track_caller]
     pub fn is_greater_than(self, expected: &T) -> Self {
         self.check(
@@ -66,11 +81,13 @@ impl<T: Debug + PartialOrd> Assertion<'_, T> {
     }
 }
 impl Assertion<'_, bool> {
+    /// Fail unless the subject is `true`.
     #[track_caller]
     pub fn is_true(self) -> Self {
         self.check(*self.actual, "expected true, actual false");
         self
     }
+    /// Fail unless the subject is `false`.
     #[track_caller]
     pub fn is_false(self) -> Self {
         self.check(!*self.actual, "expected false, actual true");
@@ -78,6 +95,7 @@ impl Assertion<'_, bool> {
     }
 }
 impl<T: AsRef<str> + ?Sized> Assertion<'_, T> {
+    /// Fail unless the subject contains `expected` as a substring.
     #[track_caller]
     pub fn contains_text(self, expected: &str) -> Self {
         self.check(
@@ -92,11 +110,14 @@ impl<T: AsRef<str> + ?Sized> Assertion<'_, T> {
     }
 }
 impl<T: Debug> Assertion<'_, Option<T>> {
+    /// Fail unless the subject is `Some`. Use [`Assertion::value`] to go on to
+    /// assert about the contained value.
     #[track_caller]
     pub fn is_some(self) -> Self {
         self.check(self.actual.is_some(), "expected Some, actual None");
         self
     }
+    /// Fail unless the subject is `None`.
     #[track_caller]
     pub fn is_none(self) -> Self {
         self.check(
@@ -107,6 +128,8 @@ impl<T: Debug> Assertion<'_, Option<T>> {
     }
 }
 impl<T: Debug, E: Debug> Assertion<'_, Result<T, E>> {
+    /// Fail unless the subject is `Ok`. Use [`Assertion::value`] to go on to
+    /// assert about the contained value.
     #[track_caller]
     pub fn is_ok(self) -> Self {
         self.check(
@@ -115,6 +138,7 @@ impl<T: Debug, E: Debug> Assertion<'_, Result<T, E>> {
         );
         self
     }
+    /// Fail unless the subject is `Err`.
     #[track_caller]
     pub fn is_err(self) -> Self {
         self.check(
@@ -125,6 +149,7 @@ impl<T: Debug, E: Debug> Assertion<'_, Result<T, E>> {
     }
 }
 impl<T: Debug + PartialEq> Assertion<'_, [T]> {
+    /// Fail unless some element equals `expected`.
     #[track_caller]
     pub fn contains(self, expected: &T) -> Self {
         self.check(
@@ -133,6 +158,7 @@ impl<T: Debug + PartialEq> Assertion<'_, [T]> {
         );
         self
     }
+    /// Fail unless the slice has exactly `expected` elements.
     #[track_caller]
     pub fn has_length(self, expected: usize) -> Self {
         self.check(
@@ -145,6 +171,7 @@ impl<T: Debug + PartialEq> Assertion<'_, [T]> {
         );
         self
     }
+    /// Fail unless the slice is empty.
     #[track_caller]
     pub fn is_empty(self) -> Self {
         self.has_length(0)
@@ -152,6 +179,7 @@ impl<T: Debug + PartialEq> Assertion<'_, [T]> {
 }
 
 impl<T: Debug + PartialOrd> Assertion<'_, T> {
+    /// Fail unless the subject is strictly less than `expected`.
     #[track_caller]
     pub fn is_less_than(self, expected: &T) -> Self {
         self.check(
@@ -160,6 +188,7 @@ impl<T: Debug + PartialOrd> Assertion<'_, T> {
         );
         self
     }
+    /// Fail unless the subject lies in the inclusive range `min..=max`.
     #[track_caller]
     pub fn is_between(self, min: &T, max: &T) -> Self {
         self.check(
@@ -173,6 +202,7 @@ impl<T: Debug + PartialOrd> Assertion<'_, T> {
     }
 }
 impl<T: AsRef<str> + ?Sized> Assertion<'_, T> {
+    /// Fail unless the subject starts with `prefix`.
     #[track_caller]
     pub fn starts_with(self, prefix: &str) -> Self {
         self.check(
@@ -185,6 +215,7 @@ impl<T: AsRef<str> + ?Sized> Assertion<'_, T> {
         );
         self
     }
+    /// Fail unless the subject ends with `suffix`.
     #[track_caller]
     pub fn ends_with(self, suffix: &str) -> Self {
         self.check(
@@ -199,6 +230,8 @@ impl<T: AsRef<str> + ?Sized> Assertion<'_, T> {
     }
 }
 impl<'a, T: Debug> Assertion<'a, Option<T>> {
+    /// Assert `Some`, then continue asserting about the contained value.
+    /// Panics with the `is_some` message if the subject is `None`.
     #[track_caller]
     pub fn value(self) -> Assertion<'a, T> {
         let checked = self.is_some();
@@ -210,6 +243,8 @@ impl<'a, T: Debug> Assertion<'a, Option<T>> {
 }
 
 impl<'a, T: Debug, E: Debug> Assertion<'a, Result<T, E>> {
+    /// Assert `Ok`, then continue asserting about the contained value.
+    /// Panics with the `is_ok` message if the subject is `Err`.
     #[track_caller]
     pub fn value(self) -> Assertion<'a, T> {
         let checked = self.is_ok();
@@ -220,6 +255,7 @@ impl<'a, T: Debug, E: Debug> Assertion<'a, Result<T, E>> {
     }
 }
 impl<T: Debug + PartialEq> Assertion<'_, Vec<T>> {
+    /// Fail unless some element equals `expected`. Delegates to the slice impl.
     #[track_caller]
     pub fn contains(self, expected: &T) -> Self {
         Assertion {
@@ -229,6 +265,7 @@ impl<T: Debug + PartialEq> Assertion<'_, Vec<T>> {
         .contains(expected);
         self
     }
+    /// Fail unless the vector has exactly `expected` elements.
     #[track_caller]
     pub fn has_length(self, expected: usize) -> Self {
         Assertion {
@@ -238,6 +275,7 @@ impl<T: Debug + PartialEq> Assertion<'_, Vec<T>> {
         .has_length(expected);
         self
     }
+    /// Fail unless the vector is empty.
     #[track_caller]
     pub fn is_empty(self) -> Self {
         self.has_length(0)

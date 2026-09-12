@@ -4,20 +4,39 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
 };
+/// Whether a snapshot run is allowed to write to disk, and how much.
+///
+/// The default never writes, so a snapshot cannot be accepted by accident in
+/// CI. Widen it deliberately when you mean to record new expected output.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum UpdateMode {
+    /// Compare only. A missing or differing snapshot is an error.
     #[default]
     Verify,
+    /// Write snapshots that do not exist yet; still fail on a mismatch.
     CreateMissing,
+    /// Write every snapshot, replacing whatever was there.
     Overwrite,
 }
+/// Why a snapshot check did not pass.
 #[derive(Debug)]
 pub enum SnapshotError {
+    /// Reading or writing the snapshot file failed.
     Io(io::Error),
+    /// The snapshot name is empty, too long, or has characters that are not
+    /// safe in a file name.
     InvalidName(String),
+    /// The text is larger than the configured [`Snapshots::max_bytes`] limit.
     TooLarge,
+    /// No snapshot on disk, and the mode does not allow creating one.
     Missing(PathBuf),
-    Mismatch { path: PathBuf, diff: String },
+    /// The text differs from the stored snapshot.
+    Mismatch {
+        /// File the text was compared against.
+        path: PathBuf,
+        /// Rendered difference, from [`text_diff`].
+        diff: String,
+    },
 }
 impl From<io::Error> for SnapshotError {
     fn from(error: io::Error) -> Self {
@@ -78,6 +97,8 @@ pub fn text_diff(expected: &str, actual: &str) -> String {
     result
 }
 #[derive(Debug, Clone)]
+/// A directory of stored text snapshots, plus the policy for comparing
+/// against them: update mode, size limit and redactions.
 pub struct Snapshots {
     directory: PathBuf,
     mode: UpdateMode,
@@ -101,6 +122,7 @@ impl Drop for Remove {
     }
 }
 impl Snapshots {
+    /// Snapshots stored in `directory`, in [`UpdateMode::Verify`].
     pub fn new(directory: impl Into<PathBuf>) -> Self {
         Self {
             directory: directory.into(),
@@ -109,15 +131,20 @@ impl Snapshots {
             max_bytes: 1_048_576,
         }
     }
+    /// Choose whether this run may write snapshots.
     pub fn mode(mut self, mode: UpdateMode) -> Self {
         self.mode = mode;
         self
     }
+    /// Refuse text larger than `limit` bytes, measured after redaction.
     pub fn max_bytes(mut self, limit: usize) -> Self {
         self.max_bytes = limit;
         self
     }
     /// Literal replacements run in declaration order on actual text before comparison/storage.
+    /// Replace `text` with `replacement` before storing or comparing, so
+    /// timestamps, ids and paths do not make snapshots unstable. Redaction runs
+    /// before anything is written or reported.
     pub fn redact(mut self, text: impl Into<String>, replacement: impl Into<String>) -> Self {
         let text = text.into();
         assert!(!text.is_empty(), "redaction text cannot be empty");
@@ -159,10 +186,13 @@ impl Snapshots {
         }
         Ok(())
     }
+    /// Compare `actual` against the snapshot named `name`.
     pub fn check(&self, name: &str, actual: &str) -> Result<(), SnapshotError> {
         Self::name(name)?;
         self.check_path(self.directory.join(format!("test-{name}.snap")), actual)
     }
+    /// [`check`](Snapshots::check) for one case of a parameterised test, so
+    /// each case gets its own file rather than overwriting a shared one.
     pub fn check_case(&self, test: &str, case: &str, actual: &str) -> Result<(), SnapshotError> {
         Self::name(test)?;
         Self::name(case)?;
@@ -174,6 +204,8 @@ impl Snapshots {
         )
     }
     /// Compare an inline literal; never edits source files, regardless of update mode.
+    /// Compare against a literal written in the test instead of a file.
+    /// Applies redaction and the size limit, and never writes anything.
     pub fn inline(&self, expected: &str, actual: &str) -> Result<(), SnapshotError> {
         if expected.len() > self.max_bytes {
             return Err(SnapshotError::TooLarge);

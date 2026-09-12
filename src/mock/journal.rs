@@ -1,10 +1,16 @@
 //! Opt-in bounded log of the calls a mock has seen.
 use std::collections::VecDeque;
 
+/// One entry of a mock's call journal, recorded only while
+/// [`Mock::journal_capacity`](crate::mock::Mock::journal_capacity) is nonzero.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallRecord {
+    /// `Debug` rendering of the arguments the mock was called with.
     pub arguments: String,
+    /// Label of the rule that matched, or `None` when nothing matched.
     pub expectation: Option<String>,
+    /// Whether the call was answered, as opposed to rejected as unexpected or
+    /// over its call limit.
     pub accepted: bool,
 }
 

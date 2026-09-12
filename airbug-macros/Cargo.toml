@@ -5,6 +5,8 @@ edition = "2024"
 rust-version = "1.96"
 license = "MIT"
 description = "Optional procedural macros for airbug test helpers"
+keywords = ["testing", "mocking", "macros", "proc-macro"]
+categories = ["development-tools::testing"]
 [lib]
 proc-macro = true
 [dependencies]

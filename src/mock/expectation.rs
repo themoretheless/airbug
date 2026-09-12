@@ -7,6 +7,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// A rule being configured on a [`Mock`]: how many calls it accepts, whether it
+/// captures arguments, whether it belongs to an ordered sequence.
+///
+/// Nothing is registered until a terminal method
+/// ([`returns`](ExpectationBuilder::returns),
+/// [`returning`](ExpectationBuilder::returning),
+/// [`returning_once`](ExpectationBuilder::returning_once) or
+/// [`returns_sequence`](ExpectationBuilder::returns_sequence)) supplies the answer.
 #[must_use = "finish with returns, returning, returning_once or returns_sequence"]
 pub struct ExpectationBuilder<A, R> {
     pub(super) mock: Mock<A, R>,
@@ -18,21 +26,27 @@ pub struct ExpectationBuilder<A, R> {
     pub(super) sequence: Option<CallSequence>,
 }
 impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
+    /// Require exactly `count` calls.
     pub fn times(self, count: usize) -> Self {
         self.times_between(count, count)
     }
+    /// Require between `min` and `max` calls, inclusive. Panics if `min > max`.
     pub fn times_between(mut self, min: usize, max: usize) -> Self {
         assert!(min <= max, "min must be <= max");
         self.min = min;
         self.max = max;
         self
     }
+    /// Require at least `count` calls, with no upper bound.
     pub fn at_least(self, count: usize) -> Self {
         self.times_between(count, usize::MAX)
     }
+    /// Allow up to `count` calls, including none at all.
     pub fn at_most(self, count: usize) -> Self {
         self.times_between(0, count)
     }
+    /// Record the arguments of every accepted call into `capture`. Cloning
+    /// happens after the mock's lock is released.
     pub fn capture(mut self, capture: &Capture<A>) -> Self
     where
         A: Clone + Send + Sync,
@@ -84,9 +98,11 @@ impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
             sequence,
         });
     }
+    /// Answer each call by running `answer` on its arguments.
     pub fn returning(self, answer: impl Fn(A) -> R + Send + Sync + 'static) {
         self.insert(Arc::new(answer), true);
     }
+    /// Answer every call with a clone of `value`.
     pub fn returns(self, value: R)
     where
         R: Clone + Send + Sync,

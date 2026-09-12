@@ -20,6 +20,11 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features
       - run: cargo +${{ matrix.toolchain }} test --locked -p airbug --no-default-features
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --release
+      # Fails on undocumented public items and broken intra-doc links, which
+      # the crate lints for. RUSTDOCFLAGS makes warnings fatal in CI only.
+      - run: cargo +${{ matrix.toolchain }} doc --locked --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
       - run: cargo +${{ matrix.toolchain }} run --locked --features macros --example native_service
       - run: cargo +${{ matrix.toolchain }} run --locked --example top50
       - run: cargo +${{ matrix.toolchain }} run --locked --features macros --example checkout_pilot -- success

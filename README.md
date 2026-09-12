@@ -191,6 +191,21 @@ Omit `features` for the dependency-free core. Validator may be used as a normal
 application dependency; test helpers belong in dev-dependencies. No custom test
 runner, global state, or mandatory TestContext is installed.
 
+## Importing
+
+There is one canonical path per name, so examples stay comparable:
+
+- The main types come from the crate root: `airbug::{Mock, Validator,
+  FixtureContext, CallSequence, assert_that, with_mocks}`.
+- Supporting types stay in their module: `airbug::mock::{Capture, Matcher}`,
+  `airbug::time::{Clock, ManualClock}`, `airbug::snapshot::Snapshots`,
+  `airbug::checks::*`.
+- `airbug::prelude::*` pulls in both sets at once, for test files that would
+  otherwise open with a long import list.
+
+Prefer the root path over the module path for anything the root re-exports:
+`airbug::Mock`, not `airbug::mock::Mock`.
+
 ## Derived generation and field builders
 
 ```rust

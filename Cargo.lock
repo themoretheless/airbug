@@ -7,6 +7,7 @@ name = "airbug"
 version = "0.5.0"
 dependencies = [
  "airbug-macros",
+ "checkout-domain",
 ]
 
 [[package]]
@@ -17,6 +18,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "checkout-domain"
+version = "0.5.0"
+dependencies = [
+ "airbug",
 ]
 
 [[package]]

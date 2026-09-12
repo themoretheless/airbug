@@ -3,13 +3,14 @@ mod capture;
 mod expectation;
 mod journal;
 mod matcher;
-mod verify;
 
+/// Re-exported so `airbug::mock::MockError` keeps naming the error this module
+/// produces, even though the type itself lives one level up.
+pub use crate::verify::{MockError, VerificationErrors, VerifyMocks, with_mocks, with_mocks_async};
 pub use capture::Capture;
 pub use expectation::ExpectationBuilder;
 pub use journal::CallRecord;
 pub use matcher::Matcher;
-pub use verify::{VerificationErrors, VerifyMocks, with_mocks, with_mocks_async};
 
 use crate::order::SequenceStep;
 use journal::Journal;
@@ -17,18 +18,6 @@ use std::{
     fmt,
     sync::{Arc, Mutex},
 };
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MockError {
-    pub method: String,
-    pub details: Vec<String>,
-}
-impl fmt::Display for MockError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "mock {}: {}", self.method, self.details.join("; "))
-    }
-}
-impl std::error::Error for MockError {}
 
 type Answer<A, R> = Arc<dyn Fn(A) -> R + Send + Sync>;
 type Recorder<A> = Arc<dyn Fn(&A) + Send + Sync>;
@@ -72,6 +61,12 @@ struct State<A, R> {
     in_flight: usize,
 }
 
+/// A strict mock of one method, taking `A` and answering `R`.
+///
+/// Configure rules with [`expect`](Mock::expect) before the first call, then
+/// call it. Clones share one underlying mock, so a mock handed to code under
+/// test and the handle the test verifies stay the same object. Unexpected calls
+/// and calls past a rule's limit are recorded as failures, not silently allowed.
 pub struct Mock<A, R> {
     name: Arc<str>,
     state: Arc<Mutex<State<A, R>>>,
@@ -94,6 +89,7 @@ impl<A, R> Drop for Active<'_, A, R> {
 }
 
 impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
+    /// A mock with no rules yet; `name` appears in every failure message.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: Arc::from(name.into()),
@@ -114,6 +110,7 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
     ) -> ExpectationBuilder<A, R> {
         self.expect_matcher(Matcher::new(label, matcher))
     }
+    /// Like [`expect`](Mock::expect), reusing an existing named [`Matcher`].
     pub fn expect_matcher(&self, matcher: Matcher<A>) -> ExpectationBuilder<A, R> {
         ExpectationBuilder {
             mock: self.clone(),
@@ -133,6 +130,8 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
             .journal
             .set_capacity(capacity);
     }
+    /// The journal so far, oldest first. Empty unless
+    /// [`journal_capacity`](Mock::journal_capacity) was set.
     pub fn calls(&self) -> Vec<CallRecord> {
         self.state
             .lock()
@@ -146,6 +145,9 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
             details,
         }
     }
+    /// Answer one call, or return the failure it caused. The failure is also
+    /// remembered, so [`verify`](Mock::verify) reports it even if the caller
+    /// swallows this error. Matchers and the answer run outside the lock.
     pub fn try_call(&self, args: A) -> Result<R, MockError> {
         let matchers: Vec<_> = {
             let mut state = self.state.lock().expect("mock lock poisoned");
@@ -193,10 +195,13 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
         }
         Ok(answer(args))
     }
+    /// [`try_call`](Mock::try_call), panicking on failure. The usual choice
+    /// when the mock stands in for an infallible method.
     #[track_caller]
     pub fn call(&self, args: A) -> R {
         self.try_call(args).unwrap_or_else(|e| panic!("{e}"))
     }
+    /// Report every failure seen during calls plus every unmet call count.
     pub fn verify(&self) -> Result<(), MockError> {
         let state = self.state.lock().expect("mock lock poisoned");
         let mut details = state.failures.clone();
@@ -232,6 +237,7 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
         state.journal.clear();
         Ok(())
     }
+    /// [`verify`](Mock::verify), panicking on failure.
     #[track_caller]
     pub fn assert_verified(&self) {
         self.verify().unwrap_or_else(|e| panic!("{e}"));

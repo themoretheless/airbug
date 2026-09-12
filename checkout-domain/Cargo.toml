@@ -1,0 +1,19 @@
+# Shared demonstration domain for the checkout pilot. Used by both the examples
+# and the pilot tests, so it is a real crate rather than a file both reach into
+# with #[path]. Never published.
+[package]
+name = "checkout-domain"
+version = "0.5.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+description = "Demonstration checkout domain used by the airbug pilot tests and examples"
+publish = false
+
+[features]
+# Mirrors airbug's own feature, so enabling macros on airbug does not get forced
+# on by this crate through feature unification.
+macros = ["airbug/macros"]
+
+[dependencies]
+airbug = { path = "..", default-features = false }

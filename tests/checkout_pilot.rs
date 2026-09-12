@@ -1,8 +1,6 @@
 #![cfg(feature = "macros")]
-#[path = "../examples/checkout/domain.rs"]
-mod domain;
 use airbug::{CallSequence, with_mocks};
-use domain::*;
+use checkout_domain::*;
 
 struct Harness {
     payments: MockPayments,

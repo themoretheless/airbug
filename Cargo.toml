@@ -6,18 +6,28 @@ rust-version = "1.96"
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
 license = "MIT"
 readme = "README.md"
-include = ["src/**", "tests/**", "examples/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "PILOT.md"]
+keywords = ["testing", "mocking", "assertions", "fixtures", "validation"]
+categories = ["development-tools::testing", "development-tools"]
+include = ["src/**", "examples/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "PILOT.md"]
+
+# Without this docs.rs would build with default features, hiding the entire
+# macro API (#[mock], #[cases], #[derive(Generate)]) from the published docs.
+[package.metadata.docs.rs]
+all-features = true
 
 [workspace]
-members = ["airbug-macros"]
+members = ["airbug-macros", "checkout-domain"]
 resolver = "3"
 
 [features]
 default = []
-macros = ["dep:airbug-macros"]
+macros = ["dep:airbug-macros", "checkout-domain/macros"]
 
 [dependencies]
 airbug-macros = { version = "=0.5.0", path = "airbug-macros", optional = true }
+
+[dev-dependencies]
+checkout-domain = { path = "checkout-domain" }
 
 [[example]]
 name = "native_service"

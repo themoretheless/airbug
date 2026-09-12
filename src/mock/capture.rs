@@ -18,12 +18,14 @@ impl<A> Clone for Capture<A> {
     }
 }
 impl<A: Clone> Capture<A> {
+    /// Keep at most `capacity` most recent arguments. Zero records nothing.
     pub fn new(capacity: usize) -> Self {
         Self {
             values: Arc::new(Mutex::new(VecDeque::new())),
             capacity,
         }
     }
+    /// Clone one argument in. Cloning happens outside the mock's lock.
     pub fn record(&self, value: &A) {
         if self.capacity == 0 {
             return;
@@ -41,6 +43,7 @@ impl<A: Clone> Capture<A> {
         };
         drop(removed);
     }
+    /// Snapshot the retained arguments, oldest first.
     pub fn values(&self) -> Vec<A> {
         let values: Vec<_> = self
             .values
@@ -51,6 +54,7 @@ impl<A: Clone> Capture<A> {
             .collect();
         values.into_iter().map(|value| (*value).clone()).collect()
     }
+    /// Drop everything recorded so far, for reuse across phases of a test.
     pub fn clear(&self) {
         let removed = std::mem::take(&mut *self.values.lock().expect("capture lock poisoned"));
         drop(removed);

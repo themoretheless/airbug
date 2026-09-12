@@ -1,7 +1,5 @@
-#[path = "checkout/domain.rs"]
-mod domain;
 use airbug::{CallSequence, with_mocks};
-use domain::*;
+use checkout_domain::*;
 fn main() {
     let scenario = std::env::args().nth(1).unwrap_or_else(|| "success".into());
     assert!(

@@ -1,6 +1,24 @@
-//! Verifying one or many mocks at the end of a test.
-use super::MockError;
+//! The failure types every mocked call and every ordered sequence reports, and
+//! the helpers that verify a batch of them at the end of a test.
+//!
+//! This sits below both [`mod@crate::mock`] and [`crate::order`] so those two do not
+//! have to depend on each other.
 use std::fmt;
+
+/// Everything one mocked method got wrong during a test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MockError {
+    /// Name the mock was created with.
+    pub method: String,
+    /// Individual failures, in the order they were detected.
+    pub details: Vec<String>,
+}
+impl fmt::Display for MockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "mock {}: {}", self.method, self.details.join("; "))
+    }
+}
+impl std::error::Error for MockError {}
 
 /// Combined errors from multiple mocked methods.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +38,8 @@ impl std::error::Error for VerificationErrors {}
 
 /// Shared verification interface for one method or a generated trait mock.
 pub trait VerifyMocks: Send + Sync {
+    /// Report everything this mock, sequence or generated trait double got
+    /// wrong, so [`with_mocks`] can gather failures across all of them.
     fn verify_mocks(&self) -> Result<(), VerificationErrors>;
 }
 
