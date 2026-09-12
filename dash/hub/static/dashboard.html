@@ -179,7 +179,7 @@
 <body>
   <main class="shell">
     <h1 class="brand">airbug <em>hub</em></h1>
-    <p class="lede">One view across unit tests, benches, runtime metrics, and the reserved trace lane. Reads artifacts; does not own the products.</p>
+    <p class="lede">One view across unit tests, benches, host metrics, OpenTelemetry, and the local collector. Reads artifacts; does not own the products.</p>
     <div class="meta" id="meta">loading…</div>
     <section class="domains" id="domains" aria-live="polite"></section>
   </main>
@@ -241,7 +241,7 @@
       const data = await res.json();
       metaEl.innerHTML = `<span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
       document.getElementById("reload").onclick = refresh;
-      const order = ["unit", "bench", "otel", "trace"];
+      const order = ["unit", "bench", "mon", "trace", "collector"];
       domainsEl.innerHTML = order.map(k => card(data.domains[k])).join("");
       domainsEl.querySelectorAll("button[data-cmd]").forEach(btn => {
         btn.addEventListener("click", () => copy(btn.getAttribute("data-cmd")));

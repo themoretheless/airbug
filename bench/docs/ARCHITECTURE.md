@@ -1,4 +1,4 @@
-# Архитектура rbench
+# Архитектура airbug-bench
 
 Статус: предлагаемый дизайн, не реализованный API. Основной выбор — небольшая Rust-библиотека описания экспериментов, независимый runner и общий протокол для microbenchmark, процессов и сценариев приложения. Первый целевой потребитель — Forma.
 
@@ -6,9 +6,9 @@
 
 ```mermaid
 flowchart TD
-    API["rbench: Suite / Case / Fixture"] --> PLAN["ExperimentPlan"]
-    MACRO["rbench-macros: optional attributes"] --> API
-    CLI["cargo-rbench: build / run / compare"] --> PLAN
+    API["bench: Suite / Case / Fixture"] --> PLAN["ExperimentPlan"]
+    MACRO["airbug-bench-macros: optional attributes"] --> API
+    CLI["cargo-airbug-bench: build / run / compare"] --> PLAN
     PLAN --> RUN["runner: schedule, workers, deadlines"]
     RUN --> CPU["CPU worker: batched functions"]
     RUN --> APP["Scenario worker: main thread, frames, events"]
@@ -26,12 +26,12 @@ flowchart TD
 
 | Компонент | Ответственность | Чего не должен знать |
 |---|---|---|
-| `rbench-model` | CaseId, MetricDescriptor, phase, observations, manifest, status, protocol version | wgpu, GUI, конкретный async runtime |
-| `rbench` | Suite builder, fixture lifetime, типизированный горячий loop, black_box helpers | Хранилище истории, HTML, внешние процессы |
-| `rbench-runner` | Worker lifecycle, deterministic schedule, cancellation, timeout, resource leases | Формула «FPS» конкретного renderer |
-| `rbench-analysis` | Валидация совместимости, статистика, budgets, диагностические статусы | Запуск измеряемого кода |
-| `cargo-rbench` | Cargo discovery/build, CLI, пути артефактов, запуск заранее собранных workers | Внутренности Forma |
-| `rbench-macros` | Необязательный синтаксический сахар над тем же builder API | Особый второй execution path |
+| `bench-model` | CaseId, MetricDescriptor, phase, observations, manifest, status, protocol version | wgpu, GUI, конкретный async runtime |
+| `airbug-bench` | Suite builder, fixture lifetime, типизированный горячий loop, black_box helpers | Хранилище истории, HTML, внешние процессы |
+| `bench-runner` | Worker lifecycle, deterministic schedule, cancellation, timeout, resource leases | Формула «FPS» конкретного renderer |
+| `bench-analysis` | Валидация совместимости, статистика, budgets, диагностические статусы | Запуск измеряемого кода |
+| `cargo-airbug-bench` | Cargo discovery/build, CLI, пути артефактов, запуск заранее собранных workers | Внутренности Forma |
+| `airbug-bench-macros` | Необязательный синтаксический сахар над тем же builder API | Особый второй execution path |
 | Опциональные адаптеры | Tokio, wgpu, alloc, process metrics, browser, Forma import | Не должны расширять обязательные зависимости ядра |
 
 Не создавать десяток пустых crates сразу. В первой реализации достаточно model, library, runner/CLI и analysis; адаптеры выделять по реальным несовместимым зависимостям. `wgpu 29` Forma не должен навязывать ту же версию другим проектам.
@@ -52,7 +52,7 @@ flowchart TD
 
 Runner заранее строит и сохраняет schedule. Compile выполняется до измерительной фазы; A/B бинарники и fixtures хешируются до и после серии. Результат публикуется атомарно только при полном required case set; частичные данные остаются доступны для диагностики.
 
-Для CPU microbench по умолчанию один измеряемый worker в каждый момент; для независимых replications — новые процессы. Для concurrency workload параллелизм является параметром самого сценария. GPU/window jobs получают exclusive lease по adapter/display. Локальная блокировка координирует только rbench: она не гарантирует отсутствие чужой нагрузки.
+Для CPU microbench по умолчанию один измеряемый worker в каждый момент; для независимых replications — новые процессы. Для concurrency workload параллелизм является параметром самого сценария. GPU/window jobs получают exclusive lease по adapter/display. Локальная блокировка координирует только bench: она не гарантирует отсутствие чужой нагрузки.
 
 ## Три execution driver
 

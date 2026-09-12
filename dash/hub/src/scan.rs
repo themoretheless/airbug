@@ -18,8 +18,9 @@ pub struct Snapshot {
 pub struct Domains {
     pub unit: DomainCard,
     pub bench: DomainCard,
-    pub otel: DomainCard,
+    pub mon: DomainCard,
     pub trace: DomainCard,
+    pub collector: DomainCard,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,8 +65,9 @@ pub fn scan(root: &Path) -> Snapshot {
         domains: Domains {
             unit: scan_unit(root),
             bench: scan_bench(root),
-            otel: scan_otel(),
+            mon: scan_mon(),
             trace: scan_trace(root),
+            collector: scan_collector(root),
         },
     }
 }
@@ -141,7 +143,7 @@ fn scan_unit(root: &Path) -> DomainCard {
         actions: vec![
             Action {
                 label: "Generate report".into(),
-                command: "python3 unit/airbug/tools/airbug_report.py --all-features --locked"
+                command: "python3 unit/tools/airbug_report.py --all-features --locked"
                     .into(),
             },
             Action {
@@ -153,10 +155,10 @@ fn scan_unit(root: &Path) -> DomainCard {
 }
 
 fn scan_bench(root: &Path) -> DomainCard {
-    let store = root.join(".rbench");
+    let store = root.join(".airbug-bench");
     let mut artifacts = Vec::new();
     let mut status = Status::Missing;
-    let mut summary = "No .rbench store yet.".into();
+    let mut summary = "No .bench store yet.".into();
 
     if store.is_dir() {
         let runs = find_run_json(&store, 12);
@@ -165,7 +167,7 @@ fn scan_bench(root: &Path) -> DomainCard {
             summary = "Store exists, but no run.json found.".into();
         } else {
             status = Status::Ready;
-            summary = format!("{} recent run artifact(s) under .rbench", runs.len());
+            summary = format!("{} recent run artifact(s) under .bench", runs.len());
             for path in runs {
                 let detail = run_detail(&path);
                 artifacts.push(Artifact {
@@ -179,7 +181,7 @@ fn scan_bench(root: &Path) -> DomainCard {
         artifacts.insert(
             0,
             Artifact {
-                label: ".rbench".into(),
+                label: ".airbug-bench".into(),
                 path: store.display().to_string(),
                 kind: "dir",
                 detail: mtime_detail(&store),
@@ -190,32 +192,32 @@ fn scan_bench(root: &Path) -> DomainCard {
     DomainCard {
         id: "bench",
         title: "Bench",
-        blurb: "Microbenchmarks · rbench store",
+        blurb: "Microbenchmarks · bench store",
         status,
         summary,
         artifacts,
         actions: vec![
             Action {
-                label: "Serve rbench UI".into(),
-                command: "cargo rbench serve .rbench --port 8787".into(),
+                label: "Serve bench UI".into(),
+                command: "cargo airbug-bench serve .bench --port 8787".into(),
             },
             Action {
                 label: "Run workloads".into(),
-                command: "cargo rbench run -p rbench --bench workloads -o .rbench/session".into(),
+                command: "cargo airbug-bench run -p airbug-bench --bench workloads -o .airbug-bench/session".into(),
             },
         ],
     }
 }
 
-fn scan_otel() -> DomainCard {
+fn scan_mon() -> DomainCard {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    let db = PathBuf::from(home).join(".local/share/monik/monik.db");
+    let db = PathBuf::from(home).join(".local/share/airbug-mon/airbug-mon.db");
     let mut artifacts = Vec::new();
     let (status, summary) = if db.is_file() {
         let meta = fs::metadata(&db).ok();
         let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
         artifacts.push(Artifact {
-            label: "monik.db".into(),
+            label: "airbug-mon.db".into(),
             path: db.display().to_string(),
             kind: "sqlite",
             detail: format!("{} · {}", human_bytes(size), mtime_detail(&db)),
@@ -227,49 +229,158 @@ fn scan_otel() -> DomainCard {
     } else {
         (
             Status::Missing,
-            "No monik database yet. Launch the desktop monitor.".into(),
+            "No airbug-mon database yet. Launch the desktop monitor.".into(),
         )
     };
 
     DomainCard {
-        id: "otel",
-        title: "Otel",
-        blurb: "Runtime metrics · monik",
+        id: "mon",
+        title: "Mon",
+        blurb: "Host metrics · airbug-mon",
         status,
         summary,
         artifacts,
         actions: vec![
             Action {
-                label: "Open monik".into(),
-                command: "cargo run -p monik --release".into(),
+                label: "Open airbug-mon".into(),
+                command: "cargo run -p airbug-mon --release".into(),
             },
             Action {
                 label: "Headless sample".into(),
-                command: "cargo run -p monik --release -- --headless --seconds 15".into(),
+                command: "cargo run -p airbug-mon --release -- --headless --seconds 15".into(),
             },
         ],
     }
 }
 
 fn scan_trace(root: &Path) -> DomainCard {
+    let manifest = root.join("trace/Cargo.toml");
     let readme = root.join("trace/README.md");
     let mut artifacts = Vec::new();
+    if manifest.is_file() {
+        artifacts.push(Artifact {
+            label: "Cargo.toml".into(),
+            path: manifest.display().to_string(),
+            kind: "crate",
+            detail: "airbug-trace · OTLP traces+metrics".into(),
+        });
+    }
     if readme.is_file() {
         artifacts.push(Artifact {
             label: "README.md".into(),
             path: readme.display().to_string(),
             kind: "md",
-            detail: "domain reserved".into(),
+            detail: "domain docs".into(),
         });
     }
+    let ready = manifest.is_file();
     DomainCard {
         id: "trace",
         title: "Trace",
-        blurb: "Spans / call graphs (reserved)",
-        status: Status::Reserved,
-        summary: "No tracer crate yet — domain reserved for causal paths.".into(),
+        blurb: "OpenTelemetry traces+metrics · airbug-trace",
+        status: if ready {
+            Status::Ready
+        } else {
+            Status::Reserved
+        },
+        summary: if ready {
+            "OTLP trace and metric helper crate present.".into()
+        } else {
+            "No tracer crate yet — domain reserved for causal paths.".into()
+        },
         artifacts,
-        actions: vec![],
+        actions: if ready {
+            vec![
+                Action {
+                    label: "Test airbug-trace".into(),
+                    command: "cargo test -p airbug-trace".into(),
+                },
+                Action {
+                    label: "Run span example".into(),
+                    command: "cargo run -p airbug-trace --example span".into(),
+                },
+                Action {
+                    label: "Run metrics example".into(),
+                    command: "cargo run -p airbug-trace --example metrics".into(),
+                },
+            ]
+        } else {
+            vec![]
+        },
+    }
+}
+
+fn scan_collector(root: &Path) -> DomainCard {
+    let compose = root.join("dash/collector/docker-compose.yml");
+    let config = root.join("dash/collector/config.yaml");
+    let probe = crate::collector::probe();
+    let mut artifacts = Vec::new();
+    if compose.is_file() {
+        artifacts.push(Artifact {
+            label: "docker-compose.yml".into(),
+            path: compose.display().to_string(),
+            kind: "compose",
+            detail: "otel-collector + jaeger".into(),
+        });
+    }
+    if config.is_file() {
+        artifacts.push(Artifact {
+            label: "config.yaml".into(),
+            path: config.display().to_string(),
+            kind: "yaml",
+            detail: "OTLP :4317 / :4318".into(),
+        });
+    }
+
+    let (status, summary) = if probe.any_up() {
+        let mut parts = Vec::new();
+        if probe.otlp_http {
+            parts.push("OTLP HTTP :4318");
+        }
+        if probe.otlp_grpc {
+            parts.push("OTLP gRPC :4317");
+        }
+        if probe.jaeger_ui {
+            parts.push("Jaeger :16686");
+        }
+        (Status::Ready, parts.join(" · "))
+    } else if compose.is_file() {
+        (
+            Status::Missing,
+            "Collector not running. Start hub with --collector or compose up.".into(),
+        )
+    } else {
+        (
+            Status::Missing,
+            "No dash/collector stack in this root.".into(),
+        )
+    };
+
+    DomainCard {
+        id: "collector",
+        title: "Collector",
+        blurb: "Local OTLP collector + Jaeger UI",
+        status,
+        summary,
+        artifacts,
+        actions: vec![
+            Action {
+                label: "Hub + collector".into(),
+                command: "cargo run -p airbug-hub -- serve --root . --collector".into(),
+            },
+            Action {
+                label: "Compose up".into(),
+                command: "docker compose -f dash/collector/docker-compose.yml up -d".into(),
+            },
+            Action {
+                label: "Compose down".into(),
+                command: "docker compose -f dash/collector/docker-compose.yml down".into(),
+            },
+            Action {
+                label: "Open Jaeger".into(),
+                command: "open http://127.0.0.1:16686/".into(),
+            },
+        ],
     }
 }
 

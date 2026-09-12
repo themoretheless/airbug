@@ -16,4 +16,4 @@ publish = false
 macros = ["airbug/macros"]
 
 [dependencies]
-airbug = { path = "../airbug", default-features = false }
+airbug = { path = "..", default-features = false }

@@ -1,4 +1,4 @@
-use rbench::memory::{self, Allocator};
+use airbug_bench::memory::{self, Allocator};
 #[global_allocator]
 static ALLOC: Allocator<std::alloc::System> = Allocator(std::alloc::System);
 #[inline(never)]
@@ -10,7 +10,7 @@ fn temporary() {
 fn retained() -> Vec<u8> {
     vec![7u8; 16384]
 }
-fn main() -> rbench::Result<()> {
+fn main() -> airbug_bench::Result<()> {
     let count = if std::env::args().any(|a| a == "--overflow") {
         5000
     } else {

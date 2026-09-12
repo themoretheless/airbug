@@ -1,5 +1,5 @@
-use rbench::analysis::{compare, median_interval, Decision};
-use rbench::*;
+use airbug_bench::analysis::{compare, median_interval, Decision};
+use airbug_bench::*;
 use std::{
     collections::BTreeMap,
     sync::{
@@ -182,11 +182,11 @@ fn recorder_keeps_missing_gpu_reason() {
     .unwrap();
     let r = s.finish().unwrap();
     assert_eq!(r.observations[0].value, None);
-    assert!(rbench::report::markdown(&r).unwrap().contains("no adapter"));
+    assert!(airbug_bench::report::markdown(&r).unwrap().contains("no adapter"));
 }
 #[test]
 fn report_escapes_untrusted_names() {
-    let html = rbench::report::html("<script>alert(1)</script>");
+    let html = airbug_bench::report::html("<script>alert(1)</script>");
     assert!(!html.contains("<script>"));
     assert!(html.contains("&lt;script&gt;"));
 }
@@ -228,7 +228,7 @@ fn allocator_failed_realloc_preserves_live_allocation() {
             std::ptr::null_mut()
         }
     }
-    let a = rbench::alloc::TrackingAllocator::new(FailRealloc);
+    let a = airbug_bench::alloc::TrackingAllocator::new(FailRealloc);
     unsafe {
         let l = Layout::from_size_align(32, 8).unwrap();
         let p = a.alloc(l);
@@ -243,7 +243,7 @@ fn allocator_failed_realloc_preserves_live_allocation() {
 #[test]
 fn allocator_zeroed_shrink_and_peak() {
     use std::alloc::{GlobalAlloc, Layout, System};
-    let a = rbench::alloc::TrackingAllocator::new(System);
+    let a = airbug_bench::alloc::TrackingAllocator::new(System);
     unsafe {
         let l = Layout::from_size_align(64, 8).unwrap();
         let p = a.alloc_zeroed(l);
@@ -523,7 +523,7 @@ fn diagnostic_reports_prioritize_regressions_and_plot_raw_data() {
 
 #[test]
 fn lifecycle_helpers_join_and_cancel() {
-    use rbench::workloads::*;
+    use airbug_bench::workloads::*;
     let active = std::sync::atomic::AtomicUsize::new(0);
     let peak = std::sync::atomic::AtomicUsize::new(0);
     let result = parallel(4, |i| {
@@ -562,7 +562,7 @@ fn lifecycle_helpers_join_and_cancel() {
 }
 #[test]
 fn async_wakeup_and_cold_first_invocation() {
-    use rbench::workloads::*;
+    use airbug_bench::workloads::*;
     struct Once(bool);
     impl std::future::Future for Once {
         type Output = u32;
@@ -698,7 +698,7 @@ fn multi_reference_family_and_deadlines() {
     assert_eq!(d[1].over_budget, 12);
 }
 #[cfg(feature = "macros")]
-#[rbench::bench]
+#[airbug_bench::bench]
 fn attributed_work() -> usize {
     std::hint::black_box(7)
 }

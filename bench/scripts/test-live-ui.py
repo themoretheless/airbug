@@ -8,10 +8,10 @@ import time
 import urllib.request
 import urllib.error
 
-with tempfile.TemporaryDirectory(prefix='rbench-live-') as tmp:
+with tempfile.TemporaryDirectory(prefix='bench-live-') as tmp:
     for cancel in (False, True):
         out = pathlib.Path(tmp) / ('cancelled' if cancel else 'complete')
-        proc = subprocess.Popen(['target/release/cargo-rbench', 'run', '--ui', '--no-open', '--program', '/bin/sleep', '--repetitions', '2', '-o', str(out), '--', '0.5'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        proc = subprocess.Popen(['target/release/cargo-airbug-bench', 'run', '--ui', '--no-open', '--program', '/bin/sleep', '--repetitions', '2', '-o', str(out), '--', '0.5'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
             url = proc.stdout.readline().strip().split('Live benchmark: ')[1]
             def state():

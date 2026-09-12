@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
 publish = false
-description = "Cross-domain dashboard for the airbug monorepo (unit / bench / otel / trace)"
+description = "Cross-domain dashboard for the airbug monorepo (unit / bench / mon / trace)"
 
 [[bin]]
 name = "airbug-hub"
@@ -14,3 +14,4 @@ path = "src/main.rs"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+ctrlc = "3"

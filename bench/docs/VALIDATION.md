@@ -7,12 +7,12 @@
 Реализованные пункты и команды: [NEXT20.md](NEXT20.md).
 
 - 38 тестов workspace проходят: 26 библиотечных и 12 CLI. Строгий Clippy всех targets проходит. Проверены release-сборки CLI/библиотеки/examples.
-- `.rbench/workflow20/0-rbench-workloads`: автоматическая сборка зарегистрированного target, 3 независимых процесса × 2 cases × 8 samples = 48 наблюдений. Общий lazy fixture, seed 42, CPU tags и throughput. Это smoke, не acceptance производительности; короткие samples отмечены предупреждением.
+- `.airbug-bench/workflow20/0-bench-workloads`: автоматическая сборка зарегистрированного target, 3 независимых процесса × 2 cases × 8 samples = 48 наблюдений. Общий lazy fixture, seed 42, CPU tags и throughput. Это smoke, не acceptance производительности; короткие samples отмечены предупреждением.
 - Проверены worker profile overrides, exact/glob/tag selection и dry-run без workload; runner preview не создал output.
 - CSV/JSONL сохранили 48 observations; note не изменила hash исходного Run. Bundle export/unpack восстановил точные bytes run.json; note доступна и с другим пустым store.
 - HTML содержит SVG raw plots, throughput и заметку. Trend разделяет графики по context hash. Браузерная визуальная/интерактивная приёмка остаётся непроведённой после ранее полученного запрета browser URL policy; структурные тесты не выданы за визуальную проверку.
-- `.rbench/git-control-result/run`: 12 A/B пар двух локальных commits с известной добавленной sleep (1 ms → 3 ms), Regression. Исходные HEAD и незакоммиченный файл сохранились точно. Этот тест проверяет обнаружение контрольного эффекта, не скорость реального алгоритма.
-- `.rbench/git-isolation-result/run`: 6 пар с намеренно унаследованным общим `CARGO_TARGET_DIR`; сборки изолированы, общий путь не создан, binaries различны, Regression; исходный checkout сохранён.
+- `.airbug-bench/git-control-result/run`: 12 A/B пар двух локальных commits с известной добавленной sleep (1 ms → 3 ms), Regression. Исходные HEAD и незакоммиченный файл сохранились точно. Этот тест проверяет обнаружение контрольного эффекта, не скорость реального алгоритма.
+- `.airbug-bench/git-isolation-result/run`: 6 пар с намеренно унаследованным общим `CARGO_TARGET_DIR`; сборки изолированы, общий путь не создан, binaries различны, Regression; исходный checkout сохранён.
 - Negative tests: bundle traversal/tampering не создаёт output, unavailable не проходит при `--uncertainty record`, повторный CI export не перезаписывает файл.
 - Финальный HTML: 6 SVG plots / 48 точек проверены XML-парсером, координаты конечные и внутри области графика; MiB/s присутствует в отчёте. Это структурная проверка. CI YAML успешно разобран YAML-парсером.
 - CI-шаблон сформирован локально. В GitHub он не устанавливался и удалённый job не запускался. Использование hosted runner в шаблоне означает smoke, а не контролируемый performance gate.
@@ -22,11 +22,11 @@
 Добавлены и проверены init/discover/bench, baseline aliases, прогресс/ETA, parameter matrix, checked operations, HTML tables, declarative budgets и native Forma golden scenarios. Инструкция: [USABILITY.md](USABILITY.md).
 
 - 28 тестов workspace прошли; строгий Clippy core/CLI и отдельного Forma adapter прошёл.
-- Полный путь нового Cargo package: init сохранил TOML-комментарий, discover нашёл target, bench собрал и запустил 3 процесса / 3 размера input; baseline save/report/gate успешно использовали `@usability-main`. Артефакт `.rbench/usability-first/0-usability-fixture-rbench`.
-- `.rbench/forma-scenarios-v2`: 6 реальных сценариев × 3 процесса × 96 кадров = 1728 измеренных кадров; checkpoints до/после совпали точно. Image возвращает Unsupported.
+- Полный путь нового Cargo package: init сохранил TOML-комментарий, discover нашёл target, bench собрал и запустил 3 процесса / 3 размера input; baseline save/report/gate успешно использовали `@usability-main`. Артефакт `.airbug-bench/usability-first/0-usability-fixture-bench`.
+- `.airbug-bench/forma-scenarios-v2`: 6 реальных сценариев × 3 процесса × 96 кадров = 1728 измеренных кадров; checkpoints до/после совпали точно. Image возвращает Unsupported.
 - Просмотрены PNG static, hover, animation, scroll, resize и text. Это reference images текущей сборки, не независимый rendering oracle.
-- `.rbench/forma-goldens-v2` содержит 12 RGBA/PNG checkpoints. Бюджеты нулевых geometry uploads прошли для static/hover/animation.
-- `.rbench/forma-golden-negative`: один изменённый pixel в копии reference вызвал mismatch на pre-check frame 0, измерение не началось; сохранён Failed и stderr.
+- `.airbug-bench/forma-goldens-v2` содержит 12 RGBA/PNG checkpoints. Бюджеты нулевых geometry uploads прошли для static/hover/animation.
+- `.airbug-bench/forma-golden-negative`: один изменённый pixel в копии reference вызвал mismatch на pre-check frame 0, измерение не началось; сохранён Failed и stderr.
 - HTML проверен тестом структуры и экранирования. Визуальная и интерактивная проверка браузером не выполнена: browser security policy запретила открытие локального файла.
 
 ## Автоматические проверки исходного прототипа
@@ -39,7 +39,7 @@
 
 ## Реальные запуски
 
-Артефакты хранятся локально в игнорируемой `.rbench/`; они не входят в пакет библиотеки. Каждый run содержит план, SHA-256 бинарников и логи.
+Артефакты хранятся локально в игнорируемой `.airbug-bench/`; они не входят в пакет библиотеки. Каждый run содержит план, SHA-256 бинарников и логи.
 
 | Запуск | Проверка | Результат |
 |---|---|---|
@@ -60,7 +60,7 @@ Forma: медиана наблюдений CPU submit 41 µs, completed 1.302521
 - Allocator считает Rust process scope; нет OS RSS/CPU provider, thread-local allocator scope и отдельного phase peak. Lifetime peak явно отличается от phase peak.
 - HTML автономный, с таблицей, фильтром, сортировкой и раскрытием contracts; исторический dashboard отсутствует.
 - Сборка проверена на текущем macOS toolchain. Заявленный MSRV 1.85 и Windows/Linux ещё не проверены. На Unix убирается process group; на других ОС только непосредственный child.
-- Runner lock исключает параллельные rbench, но не другую нагрузку, температурный дрейф или изменения частот. После аварийного kill stale lock может требовать ручного удаления после проверки отсутствия runner.
+- Runner lock исключает параллельные bench, но не другую нагрузку, температурный дрейф или изменения частот. После аварийного kill stale lock может требовать ручного удаления после проверки отсутствия runner.
 - Окружение фиксируется частично. Для значимых настроек нужны explicit plan.env и contract; секреты в plan.env попадут в локальные артефакты. Автоматического редактирования system settings нет.
 - JSON-схема валидируется, но crash-durable atomic directory publication отсутствует. Окончательный статус — `status-final.json`; отсутствие финального файла означает незавершённый запуск.
 - Legacy importer намеренно принимает известную матрицу Forma, а не произвольные будущие схемы. Сохранённые aggregates не превращаются в raw frame samples.
@@ -80,4 +80,4 @@ Privacy tests cover streamed split literals, escaped secrets, allowlisted inheri
 
 Instrumentation cost was measured in a balanced system/tracked/phase A/B/C experiment (36 processes, 8 samples each). Both corrected comparisons were Inconclusive at the 5% practical margin; no zero-overhead or universal coefficient claim is made. Pilot simulation uses independent confirmation data, 2,000 fixed-seed experiments; the budget extrapolation remains a heuristic, not a power guarantee.
 
-Local artifact paths and detailed feature contracts are in [FINAL20.md](FINAL20.md). Checksums are recorded in ignored `.rbench/final20-evidence.json`. Raw artifacts are intentionally not committed. Window image goldens, compositor scanout/drop counts, non-Metal GPU success paths, actual query-device-failure recovery, remote CI execution and new browser visual validation are **not** established by these checks.
+Local artifact paths and detailed feature contracts are in [FINAL20.md](FINAL20.md). Checksums are recorded in ignored `.airbug-bench/final20-evidence.json`. Raw artifacts are intentionally not committed. Window image goldens, compositor scanout/drop counts, non-Metal GPU success paths, actual query-device-failure recovery, remote CI execution and new browser visual validation are **not** established by these checks.

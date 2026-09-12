@@ -376,7 +376,7 @@ impl<'a> Suite<'a> {
         }
         let mut run = Run::new();
         run.provenance
-            .insert("rbench_version".into(), env!("CARGO_PKG_VERSION").into());
+            .insert("bench_version".into(), env!("CARGO_PKG_VERSION").into());
         run.provenance
             .insert("samples".into(), self.config.samples.to_string());
         run.provenance.insert(
@@ -422,7 +422,7 @@ impl<'a> Suite<'a> {
                 })
                 .to_string(),
             );
-            eprintln!("rbench: {} — validating and calibrating", e.case.id);
+            eprintln!("bench: {} — validating and calibrating", e.case.id);
             if let Some(check) = &mut e.verify {
                 check().map_err(|err| error(format!("{} pre-validation: {err}", e.case.id)))?;
             }
@@ -441,7 +441,7 @@ impl<'a> Suite<'a> {
             while !cold && start.elapsed() < self.config.warmup {
                 (e.work)(n);
             }
-            eprintln!("rbench: {} — measuring {} samples", e.case.id, samples);
+            eprintln!("bench: {} — measuring {} samples", e.case.id, samples);
             run.cases.push(e.case.clone());
             let mut under_target = false;
             for sequence in 0..samples {
@@ -579,7 +579,7 @@ impl<'a> Suite<'a> {
             run.save_new(p)?;
         }
         if json {
-            println!("RBENCH_RESULT={}", serde_json::to_string(&run)?);
+            println!("BENCH_RESULT={}", serde_json::to_string(&run)?);
         } else {
             println!("{}", crate::report::markdown(&run)?);
         }

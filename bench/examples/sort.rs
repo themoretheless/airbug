@@ -1,5 +1,5 @@
-use rbench::{DropPolicy, Suite};
-fn main() -> rbench::Result<()> {
+use airbug_bench::{DropPolicy, Suite};
+fn main() -> airbug_bench::Result<()> {
     let mut s = Suite::new("sort");
     for size in [32, 128, 512] {
         s.bench_with_input(

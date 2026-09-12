@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal --component clippy --component rustfmt
-      - run: python -m unittest discover -s unit/airbug/tools/tests -v
+      - run: python -m unittest discover -s unit/tools/tests -v
         env:
           RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
       - run: cargo +${{ matrix.toolchain }} fmt --all --check
@@ -32,14 +32,22 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- decline
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- store-failure
       - run: cargo +${{ matrix.toolchain }} clippy --locked --all-features --all-targets -- -D warnings
-      - run: python unit/airbug/tools/verify_packages.py --toolchain ${{ matrix.toolchain }}
+      - run: python unit/tools/verify_packages.py --toolchain ${{ matrix.toolchain }}
 
-  monik:
+  airbug-trace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo +stable test --locked -p airbug-trace
+      - run: cargo +stable check --locked -p airbug-trace --no-default-features --features otlp-grpc
+
+  airbug-mon:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
-      - run: cargo +stable check --locked -p monik
+      - run: cargo +stable check --locked -p airbug-mon
 
   report:
     runs-on: ubuntu-latest
@@ -50,7 +58,7 @@ jobs:
           python-version: '3.12'
       - run: rustup toolchain install stable --profile minimal
       - name: Generate web report
-        run: python unit/airbug/tools/airbug_report.py --all-features --locked --doc-tests
+        run: python unit/tools/airbug_report.py --all-features --locked --doc-tests
         env:
           RUSTUP_TOOLCHAIN: stable
       - uses: actions/upload-artifact@v4

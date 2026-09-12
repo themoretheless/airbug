@@ -27,22 +27,22 @@
 
 ## Быстрый рабочий цикл
 
-В workspace теперь зарегистрирован реальный target `rbench/workloads`: два CPU-сценария с общим lazy fixture, seed 42, тегами и единицами работы.
+В workspace теперь зарегистрирован реальный target `bench/workloads`: два CPU-сценария с общим lazy fixture, seed 42, тегами и единицами работы.
 
 ```sh
 cargo build --release --workspace --offline
-cargo rbench profiles
-cargo rbench bench --offline --repetitions 3 -o .rbench/demo -- --profile quick --tag cpu
-cargo rbench history
-cargo rbench note last "Seed 42; быстрый smoke-прогон"
-cargo rbench report last -o .rbench/demo.html
-cargo rbench export last --format csv -o .rbench/demo.csv
-cargo rbench export last --format jsonl -o .rbench/demo.jsonl
-cargo rbench bundle last -o .rbench/demo.bundle.json
-cargo rbench unpack .rbench/demo.bundle.json -o .rbench/demo-restored
+cargo airbug-bench profiles
+cargo airbug-bench bench --offline --repetitions 3 -o .airbug-bench/demo -- --profile quick --tag cpu
+cargo airbug-bench history
+cargo airbug-bench note last "Seed 42; быстрый smoke-прогон"
+cargo airbug-bench report last -o .airbug-bench/demo.html
+cargo airbug-bench export last --format csv -o .airbug-bench/demo.csv
+cargo airbug-bench export last --format jsonl -o .airbug-bench/demo.jsonl
+cargo airbug-bench bundle last -o .airbug-bench/demo.bundle.json
+cargo airbug-bench unpack .airbug-bench/demo.bundle.json -o .airbug-bench/demo-restored
 ```
 
-`last` ищет последний Complete run по времени изменения файла в `--store` (по умолчанию `.rbench`). Это удобный навигатор, не стабильная ссылка: для воспроизводимого сравнения сохраните baseline. Если реальный путь `last` существует, он имеет приоритет. Сканирование ограничено глубиной 8 и 20 000 каталогов; `target`, `.git`, `checkouts`, baseline/notes и символические каталоги не обходятся. Повреждённые run-файлы показываются как Invalid. Копирование/восстановление старого run может сделать его последним по filesystem time.
+`last` ищет последний Complete run по времени изменения файла в `--store` (по умолчанию `.bench`). Это удобный навигатор, не стабильная ссылка: для воспроизводимого сравнения сохраните baseline. Если реальный путь `last` существует, он имеет приоритет. Сканирование ограничено глубиной 8 и 20 000 каталогов; `target`, `.git`, `checkouts`, baseline/notes и символические каталоги не обходятся. Повреждённые run-файлы показываются как Invalid. Копирование/восстановление старого run может сделать его последним по filesystem time.
 
 Профили меняют worker samples/warmup/sample time. `--repetitions` отдельно задаёт число независимых процессов. Explicit `--samples`/`--sample-ms`/`--warmup-ms` переопределяют профиль независимо от порядка аргументов. Quick не предназначен для доказательства отсутствия регрессии.
 
@@ -52,8 +52,8 @@ cargo rbench unpack .rbench/demo.bundle.json -o .rbench/demo-restored
 # PROGRAM — путь к executable из plan.json или результата Cargo build.
 PROGRAM --list --filter 'workloads/*/4096' --glob --exclude '*zero*' --tag cpu
 PROGRAM --dry-run --profile quick --filter workloads/checksum/4096 --exact
-cargo rbench run --plan experiment.json --dry-run -o .rbench/not-created
-cargo rbench preflight --plan experiment.json -o .rbench/not-created
+cargo airbug-bench run --plan experiment.json --dry-run -o .airbug-bench/not-created
+cargo airbug-bench preflight --plan experiment.json -o .airbug-bench/not-created
 ```
 
 `*` и `?` сопоставляются со всей строкой case ID; shell patterns нужно заключать в кавычки. Повторные `--tag` требуют все теги. `--exclude` всегда glob. Обычный `--filter` сохраняет поиск подстроки; `--exact` и `--glob` несовместимы. Эти флаги относятся к Suite worker; фильтр CLI compare пока остаётся подстрокой.
@@ -63,7 +63,7 @@ Worker dry-run показывает известные descriptors и sample bud
 ## Fixtures, seed и фазы
 
 ```rust
-use rbench::{Fixture, Seeded, Suite};
+use airbug_bench::{Fixture, Seeded, Suite};
 let fixture = Fixture::new(|| Seeded::new(42).bytes(4096));
 let mut suite = Suite::new("data");
 suite.bench_fixture("checksum", fixture.clone(), |bytes| {
@@ -73,7 +73,7 @@ suite.bench_fixture("checksum", fixture.clone(), |bytes| {
 
 Fixture инициализируется один раз при первом измерении. Клоны разделяют одно mutable значение внутри процесса. Отдельный `Fixture::new` на case даёт отдельное состояние; `bench_with_input`/`bench_checked` продолжают создавать свежий input на каждую операцию. Повторный `Suite::run` в том же процессе не сбрасывает shared fixture. Межпроцессного singleton здесь нет. Setup/заимствование/уничтожение fixture вне timing; output Drop включён. Seeded не криптографический генератор. `seed()` записывает договорённость в contract — caller должен использовать этот же seed для генератора.
 
-Throughput вычисляется из положительных wall batch durations и количества work units на операцию; это batch throughput, а не распределение индивидуальных задержек. Zero/Unavailable durations в производную throughput не входят, исходные наблюдения сохраняются. Для `bytes` показывается MiB/s, остальные имена отображаются как `<unit>/s`. Производную throughput можно получить и проверить командой `cargo rbench throughput RUN` (текст или `--json`, фильтр `--filter`, бюджет `--min`/`--max`, коды выхода как у `check`: 0 — пройдено, 1 — нарушение границы, 2 — ошибка использования). Она остаётся производной величиной: отдельным observation не записывается, исходные наблюдения неизменны. Гейтинг требует завершённого запуска.
+Throughput вычисляется из положительных wall batch durations и количества work units на операцию; это batch throughput, а не распределение индивидуальных задержек. Zero/Unavailable durations в производную throughput не входят, исходные наблюдения сохраняются. Для `bytes` показывается MiB/s, остальные имена отображаются как `<unit>/s`. Производную throughput можно получить и проверить командой `cargo airbug-bench throughput RUN` (текст или `--json`, фильтр `--filter`, бюджет `--min`/`--max`, коды выхода как у `check`: 0 — пройдено, 1 — нарушение границы, 2 — ошибка использования). Она остаётся производной величиной: отдельным observation не записывается, исходные наблюдения неизменны. Гейтинг требует завершённого запуска.
 
 ```rust
 recorder.phase("pipeline", "parse", "CPU parse")?;
@@ -85,11 +85,11 @@ Case регистрируется заранее; неизвестная фаз�
 ## Git-сравнение
 
 ```sh
-cargo rbench git-compare --repo /path/to/repo \
+cargo airbug-bench git-compare --repo /path/to/repo \
   --baseline main --candidate feature \
   --target package/bench --offline --repetitions 12 \
-  -o .rbench/git-ab -- --profile normal
-cargo rbench compare .rbench/git-ab/run --check
+  -o .airbug-bench/git-ab -- --profile normal
+cargo airbug-bench compare .airbug-bench/git-ab/run --check
 ```
 
 Используются локально существующие commits/refs. Ветки не переключаются, fetch/reset/stash не выполняются. Незакоммиченные изменения не включаются. Читаются tracked blobs в новые snapshots; обе сборки заканчиваются до измерений. `CARGO_TARGET_DIR` задаётся отдельно для каждого snapshot, включая случай унаследованной общей настройки. Полные SHA commits записываются в git.json и provenance run. `--manifest-path` — относительный путь внутри snapshot.
@@ -99,8 +99,8 @@ cargo rbench compare .rbench/git-ab/run --check
 ## История, контекст и отчёт
 
 ```sh
-cargo rbench context @main last
-cargo rbench trend --case workloads/checksum/4096 --metric wall -o .rbench/trend.html
+cargo airbug-bench context @main last
+cargo airbug-bench trend --case workloads/checksum/4096 --metric wall -o .airbug-bench/trend.html
 ```
 
 Trend показывает медиану process medians, а не объединяет все внутренние samples. Отдельный context hash включает окружение и descriptor/contract выбранного case; разные контексты рисуются отдельно. Commit отображается, если записан через git-compare. Это описательная история, не причинное доказательство влияния commit. Дрейф окружения возможен даже при совпадающем hash.
@@ -116,13 +116,13 @@ Notes привязаны к hash неизменяемого run.json; базов
 ## Политика CI
 
 ```sh
-cargo rbench compare @main last --check --uncertainty warn
-cargo rbench gate last --config budgets.json --uncertainty fail
-cargo rbench ci -o rbench-ci.yml
+cargo airbug-bench compare @main last --check --uncertainty warn
+cargo airbug-bench gate last --config budgets.json --uncertainty fail
+cargo airbug-bench ci -o bench-ci.yml
 ```
 
 `fail` — стандартный код 2 при Inconclusive. `warn` разрешает Inconclusive с предупреждением; `record` оставляет результат в отчёте и возвращает 0. Регрессия/провал всегда даёт 1. Missing/Unsupported/ошибка остаются кодом 2 при любой политике. Приоритет провала выше неопределённости.
 
-CI-файл — готовый вручную запускаемый smoke workflow для этого workspace; команда не устанавливает его и не запускает удалённый CI. Включены сборка, quick benchmark и сохранение отчётов/artifacts, в том числе hidden `.rbench`. Для другого repo адаптируйте установку CLI и бюджеты. Shared GitHub runner не даёт контролируемой performance acceptance.
+CI-файл — готовый вручную запускаемый smoke workflow для этого workspace; команда не устанавливает его и не запускает удалённый CI. Включены сборка, quick benchmark и сохранение отчётов/artifacts, в том числе hidden `.bench`. Для другого repo адаптируйте установку CLI и бюджеты. Shared GitHub runner не даёт контролируемой performance acceptance.
 
 Версии действий сверены с первичными источниками: [actions/checkout](https://github.com/actions/checkout), [actions/upload-artifact](https://github.com/actions/upload-artifact), [dtolnay/rust-toolchain](https://github.com/dtolnay/rust-toolchain). Workflow uses checkout/upload-artifact v7 и rust-toolchain stable; это не полностью закреплённая цепочка инструментов.

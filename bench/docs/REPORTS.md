@@ -3,10 +3,10 @@
 Команда работает с сохранёнными данными и не запускает измерения. Источник — `run.json`, каталог одного запуска или дерево экспериментов.
 
 ```sh
-cargo rbench report .rbench/experiment --title "Forma: performance" -o .rbench/report.html
-cargo rbench report .rbench/experiment -o .rbench/report.md
-cargo rbench report .rbench/experiment -o .rbench/report.json
-cargo rbench report .rbench/new --baseline .rbench/old --threshold 5 --alpha 0.05 -o .rbench/comparison.html
+cargo airbug-bench report .airbug-bench/experiment --title "Forma: performance" -o .airbug-bench/report.html
+cargo airbug-bench report .airbug-bench/experiment -o .airbug-bench/report.md
+cargo airbug-bench report .airbug-bench/experiment -o .airbug-bench/report.json
+cargo airbug-bench report .airbug-bench/new --baseline .airbug-bench/old --threshold 5 --alpha 0.05 -o .airbug-bench/comparison.html
 ```
 
 Без `-o` выводится Markdown. Существующий выходной файл не перезаписывается.
@@ -17,16 +17,16 @@ JSON содержит документ со сводкой, сравнениям
 
 ## Осмотр состава запуска
 
-`cargo rbench list RUN` печатает идентификаторы кейсов (с `--filter SUBSTR` — подмножество), не запуская измерения. Флаг `--json` добавляет по каждому кейсу его метрики (id, единицу, scope, фазу, статистику, направление) и счётчики наблюдений (`observations`/`available`/`processes`) — удобно, чтобы узнать точные имена метрик для `gate`, `check` или `compare --metric`.
+`cargo airbug-bench list RUN` печатает идентификаторы кейсов (с `--filter SUBSTR` — подмножество), не запуская измерения. Флаг `--json` добавляет по каждому кейсу его метрики (id, единицу, scope, фазу, статистику, направление) и счётчики наблюдений (`observations`/`available`/`processes`) — удобно, чтобы узнать точные имена метрик для `gate`, `check` или `compare --metric`.
 
 ```sh
-cargo rbench list .rbench/sort
-cargo rbench list .rbench/sort --json --filter unstable
+cargo airbug-bench list .airbug-bench/sort
+cargo airbug-bench list .airbug-bench/sort --json --filter unstable
 ```
 
-`cargo rbench history` перечисляет запуски хранилища в хронологическом порядке; `--status` (например `complete`/`failed`, регистр не важен) и `--limit N` (только последние N) сужают список, `--json` даёт машинный вывод.
+`cargo airbug-bench history` перечисляет запуски хранилища в хронологическом порядке; `--status` (например `complete`/`failed`, регистр не важен) и `--limit N` (только последние N) сужают список, `--json` даёт машинный вывод.
 
-`cargo rbench context A B` показывает различия окружения/provenance/контрактов двух запусков, `cargo rbench trend --case C --metric M` — историю медиан по кейсу/метрике. У обоих есть `--json` для машинной обработки (`context` — список `{key,a,b}`, `trend` — точки `{id,revision,median,unit,context}`).
+`cargo airbug-bench context A B` показывает различия окружения/provenance/контрактов двух запусков, `cargo airbug-bench trend --case C --metric M` — историю медиан по кейсу/метрике. У обоих есть `--json` для машинной обработки (`context` — список `{key,a,b}`, `trend` — точки `{id,revision,median,unit,context}`).
 
 ## Интерпретация
 
@@ -53,7 +53,7 @@ cargo rbench list .rbench/sort --json --filter unstable
 ## Веб-интерфейс
 
 ```sh
-cargo rbench serve .rbench --port 8787
+cargo airbug-bench serve .bench --port 8787
 ```
 
 Откройте адрес, напечатанный сервером. Доступен каталог запусков с поиском, общий отчёт, выбор отдельного запуска и baseline, настройка порога, просмотр и экспорт JSON/Markdown. Для большой коллекции можно передать более узкую папку. Обновление списка выполняется кнопкой; отчёт строится кнопкой или выбором запуска.
@@ -62,7 +62,7 @@ cargo rbench serve .rbench --port 8787
 
 ## Интерфейс во время бенчмарка
 
-`cargo rbench run ... -o .rbench/session` автоматически открывает интерфейс при запуске из интерактивного терминала. Во время измерений отображается прогресс по завершённым процессам; построение отчёта разрешено после финализации. Затем интерфейс показывает результат и остаётся доступным до Ctrl+C.
+`cargo airbug-bench run ... -o .airbug-bench/session` автоматически открывает интерфейс при запуске из интерактивного терминала. Во время измерений отображается прогресс по завершённым процессам; построение отчёта разрешено после финализации. Затем интерфейс показывает результат и остаётся доступным до Ctrl+C.
 
 - `--ui` включает интерфейс и при перенаправленном выводе.
 - `--no-ui` отключает его, например для CI или измерений без браузера.

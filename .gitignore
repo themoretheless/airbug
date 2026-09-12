@@ -2,10 +2,9 @@
 **/target/
 .cargo-home/
 .DS_Store
-.rbench/
-.rbench-git-leftover/
-research/private/
-research/focused/
-research/sources/
+.airbug-bench/
+bench/research/private/
+bench/research/focused/
+bench/research/sources/
 __pycache__/
 *.pyc

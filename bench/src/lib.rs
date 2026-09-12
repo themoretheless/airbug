@@ -21,15 +21,15 @@ pub fn error(message: impl Into<String>) -> Box<dyn std::error::Error + Send + S
 
 /// Attribute registration rejects ambiguous lifecycle signatures.
 /// ```compile_fail
-/// #[rbench::bench]
+/// #[airbug_bench::bench]
 /// fn has_arguments(input: usize) -> usize { input }
 /// ```
 /// ```compile_fail
-/// #[rbench::bench]
+/// #[airbug_bench::bench]
 /// async fn implicit_runtime() {}
 /// ```
 #[cfg(feature = "macros")]
-pub use rbench_macros::bench;
+pub use airbug_bench_macros::bench;
 pub mod diagnostics;
 pub mod workloads;
 

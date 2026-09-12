@@ -1,4 +1,4 @@
-use rbench::*;
+use airbug_bench::*;
 fn main() -> Result<()> {
     let mut recorder = Recorder::new();
     recorder.case(Case {
@@ -14,7 +14,7 @@ fn main() -> Result<()> {
     })?;
     std::hint::black_box(checksum);
     println!(
-        "RBENCH_RESULT={}",
+        "BENCH_RESULT={}",
         serde_json::to_string(&recorder.finish()?)?
     );
     Ok(())

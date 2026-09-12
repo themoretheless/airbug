@@ -1,2 +1,2 @@
 [alias]
-rbench = "run --release -p cargo-rbench --"
+airbug-bench = "run --release -p cargo-airbug-bench --"

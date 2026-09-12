@@ -251,7 +251,7 @@ fn analyze(events: &[Event], dropped_events: u64) -> Profile {
             site
         })
         .collect();
-    Profile {schema:"rbench.memory/1".into(),scope:"Rust allocator events during session; realloc counts as replacement allocation; live = tracked blocks remaining, not proof of leaks; stacks limited to 24 frames; no native/GPU/type/ownership data".into(),dropped_events,events:events.len(),peak_tracked_bytes:peak,sites}
+    Profile {schema:"bench.memory/1".into(),scope:"Rust allocator events during session; realloc counts as replacement allocation; live = tracked blocks remaining, not proof of leaks; stacks limited to 24 frames; no native/GPU/type/ownership data".into(),dropped_events,events:events.len(),peak_tracked_bytes:peak,sites}
 }
 impl Profile {
     pub fn save(&self, path: impl AsRef<std::path::Path>) -> crate::Result<()> {
@@ -261,7 +261,7 @@ impl Profile {
 /// Wrap the workload. Normal runs execute without profiling; `run --memory`
 /// supplies the output path. Install `memory::Allocator` as the global allocator.
 pub fn profile<T>(work: impl FnOnce() -> T) -> crate::Result<T> {
-    let Some(path) = std::env::var_os("RBENCH_MEMORY_OUTPUT") else {
+    let Some(path) = std::env::var_os("BENCH_MEMORY_OUTPUT") else {
         return Ok(work());
     };
     let session = Session::start()?;
@@ -292,7 +292,7 @@ impl Profile {
             ));
         }
         let p: Self = serde_json::from_slice(&std::fs::read(path)?)?;
-        if p.schema != "rbench.memory/1"
+        if p.schema != "bench.memory/1"
             || p.sites.len() > 8192
             || p.sites.iter().any(|s| s.frames.len() > 24)
         {
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn escaped_frames_and_incomplete_profile() {
         let p = Profile {
-            schema: "rbench.memory/1".into(),
+            schema: "bench.memory/1".into(),
             scope: "test".into(),
             dropped_events: 10,
             events: 0,

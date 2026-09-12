@@ -4,25 +4,25 @@
 
 ## Подключение нового проекта
 
-Установите CLI: `cargo install --path crates/cargo-rbench --offline` из checkout rbench. Либо используйте абсолютный путь к `target/release/cargo-rbench` после release-сборки. Локальный alias работает только внутри checkout rbench.
+Установите CLI: `cargo install --path bench/cli --offline` из корня monorepo. Либо используйте абсолютный путь к `target/release/cargo-airbug-bench` после release-сборки. Локальный alias работает только внутри этого workspace.
 
 ```sh
-cargo rbench init --manifest-path /path/to/project/Cargo.toml
-cargo rbench discover --manifest-path /path/to/project/Cargo.toml --offline
-cargo rbench bench --manifest-path /path/to/project/Cargo.toml \
-  --offline --repetitions 12 -o .rbench/first
+cargo airbug-bench init --manifest-path /path/to/project/Cargo.toml
+cargo airbug-bench discover --manifest-path /path/to/project/Cargo.toml --offline
+cargo airbug-bench bench --manifest-path /path/to/project/Cargo.toml \
+  --offline --repetitions 12 -o .airbug-bench/first
 ```
 
-`init` добавляет dev-dependency на локальную библиотеку, `[[bench]]` с `harness=false`, регистрацию target, пример проверяемой сортировки с тремя размерами и `rbench.json`. TOML-комментарии сохраняются. Существующие файлы не заменяются. Для virtual workspace нужно выбрать manifest одного package. Если исходники библиотеки перемещены, передайте `--library-path /path/to/airbug/bench`.
+`init` добавляет dev-dependency на локальную библиотеку, `[[bench]]` с `harness=false`, регистрацию target, пример проверяемой сортировки с тремя размерами и `bench.json`. TOML-комментарии сохраняются. Существующие файлы не заменяются. Для virtual workspace нужно выбрать manifest одного package. Если исходники библиотеки перемещены, передайте `--library-path /path/to/airbug/bench`.
 
-`discover` показывает все Cargo bench targets workspace и их регистрацию. `bench` сначала собирает **все выбранные targets**, затем измеряет их последовательно. Для существующего rbench target добавьте:
+`discover` показывает все Cargo bench targets workspace и их регистрацию. `airbug-bench` сначала собирает **все выбранные targets**, затем измеряет их последовательно. Для существующего bench target добавьте:
 
 ```toml
-[package.metadata.rbench]
+[package.metadata.airbug_bench]
 targets = ["my_benchmark"]
 ```
 
-Не отмечайте обычный libtest/Criterion target: регистрация означает, что executable поддерживает `RBENCH_RESULT` protocol. Точный выбор: `--target package/target`, можно повторять. Результаты отдельных targets находятся в пронумерованных подкаталогах; корень содержит `targets.json`. Это коллекция запусков, а не единый Run: для baseline/report/gate выберите подкаталог target.
+Не отмечайте обычный libtest/Criterion target: регистрация означает, что executable поддерживает `BENCH_RESULT` protocol. Точный выбор: `--target package/target`, можно повторять. Результаты отдельных targets находятся в пронумерованных подкаталогах; корень содержит `targets.json`. Это коллекция запусков, а не единый Run: для baseline/report/gate выберите подкаталог target.
 
 Настройки worker передаются после `--`, например `-- --samples 8 --warmup-ms 10 --sample-ms 1`. Прогресс идёт в stderr: target, номер процесса, baseline/candidate, оценка оставшегося времени; для долгого процесса показывается последняя фаза worker. ETA оценивается по завершённым процессам, не гарантируется при разных workloads. Диагностика supervisor может немного влиять на host load.
 
@@ -30,30 +30,30 @@ targets = ["my_benchmark"]
 
 ```sh
 # bash: подключить на текущую сессию
-source <(cargo rbench completions bash)
+source <(cargo airbug-bench completions bash)
 # zsh: сохранить в каталог из $fpath
-cargo rbench completions zsh > ~/.zfunc/_cargo-rbench
+cargo airbug-bench completions zsh > ~/.zfunc/_cargo-airbug-bench
 # поддерживаются также fish, powershell и elvish
-cargo rbench completions fish > ~/.config/fish/completions/cargo-rbench.fish
+cargo airbug-bench completions fish > ~/.config/fish/completions/cargo-airbug-bench.fish
 ```
 
-`completions SHELL` печатает скрипт автодополнения в stdout и не изменяет конфигурацию оболочки. Скрипт дополняет установленный бинарник `cargo-rbench`; неизвестное имя оболочки отклоняется. Закрытый downstream-канал (например, `| head`) не считается ошибкой.
+`completions SHELL` печатает скрипт автодополнения в stdout и не изменяет конфигурацию оболочки. Скрипт дополняет установленный бинарник `cargo-airbug-bench`; неизвестное имя оболочки отклоняется. Закрытый downstream-канал (например, `| head`) не считается ошибкой.
 
 ## Именованные baseline
 
 ```sh
-cargo rbench baseline save main .rbench/first/0-my-package-rbench
-cargo rbench baseline list
-cargo rbench compare @main .rbench/second/0-my-package-rbench --check
-cargo rbench report @main -o .rbench/main.html
+cargo airbug-bench baseline save main .airbug-bench/first/0-my-package-bench
+cargo airbug-bench baseline list
+cargo airbug-bench compare @main .airbug-bench/second/0-my-package-bench --check
+cargo airbug-bench report @main -o .airbug-bench/main.html
 ```
 
-Имя разрешает буквы ASCII, цифры, `-` и `_`. Сохранение создаёт неизменяемую ссылку на canonical path и SHA-256 файла результата; данные не копируются. Перезапись имени запрещена: используйте новое имя. Удаление исходного run сломает ссылку, изменение его содержимого обнаруживается. Хранилище по умолчанию `.rbench` относительно текущего каталога; общий каталог задаётся глобальным `--store PATH`.
+Имя разрешает буквы ASCII, цифры, `-` и `_`. Сохранение создаёт неизменяемую ссылку на canonical path и SHA-256 файла результата; данные не копируются. Перезапись имени запрещена: используйте новое имя. Удаление исходного run сломает ссылку, изменение его содержимого обнаруживается. Хранилище по умолчанию `.bench` относительно текущего каталога; общий каталог задаётся глобальным `--store PATH`.
 
 ## Матрицы и проверка правильности
 
 ```rust
-use rbench::{DropPolicy, Suite};
+use airbug_bench::{DropPolicy, Suite};
 let mut suite = Suite::new("collections");
 suite.matrix("sort", &[("size", &["32", "512"]), ("order", &["forward", "reverse"])],
     |suite, id, params| {
@@ -68,7 +68,7 @@ suite.matrix("sort", &[("size", &["32", "512"]), ("order", &["forward", "reverse
             |v| v.sort_unstable(),
             |v, _output| {
                 if v.windows(2).all(|w| w[0] <= w[1]) { Ok(()) }
-                else { Err(rbench::error("unordered result")) }
+                else { Err(airbug_bench::error("unordered result")) }
             }, DropPolicy::InsideTiming);
     })?;
 ```
@@ -89,7 +89,7 @@ suite.matrix("sort", &[("size", &["32", "512"]), ("order", &["forward", "reverse
 ```
 
 ```sh
-cargo rbench gate .rbench/candidate --config budgets.json --baseline @main
+cargo airbug-bench gate .airbug-bench/candidate --config budgets.json --baseline @main
 ```
 
 `case` и `metric` совпадают **точно**. `unit` обязательна. `min`/`max` проверяются на каждом candidate observation, batch totals нормализуются на число операций. `max_regression_percent` использует сравнительный анализ независимых процессов; без `--baseline` требуется paired run. Для нескольких относительных бюджетов применяется общая поправка Bonferroni. Budget на нулевом baseline задавайте абсолютным пределом.
@@ -103,15 +103,15 @@ cargo rbench gate .rbench/candidate --config budgets.json --baseline @main
 ## Сценарии Forma и контроль кадров
 
 ```sh
-cargo build --release --manifest-path integrations/forma/Cargo.toml --offline
-integrations/forma/target/release/rbench-forma-example --list
-integrations/forma/target/release/rbench-forma-example \
-  --record-goldens .rbench/my-forma-goldens
+cargo build --release --manifest-path bench/integrations/forma/Cargo.toml --offline
+bench/integrations/forma/target/release/bench-forma-example --list
+bench/integrations/forma/target/release/bench-forma-example \
+  --record-goldens .airbug-bench/my-forma-goldens
 # Просмотрите созданные PNG как эталоны, затем:
-cargo rbench run --program integrations/forma/target/release/rbench-forma-example \
-  --protocol --repetitions 3 -o .rbench/forma-checked -- \
-  --goldens .rbench/my-forma-goldens --json
-cargo rbench gate .rbench/forma-checked --config integrations/forma/budgets.json
+cargo airbug-bench run --program bench/integrations/forma/target/release/bench-forma-example \
+  --protocol --repetitions 3 -o .airbug-bench/forma-checked -- \
+  --goldens .airbug-bench/my-forma-goldens --json
+cargo airbug-bench gate .airbug-bench/forma-checked --config bench/integrations/forma/budgets.json
 ```
 
 Golden capture не запускает benchmark protocol и никогда не перезаписывает каталог. Запуск измерения требует эталоны; автоматического принятия нового изображения нет. RGBA8 сохраняется в версионированном `.rbimg`, PNG предназначен для просмотра. Эталоны берутся с известной сборки; их запись сама по себе не доказывает правильность renderer.

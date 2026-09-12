@@ -72,7 +72,7 @@ pub fn throughput(run: &Run) -> Result<Vec<ThroughputSeries>> {
 }
 pub fn markdown(run: &Run) -> Result<String> {
     run.validate()?;
-    let mut out=format!("# rbench {}\n\nStatus: {:?}\n\n| Case | Metric | Median | Unit | Scope / statistic | Observations | Processes |\n|---|---|---:|---|---|---:|---:|\n",escape(&run.id),run.status);
+    let mut out=format!("# bench {}\n\nStatus: {:?}\n\n| Case | Metric | Median | Unit | Scope / statistic | Observations | Processes |\n|---|---|---:|---|---|---:|---:|\n",escape(&run.id),run.status);
     for c in &run.cases {
         for m in &c.metrics {
             let mut groups: BTreeMap<&str, Vec<_>> = BTreeMap::new();
@@ -151,7 +151,7 @@ pub fn comparison(rows: &[Comparison]) -> String {
         _ => 4,
     });
     let rows = ordered;
-    let mut out=String::from("# rbench comparison\n\n| Case | Metric | A | B | Change % | Interval % | Independent units | Decision |\n|---|---|---:|---:|---:|---|---:|---|\n");
+    let mut out=String::from("# bench comparison\n\n| Case | Metric | A | B | Change % | Interval % | Independent units | Decision |\n|---|---|---:|---:|---:|---|---:|---|\n");
     let regressions = rows
         .iter()
         .filter(|r| r.decision == crate::analysis::Decision::Regression)
@@ -165,7 +165,7 @@ pub fn comparison(rows: &[Comparison]) -> String {
             )
         })
         .count();
-    out=out.replacen("# rbench comparison\n\n",&format!("# rbench comparison\n\n{} metrics · {regressions} regressions · {unresolved} unresolved. Regressions and unresolved results appear first.\n\n",rows.len()),1);
+    out=out.replacen("# bench comparison\n\n",&format!("# bench comparison\n\n{} metrics · {regressions} regressions · {unresolved} unresolved. Regressions and unresolved results appear first.\n\n",rows.len()),1);
     let n = |v: Option<f64>| v.map(|x| format!("{x:.4}")).unwrap_or("n/a".into());
     for r in &rows {
         out.push_str(&format!(

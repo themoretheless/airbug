@@ -1,5 +1,5 @@
 #![cfg(feature = "memory")]
-use rbench::memory::{Allocator, Session};
+use airbug_bench::memory::{Allocator, Session};
 use std::alloc::{GlobalAlloc, Layout, System};
 struct RejectRealloc;
 // SAFETY: forwards valid layouts/pointers; failure leaves original allocation intact.

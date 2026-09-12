@@ -1,4 +1,4 @@
-# rbench
+# bench
 
 Своя Rust benchmark-библиотека и runner: короткие операции, отдельные процессы и сценарии приложения в одном формате наблюдений. Реализован рабочий прототип 0.1.0; полная приёмка и переносимость ещё проверяются.
 
@@ -13,17 +13,17 @@
 ```sh
 cargo build --release --workspace --offline
 cargo build --release --examples --offline
-cargo rbench doctor
+cargo airbug-bench doctor
 # Список без исполнения workload:
 target/release/examples/sort --list
-cargo rbench run --program target/release/examples/sort --protocol \
-  --repetitions 12 -o .rbench/sort -- --json
-cargo rbench report .rbench/sort -o .rbench/sort.html
+cargo airbug-bench run --program target/release/examples/sort --protocol \
+  --repetitions 12 -o .airbug-bench/sort -- --json
+cargo airbug-bench report .airbug-bench/sort -o .airbug-bench/sort.html
 ```
 
-`--offline` подходит при наличии зависимостей в Cargo cache; при первой сборке его можно убрать. Alias `cargo rbench` настроен в этом workspace. Для других проектов: `cargo install --path crates/cargo-rbench --offline`.
+`--offline` подходит при наличии зависимостей в Cargo cache; при первой сборке его можно убрать. Alias `cargo airbug-bench` настроен в этом workspace. Для других проектов: `cargo install --path bench/cli --offline`.
 
-Веб-интерфейс: `cargo rbench serve .rbench`. Сводные отчёты по папке экспериментов: HTML с фильтрами и графиками, Markdown и JSON. [Построение отчётов](docs/REPORTS.md).
+Веб-интерфейс: `cargo airbug-bench serve .bench`. Сводные отчёты по папке экспериментов: HTML с фильтрами и графиками, Markdown и JSON. [Построение отчётов](docs/REPORTS.md).
 
 Профиль памяти по стекам: `run --memory` и [подключение Rust worker](docs/MEMORY_PROFILER.md).
 
@@ -33,18 +33,18 @@ cargo rbench report .rbench/sort -o .rbench/sort.html
 
 ```toml
 # всегда последний РЕЛИЗ: ветка release двигается на каждый выпуск
-rbench = { git = "https://github.com/themoretheless/rbench", branch = "release" }
+bench = { git = "https://github.com/themoretheless/bench", branch = "release" }
 # закреплённая версия (теги v* создаются автоматически при бампе версии)
-rbench = { git = "https://github.com/themoretheless/rbench", tag = "v0.1.0" }
+bench = { git = "https://github.com/themoretheless/bench", tag = "v0.1.0" }
 # последний коммит ветки по умолчанию (main), включая незарелиженные изменения
-rbench = { git = "https://github.com/themoretheless/rbench" }
+bench = { git = "https://github.com/themoretheless/bench" }
 # опциональные возможности:
-# rbench = { git = "…", branch = "release", features = ["macros", "memory"] }
+# bench = { git = "…", branch = "release", features = ["macros", "memory"] }
 ```
 
-Cargo не выбирает «самый свежий семвер-тег» из git: диапазоны вроде `rbench = "0.1"` работают только через реестр. «Всегда последний релиз» — это движущаяся ветка `release`, точные версии — теги `v*`, а «tip main» — ветка `main`. Ветка `release` появляется после первого релиза; до него используйте `main`.
+Cargo не выбирает «самый свежий семвер-тег» из git: диапазоны вроде `bench = "0.1"` работают только через реестр. «Всегда последний релиз» — это движущаяся ветка `release`, точные версии — теги `v*`, а «tip main» — ветка `main`. Ветка `release` появляется после первого релиза; до него используйте `main`.
 
-Локальный checkout: `rbench = { path = "/path/to/airbug/bench" }`. Для Cargo benchmark target задайте `harness = false`.
+Локальный checkout: `bench = { path = "/path/to/airbug/bench" }`. Для Cargo benchmark target задайте `harness = false`.
 
 ### Как выпускать релиз
 
@@ -55,11 +55,11 @@ Cargo не выбирает «самый свежий семвер-тег» из
 # закоммитьте и слейте в main
 ```
 
-Пуш в `main` запускает [`release.yml`](.github/workflows/release.yml) — тонкую обёртку над общим reusable-workflow `themoretheless/.github/.github/workflows/release-rust-library.yml`. Он сравнивает версию `rbench` в `Cargo.toml` до/после пуша и, если она изменилась: гоняет Clippy и тесты, затем создаёт тег `v<version>` и GitHub Release с авто-заметками. Секреты не нужны — используется встроенный `GITHUB_TOKEN` (rustfmt отключён: `run_fmt: false`). Если версия не менялась, релиз не создаётся. После успешного релиза ветка `release` переводится на этот коммит, поэтому потребители с `branch = "release"` всегда получают последний выпуск.
+Пуш в `main` запускает [`release.yml`](.github/workflows/release.yml) — тонкую обёртку над общим reusable-workflow `themoretheless/.github/.github/workflows/release-rust-library.yml`. Он сравнивает версию `airbug-bench` в `Cargo.toml` до/после пуша и, если она изменилась: гоняет Clippy и тесты, затем создаёт тег `v<version>` и GitHub Release с авто-заметками. Секреты не нужны — используется встроенный `GITHUB_TOKEN` (rustfmt отключён: `run_fmt: false`). Если версия не менялась, релиз не создаётся. После успешного релиза ветка `release` переводится на этот коммит, поэтому потребители с `branch = "release"` всегда получают последний выпуск.
 
 ```rust
-use rbench::{DropPolicy, Suite};
-fn main() -> rbench::Result<()> {
+use airbug_bench::{DropPolicy, Suite};
+fn main() -> airbug_bench::Result<()> {
     let mut suite = Suite::new("collections");
     suite.bench_with_input(
         "sort/1000",
@@ -76,17 +76,17 @@ fn main() -> rbench::Result<()> {
 ## Сравнение и автоматические проверки
 
 ```sh
-cargo rbench run --program /path/to/candidate --baseline /path/to/baseline \
-  --protocol --repetitions 12 -o .rbench/ab -- --json
-cargo rbench compare .rbench/ab --threshold 5 --check
+cargo airbug-bench run --program /path/to/candidate --baseline /path/to/baseline \
+  --protocol --repetitions 12 -o .airbug-bench/ab -- --json
+cargo airbug-bench compare .airbug-bench/ab --threshold 5 --check
 # Или два исторических запуска:
-cargo rbench compare .rbench/old .rbench/new --json
+cargo airbug-bench compare .airbug-bench/old .airbug-bench/new --json
 # Абсолютный бюджет на каждое наблюдение, без статистического вывода:
-cargo rbench check .rbench/forma --metric geometry.uploads --max 0
+cargo airbug-bench check .airbug-bench/forma --metric geometry.uploads --max 0
 # Нижняя граница или диапазон на конкретную метрику (можно сузить кейсы через --filter):
-cargo rbench check .rbench/forma --metric frame.completed --min 8 --max 16 --filter static
+cargo airbug-bench check .airbug-bench/forma --metric frame.completed --min 8 --max 16 --filter static
 # Производная throughput (units/s; MiB/s для bytes) с бюджетом:
-cargo rbench throughput .rbench/run --min 1000
+cargo airbug-bench throughput .airbug-bench/run --min 1000
 ```
 
 Runner чередует AB/BA, последовательно запускает процессы, сохраняет stdout/stderr, план, SHA-256 бинарников/fixtures и сырые наблюдения. Каталог результата должен быть новым: существующие данные не перезаписываются. Без `--protocol` измеряется длительность процесса целиком, включая запуск и ожидание завершения, с разрешением polling около 1 ms.
@@ -100,9 +100,9 @@ Runner чередует AB/BA, последовательно запускает
 - `Recorder` принимает наблюдения из собственного event loop приложения; сбор записей можно вынести за измеряемую фазу.
 - `TrackingAllocator<System>` подключается явно и считает Rust allocations/reallocations/live/lifetime peak; native/driver allocations в него не входят.
 - `import-forma` импортирует завершённые старые normal/paired результаты известной схемы Forma, сохраняя scope и отсутствующие значения.
-- [Реальный offscreen-пример](integrations/forma/src/main.rs) использует renderer Forma и wgpu/Metal. Его зависимости изолированы от основного workspace. Сборка: `cargo build --release --offline --manifest-path integrations/forma/Cargo.toml`; затем бинарник запускается runner с `--protocol`.
+- [Реальный offscreen-пример](integrations/forma/src/main.rs) использует renderer Forma и wgpu/Metal. Его зависимости изолированы от основного workspace. Сборка: `cargo build --release --offline --manifest-path bench/integrations/forma/Cargo.toml`; затем бинарник запускается runner с `--protocol`.
 
-Интеграция сейчас ссылается на локальный исследовательский снимок `research/private/forma/vector-ui`; для другого checkout исправьте path в её Cargo.toml. Интеграция включает static, hover, animation, scroll, resize и text; image явно Unsupported. Перед запуском нужно записать и просмотреть golden PNG, затем передать `--goldens DIR`. Измеряются submit/completed frames, allocations и geometry uploads с проверкой контрольных кадров. Оконный FPS и GPU timestamp duration этим примером не измеряются.
+Интеграция сейчас ссылается на локальный исследовательский снимок `bench/research/private/forma/vector-ui`; для другого checkout исправьте path в её Cargo.toml. Интеграция включает static, hover, animation, scroll, resize и text; image явно Unsupported. Перед запуском нужно записать и просмотреть golden PNG, затем передать `--goldens DIR`. Измеряются submit/completed frames, allocations и geometry uploads с проверкой контрольных кадров. Оконный FPS и GPU timestamp duration этим примером не измеряются.
 
 ## Исследование и статус
 

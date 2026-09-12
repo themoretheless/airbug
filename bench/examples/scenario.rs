@@ -1,4 +1,4 @@
-use rbench::*;
+use airbug_bench::*;
 fn main() -> Result<()> {
     let mut recorder = Recorder::new();
     recorder.case(Case {
@@ -27,6 +27,6 @@ fn main() -> Result<()> {
         Availability::Unsupported("this example does not create a GPU adapter".into()),
     )?;
     let run = recorder.finish()?;
-    println!("RBENCH_RESULT={}", serde_json::to_string(&run)?);
+    println!("BENCH_RESULT={}", serde_json::to_string(&run)?);
     Ok(())
 }

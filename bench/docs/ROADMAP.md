@@ -40,7 +40,7 @@ Generic allocator wrapper, OS CPU/RSS providers, собственные GPU coun
 
 ## 7. Удобство и переносимость
 
-`cargo rbench list/build/run/compare/import/report`, macro API, автономный HTML, JSON/Markdown, документация и примеры tokenizer/Forma/rrrah. Browser driver и async workloads после native контракта.
+`cargo airbug-bench list/build/run/compare/import/report`, macro API, автономный HTML, JSON/Markdown, документация и примеры tokenizer/Forma/rrrah. Browser driver и async workloads после native контракта.
 
 Приёмка: пользователь может повторно проанализировать run offline; отсутствуют обязательные Node/GPU/network зависимости CPU-библиотеки; default core собирается на macOS/Linux/Windows. Feature matrix проверяет отсутствие wgpu/winit/Tokio в минимальном графе.
 

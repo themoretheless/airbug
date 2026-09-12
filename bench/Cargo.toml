@@ -1,10 +1,10 @@
 [package]
-name = "rbench"
+name = "airbug-bench"
 version = "0.1.1"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 rust-version.workspace = true
-repository = "https://github.com/themoretheless/rbench"
+repository = "https://github.com/themoretheless/airbug"
 description = "Explicit, reproducible Rust benchmarks and scenario observations"
 keywords = ["benchmark", "performance", "profiling", "statistics"]
 categories = ["development-tools::profiling", "development-tools::testing"]
@@ -12,11 +12,11 @@ categories = ["development-tools::profiling", "development-tools::testing"]
 [features]
 default = []
 memory = ["dep:backtrace"]
-macros = ["dep:rbench-macros"]
+macros = ["dep:airbug-bench-macros"]
 
 [dependencies]
 backtrace = { version = "=0.3.76", optional = true }
-rbench-macros = { path = "rbench-macros", version = "0.1.1", optional = true }
+airbug-bench-macros = { path = "macros", version = "0.1.1", optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -24,7 +24,7 @@ sha2.workspace = true
 [dev-dependencies]
 tempfile = "3"
 
-[package.metadata.rbench]
+[package.metadata.airbug_bench]
 targets = ["workloads"]
 
 [[bench]]

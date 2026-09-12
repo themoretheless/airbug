@@ -1,28 +1,29 @@
 [workspace]
 resolver = "3"
 members = [
-    "unit/airbug",
-    "unit/airbug-macros",
+    "unit",
+    "unit/macros",
     "unit/checkout-domain",
     "unit/containers",
     "bench",
-    "bench/rbench-macros",
-    "bench/cargo-rbench",
-    "otel/monik",
+    "bench/macros",
+    "bench/cli",
+    "mon",
+    "trace",
     "dash/hub",
 ]
 default-members = [
-    "unit/airbug",
-    "unit/airbug-macros",
+    "unit",
+    "unit/macros",
     "unit/checkout-domain",
     "unit/containers",
     "bench",
-    "bench/rbench-macros",
-    "bench/cargo-rbench",
+    "bench/macros",
+    "bench/cli",
     "dash/hub",
 ]
 exclude = [
-    "integrations/forma",
+    "bench/integrations/forma",
 ]
 
 [workspace.package]

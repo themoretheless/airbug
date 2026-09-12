@@ -4,13 +4,13 @@
 
 ## Подключение
 
-Включите feature `memory` у зависимости `rbench` и оберните существующий глобальный аллокатор:
+Включите feature `memory` у зависимости `airbug-bench` и оберните существующий глобальный аллокатор:
 
 ```rust
-use rbench::memory::{self, Allocator};
+use airbug_bench::memory::{self, Allocator};
 #[global_allocator]
 static ALLOC: Allocator<std::alloc::System> = Allocator(std::alloc::System);
-fn main() -> rbench::Result<()> {
+fn main() -> airbug_bench::Result<()> {
     memory::profile(|| {
         // Сценарий приложения. Завершите рабочие потоки до выхода отсюда.
     })?;
@@ -22,8 +22,8 @@ fn main() -> rbench::Result<()> {
 
 ```sh
 cargo build --release --example memory --features memory --offline
-cargo rbench run --memory --program target/release/examples/memory -o .rbench/memory-demo
-cargo rbench serve .rbench/memory-demo
+cargo airbug-bench run --memory --program target/release/examples/memory -o .airbug-bench/memory-demo
+cargo airbug-bench serve .airbug-bench/memory-demo
 ```
 
 `--memory` запускает один диагностический процесс; baseline/варианты в том же запуске запрещены. Обычные сравнения отчётов исключают такой запуск. Во время работы доступен стандартный live UI; после завершения появляется кнопка «Память». Для CI: `--no-ui`.

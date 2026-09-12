@@ -1,5 +1,5 @@
-use rbench::{Fixture, Seeded, Suite};
-fn main() -> rbench::Result<()> {
+use airbug_bench::{Fixture, Seeded, Suite};
+fn main() -> airbug_bench::Result<()> {
     let mut suite = Suite::new("workloads");
     let data = Fixture::new(|| Seeded::new(42).bytes(4096));
     suite

@@ -31,6 +31,8 @@ pub use wait::Wait;
 
 /// Common imports for integration tests.
 pub mod prelude {
-    pub use crate::modules::{PostgreSqlBuilder, RedisBuilder};
+    pub use crate::modules::{
+        MongoDbBuilder, MySqlBuilder, PostgreSqlBuilder, RabbitMqBuilder, RedisBuilder,
+    };
     pub use crate::{Container, ContainerBuilder, ContainerError, Wait};
 }

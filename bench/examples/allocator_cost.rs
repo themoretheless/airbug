@@ -1,5 +1,5 @@
 //! Measure instrumentation cost with identical allocation work and explicit variant selection.
-use rbench::{alloc::TrackingAllocator, error, Result, Suite};
+use airbug_bench::{alloc::TrackingAllocator, error, Result, Suite};
 use std::alloc::{GlobalAlloc, Layout, System};
 fn operation<A: GlobalAlloc>(a: &A) {
     let layout = Layout::from_size_align(256, 8).unwrap();
@@ -13,7 +13,7 @@ fn operation<A: GlobalAlloc>(a: &A) {
     }
 }
 fn main() -> Result<()> {
-    let mode = std::env::var("RBENCH_ALLOC_MODE").unwrap_or_else(|_| "system".into());
+    let mode = std::env::var("BENCH_ALLOC_MODE").unwrap_or_else(|_| "system".into());
     static TRACKED: TrackingAllocator<System> = TrackingAllocator::new(System);
     let tracked = &TRACKED;
     let phase = if mode == "phase" {
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
         "tracked" | "phase" => {
             s.bench("alloc_free_256", || operation(tracked));
         }
-        _ => return Err(error("RBENCH_ALLOC_MODE=system|tracked|phase")),
+        _ => return Err(error("BENCH_ALLOC_MODE=system|tracked|phase")),
     }
     let result = s.main();
     drop(phase);

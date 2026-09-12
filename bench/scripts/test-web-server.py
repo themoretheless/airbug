@@ -5,7 +5,7 @@ import sys
 import urllib.request
 import urllib.error
 
-proc = subprocess.Popen(['target/release/cargo-rbench', 'serve', sys.argv[1], '--port', '0'], stdout=subprocess.PIPE, text=True)
+proc = subprocess.Popen(['target/release/cargo-airbug-bench', 'serve', sys.argv[1], '--port', '0'], stdout=subprocess.PIPE, text=True)
 try:
     url = proc.stdout.readline().strip().split('Report interface: ')[1]
     def get(path):
@@ -15,7 +15,7 @@ try:
     assert rows
     for row in rows:
         if row.get('memory'):
-            assert b'rbench.memory/1' in get('memory?id=' + row['id'])
+            assert b'bench.memory/1' in get('memory?id=' + row['id'])
     first = rows[0]['id']
     assert len(first) == 64
     assert b'<!doctype html>' in get('report?id=' + first).lower()
