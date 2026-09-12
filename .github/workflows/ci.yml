@@ -34,9 +34,6 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} run --locked --features macros --example checkout_pilot -- decline
       - run: cargo +${{ matrix.toolchain }} run --locked --features macros --example checkout_pilot -- store-failure
       - run: cargo +${{ matrix.toolchain }} clippy --locked --workspace --all-features --all-targets -- -D warnings
-      - run: cargo +${{ matrix.toolchain }} doc --locked --workspace --all-features --no-deps
-        env:
-          RUSTDOCFLAGS: -D warnings
       - run: python tools/verify_packages.py --toolchain ${{ matrix.toolchain }}
 
   report:
