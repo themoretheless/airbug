@@ -80,7 +80,7 @@ recorder.phase("pipeline", "parse", "CPU parse")?;
 let parsed = recorder.measure("pipeline", "parse", || parse(input))?;
 ```
 
-Case регистрируется заранее; неизвестная фаза отклоняется до вызова closure. Measure измеряет только синхронное замыкание, затем добавляет observation; output Drop снаружи. Один phase descriptor нельзя незаметно заменить другим. [Исполняемый пример фаз](../crates/rbench/examples/phases.rs).
+Case регистрируется заранее; неизвестная фаза отклоняется до вызова closure. Measure измеряет только синхронное замыкание, затем добавляет observation; output Drop снаружи. Один phase descriptor нельзя незаметно заменить другим. [Исполняемый пример фаз](../examples/phases.rs).
 
 ## Git-сравнение
 

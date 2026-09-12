@@ -27,7 +27,7 @@ unit/
   checkout-domain/
   containers/          # Testcontainers-style Docker helpers
 bench/
-  rbench/
+  src/                  # rbench library
   rbench-macros/
   cargo-rbench/
   docs/

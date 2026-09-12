@@ -13,7 +13,7 @@ cargo rbench bench --manifest-path /path/to/project/Cargo.toml \
   --offline --repetitions 12 -o .rbench/first
 ```
 
-`init` добавляет dev-dependency на локальную библиотеку, `[[bench]]` с `harness=false`, регистрацию target, пример проверяемой сортировки с тремя размерами и `rbench.json`. TOML-комментарии сохраняются. Существующие файлы не заменяются. Для virtual workspace нужно выбрать manifest одного package. Если исходники библиотеки перемещены, передайте `--library-path /path/to/rbench/crates/rbench`.
+`init` добавляет dev-dependency на локальную библиотеку, `[[bench]]` с `harness=false`, регистрацию target, пример проверяемой сортировки с тремя размерами и `rbench.json`. TOML-комментарии сохраняются. Существующие файлы не заменяются. Для virtual workspace нужно выбрать manifest одного package. Если исходники библиотеки перемещены, передайте `--library-path /path/to/airbug/bench`.
 
 `discover` показывает все Cargo bench targets workspace и их регистрацию. `bench` сначала собирает **все выбранные targets**, затем измеряет их последовательно. Для существующего rbench target добавьте:
 

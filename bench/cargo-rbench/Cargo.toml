@@ -10,7 +10,7 @@ keywords = ["benchmark", "cargo-subcommand", "performance", "profiling"]
 categories = ["development-tools::profiling", "command-line-utilities"]
 
 [dependencies]
-rbench = { path = "../rbench", version = "0.1.1", features = ["memory"] }
+rbench = { path = "..", version = "0.1.1", features = ["memory"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

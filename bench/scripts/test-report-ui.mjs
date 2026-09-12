@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const html=fs.readFileSync(new URL('../crates/rbench/src/report-template.html',import.meta.url),'utf8');
+const html=fs.readFileSync(new URL('../src/report-template.html',import.meta.url),'utf8');
 const script=html.match(/<script type="text\/javascript">([\s\S]*?)<\/script>/)[1];
 const element=(text='')=>({textContent:text,hidden:false,value:'',dataset:{},events:{},addEventListener(k,f){this.events[k]=f;},closest(){return null;}});
 const ids=Object.fromEntries(['search','outcome','count','collection-tools','expand','collapse','print'].map(k=>[k,element()]));

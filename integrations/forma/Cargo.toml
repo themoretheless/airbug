@@ -8,7 +8,7 @@ publish = false
 [workspace]
 
 [dependencies]
-rbench = { path = "../../bench/rbench" }
+rbench = { path = "../../bench" }
 forma-vector = { path = "../../research/private/forma/vector-ui", features = ["gpu"] }
 wgpu = "=29.0.4"
 pollster = "0.4"

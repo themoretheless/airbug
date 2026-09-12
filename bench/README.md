@@ -44,7 +44,7 @@ rbench = { git = "https://github.com/themoretheless/rbench" }
 
 Cargo не выбирает «самый свежий семвер-тег» из git: диапазоны вроде `rbench = "0.1"` работают только через реестр. «Всегда последний релиз» — это движущаяся ветка `release`, точные версии — теги `v*`, а «tip main» — ветка `main`. Ветка `release` появляется после первого релиза; до него используйте `main`.
 
-Локальный checkout: `rbench = { path = "/path/to/rbench/crates/rbench" }`. Для Cargo benchmark target задайте `harness = false`.
+Локальный checkout: `rbench = { path = "/path/to/airbug/bench" }`. Для Cargo benchmark target задайте `harness = false`.
 
 ### Как выпускать релиз
 

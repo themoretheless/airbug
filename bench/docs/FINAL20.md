@@ -28,7 +28,7 @@
 ## Быстрый старт
 
 ```rust
-// Cargo.toml: rbench = { path = ".../crates/rbench", features = ["macros"] }
+// Cargo.toml: rbench = { path = ".../bench", features = ["macros"] }
 #[rbench::bench]
 fn parsing() -> usize { std::hint::black_box("12345").len() }
 

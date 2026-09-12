@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const template=fs.readFileSync('crates/rbench/src/memory-template.html','utf8');
+const template=fs.readFileSync('src/memory-template.html','utf8');
 class Element {
   constructor(){this.children=[];this.style={};this.value='';this.textContent='';this.attrs={};}
   append(...items){this.children.push(...items)}

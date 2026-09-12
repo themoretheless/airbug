@@ -16,7 +16,7 @@ macros = ["dep:rbench-macros"]
 
 [dependencies]
 backtrace = { version = "=0.3.76", optional = true }
-rbench-macros = { path = "../rbench-macros", version = "0.1.1", optional = true }
+rbench-macros = { path = "rbench-macros", version = "0.1.1", optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
