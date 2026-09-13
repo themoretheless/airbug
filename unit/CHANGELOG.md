@@ -17,6 +17,11 @@
   a `airbug-checkout-domain` dev-dependency crate instead of a file the tests reached
   into with `#[path]`.
 
+# 0.5.1
+
+- Shared GitHub Actions release workflows (`themoretheless/.github`)
+- Architecture docs and publish-path polish for local-toolkit install via `branch = "release"`
+
 # 0.5.0
 
 ## Unreleased

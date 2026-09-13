@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Shared GitHub Actions release workflows (`themoretheless/.github`)
+- Install path: pin via `branch = "release"` or tag `airbug-bench-v*`
+
 ## 0.1.1
 
 - Typed `BenchError` public error API
