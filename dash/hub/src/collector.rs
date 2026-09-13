@@ -1,6 +1,7 @@
 //! Start/stop the local OpenTelemetry Collector.
 //!
 //! Order: Docker Compose (collector + Jaeger) → `otelcol-contrib` / `otelcol` binary.
+use crate::config::RootPaths;
 use std::{
     fs, io,
     net::TcpStream,
@@ -8,9 +9,6 @@ use std::{
     process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
-
-const COMPOSE_REL: &str = "dash/collector/docker-compose.yml";
-const STANDALONE_TEMPLATE: &str = "dash/collector/config.standalone.yaml";
 
 pub struct CollectorHandle {
     /// Present when Docker Compose backend is used (Ctrl+C / stop → compose down).
@@ -22,18 +20,21 @@ pub struct CollectorHandle {
 impl CollectorHandle {
     /// Prefer Docker stack; otherwise spawn a local otelcol binary.
     pub fn start(root: &Path) -> io::Result<Option<Self>> {
-        let data_dir = root.join("dash/collector/data");
-        fs::create_dir_all(&data_dir)?;
+        let paths = RootPaths::new(root);
+        fs::create_dir_all(paths.collector_data_dir())?;
 
-        if let Some(handle) = try_docker(root)? {
+        if let Some(handle) = try_docker(&paths)? {
             return Ok(Some(handle));
         }
-        if let Some(handle) = try_binary(root, &data_dir)? {
+        if let Some(handle) = try_binary(&paths)? {
             return Ok(Some(handle));
         }
 
         eprintln!("collector: neither Docker nor otelcol found");
-        eprintln!("  Docker:  docker compose -f {COMPOSE_REL} up -d");
+        eprintln!(
+            "  Docker:  docker compose -f {} up -d",
+            paths.compose_file().display()
+        );
         eprintln!("  Binary:  install otelcol-contrib (or otelcol) on PATH");
         eprintln!("           https://github.com/open-telemetry/opentelemetry-collector-releases");
         Ok(None)
@@ -59,8 +60,8 @@ impl CollectorHandle {
     }
 }
 
-fn try_docker(root: &Path) -> io::Result<Option<CollectorHandle>> {
-    let compose_file = root.join(COMPOSE_REL);
+fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
+    let compose_file = paths.compose_file();
     if !compose_file.is_file() {
         return Ok(None);
     }
@@ -69,7 +70,7 @@ fn try_docker(root: &Path) -> io::Result<Option<CollectorHandle>> {
         return Ok(None);
     }
 
-    eprintln!("collector: starting Docker stack ({COMPOSE_REL}) …");
+    eprintln!("collector: starting Docker stack ({}) …", compose_file.display());
     let status = compose_cmd(&compose_file, &["up", "-d", "--remove-orphans"])?;
     if !status.success() {
         eprintln!("collector: docker compose up failed — trying otelcol binary …");
@@ -88,11 +89,11 @@ fn try_docker(root: &Path) -> io::Result<Option<CollectorHandle>> {
     }))
 }
 
-fn try_binary(root: &Path, data_dir: &Path) -> io::Result<Option<CollectorHandle>> {
+fn try_binary(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
     let Some(bin) = find_otelcol() else {
         return Ok(None);
     };
-    let template = root.join(STANDALONE_TEMPLATE);
+    let template = paths.standalone_template();
     if !template.is_file() {
         eprintln!(
             "collector: missing {} — cannot start binary mode",
@@ -101,9 +102,10 @@ fn try_binary(root: &Path, data_dir: &Path) -> io::Result<Option<CollectorHandle
         return Ok(None);
     }
 
-    let logs_path = data_dir.join("logs.json");
-    let metrics_path = data_dir.join("metrics.json");
-    let runtime_cfg = data_dir.join("runtime-config.yaml");
+    let data_dir = paths.collector_data_dir();
+    let logs_path = paths.logs_file();
+    let metrics_path = paths.metrics_file();
+    let runtime_cfg = paths.runtime_config();
     let logs_yaml = format!("\"{}\"", logs_path.display().to_string().replace('\\', "/"));
     let metrics_yaml = format!(
         "\"{}\"",
@@ -126,7 +128,7 @@ fn try_binary(root: &Path, data_dir: &Path) -> io::Result<Option<CollectorHandle
         .stderr(Stdio::inherit())
         .spawn()?;
 
-    let pid_file = data_dir.join("otelcol.pid");
+    let pid_file = paths.otelcol_pid();
     fs::write(&pid_file, child.id().to_string())?;
 
     wait_port(4318, Duration::from_secs(20));
@@ -144,6 +146,7 @@ fn try_binary(root: &Path, data_dir: &Path) -> io::Result<Option<CollectorHandle
         "collector: OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317 (no Jaeger in binary mode)"
     );
     eprintln!("  export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318");
+    let _ = data_dir;
 
     Ok(Some(CollectorHandle {
         compose_file: None,
@@ -157,7 +160,6 @@ fn find_otelcol() -> Option<PathBuf> {
         if command_ok(name, &["--version"]) || command_ok(name, &["version"]) {
             return Some(PathBuf::from(name));
         }
-        // Some builds only print version to stdout with -v / no args — try which via `command -v` style.
         if which(name).is_some() {
             return Some(PathBuf::from(name));
         }
@@ -238,11 +240,12 @@ impl CollectorProbe {
 
 /// Best-effort stop from a Ctrl+C handler (Docker and/or pid file).
 pub fn emergency_stop(root: &Path) {
-    let compose = root.join(COMPOSE_REL);
+    let paths = RootPaths::new(root);
+    let compose = paths.compose_file();
     if compose.is_file() && command_ok("docker", &["version"]) {
         let _ = compose_cmd(&compose, &["down"]);
     }
-    let pid_file = root.join("dash/collector/data/otelcol.pid");
+    let pid_file = paths.otelcol_pid();
     if let Ok(pid_s) = fs::read_to_string(&pid_file) {
         if let Ok(pid) = pid_s.trim().parse::<i32>() {
             let _ = Command::new("kill").arg(pid.to_string()).status();

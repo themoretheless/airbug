@@ -2,11 +2,8 @@
 mod logs;
 mod metrics;
 
-pub use logs::{LogEntry, LogsResponse, SeverityCount, read_recent as read_logs};
-pub use metrics::{
-    MetricHistogram, MetricPoint, MetricSeries, MetricsResponse, SeriesPoint,
-    read_recent as read_metrics,
-};
+pub use logs::read_recent as read_logs;
+pub use metrics::read_recent as read_metrics;
 
 use serde_json::Value;
 use std::{

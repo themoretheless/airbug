@@ -70,6 +70,7 @@ impl RootPaths {
         self.root.join("target/airbug-report")
     }
 
+    /// HTML report index when present (used by Local APIs catalog).
     pub fn unit_report_index(&self) -> PathBuf {
         self.unit_report_dir().join("index.html")
     }

@@ -205,110 +205,104 @@ fn map_issue_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Issue> {
 }
 
 /// Ingest one error event JSON object.
-pub fn ingest(root: &Path, event: Value, webhook: Option<&str>) -> Result<IngestResponse, String> {
-    let _guard = LOCK.lock().map_err(|e| e.to_string())?;
-    let path = db_path(root);
-    let conn = open(&path).map_err(|e| e.to_string())?;
-    let fp = fingerprint_key(&event);
-    let ts = str_field(&event, "timestamp").unwrap_or_else(now_iso);
-    let title = event_title(&event);
-    let level = str_field(&event, "level").unwrap_or_else(|| "error".into());
-    let release = str_field(&event, "release");
-    let environment = str_field(&event, "environment");
-    let service = str_field(&event, "service");
-    let event_json = serde_json::to_string(&event).unwrap_or_else(|_| "{}".into());
+pub fn ingest(root: &Path, event: Value, webhook: Option<&str>) -> Result<IngestResponse> {
+    with_db(root, |conn| {
+        let fp = fingerprint_key(&event);
+        let ts = str_field(&event, "timestamp").unwrap_or_else(now_iso);
+        let title = event_title(&event);
+        let level = str_field(&event, "level").unwrap_or_else(|| "error".into());
+        let release = str_field(&event, "release");
+        let environment = str_field(&event, "environment");
+        let service = str_field(&event, "service");
+        let event_json = serde_json::to_string(&event).unwrap_or_else(|_| "{}".into());
 
-    let existing: Option<(String, i64, String)> = conn
-        .query_row(
-            "SELECT id, count, status FROM issues WHERE fingerprint = ?1",
-            params![fp],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+        let existing: Option<(String, i64, String)> = conn
+            .query_row(
+                "SELECT id, count, status FROM issues WHERE fingerprint = ?1",
+                params![fp],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
 
-    if let Some((id, count, status)) = existing {
-        let new_count = count + 1;
-        let new_status = if status == "resolved" {
-            "unresolved"
-        } else {
-            status.as_str()
-        };
+        if let Some((id, count, status)) = existing {
+            let new_count = count + 1;
+            let new_status = if status == "resolved" {
+                "unresolved"
+            } else {
+                status.as_str()
+            };
+            conn.execute(
+                "UPDATE issues SET count=?1, last_seen=?2, title=?3, level=?4,
+                 release=?5, environment=?6, service=?7, last_event=?8, status=?9
+                 WHERE id=?10",
+                params![
+                    new_count,
+                    ts,
+                    title,
+                    level,
+                    release,
+                    environment,
+                    service,
+                    event_json,
+                    new_status,
+                    id
+                ],
+            )?;
+            return Ok(IngestResponse {
+                ok: true,
+                issue_id: id,
+                is_new: false,
+                count: new_count as u64,
+            });
+        }
+
+        let next_id: i64 = conn
+            .query_row(
+                "UPDATE meta SET value = value + 1 WHERE key = 'next_id' RETURNING value",
+                [],
+                |row| row.get(0),
+            )
+            .or_else(|_| {
+                conn.execute(
+                    "UPDATE meta SET value = value + 1 WHERE key = 'next_id'",
+                    [],
+                )?;
+                conn.query_row("SELECT value FROM meta WHERE key = 'next_id'", [], |row| {
+                    row.get(0)
+                })
+            })?;
+
+        let id = format!("ISSUE-{next_id}");
         conn.execute(
-            "UPDATE issues SET count=?1, last_seen=?2, title=?3, level=?4,
-             release=?5, environment=?6, service=?7, last_event=?8, status=?9
-             WHERE id=?10",
+            "INSERT INTO issues(id, fingerprint, title, level, status, count, first_seen, last_seen,
+             release, environment, service, last_event)
+             VALUES(?1,?2,?3,?4,'unresolved',1,?5,?5,?6,?7,?8,?9)",
             params![
-                new_count,
-                ts,
+                id,
+                fp,
                 title,
                 level,
+                ts,
                 release,
                 environment,
                 service,
-                event_json,
-                new_status,
-                id
+                event_json
             ],
-        )
-        .map_err(|e| e.to_string())?;
-        return Ok(IngestResponse {
+        )?;
+
+        if let Some(url) = webhook {
+            let issue = get_unlocked(conn, &id).ok();
+            if let Some(issue) = issue {
+                fire_webhook(url, &id, &issue);
+            }
+        }
+
+        Ok(IngestResponse {
             ok: true,
             issue_id: id,
-            is_new: false,
-            count: new_count as u64,
-        });
-    }
-
-    let next_id: i64 = conn
-        .query_row(
-            "UPDATE meta SET value = value + 1 WHERE key = 'next_id' RETURNING value",
-            [],
-            |row| row.get(0),
-        )
-        .or_else(|_| {
-            // Older SQLite without RETURNING: fallback
-            conn.execute(
-                "UPDATE meta SET value = value + 1 WHERE key = 'next_id'",
-                [],
-            )?;
-            conn.query_row("SELECT value FROM meta WHERE key = 'next_id'", [], |row| {
-                row.get(0)
-            })
+            is_new: true,
+            count: 1,
         })
-        .map_err(|e| e.to_string())?;
-
-    let id = format!("ISSUE-{next_id}");
-    conn.execute(
-        "INSERT INTO issues(id, fingerprint, title, level, status, count, first_seen, last_seen,
-         release, environment, service, last_event)
-         VALUES(?1,?2,?3,?4,'unresolved',1,?5,?5,?6,?7,?8,?9)",
-        params![
-            id,
-            fp,
-            title,
-            level,
-            ts,
-            release,
-            environment,
-            service,
-            event_json
-        ],
-    )
-    .map_err(|e| e.to_string())?;
-
-    if let Some(url) = webhook {
-        let issue = get_unlocked(&conn, &id).ok();
-        if let Some(issue) = issue {
-            fire_webhook(url, &id, &issue);
-        }
-    }
-
-    Ok(IngestResponse {
-        ok: true,
-        issue_id: id,
-        is_new: true,
-        count: 1,
     })
 }
 
@@ -335,28 +329,30 @@ fn fire_webhook(url: &str, issue_id: &str, issue: &Issue) {
     });
 }
 
-fn post_json(url: &str, body: &Value) -> Result<(), String> {
+fn post_json(url: &str, body: &Value) -> Result<()> {
     let (host, port, path) = parse_http_url(url)?;
-    let payload = serde_json::to_vec(body).map_err(|e| e.to_string())?;
+    let payload = serde_json::to_vec(body)?;
     let mut stream = TcpStream::connect((host.as_str(), port))
-        .map_err(|e| format!("connect {host}:{port}: {e}"))?;
+        .map_err(|e| HubError::msg(format!("connect {host}:{port}: {e}")))?;
     let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(5)));
     let req = format!(
         "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         payload.len()
     );
-    stream
-        .write_all(req.as_bytes())
-        .map_err(|e| e.to_string())?;
-    stream.write_all(&payload).map_err(|e| e.to_string())?;
+    stream.write_all(req.as_bytes())?;
+    stream.write_all(&payload)?;
     Ok(())
 }
 
-fn parse_http_url(url: &str) -> Result<(String, u16, String), String> {
+fn parse_http_url(url: &str) -> Result<(String, u16, String)> {
+    if url.starts_with("https://") {
+        return Err(HubError::msg(
+            "webhook HTTPS is not supported (plain TCP only); use http:// for local hooks",
+        ));
+    }
     let rest = url
         .strip_prefix("http://")
-        .or_else(|| url.strip_prefix("https://"))
-        .ok_or_else(|| "webhook must be http(s)://…".to_string())?;
+        .ok_or_else(|| HubError::msg("webhook must be http://…"))?;
     let (authority, path) = match rest.split_once('/') {
         Some((a, p)) => (a, format!("/{p}")),
         None => (rest, "/".into()),
@@ -365,14 +361,13 @@ fn parse_http_url(url: &str) -> Result<(String, u16, String), String> {
         (
             h.to_string(),
             p.parse::<u16>()
-                .map_err(|_| format!("bad webhook port: {p}"))?,
+                .map_err(|_| HubError::msg(format!("bad webhook port: {p}")))?,
         )
     } else {
-        let default = if url.starts_with("https://") { 443 } else { 80 };
-        (authority.to_string(), default)
+        (authority.to_string(), 80)
     };
     if host.is_empty() {
-        return Err("webhook URL missing host".into());
+        return Err(HubError::msg("webhook URL missing host"));
     }
     Ok((host, port, path))
 }
@@ -380,99 +375,62 @@ fn parse_http_url(url: &str) -> Result<(String, u16, String), String> {
 pub fn list(root: &Path) -> IssuesList {
     let path = db_path(root);
     let path_s = path.display().to_string();
-    let _guard = match LOCK.lock() {
-        Ok(g) => g,
-        Err(e) => {
-            return IssuesList {
-                path: path_s,
-                available: false,
-                issues: vec![],
-                note: format!("lock poisoned: {e}"),
-            };
-        }
-    };
-    let conn = match open(&path) {
-        Ok(c) => c,
-        Err(e) => {
-            return IssuesList {
-                path: path_s,
-                available: false,
-                issues: vec![],
-                note: format!("open db: {e}"),
-            };
-        }
-    };
-    let mut stmt = match conn.prepare(
-        "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service
-         FROM issues ORDER BY last_seen DESC",
-    ) {
-        Ok(s) => s,
-        Err(e) => {
-            return IssuesList {
-                path: path_s,
-                available: false,
-                issues: vec![],
-                note: format!("query: {e}"),
-            };
-        }
-    };
-    let rows = stmt.query_map([], |row| {
-        Ok(IssueSummary {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            level: row.get(2)?,
-            status: IssueStatus::parse(&row.get::<_, String>(3)?),
-            count: row.get::<_, i64>(4)? as u64,
-            first_seen: row.get(5)?,
-            last_seen: row.get(6)?,
-            release: row.get(7)?,
-            environment: row.get(8)?,
-            service: row.get(9)?,
-        })
-    });
-    let issues: Vec<IssueSummary> = match rows {
-        Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
-        Err(e) => {
-            return IssuesList {
-                path: path_s,
-                available: true,
-                issues: vec![],
-                note: format!("rows: {e}"),
-            };
-        }
-    };
-    IssuesList {
-        path: path_s,
-        available: true,
-        note: if issues.is_empty() {
-            "No issues yet. Point airbug-err at POST /api/errors.".into()
-        } else {
-            format!("{} issue(s)", issues.len())
+    match with_db(root, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service
+             FROM issues ORDER BY last_seen DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(IssueSummary {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                level: row.get(2)?,
+                status: IssueStatus::parse(&row.get::<_, String>(3)?),
+                count: row.get::<_, i64>(4)? as u64,
+                first_seen: row.get(5)?,
+                last_seen: row.get(6)?,
+                release: row.get(7)?,
+                environment: row.get(8)?,
+                service: row.get(9)?,
+            })
+        })?;
+        let issues: Vec<IssueSummary> = rows.filter_map(|r| r.ok()).collect();
+        Ok(issues)
+    }) {
+        Ok(issues) => IssuesList {
+            path: path_s,
+            available: true,
+            note: if issues.is_empty() {
+                "No issues yet. Point airbug-err at POST /api/errors.".into()
+            } else {
+                format!("{} issue(s)", issues.len())
+            },
+            issues,
         },
-        issues,
+        Err(e) => IssuesList {
+            path: path_s,
+            available: false,
+            issues: vec![],
+            note: e.to_string(),
+        },
     }
 }
 
 pub fn get(root: &Path, id: &str) -> Option<Issue> {
-    let _guard = LOCK.lock().ok()?;
-    let conn = open(&db_path(root)).ok()?;
-    get_unlocked(&conn, id).ok()
+    with_db(root, |conn| Ok(get_unlocked(conn, id)?)).ok()
 }
 
-pub fn set_status(root: &Path, id: &str, status: IssueStatus) -> Result<Issue, String> {
-    let _guard = LOCK.lock().map_err(|e| e.to_string())?;
-    let path = db_path(root);
-    let conn = open(&path).map_err(|e| e.to_string())?;
-    let n = conn
-        .execute(
+pub fn set_status(root: &Path, id: &str, status: IssueStatus) -> Result<Issue> {
+    with_db(root, |conn| {
+        let n = conn.execute(
             "UPDATE issues SET status = ?1 WHERE id = ?2",
             params![status.as_str(), id],
-        )
-        .map_err(|e| e.to_string())?;
-    if n == 0 {
-        return Err(format!("issue not found: {id}"));
-    }
-    get_unlocked(&conn, id).map_err(|e| e.to_string())
+        )?;
+        if n == 0 {
+            return Err(HubError::msg(format!("issue not found: {id}")));
+        }
+        Ok(get_unlocked(conn, id)?)
+    })
 }
 
 pub fn status_from_action(action: &str) -> Option<IssueStatus> {
@@ -516,5 +474,11 @@ mod tests {
         assert_eq!(list.issues.len(), 1);
         assert_eq!(list.issues[0].count, 2);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn webhook_rejects_https() {
+        let err = parse_http_url("https://example.com/hook").unwrap_err();
+        assert!(err.to_string().contains("HTTPS"));
     }
 }
