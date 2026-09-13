@@ -1,6 +1,6 @@
 [package]
 name = "airbug"
-version = "0.6.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
@@ -20,7 +20,7 @@ default = []
 macros = ["dep:airbug-macros", "airbug-checkout-domain/macros"]
 
 [dependencies]
-airbug-macros = { version = "=0.6.0", path = "macros", optional = true }
+airbug-macros = { workspace = true, optional = true }
 
 [dev-dependencies]
 airbug-checkout-domain = { path = "checkout-domain" }
