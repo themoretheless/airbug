@@ -34,13 +34,21 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} clippy --locked --all-features --all-targets -- -D warnings
       - run: python unit/tools/verify_packages.py --toolchain ${{ matrix.toolchain }}
 
-  airbug-trace:
+  airbug-otel:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
-      - run: cargo +stable test --locked -p airbug-trace
-      - run: cargo +stable check --locked -p airbug-trace --no-default-features --features otlp-grpc
+      - run: cargo +stable test --locked -p airbug-otel
+      - run: cargo +stable check --locked -p airbug-otel --no-default-features --features otlp-grpc
+
+  airbug-err:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo +stable test --locked -p airbug-err
+      - run: cargo +stable test --locked -p airbug-hub
 
   airbug-mon:
     runs-on: macos-latest

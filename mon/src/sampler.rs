@@ -165,6 +165,7 @@ pub fn run_sampler(
     db_tx: Sender<Vec<Sample>>,
     gpu: Box<dyn GpuProvider + Send>,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    otlp: Option<std::sync::Arc<crate::otlp::OtlpExport>>,
 ) {
     let mut sampler = Sampler::new(gpu);
     let mut batch: Vec<Sample> = Vec::new();
@@ -177,6 +178,9 @@ pub fn run_sampler(
             break;
         }
         let sample = sampler.sample();
+        if let Some(otlp) = &otlp {
+            otlp.record(&sample);
+        }
         batch.push(sample.clone());
         if batch.len() >= 5 {
             let _ = db_tx.send(std::mem::take(&mut batch));

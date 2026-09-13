@@ -9,7 +9,8 @@ Rust toolkit split by job. One naming rule:
 | `unit/` | `airbug`, `airbug-macros`, `airbug-containers`, `checkout-domain` |
 | `bench/` | `airbug-bench`, `airbug-bench-macros`, `cargo-airbug-bench` |
 | `mon/` | `airbug-mon` |
-| `trace/` | `airbug-trace` |
+| `otel/` | `airbug-otel` |
+| `err/` | `airbug-err` |
 | `dash/` | `airbug-hub` |
 
 ```text
@@ -23,8 +24,9 @@ bench/                     # package: airbug-bench
   research/                # screening notes / corpus
   integrations/forma/      # excluded from workspace
 mon/                       # package: airbug-mon (host monitor)
-trace/                     # package: airbug-trace (OTLP traces+metrics)
-dash/hub/                  # package: airbug-hub
+otel/                      # package: airbug-otel (OTLP traces+metrics+logs)
+err/                       # package: airbug-err (panic/error → hub issues)
+dash/hub/                  # package: airbug-hub (+ collector / logs / issues)
 ```
 
 ## Quick start
@@ -35,12 +37,13 @@ cargo test -p airbug-containers
 cargo test -p airbug-bench
 cargo airbug-bench --help
 cargo run -p airbug-mon --release
-cargo test -p airbug-trace
+cargo test -p airbug-otel
+cargo test -p airbug-err
 cargo run -p airbug-hub -- serve --root .
-cargo run -p airbug-hub -- serve --root . --collector   # + OTEL collector / Jaeger
+cargo run -p airbug-hub -- serve --root . --collector   # Docker or otelcol on PATH
 ```
 
 ## License
 
-- `airbug*` unit/mon/trace/dash: MIT
+- `airbug*` unit/mon/otel/dash: MIT
 - `airbug-bench*`: MIT OR Apache-2.0

@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
 publish = false
-description = "Cross-domain dashboard for the airbug monorepo (unit / bench / mon / trace)"
+description = "Cross-domain dashboard for the airbug monorepo (unit / bench / mon / otel / err)"
 
 [[bin]]
 name = "airbug-hub"
@@ -14,4 +14,6 @@ path = "src/main.rs"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 ctrlc = "3"
+rusqlite = { version = "0.32", features = ["bundled"] }

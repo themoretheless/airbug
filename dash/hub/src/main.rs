@@ -1,4 +1,9 @@
 mod collector;
+mod config;
+mod error;
+mod http;
+mod issues;
+mod otlp;
 mod scan;
 mod serve;
 
@@ -8,20 +13,33 @@ fn main() {
     let mut args = env::args().skip(1).peekable();
     let command = args.next().unwrap_or_else(|| "serve".into());
     let mut root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let mut port = 8790u16;
+    let mut port = config::DEFAULT_PORT;
     let mut with_collector = false;
+    let mut webhook = env::var("AIRBUG_ISSUES_WEBHOOK").ok();
 
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--root" => {
-                let value = args.next().unwrap_or_else(|| usage_exit("--root needs a path"));
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--root needs a path"));
                 root = PathBuf::from(value);
             }
             "--port" => {
-                let value = args.next().unwrap_or_else(|| usage_exit("--port needs a number"));
-                port = value.parse().unwrap_or_else(|_| usage_exit("invalid --port"));
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--port needs a number"));
+                port = value
+                    .parse()
+                    .unwrap_or_else(|_| usage_exit("invalid --port"));
             }
             "--collector" => with_collector = true,
+            "--webhook" => {
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--webhook needs a URL"));
+                webhook = Some(value);
+            }
             "-h" | "--help" => usage_exit(""),
             other => usage_exit(&format!("unknown argument: {other}")),
         }
@@ -43,23 +61,19 @@ fn main() {
                 None
             };
 
-            if let Some(ref handle) = collector {
-                let compose = Arc::new(handle.compose_file.clone());
-                let compose_for_handler = Arc::clone(&compose);
+            if collector.is_some() {
+                let root_for_handler = Arc::new(root.clone());
                 if let Err(err) = ctrlc::set_handler(move || {
-                    eprintln!("\ncollector: stopping stack (Ctrl+C) …");
-                    let _ = std::process::Command::new("docker")
-                        .args(["compose", "-f"])
-                        .arg(compose_for_handler.as_ref())
-                        .arg("down")
-                        .status();
+                    eprintln!("\ncollector: stopping (Ctrl+C) …");
+                    collector::emergency_stop(root_for_handler.as_ref());
                     process::exit(0);
                 }) {
                     eprintln!("collector: could not install Ctrl+C handler: {err}");
                 }
             }
 
-            if let Err(err) = serve::serve(root, port) {
+            let opts = serve::ServeOpts { webhook };
+            if let Err(err) = serve::serve(root, port, opts) {
                 if let Some(handle) = collector {
                     handle.stop();
                 }
@@ -80,11 +94,12 @@ fn usage_exit(message: &str) -> ! {
     }
     eprintln!(
         "\
-airbug-hub — monorepo dashboard for unit / bench / mon / trace
+airbug-hub — monorepo dashboard for unit / bench / mon / otel / err
 
 Usage:
-  airbug-hub serve [--root PATH] [--port N] [--collector]
-      # dashboard :8790; --collector starts dash/collector via Docker
+  airbug-hub serve [--root PATH] [--port N] [--collector] [--webhook URL]
+      # dashboard :8790; --collector prefers Docker, else otelcol on PATH
+      # --webhook / AIRBUG_ISSUES_WEBHOOK fires on new issues (http:// only)
   airbug-hub status [--root PATH]
 "
     );

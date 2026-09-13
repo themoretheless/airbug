@@ -6,5 +6,9 @@
 bench/research/private/
 bench/research/focused/
 bench/research/sources/
+dash/collector/data/*
+!dash/collector/data/.gitignore
+dash/hub/data/*
+!dash/hub/data/.gitignore
 __pycache__/
 *.pyc

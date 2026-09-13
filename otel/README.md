@@ -1,16 +1,17 @@
-# trace
+# otel
 
-OpenTelemetry **traces and metrics** for the airbug monorepo.
+OpenTelemetry **traces, metrics, and logs** for the airbug monorepo.
 
-Package: `airbug-trace` — install/shutdown wrapper over official
+Package: `airbug-otel` — install/shutdown wrapper over official
 `opentelemetry` + OTLP exporters. Host UI metrics stay in `mon/`; microbenchmarks in `bench/`.
 
 ## Quick start
 
 ```bash
-cargo test -p airbug-trace
-cargo run -p airbug-trace --example span
-cargo run -p airbug-trace --example metrics
+cargo test -p airbug-otel
+cargo run -p airbug-otel --example span
+cargo run -p airbug-otel --example metrics
+cargo run -p airbug-otel --example logs
 ```
 
 Point at a collector (defaults: HTTP `http://localhost:4318`):
@@ -18,16 +19,15 @@ Point at a collector (defaults: HTTP `http://localhost:4318`):
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
 export OTEL_SERVICE_NAME=my-app
-cargo run -p airbug-trace --example metrics
+cargo run -p airbug-otel --example logs
 ```
 
 ```rust
-use airbug_trace::{add_counter, in_span, init, TelemetryConfig};
-use opentelemetry::KeyValue;
+use airbug_otel::{init, log_info, in_span, TelemetryConfig};
 
 let guard = init(TelemetryConfig::new().service_name("checkout"))?;
 in_span("checkout", "place_order", || {
-    add_counter("checkout", "orders.placed", 1, &[KeyValue::new("currency", "USD")]);
+    log_info("checkout", "order accepted");
 });
 guard.shutdown()?;
 ```
@@ -46,10 +46,11 @@ Enable only one for normal builds. With `--all-features`, gRPC wins.
 | Item | Role |
 |------|------|
 | `TelemetryConfig` / `TraceConfig` | service name + endpoint |
-| `init` | global tracer **and** meter (OTLP) |
+| `init` | global tracer, meter, **and** logger (OTLP) |
 | `TelemetryGuard` | flush on `shutdown` / `Drop` |
 | `in_span` / `set_attribute` | span helpers |
 | `meter` / `add_counter` / `record_histogram` | metric helpers |
+| `emit_log` / `log_info` / `log_warn` / `log_error` | log helpers |
 
 ## Env
 
@@ -60,4 +61,6 @@ Local collector (with hub):
 ```bash
 cargo run -p airbug-hub -- serve --root . --collector
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+cargo run -p airbug-otel --example logs
+# watch the OTLP logs panel on http://127.0.0.1:8790/
 ```

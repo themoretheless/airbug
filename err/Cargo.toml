@@ -1,0 +1,35 @@
+[package]
+name = "airbug-err"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+description = "Error / panic reporting for airbug (Sentry∪Bugsnag∪Rollbar subset for Rust)"
+repository = "https://github.com/themoretheless/airbug"
+keywords = ["error", "panic", "monitoring", "sentry"]
+categories = ["development-tools", "development-tools::debugging"]
+
+[features]
+default = ["panic"]
+## Install a panic hook that captures and forwards to the previous hook.
+panic = []
+## Capture `anyhow::Error` via `capture_anyhow`.
+anyhow = ["dep:anyhow"]
+
+[dependencies]
+anyhow = { version = "1", optional = true }
+backtrace = "0.3"
+reqwest = { version = "0.12", default-features = true, features = ["blocking", "json"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[[example]]
+name = "capture"
+path = "examples/capture.rs"
+
+[[example]]
+name = "panic"
+path = "examples/panic.rs"

@@ -1,19 +1,23 @@
-//! OpenTelemetry traces **and** metrics for airbug via OTLP.
+//! OpenTelemetry traces, metrics, and logs for airbug via OTLP.
 //!
 //! Call [`init`] once at startup and keep [`TelemetryGuard`] until shutdown so
 //! exporters can flush. `OTEL_*` environment variables are honored.
 use opentelemetry::{
     global,
+    logs::{LogRecord as _, Logger as _, LoggerProvider as _, Severity},
     metrics::Meter,
     trace::{TraceContextExt, Tracer as _},
 };
 
 pub use opentelemetry::KeyValue;
-use opentelemetry_otlp::{MetricExporter, SpanExporter, WithExportConfig};
+use opentelemetry_otlp::{LogExporter, MetricExporter, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
-    metrics::SdkMeterProvider, resource::Resource, trace::SdkTracerProvider,
+    logs::SdkLoggerProvider, metrics::SdkMeterProvider, resource::Resource,
+    trace::SdkTracerProvider,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::OnceLock};
+
+static LOGS: OnceLock<SdkLoggerProvider> = OnceLock::new();
 
 /// Errors while building or shutting down providers.
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +31,7 @@ pub enum TraceError {
     Runtime(#[from] std::io::Error),
 }
 
-/// Shared config for traces and metrics. Unset fields fall back to `OTEL_*`.
+/// Shared config for all signals. Unset fields fall back to `OTEL_*`.
 #[derive(Debug, Clone, Default)]
 pub struct TelemetryConfig {
     /// Logical service name (`service.name`). Default: `OTEL_SERVICE_NAME` or `"airbug"`.
@@ -55,10 +59,11 @@ impl TelemetryConfig {
     }
 }
 
-/// Owns tracer + meter providers (and a Tokio runtime when using gRPC).
+/// Owns tracer, meter, and logger providers (and a Tokio runtime when using gRPC).
 pub struct TelemetryGuard {
     tracer: SdkTracerProvider,
     meter: SdkMeterProvider,
+    logs: SdkLoggerProvider,
     #[cfg(feature = "otlp-grpc")]
     _runtime: Option<tokio::runtime::Runtime>,
 }
@@ -77,7 +82,7 @@ impl TelemetryGuard {
         global::meter(name)
     }
 
-    /// Flush pending telemetry and shut down both providers.
+    /// Flush pending telemetry and shut down all providers.
     pub fn shutdown(self) -> Result<(), TraceError> {
         self.tracer
             .shutdown()
@@ -85,6 +90,9 @@ impl TelemetryGuard {
         self.meter
             .shutdown()
             .map_err(|e| TraceError::Shutdown(format!("metrics: {e}")))?;
+        self.logs
+            .shutdown()
+            .map_err(|e| TraceError::Shutdown(format!("logs: {e}")))?;
         Ok(())
     }
 }
@@ -93,6 +101,7 @@ impl Drop for TelemetryGuard {
     fn drop(&mut self) {
         let _ = self.tracer.shutdown();
         let _ = self.meter.shutdown();
+        let _ = self.logs.shutdown();
     }
 }
 
@@ -105,14 +114,19 @@ fn service_resource(config: &TelemetryConfig) -> Resource {
     Resource::builder().with_service_name(service).build()
 }
 
-/// Install global OTLP tracer **and** meter providers.
+fn install_logs(provider: SdkLoggerProvider) -> SdkLoggerProvider {
+    let _ = LOGS.set(provider.clone());
+    provider
+}
+
+/// Install global OTLP tracer, meter, and logger providers.
 ///
 /// Default feature `otlp-http` uses HTTP/protobuf. For gRPC:
 /// `--no-default-features --features otlp-grpc`. If both features are enabled
 /// (e.g. `--all-features`), gRPC wins.
 pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
     #[cfg(not(any(feature = "otlp-http", feature = "otlp-grpc")))]
-    compile_error!("enable airbug-trace feature otlp-http or otlp-grpc");
+    compile_error!("enable airbug-otel feature otlp-http or otlp-grpc");
 
     let resource = service_resource(&config);
 
@@ -120,14 +134,16 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
     {
         let runtime = tokio::runtime::Runtime::new()?;
         let endpoint = config.endpoint.clone();
-        let (span_exporter, metric_exporter) = runtime.block_on(async {
+        let (span_exporter, metric_exporter, log_exporter) = runtime.block_on(async {
             let mut spans = SpanExporter::builder().with_tonic();
             let mut metrics = MetricExporter::builder().with_tonic();
+            let mut logs = LogExporter::builder().with_tonic();
             if let Some(ref endpoint) = endpoint {
                 spans = spans.with_endpoint(endpoint.clone());
                 metrics = metrics.with_endpoint(endpoint.clone());
+                logs = logs.with_endpoint(endpoint.clone());
             }
-            Ok::<_, TraceError>((spans.build()?, metrics.build()?))
+            Ok::<_, TraceError>((spans.build()?, metrics.build()?, logs.build()?))
         })?;
 
         let tracer = SdkTracerProvider::builder()
@@ -136,14 +152,21 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
             .build();
         let meter = SdkMeterProvider::builder()
             .with_periodic_exporter(metric_exporter)
-            .with_resource(resource)
+            .with_resource(resource.clone())
             .build();
+        let logs = install_logs(
+            SdkLoggerProvider::builder()
+                .with_batch_exporter(log_exporter)
+                .with_resource(resource)
+                .build(),
+        );
 
         global::set_tracer_provider(tracer.clone());
         global::set_meter_provider(meter.clone());
         return Ok(TelemetryGuard {
             tracer,
             meter,
+            logs,
             _runtime: Some(runtime),
         });
     }
@@ -152,9 +175,11 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
     {
         let mut spans = SpanExporter::builder().with_http();
         let mut metrics = MetricExporter::builder().with_http();
+        let mut logs = LogExporter::builder().with_http();
         if let Some(endpoint) = config.endpoint {
             spans = spans.with_endpoint(endpoint.clone());
-            metrics = metrics.with_endpoint(endpoint);
+            metrics = metrics.with_endpoint(endpoint.clone());
+            logs = logs.with_endpoint(endpoint);
         }
         let tracer = SdkTracerProvider::builder()
             .with_batch_exporter(spans.build()?)
@@ -162,12 +187,22 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
             .build();
         let meter = SdkMeterProvider::builder()
             .with_periodic_exporter(metrics.build()?)
-            .with_resource(resource)
+            .with_resource(resource.clone())
             .build();
+        let logs = install_logs(
+            SdkLoggerProvider::builder()
+                .with_batch_exporter(logs.build()?)
+                .with_resource(resource)
+                .build(),
+        );
 
         global::set_tracer_provider(tracer.clone());
         global::set_meter_provider(meter.clone());
-        return Ok(TelemetryGuard { tracer, meter });
+        return Ok(TelemetryGuard {
+            tracer,
+            meter,
+            logs,
+        });
     }
 
     #[cfg(not(any(feature = "otlp-http", feature = "otlp-grpc")))]
@@ -196,25 +231,43 @@ pub fn meter(scope: &'static str) -> Meter {
 }
 
 /// Increment a `u64` counter on the global meter.
-pub fn add_counter(
-    scope: &'static str,
-    name: &'static str,
-    value: u64,
-    attrs: &[KeyValue],
-) {
+pub fn add_counter(scope: &'static str, name: &'static str, value: u64, attrs: &[KeyValue]) {
     let counter = meter(scope).u64_counter(name).build();
     counter.add(value, attrs);
 }
 
 /// Record a `f64` histogram observation on the global meter.
-pub fn record_histogram(
-    scope: &'static str,
-    name: &'static str,
-    value: f64,
-    attrs: &[KeyValue],
-) {
+pub fn record_histogram(scope: &'static str, name: &'static str, value: f64, attrs: &[KeyValue]) {
     let histogram = meter(scope).f64_histogram(name).build();
     histogram.record(value, attrs);
+}
+
+/// Emit a log record after [`init`] (no-op if telemetry was never installed).
+pub fn emit_log(scope: &'static str, severity: Severity, body: impl AsRef<str>) {
+    let Some(provider) = LOGS.get() else {
+        return;
+    };
+    let logger = provider.logger(scope);
+    let mut record = logger.create_log_record();
+    record.set_severity_text(severity.name());
+    record.set_severity_number(severity);
+    record.set_body(body.as_ref().to_string().into());
+    logger.emit(record);
+}
+
+/// Convenience: INFO log.
+pub fn log_info(scope: &'static str, body: impl AsRef<str>) {
+    emit_log(scope, Severity::Info, body);
+}
+
+/// Convenience: WARN log.
+pub fn log_warn(scope: &'static str, body: impl AsRef<str>) {
+    emit_log(scope, Severity::Warn, body);
+}
+
+/// Convenience: ERROR log.
+pub fn log_error(scope: &'static str, body: impl AsRef<str>) {
+    emit_log(scope, Severity::Error, body);
 }
 
 #[cfg(test)]

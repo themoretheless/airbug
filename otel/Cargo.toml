@@ -1,13 +1,13 @@
 [package]
-name = "airbug-trace"
+name = "airbug-otel"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
 publish = false
-description = "OpenTelemetry traces and metrics for airbug (OTLP)"
+description = "OpenTelemetry traces, metrics, and logs for airbug (OTLP)"
 repository = "https://github.com/themoretheless/airbug"
-keywords = ["opentelemetry", "otlp", "tracing", "metrics", "observability"]
+keywords = ["opentelemetry", "otlp", "tracing", "metrics", "logs"]
 categories = ["development-tools", "development-tools::debugging"]
 
 [features]
@@ -18,9 +18,9 @@ otlp-http = ["opentelemetry-otlp/http-proto", "opentelemetry-otlp/reqwest-blocki
 otlp-grpc = ["dep:tokio", "opentelemetry-otlp/grpc-tonic"]
 
 [dependencies]
-opentelemetry = { version = "0.30", default-features = false, features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.30", default-features = false, features = ["trace", "metrics"] }
-opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "metrics"] }
+opentelemetry = { version = "0.30", default-features = false, features = ["trace", "metrics", "logs"] }
+opentelemetry_sdk = { version = "0.30", default-features = false, features = ["trace", "metrics", "logs"] }
+opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "metrics", "logs"] }
 thiserror = "2"
 tokio = { version = "1", optional = true, features = ["rt-multi-thread"] }
 

@@ -1,0 +1,3 @@
+# Runtime OTLP log sink for the hub (collector file exporter).
+*
+!.gitignore

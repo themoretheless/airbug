@@ -2,7 +2,8 @@
 
 Local host monitor: live metrics, history, alerts.
 
-Package: `airbug-mon` (egui + sysinfo + SQLite). OpenTelemetry **spans** live in `trace/` (`airbug-trace`).
+Package: `airbug-mon` (egui + sysinfo + SQLite). OpenTelemetry OTLP lives in `otel/` (`airbug-otel`);
+mon can export host metrics with `--otlp` or `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 Нативное десктопное приложение мониторинга системы для macOS.
 
@@ -12,10 +13,18 @@ Package: `airbug-mon` (egui + sysinfo + SQLite). OpenTelemetry **spans** live in
 cargo run -p airbug-mon --release
 ```
 
+OTLP export (collector on :4318):
+
+```
+cargo run -p airbug-mon --release -- --otlp
+# or: export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+```
+
 Headless-режим (без GUI, только сбор в SQLite):
 
 ```
 cargo run -p airbug-mon --release -- --headless --seconds 15
+cargo run -p airbug-mon --release -- --headless --seconds 15 --otlp
 ```
 
 ## Возможности

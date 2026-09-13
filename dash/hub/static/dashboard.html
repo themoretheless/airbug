@@ -7,251 +7,64 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --ink: #14201a;
-      --paper: #e8f0ea;
-      --mist: #c5d6cb;
-      --deep: #0b3d2e;
-      --leaf: #1f7a4c;
-      --glow: #c8f54a;
-      --warn: #c45c26;
-      --bad: #a11d2e;
-      --mute: #5a6b61;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
-    body {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      color: var(--ink);
-      background:
-        radial-gradient(1200px 600px at 10% -10%, #d7f56a33, transparent 60%),
-        radial-gradient(900px 500px at 100% 0%, #1f7a4c22, transparent 55%),
-        linear-gradient(160deg, #f3f7f2 0%, #d5e4da 45%, #b9cfc2 100%);
-      background-attachment: fixed;
-    }
-    .shell {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 4.5rem 1.5rem 5rem;
-    }
-    .brand {
-      font-family: "Instrument Serif", Georgia, serif;
-      font-size: clamp(3.2rem, 9vw, 5.6rem);
-      line-height: 0.92;
-      letter-spacing: -0.03em;
-      color: var(--deep);
-      margin: 0;
-      animation: rise 700ms ease-out both;
-    }
-    .brand em {
-      font-style: italic;
-      color: var(--leaf);
-    }
-    .lede {
-      margin: 1rem 0 0;
-      max-width: 34rem;
-      font-size: 0.95rem;
-      line-height: 1.55;
-      color: var(--mute);
-      animation: rise 800ms 80ms ease-out both;
-    }
-    .meta {
-      margin-top: 1.75rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem 1.25rem;
-      font-size: 0.75rem;
-      color: var(--mute);
-      animation: rise 850ms 120ms ease-out both;
-    }
-    .meta code {
-      color: var(--deep);
-      background: #ffffff66;
-      padding: 0.15rem 0.4rem;
-    }
-    .domains {
-      margin-top: 3.25rem;
-      display: grid;
-      gap: 1px;
-      background: #0b3d2e22;
-      border: 1px solid #0b3d2e33;
-      animation: rise 900ms 160ms ease-out both;
-    }
-    .domain {
-      display: grid;
-      grid-template-columns: 7.5rem 1fr;
-      gap: 1.25rem;
-      padding: 1.35rem 1.4rem;
-      background: color-mix(in srgb, #f7fbf8 88%, transparent);
-      backdrop-filter: blur(6px);
-      transition: background 180ms ease, transform 180ms ease;
-    }
-    .domain:hover {
-      background: #f7fbf8;
-      transform: translateX(4px);
-    }
-    .domain h2 {
-      font-family: "Instrument Serif", Georgia, serif;
-      font-size: 1.85rem;
-      font-weight: 400;
-      margin: 0;
-      color: var(--deep);
-    }
-    .blurb {
-      margin: 0.2rem 0 0;
-      font-size: 0.7rem;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--mute);
-    }
-    .body { min-width: 0; }
-    .status {
-      display: inline-block;
-      font-size: 0.68rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 0.2rem 0.45rem;
-      border: 1px solid currentColor;
-      margin-bottom: 0.55rem;
-    }
-    .status.ready { color: var(--leaf); }
-    .status.missing { color: var(--mute); }
-    .status.stale { color: var(--warn); }
-    .status.error { color: var(--bad); }
-    .status.reserved { color: #3d5c8a; }
-    .summary {
-      margin: 0;
-      font-size: 0.9rem;
-      line-height: 1.45;
-    }
-    .artifacts, .actions {
-      list-style: none;
-      margin: 0.85rem 0 0;
-      padding: 0;
-      display: grid;
-      gap: 0.35rem;
-    }
-    .artifacts li, .actions li {
-      font-size: 0.78rem;
-      color: var(--mute);
-      overflow-wrap: anywhere;
-    }
-    .artifacts strong { color: var(--ink); font-weight: 500; }
-    .actions button, .actions a {
-      font: inherit;
-      color: var(--deep);
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--glow);
-      padding: 0;
-      cursor: pointer;
-      text-align: left;
-    }
-    .actions button:hover, .actions a:hover { color: var(--leaf); }
-    .toast {
-      position: fixed;
-      left: 1rem;
-      bottom: 1rem;
-      max-width: min(32rem, calc(100vw - 2rem));
-      padding: 0.7rem 0.9rem;
-      background: var(--ink);
-      color: var(--paper);
-      font-size: 0.75rem;
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(8px);
-      transition: opacity 200ms ease, transform 200ms ease;
-    }
-    .toast.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(14px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @media (max-width: 720px) {
-      .domain { grid-template-columns: 1fr; gap: 0.6rem; }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/dashboard.css" />
 </head>
 <body>
   <main class="shell">
     <h1 class="brand">airbug <em>hub</em></h1>
-    <p class="lede">One view across unit tests, benches, host metrics, OpenTelemetry, and the local collector. Reads artifacts; does not own the products.</p>
+    <p class="lede">One view across unit tests, benches, host metrics, OpenTelemetry, errors/issues, and the local collector. Reads artifacts; does not own the products.</p>
     <div class="meta" id="meta">loading…</div>
+    <section class="apis" id="apis" hidden>
+      <div class="apis-head">
+        <h2>Local APIs</h2>
+        <div class="apis-meta" id="apis-meta"></div>
+      </div>
+      <ul class="api-list" id="api-list"></ul>
+    </section>
     <section class="domains" id="domains" aria-live="polite"></section>
+    <section class="issues" aria-live="polite">
+      <div class="issues-head">
+        <h2>Issues</h2>
+        <div class="issues-meta" id="issues-meta">loading…</div>
+      </div>
+      <div class="issues-layout">
+        <div class="issues-panel" id="issues-panel"><p class="issues-empty">waiting…</p></div>
+        <aside class="issue-detail" id="issue-detail" hidden>
+          <div class="issue-detail-head">
+            <h3 id="issue-detail-title">Issue</h3>
+            <div class="issue-actions" id="issue-actions"></div>
+          </div>
+          <pre class="issue-detail-body" id="issue-detail-body"></pre>
+        </aside>
+      </div>
+    </section>
+    <section class="metrics" aria-live="polite">
+      <div class="metrics-head">
+        <h2>Metrics</h2>
+        <div class="metrics-meta" id="metrics-meta">loading…</div>
+      </div>
+      <div class="viz-picker" id="viz-picker" role="tablist" aria-label="Visualization type"></div>
+      <div class="metrics-pick" id="metrics-pick" hidden></div>
+      <div class="metrics-boards" id="metrics-boards"></div>
+      <div class="metrics-panel" id="metrics-panel"><p class="metrics-empty">waiting…</p></div>
+    </section>
+    <section class="logs" aria-live="polite">
+      <div class="logs-head">
+        <h2>Logs</h2>
+        <div class="logs-meta" id="logs-meta">loading…</div>
+      </div>
+      <div class="logs-toolbar" id="logs-toolbar">
+        <input type="search" id="logs-filter" placeholder="filter body…" autocomplete="off" />
+        <select id="logs-service" aria-label="Service">
+          <option value="">all services</option>
+        </select>
+        <div class="sev-chips" id="sev-chips"></div>
+      </div>
+      <div class="sev-bar" id="sev-bar" hidden></div>
+      <div class="logs-panel" id="logs-panel"><p class="logs-empty">waiting…</p></div>
+    </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
-  <script>
-    const domainsEl = document.getElementById("domains");
-    const metaEl = document.getElementById("meta");
-    const toastEl = document.getElementById("toast");
-
-    function toast(text) {
-      toastEl.textContent = text;
-      toastEl.classList.add("show");
-      clearTimeout(toastEl._t);
-      toastEl._t = setTimeout(() => toastEl.classList.remove("show"), 2200);
-    }
-
-    async function copy(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        toast("copied: " + text);
-      } catch {
-        toast(text);
-      }
-    }
-
-    function card(d) {
-      const arts = (d.artifacts || []).map(a =>
-        `<li><strong>${escapeHtml(a.label)}</strong> · ${escapeHtml(a.detail)}<br/><span>${escapeHtml(a.path)}</span></li>`
-      ).join("");
-      const acts = (d.actions || []).map(a =>
-        `<li><button type="button" data-cmd="${escapeAttr(a.command)}">${escapeHtml(a.label)}</button></li>`
-      ).join("");
-      const extra = d.id === "unit" && (d.artifacts || []).some(a => a.label === "index.html")
-        ? `<li><a href="/report/index.html" target="_blank" rel="noopener">Open unit HTML report</a></li>`
-        : "";
-      return `<article class="domain" data-id="${d.id}">
-        <header>
-          <h2>${escapeHtml(d.title)}</h2>
-          <p class="blurb">${escapeHtml(d.blurb)}</p>
-        </header>
-        <div class="body">
-          <span class="status ${d.status}">${escapeHtml(d.status)}</span>
-          <p class="summary">${escapeHtml(d.summary)}</p>
-          ${arts ? `<ul class="artifacts">${arts}</ul>` : ""}
-          <ul class="actions">${acts}${extra}</ul>
-        </div>
-      </article>`;
-    }
-
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-    }
-    function escapeAttr(s) {
-      return escapeHtml(s).replace(/\n/g, " ");
-    }
-
-    async function refresh() {
-      const res = await fetch("/api/status", { cache: "no-store" });
-      const data = await res.json();
-      metaEl.innerHTML = `<span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
-      document.getElementById("reload").onclick = refresh;
-      const order = ["unit", "bench", "mon", "trace", "collector"];
-      domainsEl.innerHTML = order.map(k => card(data.domains[k])).join("");
-      domainsEl.querySelectorAll("button[data-cmd]").forEach(btn => {
-        btn.addEventListener("click", () => copy(btn.getAttribute("data-cmd")));
-      });
-    }
-
-    refresh().catch(err => {
-      metaEl.textContent = "failed to load /api/status: " + err;
-    });
-    setInterval(() => { refresh().catch(() => {}); }, 15000);
-  </script>
+  <script src="/static/dashboard.js"></script>
 </body>
 </html>

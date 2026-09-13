@@ -1,13 +1,13 @@
 //! Minimal span export demo. Needs a collector on :4318 (or set OTEL_EXPORTER_OTLP_ENDPOINT).
 //!
 //! ```sh
-//! cargo run -p airbug-trace --example span --release
+//! cargo run -p airbug-otel --example span --release
 //! ```
-use airbug_trace::{in_span, set_attribute, init, TelemetryConfig};
+use airbug_otel::{in_span, set_attribute, init, TelemetryConfig};
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let guard = init(TelemetryConfig::new().service_name("airbug-trace-example"))?;
+    let guard = init(TelemetryConfig::new().service_name("airbug-otel-example"))?;
 
     in_span("example", "root", || {
         set_attribute("demo", "true");
