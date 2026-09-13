@@ -7,6 +7,11 @@ on:
     tags:
       - 'airbug-v*'
       - 'airbug-bench-v*'
+      - 'airbug-err-v*'
+      - 'airbug-otel-v*'
+      - 'airbug-mon-v*'
+      - 'airbug-hub-v*'
+      - 'airbug-containers-v*'
 
 permissions:
   contents: write
