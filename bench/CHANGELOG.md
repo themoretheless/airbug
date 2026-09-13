@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- Align with monorepo version `0.6.0` and single tag `v0.6.0`
+- Install via `tag = "v0.6.0"` or `branch = "release"`
+
 ## 0.1.2
 
 - Shared GitHub Actions release workflows (`themoretheless/.github`)

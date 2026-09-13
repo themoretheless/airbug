@@ -1,12 +1,11 @@
-# Keep the long-lived `release` branch on the latest airbug / airbug-bench tag tip
-# (git deps: branch = "release"), matching the rbench install pattern.
+# Keep the long-lived `release` branch on the latest monorepo tag tip
+# (git deps: branch = "release").
 name: Advance release branch
 
 on:
   push:
     tags:
-      - 'airbug-v*'
-      - 'airbug-bench-v*'
+      - 'v*'
 
 permissions:
   contents: write

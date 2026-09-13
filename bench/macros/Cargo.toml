@@ -1,6 +1,6 @@
 [package]
 name = "airbug-bench-macros"
-version = "0.1.2"
+version = "0.6.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 rust-version.workspace = true

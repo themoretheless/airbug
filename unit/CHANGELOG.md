@@ -17,6 +17,11 @@
   a `airbug-checkout-domain` dev-dependency crate instead of a file the tests reached
   into with `#[path]`.
 
+# 0.6.0
+
+- Monorepo-wide version lock: all workspace crates ship as `0.6.0`
+- Single release tag scheme: `v0.6.0` (git deps: `tag = "v0.6.0"` or `branch = "release"`)
+
 # 0.5.1
 
 - Shared GitHub Actions release workflows (`themoretheless/.github`)
