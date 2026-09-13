@@ -1,5 +1,9 @@
 //! Issue store + ingest for airbug-err events (SQLite).
-use crate::{config::RootPaths, error::{HubError, Result}};
+use crate::{
+    config::RootPaths,
+    error::{HubError, Result},
+};
+use airbug_err::Event;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -139,42 +143,11 @@ fn open(path: &Path) -> rusqlite::Result<Connection> {
     Ok(conn)
 }
 
-fn fingerprint_key(event: &Value) -> String {
-    if let Some(arr) = event.get("fingerprint").and_then(|v| v.as_array()) {
-        let parts: Vec<String> = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(str::to_string))
-            .collect();
-        if !parts.is_empty() {
-            return parts.join("\u{1f}");
-        }
+fn fingerprint_key(event: &Event) -> String {
+    if !event.fingerprint.is_empty() {
+        return event.fingerprint.join("\u{1f}");
     }
-    event
-        .get("event_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown")
-        .to_string()
-}
-
-fn event_title(event: &Value) -> String {
-    if let Some(ex) = event.get("exception") {
-        let ty = ex.get("type").and_then(|v| v.as_str()).unwrap_or("Error");
-        let value = ex.get("value").and_then(|v| v.as_str()).unwrap_or("");
-        if value.is_empty() {
-            ty.to_string()
-        } else {
-            let short: String = value.chars().take(120).collect();
-            format!("{ty}: {short}")
-        }
-    } else if let Some(msg) = event.get("message").and_then(|v| v.as_str()) {
-        msg.chars().take(140).collect()
-    } else {
-        "untitled event".into()
-    }
-}
-
-fn str_field(event: &Value, key: &str) -> Option<String> {
-    event.get(key).and_then(|v| v.as_str()).map(str::to_string)
+    event.event_id.clone()
 }
 
 fn now_iso() -> String {
@@ -204,16 +177,20 @@ fn map_issue_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Issue> {
     })
 }
 
-/// Ingest one error event JSON object.
-pub fn ingest(root: &Path, event: Value, webhook: Option<&str>) -> Result<IngestResponse> {
+/// Ingest one typed airbug-err [`Event`].
+pub fn ingest(root: &Path, event: Event, webhook: Option<&str>) -> Result<IngestResponse> {
     with_db(root, |conn| {
         let fp = fingerprint_key(&event);
-        let ts = str_field(&event, "timestamp").unwrap_or_else(now_iso);
-        let title = event_title(&event);
-        let level = str_field(&event, "level").unwrap_or_else(|| "error".into());
-        let release = str_field(&event, "release");
-        let environment = str_field(&event, "environment");
-        let service = str_field(&event, "service");
+        let ts = if event.timestamp.is_empty() {
+            now_iso()
+        } else {
+            event.timestamp.clone()
+        };
+        let title = event.title();
+        let level = event.level.as_str().to_string();
+        let release = event.release.clone();
+        let environment = event.environment.clone();
+        let service = event.service.clone();
         let event_json = serde_json::to_string(&event).unwrap_or_else(|_| "{}".into());
 
         let existing: Option<(String, i64, String)> = conn
@@ -453,19 +430,31 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
 
-        let event = serde_json::json!({
-            "event_id": "a",
-            "timestamp": "t1",
-            "level": "error",
-            "message": "boom",
-            "fingerprint": ["fp:1"],
-            "exception": { "type": "panic", "value": "boom" }
-        });
+        let event = Event {
+            event_id: "a".into(),
+            timestamp: "t1".into(),
+            level: airbug_err::Severity::Error,
+            message: Some("boom".into()),
+            release: None,
+            environment: None,
+            service: None,
+            fingerprint: vec!["fp:1".into()],
+            exception: Some(airbug_err::Exception {
+                ty: "panic".into(),
+                value: "boom".into(),
+                stacktrace: None,
+            }),
+            breadcrumbs: vec![],
+            tags: Default::default(),
+            user: None,
+            extra: Default::default(),
+            contexts: Default::default(),
+        };
         let r1 = ingest(&dir, event.clone(), None).unwrap();
         assert!(r1.is_new);
         let mut event2 = event;
-        event2["event_id"] = Value::String("b".into());
-        event2["timestamp"] = Value::String("t2".into());
+        event2.event_id = "b".into();
+        event2.timestamp = "t2".into();
         let r2 = ingest(&dir, event2, None).unwrap();
         assert!(!r2.is_new);
         assert_eq!(r2.count, 2);

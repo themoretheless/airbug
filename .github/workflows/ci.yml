@@ -20,10 +20,10 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
       - run: cargo +${{ matrix.toolchain }} fmt --all --check
-      - run: cargo +${{ matrix.toolchain }} test --locked --all-features
+      - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon
       - run: cargo +${{ matrix.toolchain }} test --locked -p airbug --no-default-features
-      - run: cargo +${{ matrix.toolchain }} test --locked --all-features --release
-      - run: cargo +${{ matrix.toolchain }} doc --locked --all-features --no-deps
+      - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon --release
+      - run: cargo +${{ matrix.toolchain }} doc --locked --workspace --all-features --no-deps --exclude airbug-mon
         env:
           RUSTDOCFLAGS: -D warnings
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example native_service
@@ -31,7 +31,7 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- success
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- decline
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- store-failure
-      - run: cargo +${{ matrix.toolchain }} clippy --locked --all-features --all-targets -- -D warnings
+      - run: cargo +${{ matrix.toolchain }} clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings
       - run: python unit/tools/verify_packages.py --toolchain ${{ matrix.toolchain }}
 
   airbug-otel:
@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
-      - run: cargo +stable check --locked -p airbug-mon
+      - run: cargo +stable test --locked -p airbug-mon
 
   report:
     runs-on: ubuntu-latest

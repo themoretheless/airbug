@@ -14,7 +14,7 @@
   module cycle. `airbug::mock::MockError` still resolves.
 - `prelude` lists its `checks` imports explicitly instead of glob-importing.
 - Tests renamed by subject rather than by origin; the shared checkout domain is
-  a `checkout-domain` dev-dependency crate instead of a file the tests reached
+  a `airbug-checkout-domain` dev-dependency crate instead of a file the tests reached
   into with `#[path]`.
 
 # 0.5.0

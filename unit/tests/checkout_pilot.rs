@@ -1,6 +1,6 @@
 #![cfg(feature = "macros")]
 use airbug::{CallSequence, with_mocks};
-use checkout_domain::*;
+use airbug_checkout_domain::*;
 
 struct Harness {
     payments: MockPayments,

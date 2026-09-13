@@ -1,5 +1,5 @@
 use airbug::{CallSequence, with_mocks};
-use checkout_domain::*;
+use airbug_checkout_domain::*;
 fn main() {
     let scenario = std::env::args().nth(1).unwrap_or_else(|| "success".into());
     assert!(

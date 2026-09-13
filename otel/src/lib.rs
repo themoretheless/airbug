@@ -21,7 +21,7 @@ static LOGS: OnceLock<SdkLoggerProvider> = OnceLock::new();
 
 /// Errors while building or shutting down providers.
 #[derive(Debug, thiserror::Error)]
-pub enum TraceError {
+pub enum TelemetryError {
     #[error(transparent)]
     Exporter(#[from] opentelemetry_otlp::ExporterBuildError),
     #[error("provider shutdown failed: {0}")]
@@ -30,6 +30,10 @@ pub enum TraceError {
     #[error(transparent)]
     Runtime(#[from] std::io::Error),
 }
+
+/// Deprecated alias for [`TelemetryError`].
+#[deprecated(note = "renamed to TelemetryError")]
+pub type TraceError = TelemetryError;
 
 /// Shared config for all signals. Unset fields fall back to `OTEL_*`.
 #[derive(Debug, Clone, Default)]
@@ -41,6 +45,7 @@ pub struct TelemetryConfig {
 }
 
 /// Alias kept for call sites written against the traces-only API.
+#[deprecated(note = "renamed to TelemetryConfig")]
 pub type TraceConfig = TelemetryConfig;
 
 impl TelemetryConfig {
@@ -69,6 +74,7 @@ pub struct TelemetryGuard {
 }
 
 /// Alias for [`TelemetryGuard`].
+#[deprecated(note = "renamed to TelemetryGuard")]
 pub type TracerGuard = TelemetryGuard;
 
 impl TelemetryGuard {
@@ -83,16 +89,16 @@ impl TelemetryGuard {
     }
 
     /// Flush pending telemetry and shut down all providers.
-    pub fn shutdown(self) -> Result<(), TraceError> {
+    pub fn shutdown(self) -> Result<(), TelemetryError> {
         self.tracer
             .shutdown()
-            .map_err(|e| TraceError::Shutdown(format!("traces: {e}")))?;
+            .map_err(|e| TelemetryError::Shutdown(format!("traces: {e}")))?;
         self.meter
             .shutdown()
-            .map_err(|e| TraceError::Shutdown(format!("metrics: {e}")))?;
+            .map_err(|e| TelemetryError::Shutdown(format!("metrics: {e}")))?;
         self.logs
             .shutdown()
-            .map_err(|e| TraceError::Shutdown(format!("logs: {e}")))?;
+            .map_err(|e| TelemetryError::Shutdown(format!("logs: {e}")))?;
         Ok(())
     }
 }
@@ -124,7 +130,7 @@ fn install_logs(provider: SdkLoggerProvider) -> SdkLoggerProvider {
 /// Default feature `otlp-http` uses HTTP/protobuf. For gRPC:
 /// `--no-default-features --features otlp-grpc`. If both features are enabled
 /// (e.g. `--all-features`), gRPC wins.
-pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
+pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
     #[cfg(not(any(feature = "otlp-http", feature = "otlp-grpc")))]
     compile_error!("enable airbug-otel feature otlp-http or otlp-grpc");
 
@@ -143,7 +149,7 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TraceError> {
                 metrics = metrics.with_endpoint(endpoint.clone());
                 logs = logs.with_endpoint(endpoint.clone());
             }
-            Ok::<_, TraceError>((spans.build()?, metrics.build()?, logs.build()?))
+            Ok::<_, TelemetryError>((spans.build()?, metrics.build()?, logs.build()?))
         })?;
 
         let tracer = SdkTracerProvider::builder()
@@ -228,6 +234,58 @@ pub fn set_attribute(key: impl Into<Cow<'static, str>>, value: impl Into<Cow<'st
 /// Global meter for `scope` (after [`init`]).
 pub fn meter(scope: &'static str) -> Meter {
     global::meter(scope)
+}
+
+/// Opaque `f64` gauge that hides the OpenTelemetry type from callers.
+pub struct F64Gauge {
+    inner: opentelemetry::metrics::Gauge<f64>,
+}
+
+impl F64Gauge {
+    pub fn new(scope: &'static str, name: &'static str) -> Self {
+        Self {
+            inner: meter(scope).f64_gauge(name).build(),
+        }
+    }
+
+    pub fn with_description(scope: &'static str, name: &'static str, description: &'static str) -> Self {
+        Self {
+            inner: meter(scope)
+                .f64_gauge(name)
+                .with_description(description)
+                .build(),
+        }
+    }
+
+    pub fn record(&self, value: f64, attrs: &[KeyValue]) {
+        self.inner.record(value, attrs);
+    }
+}
+
+/// Opaque `u64` gauge that hides the OpenTelemetry type from callers.
+pub struct U64Gauge {
+    inner: opentelemetry::metrics::Gauge<u64>,
+}
+
+impl U64Gauge {
+    pub fn new(scope: &'static str, name: &'static str) -> Self {
+        Self {
+            inner: meter(scope).u64_gauge(name).build(),
+        }
+    }
+
+    pub fn with_description(scope: &'static str, name: &'static str, description: &'static str) -> Self {
+        Self {
+            inner: meter(scope)
+                .u64_gauge(name)
+                .with_description(description)
+                .build(),
+        }
+    }
+
+    pub fn record(&self, value: u64, attrs: &[KeyValue]) {
+        self.inner.record(value, attrs);
+    }
 }
 
 /// Increment a `u64` counter on the global meter.

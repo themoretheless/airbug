@@ -111,7 +111,7 @@ fn handle_errors_ingest(
     req: &Request,
     opts: &ServeOpts,
 ) -> std::io::Result<()> {
-    let event: serde_json::Value = match serde_json::from_slice(&req.body) {
+    let event: airbug_err::Event = match serde_json::from_slice(&req.body) {
         Ok(v) => v,
         Err(e) => {
             return http::respond_err(stream, "400 Bad Request", &HubError::from(e));

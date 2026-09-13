@@ -16,4 +16,5 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 ctrlc = "3"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { workspace = true }
+airbug-err = { path = "../../err", default-features = false }

@@ -29,33 +29,17 @@ cargo airbug-bench report .airbug-bench/sort -o .airbug-bench/sort.html
 
 ## API библиотеки
 
-Подключение в другой проект — напрямую из Git (crates.io не нужен). Cargo фиксирует выбранный коммит в `Cargo.lock`; обновление — по `cargo update`:
+Подключение из этого monorepo:
 
 ```toml
-# всегда последний РЕЛИЗ: ветка release двигается на каждый выпуск
-bench = { git = "https://github.com/themoretheless/bench", branch = "release" }
-# закреплённая версия (теги v* создаются автоматически при бампе версии)
-bench = { git = "https://github.com/themoretheless/bench", tag = "v0.1.0" }
-# последний коммит ветки по умолчанию (main), включая незарелиженные изменения
-bench = { git = "https://github.com/themoretheless/bench" }
-# опциональные возможности:
-# bench = { git = "…", branch = "release", features = ["macros", "memory"] }
+airbug-bench = { path = "../bench" }
+# или из GitHub monorepo:
+# airbug-bench = { git = "https://github.com/themoretheless/airbug", package = "airbug-bench" }
 ```
 
-Cargo не выбирает «самый свежий семвер-тег» из git: диапазоны вроде `bench = "0.1"` работают только через реестр. «Всегда последний релиз» — это движущаяся ветка `release`, точные версии — теги `v*`, а «tip main» — ветка `main`. Ветка `release` появляется после первого релиза; до него используйте `main`.
+Локальный checkout: `airbug-bench = { path = "/path/to/airbug/bench" }`. Для Cargo benchmark target задайте `harness = false`.
 
-Локальный checkout: `bench = { path = "/path/to/airbug/bench" }`. Для Cargo benchmark target задайте `harness = false`.
-
-### Как выпускать релиз
-
-Релиз управляется версией. Разработка идёт в feature-ветках → PR → merge в `main`; каждый PR/пуш проверяет [`ci.yml`](.github/workflows/ci.yml) (build/test/Clippy `-D warnings` + MSRV 1.85), поэтому `main` остаётся релизным. Чтобы выпустить релиз, достаточно поднять версию:
-
-```sh
-# поднимите version в [workspace.package] у Cargo.toml (например 0.1.0 -> 0.1.1),
-# закоммитьте и слейте в main
-```
-
-Пуш в `main` запускает [`release.yml`](.github/workflows/release.yml) — тонкую обёртку над общим reusable-workflow `themoretheless/.github/.github/workflows/release-rust-library.yml`. Он сравнивает версию `airbug-bench` в `Cargo.toml` до/после пуша и, если она изменилась: гоняет Clippy и тесты, затем создаёт тег `v<version>` и GitHub Release с авто-заметками. Секреты не нужны — используется встроенный `GITHUB_TOKEN` (rustfmt отключён: `run_fmt: false`). Если версия не менялась, релиз не создаётся. После успешного релиза ветка `release` переводится на этот коммит, поэтому потребители с `branch = "release"` всегда получают последний выпуск.
+CI monorepo: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (MSRV **1.96**, workspace `cargo test` / clippy). Отдельного `release.yml` в этом репозитории нет — версии поднимаются вручную в crate `Cargo.toml`.
 
 ```rust
 use airbug_bench::{DropPolicy, Suite};

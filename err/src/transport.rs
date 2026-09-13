@@ -1,26 +1,15 @@
 //! Blocking HTTP transport to airbug-hub `/api/errors`.
 use crate::event::Event;
-use std::{fmt, time::Duration};
+use std::time::Duration;
 
 /// Failure while delivering an event.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum TransportError {
+    #[error("HTTP request failed: {0}")]
     Http(String),
+    #[error("hub rejected event: HTTP {status} ({body})")]
     Rejected { status: u16, body: String },
 }
-
-impl fmt::Display for TransportError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Http(msg) => write!(f, "HTTP request failed: {msg}"),
-            Self::Rejected { status, body } => {
-                write!(f, "hub rejected event: HTTP {status} ({body})")
-            }
-        }
-    }
-}
-
-impl std::error::Error for TransportError {}
 
 /// Sends events synchronously (suitable for `Drop` flush).
 #[derive(Debug, Clone)]

@@ -1,65 +1,74 @@
-//! Optional OTLP metrics export for host samples (via `airbug-otel`).
-use airbug_otel::{init, meter, KeyValue, TelemetryConfig, TelemetryGuard};
-use opentelemetry::metrics::Gauge;
+//! Optional OTLP metrics export for host samples (via `airbug-otel` only).
+use airbug_otel::{
+    init, F64Gauge, KeyValue, TelemetryConfig, TelemetryError, TelemetryGuard, U64Gauge,
+};
 
 use crate::sampler::Sample;
 
+const SCOPE: &str = "airbug.mon";
+
 pub struct OtlpExport {
     guard: TelemetryGuard,
-    cpu: Gauge<f64>,
-    mem_used: Gauge<u64>,
-    mem_total: Gauge<u64>,
-    swap_used: Gauge<u64>,
-    net_rx: Gauge<f64>,
-    net_tx: Gauge<f64>,
-    disk_read: Gauge<f64>,
-    disk_write: Gauge<f64>,
-    gpu_util: Gauge<f64>,
-    gpu_mem_used: Gauge<u64>,
+    cpu: F64Gauge,
+    mem_used: U64Gauge,
+    mem_total: U64Gauge,
+    swap_used: U64Gauge,
+    net_rx: F64Gauge,
+    net_tx: F64Gauge,
+    disk_read: F64Gauge,
+    disk_write: F64Gauge,
+    gpu_util: F64Gauge,
+    gpu_mem_used: U64Gauge,
     host: String,
 }
 
 impl OtlpExport {
-    pub fn start(endpoint: Option<String>) -> Result<Self, airbug_otel::TraceError> {
+    pub fn start(endpoint: Option<String>) -> Result<Self, TelemetryError> {
         let mut cfg = TelemetryConfig::new().service_name("airbug-mon");
         if let Some(endpoint) = endpoint {
             cfg = cfg.endpoint(endpoint);
         }
         let guard = init(cfg)?;
-        let m = meter("airbug.mon");
         Ok(Self {
             guard,
-            cpu: m
-                .f64_gauge("system.cpu.utilization")
-                .with_description("Host CPU utilization 0..1")
-                .build(),
-            mem_used: m
-                .u64_gauge("system.memory.usage")
-                .with_description("Used memory bytes")
-                .build(),
-            mem_total: m
-                .u64_gauge("system.memory.limit")
-                .with_description("Total memory bytes")
-                .build(),
-            swap_used: m
-                .u64_gauge("system.paging.usage")
-                .with_description("Used swap bytes")
-                .build(),
-            net_rx: m
-                .f64_gauge("system.network.io")
-                .with_description("Network bytes per sample interval")
-                .build(),
-            net_tx: m.f64_gauge("system.network.io").build(),
-            disk_read: m
-                .f64_gauge("system.disk.io")
-                .with_description("Disk bytes per sample interval")
-                .build(),
-            disk_write: m.f64_gauge("system.disk.io").build(),
-            gpu_util: m
-                .f64_gauge("system.gpu.utilization")
-                .with_description("GPU utilization 0..1")
-                .build(),
-            gpu_mem_used: m.u64_gauge("system.gpu.memory.usage").build(),
+            cpu: F64Gauge::with_description(
+                SCOPE,
+                "system.cpu.utilization",
+                "Host CPU utilization 0..1",
+            ),
+            mem_used: U64Gauge::with_description(
+                SCOPE,
+                "system.memory.usage",
+                "Used memory bytes",
+            ),
+            mem_total: U64Gauge::with_description(
+                SCOPE,
+                "system.memory.limit",
+                "Total memory bytes",
+            ),
+            swap_used: U64Gauge::with_description(
+                SCOPE,
+                "system.paging.usage",
+                "Used swap bytes",
+            ),
+            net_rx: F64Gauge::with_description(
+                SCOPE,
+                "system.network.io",
+                "Network bytes per sample interval",
+            ),
+            net_tx: F64Gauge::new(SCOPE, "system.network.io"),
+            disk_read: F64Gauge::with_description(
+                SCOPE,
+                "system.disk.io",
+                "Disk bytes per sample interval",
+            ),
+            disk_write: F64Gauge::new(SCOPE, "system.disk.io"),
+            gpu_util: F64Gauge::with_description(
+                SCOPE,
+                "system.gpu.utilization",
+                "GPU utilization 0..1",
+            ),
+            gpu_mem_used: U64Gauge::new(SCOPE, "system.gpu.memory.usage"),
             host: hostname(),
         })
     }

@@ -18,11 +18,11 @@ otlp-http = ["opentelemetry-otlp/http-proto", "opentelemetry-otlp/reqwest-blocki
 otlp-grpc = ["dep:tokio", "opentelemetry-otlp/grpc-tonic"]
 
 [dependencies]
-opentelemetry = { version = "0.30", default-features = false, features = ["trace", "metrics", "logs"] }
-opentelemetry_sdk = { version = "0.30", default-features = false, features = ["trace", "metrics", "logs"] }
-opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "metrics", "logs"] }
-thiserror = "2"
-tokio = { version = "1", optional = true, features = ["rt-multi-thread"] }
+opentelemetry = { workspace = true, default-features = false, features = ["trace", "metrics", "logs"] }
+opentelemetry_sdk = { workspace = true, default-features = false, features = ["trace", "metrics", "logs"] }
+opentelemetry-otlp = { workspace = true, default-features = false, features = ["trace", "metrics", "logs"] }
+thiserror.workspace = true
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true }

@@ -2,7 +2,7 @@
 # and the pilot tests, so it is a real crate rather than a file both reach into
 # with #[path]. Never published.
 [package]
-name = "checkout-domain"
+name = "airbug-checkout-domain"
 version = "0.5.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,7 @@ publish = false
 [features]
 # Mirrors airbug's own feature, so enabling macros on airbug does not get forced
 # on by this crate through feature unification.
-macros = ["airbug/macros"]
+macros = ["dep:airbug", "airbug/macros"]
 
 [dependencies]
-airbug = { path = "..", default-features = false }
+airbug = { path = "..", default-features = false, optional = true }

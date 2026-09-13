@@ -45,7 +45,8 @@ Enable only one for normal builds. With `--all-features`, gRPC wins.
 
 | Item | Role |
 |------|------|
-| `TelemetryConfig` / `TraceConfig` | service name + endpoint |
+| `TelemetryConfig` / `TelemetryError` / `TelemetryGuard` | service name + endpoint; errors; keep-alive guard |
+| `TraceConfig` / `TraceError` / `TracerGuard` | deprecated aliases |
 | `init` | global tracer, meter, **and** logger (OTLP) |
 | `TelemetryGuard` | flush on `shutdown` / `Drop` |
 | `in_span` / `set_attribute` | span helpers |

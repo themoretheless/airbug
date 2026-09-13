@@ -1,5 +1,5 @@
 //! Baseline: same happy path with standard Rust assertions and handwritten doubles.
-use checkout_domain::*;
+use airbug_checkout_domain::*;
 use std::sync::{Arc, Mutex};
 #[derive(Debug, PartialEq)]
 enum Call {
