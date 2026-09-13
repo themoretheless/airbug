@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Publishable package family to tag/release
+        required: true
+        type: choice
+        options:
+          - airbug
+          - airbug-bench
+      version:
+        description: Exact Cargo package version (must match Cargo.toml)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.package }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tag: ${{ steps.package.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: themoretheless/.github/.github/actions/setup-rust@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          rust-toolchain: "1.96.0"
+
+      - name: Resolve package version
+        id: package
+        uses: themoretheless/.github/.github/actions/cargo-package-version@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          package-name: ${{ inputs.package }}
+          tag-prefix: ${{ inputs.package }}-v
+
+      - name: Validate release version
+        uses: themoretheless/.github/.github/actions/validate-package-release@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          version: ${{ steps.package.outputs.version }}
+          tag: ${{ steps.package.outputs.tag }}
+          prerelease: ${{ steps.package.outputs.prerelease }}
+          requested-version: ${{ inputs.version }}
+
+      - name: Validate existing tag state
+        id: tag
+        uses: themoretheless/.github/.github/actions/validate-release-tag@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          tag: ${{ steps.package.outputs.tag }}
+
+      - name: Create tag and GitHub Release
+        uses: themoretheless/.github/.github/actions/create-github-release@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          tag: ${{ steps.package.outputs.tag }}
+          prerelease: ${{ steps.package.outputs.prerelease }}
+          tag-exists: ${{ steps.tag.outputs.exists }}
+          github-token: ${{ github.token }}
+
+  advance-release-branch:
+    name: Advance release branch
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Point release at this commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B release "${GITHUB_SHA}"
+          git push origin release --force
+          echo "release -> ${GITHUB_SHA} (from ${{ needs.release.outputs.tag }})"

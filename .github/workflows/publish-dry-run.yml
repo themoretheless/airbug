@@ -1,7 +1,5 @@
-# Validate publishable package archives.
-# Leaf macros package cleanly; unit consumer archives are checked by verify_packages.py
-# (path-patched) until macros/airbug are on crates.io.
 name: Publish dry-run
+
 on:
   workflow_dispatch:
   push:
@@ -11,20 +9,48 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/publish-dry-run.yml'
+
 permissions:
   contents: read
+
+concurrency:
+  group: publish-dry-run-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dry-run:
+    name: Package validation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: themoretheless/.github/.github/actions/setup-rust@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          rust-toolchain: "1.96.0"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: rustup toolchain install stable --profile minimal
-      - name: package leaf macros
-        run: |
-          cargo +stable package -p airbug-macros --locked --allow-dirty
-          cargo +stable package -p airbug-bench-macros --locked --allow-dirty
-      - name: verify airbug package archives
-        run: python unit/tools/verify_packages.py --toolchain stable
+
+      # Leaf macros have no unpublished path deps — shared publish-crate dry-run works.
+      - name: Dry-run airbug-macros
+        uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          package-name: airbug-macros
+          dry-run: true
+
+      - name: Dry-run airbug-bench-macros
+        uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          package-name: airbug-bench-macros
+          dry-run: true
+
+      # airbug / airbug-bench still need path-patched consumer verify until macros are on crates.io.
+      - name: Verify airbug package archives
+        run: python unit/tools/verify_packages.py --toolchain 1.96.0
