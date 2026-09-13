@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- Align bench family semver with unit at `0.6.0`
+- Release tag `airbug-bench-v0.6.0` (independent of `airbug-v*`)
+
 ## 0.1.3
 
 - Restore independent package-family versioning and tag `airbug-bench-v0.1.3`
