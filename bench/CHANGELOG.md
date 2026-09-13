@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.6.0
+## 0.1.3
 
-- Align with monorepo version `0.6.0` and single tag `v0.6.0`
-- Install via `tag = "v0.6.0"` or `branch = "release"`
+- Restore independent package-family versioning and tag `airbug-bench-v0.1.3`
+- Drop monorepo-wide `v*` tag scheme
 
 ## 0.1.2
 

@@ -19,8 +19,8 @@
 
 # 0.6.0
 
-- Monorepo-wide version lock: all workspace crates ship as `0.6.0`
-- Single release tag scheme: `v0.6.0` (git deps: `tag = "v0.6.0"` or `branch = "release"`)
+- Package-family release tag `airbug-v0.6.0` (independent of bench)
+- Shared GitHub Actions release workflows; install via `tag = "airbug-v0.6.0"` or `branch = "release"`
 
 # 0.5.1
 

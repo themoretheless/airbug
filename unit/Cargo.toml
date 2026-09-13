@@ -1,6 +1,6 @@
 [package]
 name = "airbug"
-version.workspace = true
+version = "0.6.0"
 edition.workspace = true
 rust-version.workspace = true
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
