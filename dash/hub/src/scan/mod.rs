@@ -108,7 +108,8 @@ pub fn scan_with_port(root: &Path, port: u16) -> Snapshot {
 pub(crate) fn local_apis(root: &Path, port: u16, _domains: &Domains) -> Vec<ApiEndpoint> {
     let base = format!("http://127.0.0.1:{port}");
     let probe = crate::collector::probe();
-    let report = root.join("target/airbug-report/index.html");
+    let paths = crate::config::RootPaths::new(root);
+    let report = paths.unit_report_index();
     vec![
         ApiEndpoint {
             name: "Hub status",

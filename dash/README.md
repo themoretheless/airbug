@@ -1,6 +1,8 @@
 # dash
 
-Cross-cutting **hub** for the monorepo. Aggregates status from `unit`, `bench`, `mon`, `otel`, and the local OTEL collector without owning those products (SRP).
+Cross-cutting **hub** for the monorepo. Aggregates status from `unit`, `bench`, `mon`, `otel`, `err`, and the local OTEL collector without owning those products (SRP).
+
+**Local-only:** binds `127.0.0.1` — a production-quality *developer tool*, not a public SaaS.
 
 ## Run
 
@@ -13,9 +15,9 @@ cargo run -p airbug-hub -- serve --root .
 cargo run -p airbug-hub -- serve --root . --collector
 # OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317
 # Jaeger http://127.0.0.1:16686/  (Docker mode only)
-# Logs appear on the hub page (from dash/collector/data/logs.json)
 
 cargo run -p airbug-hub -- status --root .
+cargo test -p airbug-hub
 ```
 
 Collector lives in `dash/collector/`. `--collector` tries, in order:
@@ -34,6 +36,43 @@ cargo run -p airbug-otel --example metrics
 cargo run -p airbug-otel --example logs
 ```
 
+## Architecture (`airbug-hub`)
+
+```text
+dash/hub/src/
+  main.rs          CLI
+  config.rs        RootPaths + limits (DIP for artifact paths)
+  error.rs         HubError (thiserror)
+  http.rs          request parse / respond helpers
+  serve.rs         route table
+  collector.rs     Docker / otelcol lifecycle
+  scan/            domain cards (unit, bench, mon, otel, err, collector)
+  otlp/            shared file tail + logs/metrics parsers
+  issues.rs        SQLite issue store + http:// webhook
+  static/          dashboard.html + dashboard.css + dashboard.js
+```
+
+Paths are centralized in `config::RootPaths` (collector data, issues DB, unit report). OTLP JSON helpers live once under `otlp/` (DRY). Severity normalization is shared in Rust (`otlp::normalize_severity`); the UI mirrors the same labels in JS.
+
+## HTTP API
+
+| Method | Path | Body |
+|--------|------|------|
+| GET | `/` | Dashboard HTML |
+| GET | `/static/dashboard.css` | Styles |
+| GET | `/static/dashboard.js` | Client UI |
+| GET | `/api/status` | Domain snapshot + Local APIs |
+| GET | `/api` | API catalog only |
+| GET | `/api/logs?limit=` | OTLP log tail (+ `by_severity`, `services`) |
+| GET | `/api/metrics?limit=` | OTLP metrics (`series`, `histogram`, `latest`) |
+| POST | `/api/errors` | airbug-err event → issues |
+| GET | `/api/issues` | Issue list |
+| GET | `/api/issues/:id` | Issue detail |
+| POST | `/api/issues/:id/{resolve,ignore,reopen}` | Status change |
+| GET | `/report/*` | Unit HTML report files |
+
+Error JSON shape: `{ "ok": false, "error": "…" }` (or `{ "error": "…" }` for encode failures).
+
 ## What it reads
 
 | Domain | Sources |
@@ -44,16 +83,10 @@ cargo run -p airbug-otel --example logs
 | otel | `otel/` crate (`airbug-otel` OTLP) |
 | err | `err/` crate (`airbug-err`) + `dash/hub/data/issues.sqlite` |
 | collector | localhost `:4317` / `:4318` / Jaeger `:16686` |
-| logs (Explore-style) | `dash/collector/data/logs.json` via `/api/logs` — severity bar, text/service filters |
-| metrics (Grafana-like) | `dash/collector/data/metrics.json` via `/api/metrics` — viz: Time series, Gauge, Bar, Histogram, Heatmap, Pie, Table |
-| issues panel | SQLite via `/api/issues` + ingest `POST /api/errors` |
+| logs (Explore-style) | `dash/collector/data/logs.json` via `/api/logs` |
+| metrics (Grafana-like) | `dash/collector/data/metrics.json` via `/api/metrics` — Time series, Gauge, Bar, Histogram, Heatmap, Pie, Table |
+| issues | SQLite via `/api/issues` + ingest `POST /api/errors` |
 
 Traces are **not** embedded next to logs; open **Jaeger UI** from Local APIs when the Docker collector is up (`http://127.0.0.1:16686/`).
 
-It copies suggested commands into the clipboard; it does not start airbug-mon or bench for you.
-
-While the hub is running, the **Local APIs** block lists only endpoints that are up
-(`/api/status`, `/api/logs`, `/api/metrics`, `/api/errors`, `/api/issues`, `/api`, unit report if present, OTLP/Jaeger when `--collector` is live).
-
-Issues come from `airbug-err` via `POST /api/errors` and are stored in `dash/hub/data/issues.sqlite`.
-Optional new-issue webhook: `--webhook URL` or `AIRBUG_ISSUES_WEBHOOK`.
+Optional new-issue webhook: `--webhook URL` or `AIRBUG_ISSUES_WEBHOOK` (**`http://` only** — HTTPS is refused).

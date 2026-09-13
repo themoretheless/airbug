@@ -1,5 +1,5 @@
 //! Paths and limits for the local hub (DIP: leaves take RootPaths, not string literals).
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Default hub listen port.
 pub const DEFAULT_PORT: u16 = 8790;
@@ -20,10 +20,6 @@ pub struct RootPaths {
 impl RootPaths {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
-    }
-
-    pub fn root(&self) -> &Path {
-        &self.root
     }
 
     pub fn collector_dir(&self) -> PathBuf {
