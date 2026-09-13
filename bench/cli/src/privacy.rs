@@ -1,5 +1,5 @@
 //! Explicit environment policy; literal secret redaction happens before log bytes reach disk.
-use airbug_bench::{error, Result};
+use airbug_bench::{Result, error};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,

@@ -1,6 +1,6 @@
 //! Optional OTLP metrics export for host samples (via `airbug-otel` only).
 use airbug_otel::{
-    init, F64Gauge, KeyValue, TelemetryConfig, TelemetryError, TelemetryGuard, U64Gauge,
+    F64Gauge, KeyValue, TelemetryConfig, TelemetryError, TelemetryGuard, U64Gauge, init,
 };
 
 use crate::sampler::Sample;
@@ -36,21 +36,13 @@ impl OtlpExport {
                 "system.cpu.utilization",
                 "Host CPU utilization 0..1",
             ),
-            mem_used: U64Gauge::with_description(
-                SCOPE,
-                "system.memory.usage",
-                "Used memory bytes",
-            ),
+            mem_used: U64Gauge::with_description(SCOPE, "system.memory.usage", "Used memory bytes"),
             mem_total: U64Gauge::with_description(
                 SCOPE,
                 "system.memory.limit",
                 "Total memory bytes",
             ),
-            swap_used: U64Gauge::with_description(
-                SCOPE,
-                "system.paging.usage",
-                "Used swap bytes",
-            ),
+            swap_used: U64Gauge::with_description(SCOPE, "system.paging.usage", "Used swap bytes"),
             net_rx: F64Gauge::with_description(
                 SCOPE,
                 "system.network.io",

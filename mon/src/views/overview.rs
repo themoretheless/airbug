@@ -1,6 +1,6 @@
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 
-use super::{fmt_bytes, SharedState};
+use super::{SharedState, fmt_bytes};
 
 fn series<F: Fn(&crate::sampler::Sample) -> f64>(state: &SharedState, f: F) -> PlotPoints<'_> {
     state
@@ -90,7 +90,12 @@ pub fn show(ui: &mut egui::Ui, state: &SharedState) {
                         .ring
                         .iter()
                         .enumerate()
-                        .map(|(i, s)| [i as f64, s.cpu_per_core.get(c).copied().unwrap_or(0.0) as f64])
+                        .map(|(i, s)| {
+                            [
+                                i as f64,
+                                s.cpu_per_core.get(c).copied().unwrap_or(0.0) as f64,
+                            ]
+                        })
                         .collect::<PlotPoints>(),
                 )
             })

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::scan::{
-    find_run_json, mtime_detail, rel_label, run_detail, Action, Artifact, DomainCard, Status,
+    Action, Artifact, DomainCard, Status, find_run_json, mtime_detail, rel_label, run_detail,
 };
 
 pub(crate) fn scan_bench(root: &Path) -> DomainCard {

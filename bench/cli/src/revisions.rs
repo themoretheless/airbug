@@ -1,7 +1,7 @@
 //! Bounded regression search with full interval audit, so nonmonotonic histories are not misreported.
 use crate::git_run;
 use airbug_bench::{
-    analysis::{compare, Decision},
+    analysis::{Decision, compare},
     model::write_new,
     *,
 };
@@ -55,7 +55,9 @@ pub fn run(r: Search<'_>) -> Result<()> {
         || revisions.is_empty()
         || revisions.len() + 1 > r.max_commits
     {
-        return Err(error("require distinct first-parent ancestor and bounded history; increase explicit max-commits if needed"));
+        return Err(error(
+            "require distinct first-parent ancestor and bounded history; increase explicit max-commits if needed",
+        ));
     }
     revisions.reverse();
     if r.out.exists() {

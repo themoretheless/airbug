@@ -1,5 +1,5 @@
 use crate::experiment_report::{self, Options};
-use airbug_bench::{error, Result};
+use airbug_bench::{Result, error};
 use sha2::{Digest, Sha256};
 use std::{
     collections::hash_map::RandomState,
@@ -11,7 +11,11 @@ use std::{
 };
 
 fn response(stream: &mut TcpStream, status: &str, mime: &str, body: &str) -> std::io::Result<()> {
-    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {mime}; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: SAMEORIGIN\r\nConnection: close\r\n\r\n{body}", body.len())
+    write!(
+        stream,
+        "HTTP/1.1 {status}\r\nContent-Type: {mime}; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: SAMEORIGIN\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
 }
 fn identity(label: &str) -> String {
     airbug_bench::model::hex(&Sha256::digest(label.as_bytes()))

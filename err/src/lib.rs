@@ -1,8 +1,10 @@
 //! Error / panic reporting for airbug (Rust subset of Sentry ∪ Bugsnag ∪ Rollbar).
 //!
+//! One [`init`] (or [`init_with_transport`]) per process. Prefer injectable transports in tests.
+//!
 //! ```ignore
 //! let _guard = airbug_err::init(airbug_err::Options::new()
-//!     .endpoint("http://127.0.0.1:8790/api/errors")
+//!     .endpoint("http://127.0.0.1:8790/api/v1/errors")
 //!     .release(env!("CARGO_PKG_VERSION"))
 //!     .environment("dev"))?;
 //! airbug_err::capture_message("something odd");
@@ -12,20 +14,26 @@ mod fingerprint;
 mod scope;
 mod transport;
 
-pub use event::{Breadcrumb, Event, Exception, Frame, Severity, Stacktrace, User};
+pub use event::{
+    Breadcrumb, EVENT_SCHEMA_VERSION, Event, Exception, Frame, Severity, Stacktrace, User,
+};
 pub use scope::{Scope, add_breadcrumb, configure_scope};
-pub use transport::TransportError;
+pub use transport::{EventTransport, HttpTransport, TransportError};
 
 use event::Exception as Ex;
 use fingerprint::resolve as resolve_fingerprint;
 use std::{
     collections::BTreeMap,
-    sync::{Mutex, OnceLock},
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
 };
-use transport::Transport;
 use uuid::Uuid;
 
 static CLIENT: OnceLock<Mutex<Option<Client>>> = OnceLock::new();
+static SEND_FAILURES: AtomicU64 = AtomicU64::new(0);
+static LAST_SEND_ERROR: Mutex<Option<String>> = Mutex::new(None);
 
 fn client_slot() -> &'static Mutex<Option<Client>> {
     CLIENT.get_or_init(|| Mutex::new(None))
@@ -120,16 +128,15 @@ impl Options {
 
 fn default_endpoint() -> String {
     std::env::var("AIRBUG_ERR_ENDPOINT")
-        .unwrap_or_else(|_| "http://127.0.0.1:8790/api/errors".into())
+        .unwrap_or_else(|_| "http://127.0.0.1:8790/api/v1/errors".into())
 }
 
 struct Client {
     options: Options,
-    transport: Transport,
+    transport: Arc<dyn EventTransport>,
 }
 
-/// Keeps the client alive; dropping flushes nothing extra (sends are sync)
-/// but clears the global client and uninstalls the panic hook marker.
+/// Keeps the client alive; dropping clears the global client.
 pub struct Guard {
     _private: (),
 }
@@ -142,10 +149,20 @@ impl Drop for Guard {
     }
 }
 
-/// Install the global client (and optional panic hook).
+/// Install the global client with the default HTTP transport (and optional panic hook).
+///
+/// One init per process is the supported model.
 pub fn init(options: Options) -> Result<Guard, TransportError> {
+    let transport = HttpTransport::new(options.endpoint.clone())?;
+    init_with_transport(options, Arc::new(transport))
+}
+
+/// Install with an injectable [`EventTransport`] (tests / custom backends).
+pub fn init_with_transport(
+    options: Options,
+    transport: Arc<dyn EventTransport>,
+) -> Result<Guard, TransportError> {
     scope::configure_max_breadcrumbs(options.max_breadcrumbs);
-    let transport = Transport::new(options.endpoint.clone())?;
     let client = Client { options, transport };
     if let Ok(mut slot) = client_slot().lock() {
         *slot = Some(client);
@@ -153,6 +170,16 @@ pub fn init(options: Options) -> Result<Guard, TransportError> {
     #[cfg(feature = "panic")]
     install_panic_hook();
     Ok(Guard { _private: () })
+}
+
+/// How many send failures since process start.
+pub fn send_failure_count() -> u64 {
+    SEND_FAILURES.load(Ordering::Relaxed)
+}
+
+/// Last transport error message, if any.
+pub fn last_send_error() -> Option<String> {
+    LAST_SEND_ERROR.lock().ok().and_then(|g| g.clone())
 }
 
 /// Capture a plain message.
@@ -195,7 +222,6 @@ pub fn capture_anyhow(err: &anyhow::Error) -> Option<String> {
 }
 
 fn type_name_of_error(err: &dyn std::error::Error) -> String {
-    // Best-effort: Debug type name is not available; use a stable label.
     let _ = err;
     "Error".into()
 }
@@ -211,6 +237,7 @@ fn base_event(level: Severity) -> Event {
     .unwrap_or((None, None, None));
 
     let mut event = Event {
+        schema_version: EVENT_SCHEMA_VERSION,
         event_id: Uuid::new_v4().to_string(),
         timestamp: iso_now(),
         level,
@@ -261,7 +288,11 @@ fn send_event(mut event: Event) -> Option<String> {
     match result {
         Some(Ok(())) => Some(id),
         Some(Err(err)) => {
-            eprintln!("airbug-err: failed to send event: {err}");
+            SEND_FAILURES.fetch_add(1, Ordering::Relaxed);
+            if let Ok(mut slot) = LAST_SEND_ERROR.lock() {
+                *slot = Some(err.to_string());
+            }
+            tracing::warn!(error = %err, event_id = %id, "airbug-err failed to send event");
             None
         }
         None => None,
@@ -276,7 +307,6 @@ fn should_sample() -> bool {
     if rate <= 0.0 {
         return false;
     }
-    // Cheap deterministic-ish sample without extra deps.
     let n = (Uuid::new_v4().as_u128() % 10_000) as f64 / 10_000.0;
     n < rate
 }
@@ -294,14 +324,12 @@ pub(crate) fn iso_now() -> String {
     let dur = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    // RFC3339-ish UTC without chrono dep.
     let secs = dur.as_secs();
     let millis = dur.subsec_millis();
     let (y, mo, d, h, mi, s) = civil_from_days(secs);
     format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{millis:03}Z")
 }
 
-/// Convert unix seconds → UTC civil components (Howard Hinnant algorithm).
 fn civil_from_days(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
     let days = (secs / 86_400) as i64;
     let tod = (secs % 86_400) as u32;
@@ -370,7 +398,6 @@ fn collect_frames() -> Vec<Frame> {
                         && !f.contains("library/core")
                 })
                 .unwrap_or(false);
-            // Skip frames inside airbug-err / backtrace plumbing.
             if function.contains("airbug_err::") || function.contains("backtrace::") {
                 continue;
             }
@@ -432,21 +459,57 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
+    /// Global client is process-wide; serialize tests that call `init*`.
+    static INIT_LOCK: Mutex<()> = Mutex::new(());
+
+    struct DropTransport;
+
+    impl EventTransport for DropTransport {
+        fn send(&self, _event: &Event) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn before_send_can_drop() {
+        let _lock = INIT_LOCK.lock().unwrap();
         let seen = Arc::new(Mutex::new(0u32));
         let seen2 = Arc::clone(&seen);
-        let _guard = init(
+        let _guard = init_with_transport(
             Options::new()
-                .endpoint("http://127.0.0.1:9/api/errors")
+                .endpoint("http://127.0.0.1:9/api/v1/errors")
                 .before_send(move |_| {
                     *seen2.lock().unwrap() += 1;
                     None
                 }),
+            Arc::new(DropTransport),
         )
         .unwrap();
         assert!(capture_message("nope").is_none());
         assert_eq!(*seen.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn injectable_transport_receives_event() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        struct Capture(Arc<Mutex<Vec<String>>>);
+        impl EventTransport for Capture {
+            fn send(&self, event: &Event) -> Result<(), TransportError> {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(event.message.clone().unwrap_or_default());
+                Ok(())
+            }
+        }
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(Capture(Arc::clone(&seen))),
+        )
+        .unwrap();
+        assert!(capture_message("hello").is_some());
+        assert_eq!(seen.lock().unwrap().as_slice(), ["hello"]);
     }
 
     #[test]

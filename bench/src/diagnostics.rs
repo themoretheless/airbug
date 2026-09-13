@@ -1,7 +1,8 @@
 //! Descriptive diagnostics and a separately planned confirmatory design. No automatic rerun-until-pass.
 use crate::{
+    Result, Run, Status,
     analysis::{median, median_interval},
-    error, Result, Run, Status,
+    error,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -117,10 +118,10 @@ pub fn order_effects(r: &Run) -> Result<Vec<OrderEffect>> {
                     let y = values
                         .get(&(c.id.clone(), m.id.clone(), "candidate".into()))
                         .and_then(|v| v.get(b));
-                    if let (Some(x), Some(y)) = (x, y) {
-                        if *x > 0. {
-                            orders[usize::from(a > b)].push(y / x);
-                        }
+                    if let (Some(x), Some(y)) = (x, y)
+                        && *x > 0.
+                    {
+                        orders[usize::from(a > b)].push(y / x);
                     }
                 }
             }
@@ -179,7 +180,17 @@ pub fn pilot(r: &Run, target_percent: f64, max_processes: usize) -> Result<Vec<P
             let half = (h - l) / 2. / m * 100.;
             let n =
                 ((values.len() as f64 * (half / target_percent).powi(2)).ceil() as usize).max(6);
-            (Some(n.min(max_processes)),format!("Heuristic sqrt(n) extrapolation; {}. Fixed new confirmation only; no guarantee under drift/dependence",if n>max_processes{"requested precision exceeds process cap"}else{"not a promised precision or power"}))
+            (
+                Some(n.min(max_processes)),
+                format!(
+                    "Heuristic sqrt(n) extrapolation; {}. Fixed new confirmation only; no guarantee under drift/dependence",
+                    if n > max_processes {
+                        "requested precision exceeds process cap"
+                    } else {
+                        "not a promised precision or power"
+                    }
+                ),
+            )
         } else {
             (None,"Pilot too small or zero median; obtain a separately declared pilot with >=6 independent processes. Do not pool pilot with confirmation.".into())
         };

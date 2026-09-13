@@ -1,4 +1,5 @@
-use crate::{error, Availability, Case, Metric, Observation, Result, Run, Status};
+use crate::suite_measure::{input_batch, input_lifecycle};
+use crate::{Availability, Case, Metric, Observation, Result, Run, Status, error};
 use std::{
     collections::BTreeMap,
     hint::black_box,
@@ -32,7 +33,9 @@ impl Config {
             || self.sample_time > Duration::from_secs(60)
             || self.warmup > Duration::from_secs(60)
         {
-            return Err(error("invalid benchmark config: samples 1..100000, iterations 1..1048576, time 1ns..60s, warmup <=60s"));
+            return Err(error(
+                "invalid benchmark config: samples 1..100000, iterations 1..1048576, time 1ns..60s, warmup <=60s",
+            ));
         }
         Ok(())
     }
@@ -372,7 +375,9 @@ impl<'a> Suite<'a> {
                 .is_some_and(|v| v.starts_with("cold;"))
         }) && (selected.len() != 1 || selected[0].verify.is_some())
         {
-            return Err(error("cold mode requires exactly one unchecked case; verify correctness in a separate process"));
+            return Err(error(
+                "cold mode requires exactly one unchecked case; verify correctness in a separate process",
+            ));
         }
         let mut run = Run::new();
         run.provenance
@@ -540,7 +545,9 @@ impl<'a> Suite<'a> {
                     )
                 }
                 "--help" | "-h" => {
-                    println!("--list --profile quick|normal|thorough --filter TEXT [--exact|--glob] --exclude GLOB --tag TAG --samples N --sample-ms N --warmup-ms N --json --output NEW_DIRECTORY");
+                    println!(
+                        "--list --profile quick|normal|thorough --filter TEXT [--exact|--glob] --exclude GLOB --tag TAG --samples N --sample-ms N --warmup-ms N --json --output NEW_DIRECTORY"
+                    );
                     return Ok(());
                 }
                 _ => return Err(error(format!("unknown argument {arg}"))),
@@ -585,38 +592,4 @@ impl<'a> Suite<'a> {
         }
         Ok(())
     }
-}
-
-fn input_lifecycle(drop: DropPolicy) -> &'static str {
-    match drop {
-        DropPolicy::InsideTiming => "fresh input per operation; input setup/drop excluded; output drop included; chunks of <=64",
-        DropPolicy::OutsideTiming => "fresh input per operation; input setup/drop and output drop excluded; chunks of <=64",
-    }
-}
-fn input_batch<I, O>(
-    n: u64,
-    setup: &mut impl FnMut() -> I,
-    f: &mut impl FnMut(&mut I) -> O,
-    drop: DropPolicy,
-) -> u128 {
-    let mut remaining = n;
-    let mut total = 0;
-    while remaining > 0 {
-        let count = remaining.min(64);
-        let mut inputs: Vec<I> = (0..count).map(|_| setup()).collect();
-        let mut outputs = Vec::with_capacity(count as usize);
-        let start = Instant::now();
-        for input in &mut inputs {
-            match drop {
-                DropPolicy::InsideTiming => {
-                    black_box(f(black_box(input)));
-                }
-                DropPolicy::OutsideTiming => outputs.push(black_box(f(black_box(input)))),
-            }
-        }
-        total += start.elapsed().as_nanos();
-        black_box(&outputs);
-        remaining -= count;
-    }
-    total
 }

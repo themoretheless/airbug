@@ -20,19 +20,15 @@ impl HubError {
         Self::Message(s.into())
     }
 
+    /// Stable hub API error envelope: `{ "ok": false, "error": "..." }`.
     pub fn json_body(&self) -> String {
-        let msg = self.to_string();
-        match serde_json::to_string(&serde_json::json!({ "error": msg })) {
-            Ok(s) => s,
-            Err(_) => format!("{{\"error\":{}}}", serde_json::to_string(&msg).unwrap_or_else(|_| "\"error\"".into())),
-        }
-    }
-
-    pub fn json_body_ok_false(&self) -> String {
         let msg = self.to_string();
         match serde_json::to_string(&serde_json::json!({ "ok": false, "error": msg })) {
             Ok(s) => s,
-            Err(_) => format!("{{\"ok\":false,\"error\":{}}}", serde_json::to_string(&msg).unwrap_or_else(|_| "\"error\"".into())),
+            Err(_) => format!(
+                "{{\"ok\":false,\"error\":{}}}",
+                serde_json::to_string(&msg).unwrap_or_else(|_| "\"error\"".into())
+            ),
         }
     }
 }

@@ -6,7 +6,7 @@ fn main() {
         Options::new()
             .endpoint(
                 std::env::var("AIRBUG_ERR_ENDPOINT")
-                    .unwrap_or_else(|_| "http://127.0.0.1:8790/api/errors".into()),
+                    .unwrap_or_else(|_| "http://127.0.0.1:8790/api/v1/errors".into()),
             )
             .release(env!("CARGO_PKG_VERSION"))
             .environment("dev")

@@ -1,6 +1,13 @@
-//! Error event payload shared with airbug-hub `/api/errors`.
+//! Error event payload shared with airbug-hub `/api/v1/errors`.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+/// Current major schema for [`Event`]. Hub rejects unsupported majors.
+pub const EVENT_SCHEMA_VERSION: u32 = 1;
+
+fn default_schema_version() -> u32 {
+    EVENT_SCHEMA_VERSION
+}
 
 /// Severity levels aligned with Bugsnag / Rollbar / Sentry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +77,9 @@ pub struct User {
 /// Full event posted to the hub.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
+    /// Contract major. Defaults to [`EVENT_SCHEMA_VERSION`] when omitted.
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub event_id: String,
     pub timestamp: String,
     pub level: Severity,

@@ -84,7 +84,12 @@ pub fn query_usize(query: &str, key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-pub fn respond(stream: &mut TcpStream, status: &str, mime: &str, body: &str) -> std::io::Result<()> {
+pub fn respond(
+    stream: &mut TcpStream,
+    status: &str,
+    mime: &str,
+    body: &str,
+) -> std::io::Result<()> {
     write!(
         stream,
         "HTTP/1.1 {status}\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n{body}",
@@ -106,18 +111,26 @@ pub fn respond_bytes(
     stream.write_all(body)
 }
 
-pub fn respond_json(stream: &mut TcpStream, status: &str, value: &impl serde::Serialize) -> std::io::Result<()> {
+pub fn respond_json(
+    stream: &mut TcpStream,
+    status: &str,
+    value: &impl serde::Serialize,
+) -> std::io::Result<()> {
     let body = serde_json::to_string_pretty(value)
         .unwrap_or_else(|e| crate::error::HubError::from(e).json_body());
     respond(stream, status, "application/json; charset=utf-8", &body)
 }
 
-pub fn respond_err(stream: &mut TcpStream, status: &str, err: &crate::error::HubError) -> std::io::Result<()> {
+pub fn respond_err(
+    stream: &mut TcpStream,
+    status: &str,
+    err: &crate::error::HubError,
+) -> std::io::Result<()> {
     respond(
         stream,
         status,
         "application/json; charset=utf-8",
-        &err.json_body_ok_false(),
+        &err.json_body(),
     )
 }
 

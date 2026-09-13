@@ -1,6 +1,6 @@
 //! Distribution-free order-statistic intervals for the median of independent
 //! process pairs. No significance claims from intra-process batches.
-use crate::{error, Availability, Direction, Metric, Result, Run, Status};
+use crate::{Availability, Direction, Metric, Result, Run, Status, error};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,7 +8,7 @@ pub fn median(v: &[f64]) -> f64 {
     let mut v = v.to_vec();
     v.sort_by(f64::total_cmp);
     let n = v.len();
-    if n % 2 == 0 {
+    if n.is_multiple_of(2) {
         v[n / 2 - 1] / 2.0 + v[n / 2] / 2.0
     } else {
         v[n / 2]
@@ -232,11 +232,10 @@ pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<V
                 if let (Some((al, ah)), Some((bl, bh))) = (
                     median_interval(&av, corrected / 2.0),
                     median_interval(&bv, corrected / 2.0),
-                ) {
-                    if al > 0.0 && ah > 0.0 {
-                        row.interval_percent =
-                            Some(((bl / ah - 1.0) * 100.0, (bh / al - 1.0) * 100.0));
-                    }
+                ) && al > 0.0
+                    && ah > 0.0
+                {
+                    row.interval_percent = Some(((bl / ah - 1.0) * 100.0, (bh / al - 1.0) * 100.0));
                 }
                 row.note="Ratio of process medians; conservative simultaneous median intervals, Bonferroni correction. Historical runs may be confounded by environment drift.".into();
             }

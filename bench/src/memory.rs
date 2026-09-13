@@ -5,8 +5,8 @@ use std::{
     cell::Cell,
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
     },
 };
 const CAPACITY: usize = 8192;

@@ -1,5 +1,5 @@
 //! Dependency-free RGBA8 golden comparison. Color space and renderer identity belong in case contracts.
-use crate::{error, Result};
+use crate::{Result, error};
 use serde::Serialize;
 use std::{
     fs::{self, OpenOptions},
@@ -48,8 +48,10 @@ impl RgbaImage {
         let mut sum = 0u64;
         for (a, b) in self
             .pixels
-            .chunks_exact(4)
-            .zip(expected.pixels.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(expected.pixels.as_chunks::<4>().0)
         {
             let mut bad = false;
             for (a, b) in a.iter().zip(b) {

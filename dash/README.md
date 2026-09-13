@@ -40,38 +40,43 @@ cargo run -p airbug-otel --example logs
 
 ```text
 dash/hub/src/
-  main.rs          CLI
+  main.rs          CLI + tracing
+  app.rs           HubApp composition root
   config.rs        RootPaths + limits (DIP for artifact paths)
-  error.rs         HubError (thiserror)
+  error.rs         HubError (thiserror); JSON `{ok:false,error}`
   http.rs          request parse / respond helpers
-  serve.rs         route table
+  serve.rs         route table (/api/v1 + legacy /api aliases)
   collector.rs     Docker / otelcol lifecycle
   scan/            domain cards (unit, bench, mon, otel, err, collector)
   otlp/            shared file tail + logs/metrics parsers
-  issues.rs        SQLite issue store + http:// webhook
+  issues.rs        IssueStore + SqliteIssueStore + http:// webhook (reqwest)
   static/          dashboard.html + dashboard.css + dashboard.js
 ```
 
-Paths are centralized in `config::RootPaths` (collector data, issues DB, unit report). OTLP JSON helpers live once under `otlp/` (DRY). Severity normalization is shared in Rust (`otlp::normalize_severity`); the UI mirrors the same labels in JS.
+Paths are centralized in `config::RootPaths` (collector data, issues DB, unit report). OTLP JSON helpers live once under `otlp/` (DRY). Severity normalization is server-side in Rust (`otlp::normalize_severity`); the UI displays labels as returned.
 
 ## HTTP API
+
+Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 
 | Method | Path | Body |
 |--------|------|------|
 | GET | `/` | Dashboard HTML |
 | GET | `/static/dashboard.css` | Styles |
 | GET | `/static/dashboard.js` | Client UI |
-| GET | `/api/status` | Domain snapshot + Local APIs |
-| GET | `/api` | API catalog only |
-| GET | `/api/logs?limit=` | OTLP log tail (+ `by_severity`, `services`) |
-| GET | `/api/metrics?limit=` | OTLP metrics (`series`, `histogram`, `latest`) |
-| POST | `/api/errors` | airbug-err event → issues |
-| GET | `/api/issues` | Issue list |
-| GET | `/api/issues/:id` | Issue detail |
-| POST | `/api/issues/:id/{resolve,ignore,reopen}` | Status change |
+| GET | `/api/v1/status` | Domain snapshot + Local APIs |
+| GET | `/api/v1` | API catalog only |
+| GET | `/api/v1/logs?limit=` | OTLP log tail (+ `by_severity`, `services`) |
+| GET | `/api/v1/metrics?limit=` | OTLP metrics (`series`, `histogram`, `latest`) |
+| POST | `/api/v1/errors` | airbug-err event → issues (`schema_version`) |
+| GET | `/api/v1/issues` | Issue list |
+| GET | `/api/v1/issues/:id` | Issue detail |
+| POST | `/api/v1/issues/:id/{resolve,ignore,reopen}` | Status change |
 | GET | `/report/*` | Unit HTML report files |
 
-Error JSON shape: `{ "ok": false, "error": "…" }` (or `{ "error": "…" }` for encode failures).
+Error JSON shape: `{ "ok": false, "error": "…" }`.
+
+Threat model: [SECURITY.md](../SECURITY.md).
 
 ## What it reads
 

@@ -603,7 +603,7 @@
     }
 
     async function refreshIssues() {
-      const res = await fetch("/api/issues", { cache: "no-store" });
+      const res = await fetch("/api/v1/issues", { cache: "no-store" });
       const data = await res.json();
       issuesMetaEl.textContent = data.note || "";
       const issues = data.issues || [];
@@ -639,7 +639,7 @@
     async function openIssue(id) {
       if (!id) return;
       selectedIssueId = id;
-      const res = await fetch("/api/issues/" + encodeURIComponent(id), { cache: "no-store" });
+      const res = await fetch("/api/v1/issues/" + encodeURIComponent(id), { cache: "no-store" });
       if (!res.ok) {
         toast("issue not found");
         return;
@@ -654,7 +654,7 @@
       issueActionsEl.querySelectorAll("button[data-action]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const action = btn.getAttribute("data-action");
-          const r = await fetch(`/api/issues/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+          const r = await fetch(`/api/v1/issues/${encodeURIComponent(id)}/${action}`, { method: "POST" });
           if (!r.ok) {
             toast("action failed");
             return;
@@ -668,19 +668,19 @@
     }
 
     async function refreshLogs() {
-      const res = await fetch("/api/logs?limit=150", { cache: "no-store" });
+      const res = await fetch("/api/v1/logs?limit=150", { cache: "no-store" });
       const data = await res.json();
       renderLogs(data);
     }
 
     async function refreshMetrics() {
-      const res = await fetch("/api/metrics?limit=800", { cache: "no-store" });
+      const res = await fetch("/api/v1/metrics?limit=800", { cache: "no-store" });
       const data = await res.json();
       renderMetrics(data);
     }
 
     async function refresh() {
-      const res = await fetch("/api/status", { cache: "no-store" });
+      const res = await fetch("/api/v1/status", { cache: "no-store" });
       const data = await res.json();
       metaEl.innerHTML = `<span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
       document.getElementById("reload").onclick = () => {
@@ -700,16 +700,16 @@
     logsServiceEl.addEventListener("change", () => paintLogs());
 
     refresh().catch(err => {
-      metaEl.textContent = "failed to load /api/status: " + err;
+      metaEl.textContent = "failed to load /api/v1/status: " + err;
     });
     refreshLogs().catch(err => {
-      logsMetaEl.textContent = "failed to load /api/logs: " + err;
+      logsMetaEl.textContent = "failed to load /api/v1/logs: " + err;
     });
     refreshMetrics().catch(err => {
-      metricsMetaEl.textContent = "failed to load /api/metrics: " + err;
+      metricsMetaEl.textContent = "failed to load /api/v1/metrics: " + err;
     });
     refreshIssues().catch(err => {
-      issuesMetaEl.textContent = "failed to load /api/issues: " + err;
+      issuesMetaEl.textContent = "failed to load /api/v1/issues: " + err;
     });
     setInterval(() => { refresh().catch(() => {}); }, 15000);
     setInterval(() => { refreshLogs().catch(() => {}); }, 4000);

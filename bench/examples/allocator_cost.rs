@@ -1,5 +1,5 @@
 //! Measure instrumentation cost with identical allocation work and explicit variant selection.
-use airbug_bench::{alloc::TrackingAllocator, error, Result, Suite};
+use airbug_bench::{Result, Suite, alloc::TrackingAllocator, error};
 use std::alloc::{GlobalAlloc, Layout, System};
 fn operation<A: GlobalAlloc>(a: &A) {
     let layout = Layout::from_size_align(256, 8).unwrap();

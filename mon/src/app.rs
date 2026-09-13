@@ -3,7 +3,9 @@ use std::time::Duration;
 use crossbeam_channel::Receiver;
 
 use crate::sampler::Sample;
-use crate::views::{self, alerts::AlertsView, history::HistoryView, processes::ProcessesView, SharedState};
+use crate::views::{
+    self, SharedState, alerts::AlertsView, history::HistoryView, processes::ProcessesView,
+};
 
 #[derive(PartialEq)]
 enum Tab {
@@ -13,7 +15,7 @@ enum Tab {
     Alerts,
 }
 
-pub struct OtelApp {
+pub struct MonApp {
     rx: Receiver<Sample>,
     state: SharedState,
     tab: Tab,
@@ -22,7 +24,7 @@ pub struct OtelApp {
     alerts: AlertsView,
 }
 
-impl OtelApp {
+impl MonApp {
     pub fn new(rx: Receiver<Sample>) -> Self {
         Self {
             rx,
@@ -35,7 +37,7 @@ impl OtelApp {
     }
 }
 
-impl eframe::App for OtelApp {
+impl eframe::App for MonApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(sample) = self.rx.try_recv() {
             self.state.push(sample);

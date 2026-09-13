@@ -85,7 +85,10 @@ impl RootPaths {
             .filter(|p| p.starts_with(report.canonicalize().unwrap_or_else(|_| report.clone())))
             .or_else(|| {
                 // File may not exist; still reject obvious escapes via components.
-                if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                if path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+                {
                     None
                 } else {
                     Some(path)

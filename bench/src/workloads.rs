@@ -1,10 +1,10 @@
 //! Explicit async/thread/pipeline lifecycle helpers. No hidden runtime dependency.
-use crate::{error, Result};
+use crate::{Result, error};
 use std::{
     future::Future,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Condvar, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
     task::{Context, Poll, Wake, Waker},
     time::{Duration, Instant},

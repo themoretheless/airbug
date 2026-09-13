@@ -5,6 +5,9 @@ mod err;
 mod mon;
 mod otel;
 mod unit;
+mod unit_report;
+
+pub use unit_report::UnitReportV1;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -114,42 +117,42 @@ pub(crate) fn local_apis(root: &Path, port: u16, _domains: &Domains) -> Vec<ApiE
         ApiEndpoint {
             name: "Hub status",
             method: "GET",
-            href: format!("{base}/api/status"),
+            href: format!("{base}/api/v1/status"),
             detail: "Domain cards JSON".into(),
             available: true,
         },
         ApiEndpoint {
             name: "Hub logs",
             method: "GET",
-            href: format!("{base}/api/logs?limit=150"),
+            href: format!("{base}/api/v1/logs?limit=150"),
             detail: "OTLP log tail JSON".into(),
             available: true,
         },
         ApiEndpoint {
             name: "Hub metrics",
             method: "GET",
-            href: format!("{base}/api/metrics?limit=200"),
+            href: format!("{base}/api/v1/metrics?limit=200"),
             detail: "OTLP metric points JSON".into(),
             available: true,
         },
         ApiEndpoint {
             name: "Hub errors ingest",
             method: "POST",
-            href: format!("{base}/api/errors"),
+            href: format!("{base}/api/v1/errors"),
             detail: "airbug-err event JSON".into(),
             available: true,
         },
         ApiEndpoint {
             name: "Hub issues",
             method: "GET",
-            href: format!("{base}/api/issues"),
+            href: format!("{base}/api/v1/issues"),
             detail: "Grouped error issues".into(),
             available: true,
         },
         ApiEndpoint {
             name: "Hub API catalog",
             method: "GET",
-            href: format!("{base}/api"),
+            href: format!("{base}/api/v1"),
             detail: "This list as JSON".into(),
             available: true,
         },
@@ -182,24 +185,6 @@ pub(crate) fn local_apis(root: &Path, port: u16, _domains: &Domains) -> Vec<ApiE
             available: probe.jaeger_ui,
         },
     ]
-}
-
-pub(crate) fn count_tests(tests: Option<&Vec<Value>>) -> (usize, usize, usize) {
-    let Some(tests) = tests else {
-        return (0, 0, 0);
-    };
-    let mut passed = 0;
-    let mut failed = 0;
-    let mut broken = 0;
-    for test in tests {
-        match test.get("status").and_then(|s| s.as_str()).unwrap_or("") {
-            "passed" | "ok" => passed += 1,
-            "failed" => failed += 1,
-            "broken" => broken += 1,
-            _ => {}
-        }
-    }
-    (passed, failed, broken)
 }
 
 pub(crate) fn find_run_json(store: &Path, limit: usize) -> Vec<PathBuf> {

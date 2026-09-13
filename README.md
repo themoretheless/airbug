@@ -33,7 +33,7 @@ dash/hub/                  # package: airbug-hub (+ collector / logs / issues)
 
 ```text
 airbug-mon ──► airbug-otel ──► OTLP ──► dash/collector ──► files
-airbug-err ──► POST /api/errors ──► airbug-hub (SQLite issues)
+airbug-err ──► POST /api/v1/errors ──► airbug-hub (SQLite issues)
 unit / bench artifacts ──► airbug-hub status cards
 ```
 
@@ -43,14 +43,17 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. This i
 
 | Area | Status | Notes |
 |------|--------|-------|
-| `unit` / macros / containers | release-candidate | Strong tests + CI matrix |
-| `bench` / cli | usable | Deep feature set; docs mostly RU |
-| `otel` | MVP | OTLP HTTP/gRPC façade |
-| `err` | MVP | Typed `Event` → hub ingest |
-| `hub` | MVP | Local dashboard + Grafana-like metrics UI |
-| `mon` | MVP (macOS) | CI tests on macOS; excluded from Linux/Windows matrix |
+| `unit` / macros | release / publishable | Strong tests + CI matrix; crates.io metadata |
+| `bench` / cli / macros | release / publishable | Typed `BenchError`; docs synced to in-crate modules |
+| `otel` | usable | OTLP façade + `TelemetryHandle` |
+| `err` | usable | `EventTransport` + `schema_version` → hub |
+| `hub` | usable | `HubApp` / `IssueStore`, `/api/v1`, concurrency |
+| `mon` | usable (macOS) | `MonApp`; CI on macOS |
+| `containers` / checkout-domain | internal | `publish = false` |
 
-Known debt (not blocking): `syn` major differs between `unit/macros` (2.x) and `bench/macros` (3.x).
+See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).
+
+Known debt (not blocking): none on `syn` majors (unit + bench macros both on syn 2.x).
 
 ## Quick start
 

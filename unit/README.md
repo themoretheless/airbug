@@ -3,7 +3,8 @@
 Helpers for ordinary Rust tests: keep `#[test]`, `cargo test`, `assert!` and
 `assert_eq!`. Add data generation, trait mocks, named cases, collection checks,
 and reusable validation where they reduce test boilerplate. Rust 1.96 or newer.
-No unsafe code. The default build has no external dependencies; optional macros
+No unsafe code. `airbug-checkout-domain` is a **demo** crate (`publish = false`) used by pilot examples only.
+ The default build has no external dependencies; optional macros
 use a separate procedural-macro crate.
 
 ## Cross-method order (0.5)

@@ -108,7 +108,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn parses_powermetrics_output() {
-        let text = "**** GPU usage ****\nGPU active residency: 12.34 %\nGPU HW allocated memory: 512 MB\n";
+        let text =
+            "**** GPU usage ****\nGPU active residency: 12.34 %\nGPU HW allocated memory: 512 MB\n";
         let s = parse_powermetrics(text).unwrap();
         assert!((s.util - 12.34).abs() < 0.01);
         assert_eq!(s.mem_total, 512 * 1_048_576);

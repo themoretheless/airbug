@@ -1,7 +1,6 @@
 use airbug_bench::{
-    error,
+    Result, Run, error,
     model::{hash_file, write_new},
-    Result, Run,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -427,7 +426,9 @@ pub fn trend_points(store: &Path, case: &str, metric: &str) -> Result<Vec<TrendP
     Ok(points)
 }
 pub fn trend(store: &Path, case: &str, metric: &str) -> Result<String> {
-    let mut out=String::from("# History of process medians\n\n| Run | Revision | Candidate median | Unit | Context SHA256 |\n|---|---|---:|---|---|\n");
+    let mut out = String::from(
+        "# History of process medians\n\n| Run | Revision | Candidate median | Unit | Context SHA256 |\n|---|---|---:|---|---|\n",
+    );
     for p in trend_points(store, case, metric)? {
         let value = match p.median {
             Some(v) => format!("{v:.4}"),
@@ -458,7 +459,9 @@ pub fn trend_html(markdown: &str) -> String {
             index += 1.;
         }
     }
-    let mut charts=String::from("<section><h2>History by measurement context</h2><p>One chart per context hash; x = chronological run index, y = median. Missing data creates gaps between points.</p>");
+    let mut charts = String::from(
+        "<section><h2>History by measurement context</h2><p>One chart per context hash; x = chronological run index, y = median. Missing data creates gaps between points.</p>",
+    );
     for (context, points) in groups {
         charts.push_str(&airbug_bench::report::plot(&context, &points));
     }

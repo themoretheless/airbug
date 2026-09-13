@@ -3,7 +3,7 @@
 //! ```sh
 //! cargo run -p airbug-otel --example metrics
 //! ```
-use airbug_otel::{add_counter, init, record_histogram, KeyValue, TelemetryConfig};
+use airbug_otel::{KeyValue, TelemetryConfig, add_counter, init, record_histogram};
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

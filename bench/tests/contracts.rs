@@ -1,10 +1,10 @@
-use airbug_bench::analysis::{compare, median_interval, Decision};
+use airbug_bench::analysis::{Decision, compare, median_interval};
 use airbug_bench::*;
 use std::{
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -182,7 +182,11 @@ fn recorder_keeps_missing_gpu_reason() {
     .unwrap();
     let r = s.finish().unwrap();
     assert_eq!(r.observations[0].value, None);
-    assert!(airbug_bench::report::markdown(&r).unwrap().contains("no adapter"));
+    assert!(
+        airbug_bench::report::markdown(&r)
+            .unwrap()
+            .contains("no adapter")
+    );
 }
 #[test]
 fn report_escapes_untrusted_names() {
@@ -318,24 +322,27 @@ fn validation_failure_stops_before_sampling() {
         |_, _| Err(error("wrong answer")),
         DropPolicy::InsideTiming,
     );
-    assert!(s
-        .run("")
-        .unwrap_err()
-        .to_string()
-        .contains("pre-validation"));
+    assert!(
+        s.run("")
+            .unwrap_err()
+            .to_string()
+            .contains("pre-validation")
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 #[test]
 fn matrix_rejects_bad_axes_without_registration() {
     let mut s = Suite::new("bad");
-    assert!(s
-        .matrix("x", &[("n", &["1", "1"])], |_, _, _| panic!(
+    assert!(
+        s.matrix("x", &[("n", &["1", "1"])], |_, _, _| panic!(
             "must not register"
         ))
-        .is_err());
-    assert!(s
-        .matrix("x", &[("n", &[])], |_, _, _| panic!("must not register"))
-        .is_err());
+        .is_err()
+    );
+    assert!(
+        s.matrix("x", &[("n", &[])], |_, _, _| panic!("must not register"))
+            .is_err()
+    );
 }
 #[test]
 fn budgets_missing_units_bounds_and_relative_effect() {
@@ -537,13 +544,15 @@ fn lifecycle_helpers_join_and_cancel() {
     assert_eq!(result.outputs, vec![0, 1, 4, 9]);
     assert_eq!(active.load(Ordering::SeqCst), 0);
     assert!(peak.load(Ordering::SeqCst) > 1);
-    assert!(parallel(4, |i| {
-        if i == 2 {
-            panic!("controlled worker failure")
-        }
-        i
-    })
-    .is_err());
+    assert!(
+        parallel(4, |i| {
+            if i == 2 {
+                panic!("controlled worker failure")
+            }
+            i
+        })
+        .is_err()
+    );
     assert!(parallel(0, |_| 0).is_err());
     let cancellation = Cancellation::default();
     let p = pipeline((0..100).collect(), 2, &cancellation, |i| i * 2).unwrap();
@@ -552,13 +561,15 @@ fn lifecycle_helpers_join_and_cancel() {
     assert_eq!(p.processed, 100);
     assert!(pipeline(vec![1], 0, &cancellation, |i| i).is_err());
     let c = cancellation.clone();
-    assert!(pipeline((0..100).collect(), 1, &cancellation, move |i| {
-        if i == 3 {
-            c.cancel();
-        }
-        i
-    })
-    .is_err());
+    assert!(
+        pipeline((0..100).collect(), 1, &cancellation, move |i| {
+            if i == 3 {
+                c.cancel();
+            }
+            i
+        })
+        .is_err()
+    );
 }
 #[test]
 fn async_wakeup_and_cold_first_invocation() {
@@ -637,10 +648,12 @@ fn diagnostics_known_drift_and_order() {
     for o in &mut drift.observations {
         o.value = Some((100 + o.process * 10).to_string());
     }
-    assert!(diagnostics::diagnose(&drift)
-        .unwrap()
-        .iter()
-        .all(|d| d.flags.iter().any(|s| s.contains("chronological"))));
+    assert!(
+        diagnostics::diagnose(&drift)
+            .unwrap()
+            .iter()
+            .all(|d| d.flags.iter().any(|s| s.contains("chronological")))
+    );
     let mut ordered = paired(12, 1.);
     for o in &mut ordered.observations {
         let p = o.pair.unwrap();
@@ -771,5 +784,9 @@ fn throughput_derives_rates_and_scales_bytes_to_mib() {
         })
         .unwrap();
     plain.observe("plain", "wall", 1_000_000_000).unwrap();
-    assert!(report::throughput(&plain.finish().unwrap()).unwrap().is_empty());
+    assert!(
+        report::throughput(&plain.finish().unwrap())
+            .unwrap()
+            .is_empty()
+    );
 }

@@ -20,6 +20,7 @@ airbug-bench-macros = { path = "macros", version = "0.1.1", optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -1,4 +1,4 @@
-use crate::{error, Result};
+use crate::{Result, error};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{

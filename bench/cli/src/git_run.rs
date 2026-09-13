@@ -1,6 +1,6 @@
 //! Compare committed local Git snapshots without touching the active checkout.
 use crate::{project, runner};
-use airbug_bench::{error, model::write_new, Result};
+use airbug_bench::{Result, error, model::write_new};
 use std::{collections::BTreeMap, path::Path, process::Command};
 fn git(repo: &Path, args: &[&str]) -> Result<String> {
     let o = Command::new("git")
@@ -82,7 +82,9 @@ pub fn run_with_alpha(r: Request<'_>, alpha: f64) -> Result<()> {
             let fields: Vec<_> = meta.split_whitespace().collect();
             if fields.len() != 3 || fields[1] != "blob" || !matches!(fields[0], "100644" | "100755")
             {
-                return Err(error("snapshot contains symlink/submodule; use prepared binaries for this repository"));
+                return Err(error(
+                    "snapshot contains symlink/submodule; use prepared binaries for this repository",
+                ));
             }
             let path = Path::new(path);
             if path.is_absolute()

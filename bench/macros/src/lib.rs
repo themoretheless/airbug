@@ -9,7 +9,7 @@ pub fn bench(args: TokenStream, item: TokenStream) -> TokenStream {
         || !f.sig.inputs.is_empty()
         || !f.sig.generics.params.is_empty()
         || f.sig.asyncness.is_some()
-        || matches!(f.sig.safety, syn::Safety::Unsafe(_))
+        || f.sig.unsafety.is_some()
     {
         return syn::Error::new_spanned(&f.sig,"bench requires a safe synchronous nongeneric function with no arguments; use the builder for parameterized or async workloads").to_compile_error().into();
     }

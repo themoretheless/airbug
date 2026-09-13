@@ -3,7 +3,7 @@
 //! ```sh
 //! cargo run -p airbug-otel --example span --release
 //! ```
-use airbug_otel::{in_span, set_attribute, init, TelemetryConfig};
+use airbug_otel::{TelemetryConfig, in_span, init, set_attribute};
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

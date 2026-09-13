@@ -1,5 +1,5 @@
 //! Declarative exact-case budgets. Missing metrics and uncertainty never silently pass.
-use crate::{analysis, error, Result, Run, Status};
+use crate::{Result, Run, Status, analysis, error};
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

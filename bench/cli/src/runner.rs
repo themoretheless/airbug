@@ -379,7 +379,9 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                     .iter()
                     .any(|o| o.variant != "candidate" || o.process != 0 || o.pair.is_some())
                 {
-                    return Err(error("protocol worker must have one local process, candidate variant and no pair IDs"));
+                    return Err(error(
+                        "protocol worker must have one local process, candidate variant and no pair IDs",
+                    ));
                 }
                 for note in &worker.notes {
                     if !result.notes.contains(note) {
@@ -614,7 +616,9 @@ fn validate_variants(plan: &Plan) -> Result<()> {
     if !plan.variants.is_empty()
         && (plan.repetitions as usize) % (2 * (plan.variants.len() + 2)) != 0
     {
-        return Err(error("multi-variant repetitions must be a multiple of twice the variant count (balanced reversed rotations)"));
+        return Err(error(
+            "multi-variant repetitions must be a multiple of twice the variant count (balanced reversed rotations)",
+        ));
     }
     Ok(())
 }

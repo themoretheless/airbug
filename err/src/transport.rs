@@ -1,4 +1,4 @@
-//! Blocking HTTP transport to airbug-hub `/api/errors`.
+//! Blocking HTTP transport to airbug-hub `/api/v1/errors`.
 use crate::event::Event;
 use std::time::Duration;
 
@@ -11,14 +11,19 @@ pub enum TransportError {
     Rejected { status: u16, body: String },
 }
 
-/// Sends events synchronously (suitable for `Drop` flush).
+/// Pluggable delivery for [`Event`] (DIP / test doubles).
+pub trait EventTransport: Send + Sync {
+    fn send(&self, event: &Event) -> Result<(), TransportError>;
+}
+
+/// Sends events synchronously over HTTP (suitable for `Drop` flush).
 #[derive(Debug, Clone)]
-pub struct Transport {
+pub struct HttpTransport {
     endpoint: String,
     client: reqwest::blocking::Client,
 }
 
-impl Transport {
+impl HttpTransport {
     pub fn new(endpoint: impl Into<String>) -> Result<Self, TransportError> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -29,8 +34,10 @@ impl Transport {
             client,
         })
     }
+}
 
-    pub fn send(&self, event: &Event) -> Result<(), TransportError> {
+impl EventTransport for HttpTransport {
+    fn send(&self, event: &Event) -> Result<(), TransportError> {
         let response = self
             .client
             .post(&self.endpoint)
@@ -49,3 +56,8 @@ impl Transport {
         }
     }
 }
+
+/// Deprecated alias for [`HttpTransport`].
+#[deprecated(note = "renamed to HttpTransport")]
+#[allow(dead_code)]
+pub type Transport = HttpTransport;

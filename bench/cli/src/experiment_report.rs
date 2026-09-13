@@ -165,7 +165,9 @@ pub fn build(o: Options<'_>) -> Result<Document> {
         .as_ref()
         .is_some_and(|b| b.len() == 1 && candidates.len() > 1)
     {
-        return Err(error("a single baseline cannot be broadcast across a collection; supply a matching baseline collection"));
+        return Err(error(
+            "a single baseline cannot be broadcast across a collection; supply a matching baseline collection",
+        ));
     }
     if baselines
         .as_ref()
@@ -608,7 +610,9 @@ fn effects(rows: &[Row], threshold: f64) -> String {
         .fold(threshold.max(1.), f64::max);
     let x = |v: f64| 400. + v / extent * 300.;
     let height = valid.len() * 66 + 75;
-    let mut out=format!("<details open><summary>Effect estimates and confidence intervals</summary><svg role=\"img\" aria-label=\"Candidate change percent and confidence intervals\" viewBox=\"0 0 800 {height}\" style=\"width:100%;max-width:1000px\"><rect width=\"800\" height=\"{height}\" fill=\"#fff\"/>");
+    let mut out = format!(
+        "<details open><summary>Effect estimates and confidence intervals</summary><svg role=\"img\" aria-label=\"Candidate change percent and confidence intervals\" viewBox=\"0 0 800 {height}\" style=\"width:100%;max-width:1000px\"><rect width=\"800\" height=\"{height}\" fill=\"#fff\"/>"
+    );
     for value in [-threshold, 0., threshold] {
         out.push_str(&format!("<line x1=\"{:.2}\" x2=\"{:.2}\" y1=\"15\" y2=\"{}\" stroke=\"#a4b4b2\" stroke-dasharray=\"4 4\"/>",x(value),x(value),height-40));
     }

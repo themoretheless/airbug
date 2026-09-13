@@ -19,3 +19,5 @@ serde_json.workspace = true
 chrono = "0.4"
 notify-rust = "4"
 airbug-otel = { path = "../otel" }
+tracing.workspace = true
+tracing-subscriber.workspace = true

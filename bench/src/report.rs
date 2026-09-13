@@ -1,6 +1,6 @@
 use crate::{
-    analysis::{median, Comparison},
     Result, Run,
+    analysis::{Comparison, median},
 };
 use std::collections::BTreeMap;
 pub fn escape(s: &str) -> String {
@@ -72,7 +72,11 @@ pub fn throughput(run: &Run) -> Result<Vec<ThroughputSeries>> {
 }
 pub fn markdown(run: &Run) -> Result<String> {
     run.validate()?;
-    let mut out=format!("# bench {}\n\nStatus: {:?}\n\n| Case | Metric | Median | Unit | Scope / statistic | Observations | Processes |\n|---|---|---:|---|---|---:|---:|\n",escape(&run.id),run.status);
+    let mut out = format!(
+        "# bench {}\n\nStatus: {:?}\n\n| Case | Metric | Median | Unit | Scope / statistic | Observations | Processes |\n|---|---|---:|---|---|---:|---:|\n",
+        escape(&run.id),
+        run.status
+    );
     for c in &run.cases {
         for m in &c.metrics {
             let mut groups: BTreeMap<&str, Vec<_>> = BTreeMap::new();
@@ -151,7 +155,9 @@ pub fn comparison(rows: &[Comparison]) -> String {
         _ => 4,
     });
     let rows = ordered;
-    let mut out=String::from("# bench comparison\n\n| Case | Metric | A | B | Change % | Interval % | Independent units | Decision |\n|---|---|---:|---:|---:|---|---:|---|\n");
+    let mut out = String::from(
+        "# bench comparison\n\n| Case | Metric | A | B | Change % | Interval % | Independent units | Decision |\n|---|---|---:|---:|---:|---|---:|---|\n",
+    );
     let regressions = rows
         .iter()
         .filter(|r| r.decision == crate::analysis::Decision::Regression)
@@ -290,11 +296,19 @@ pub fn html_run(run: &Run) -> Result<String> {
 pub fn advice(r: &Comparison) -> &'static str {
     use crate::analysis::Decision;
     match r.decision {
-        Decision::Unavailable=>"Next: inspect missing capability/data; repeating unchanged unsupported cases will not help.",
-        Decision::Inconclusive if r.baseline==Some(0.)=>"Next: use an absolute budget; a percentage of zero is undefined.",
-        Decision::Inconclusive if r.interval_percent.is_none()=>"Next: predeclare a new experiment with more independent processes/pairs; more inner iterations do not increase independent units.",
-        Decision::Inconclusive=>"Next: inspect raw process plots and environment drift; use a separately planned larger experiment if needed. Do not rerun until a desired verdict appears.",
-        _=>""
+        Decision::Unavailable => {
+            "Next: inspect missing capability/data; repeating unchanged unsupported cases will not help."
+        }
+        Decision::Inconclusive if r.baseline == Some(0.) => {
+            "Next: use an absolute budget; a percentage of zero is undefined."
+        }
+        Decision::Inconclusive if r.interval_percent.is_none() => {
+            "Next: predeclare a new experiment with more independent processes/pairs; more inner iterations do not increase independent units."
+        }
+        Decision::Inconclusive => {
+            "Next: inspect raw process plots and environment drift; use a separately planned larger experiment if needed. Do not rerun until a desired verdict appears."
+        }
+        _ => "",
     }
 }
 /// Dependency-free SVG scatterplot. Fixed numeric coordinates and escaped labels only.
@@ -311,7 +325,11 @@ pub fn plot(label: &str, points: &[(f64, f64)]) -> String {
     let xmax = points.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
     let ymin = points.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
     let ymax = points.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
-    let mut svg=format!("<figure><figcaption>{}</figcaption><svg role=\"img\" aria-label=\"{}\" viewBox=\"0 0 720 220\" style=\"width:100%;max-width:900px;background:white\"><path d=\"M64 16V180H704\" stroke=\"#a9bdb7\" fill=\"none\"/><text x=\"2\" y=\"25\" font-size=\"11\">{ymax:.3}</text><text x=\"2\" y=\"180\" font-size=\"11\">{ymin:.3}</text><text x=\"64\" y=\"205\" font-size=\"11\">{xmin:.0}</text><text x=\"665\" y=\"205\" font-size=\"11\">{xmax:.0}</text>",html_escape(label),html_escape(label));
+    let mut svg = format!(
+        "<figure><figcaption>{}</figcaption><svg role=\"img\" aria-label=\"{}\" viewBox=\"0 0 720 220\" style=\"width:100%;max-width:900px;background:white\"><path d=\"M64 16V180H704\" stroke=\"#a9bdb7\" fill=\"none\"/><text x=\"2\" y=\"25\" font-size=\"11\">{ymax:.3}</text><text x=\"2\" y=\"180\" font-size=\"11\">{ymin:.3}</text><text x=\"64\" y=\"205\" font-size=\"11\">{xmin:.0}</text><text x=\"665\" y=\"205\" font-size=\"11\">{xmax:.0}</text>",
+        html_escape(label),
+        html_escape(label)
+    );
     let stride = points.len().div_ceil(1000).max(1);
     for (x, y) in points.iter().step_by(stride) {
         let px = 64. + (x - xmin) / (xmax - xmin).max(1.) * 640.;
@@ -326,7 +344,9 @@ pub fn plot(label: &str, points: &[(f64, f64)]) -> String {
     svg
 }
 fn raw_charts(run: &Run) -> Result<String> {
-    let mut charts=String::from("<section><h2>Raw observation plots</h2><p>x = observation sequence within each process; y = value (wall batches normalized per operation). Each plot is a separate process, with its own scale. At most 64 plots, at most 1000 displayed points each; JSON/CSV retains all values. These are diagnostics, not confidence intervals.</p>");
+    let mut charts = String::from(
+        "<section><h2>Raw observation plots</h2><p>x = observation sequence within each process; y = value (wall batches normalized per operation). Each plot is a separate process, with its own scale. At most 64 plots, at most 1000 displayed points each; JSON/CSV retains all values. These are diagnostics, not confidence intervals.</p>",
+    );
     type Series = BTreeMap<(String, String, String, u32), Vec<(f64, f64)>>;
     let mut groups: Series = BTreeMap::new();
     for o in &run.observations {

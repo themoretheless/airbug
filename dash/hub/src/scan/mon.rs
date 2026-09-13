@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use crate::scan::{human_bytes, mtime_detail, Action, Artifact, DomainCard, Status};
+use crate::scan::{Action, Artifact, DomainCard, Status, human_bytes, mtime_detail};
 
 pub(crate) fn scan_mon() -> DomainCard {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());

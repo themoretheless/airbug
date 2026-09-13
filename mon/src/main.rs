@@ -5,11 +5,22 @@ mod sampler;
 mod storage;
 mod views;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+fn init_tracing() {
+    let filter = std::env::var("AIRBUG_LOG")
+        .or_else(|_| std::env::var("RUST_LOG"))
+        .unwrap_or_else(|_| "info".into());
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::new(filter))
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 fn main() -> eframe::Result<()> {
+    init_tracing();
     let args: Vec<String> = std::env::args().collect();
     let otlp = maybe_otlp(&args);
 
@@ -55,7 +66,7 @@ fn main() -> eframe::Result<()> {
                 visuals: egui::Visuals::dark(),
                 ..Default::default()
             });
-            Ok(Box::new(app::OtelApp::new(rx)))
+            Ok(Box::new(app::MonApp::new(rx)))
         }),
     );
     stop.store(true, Ordering::Relaxed);
@@ -71,11 +82,11 @@ fn maybe_otlp(args: &[String]) -> Option<Arc<otlp::OtlpExport>> {
     let endpoint = otlp::endpoint_from_args(args);
     match otlp::OtlpExport::start(endpoint) {
         Ok(export) => {
-            eprintln!("otlp: exporting host metrics (--otlp / OTEL_EXPORTER_OTLP_ENDPOINT)");
+            tracing::info!("otlp: exporting host metrics (--otlp / OTEL_EXPORTER_OTLP_ENDPOINT)");
             Some(Arc::new(export))
         }
         Err(err) => {
-            eprintln!("otlp: disabled — {err}");
+            tracing::warn!(error = %err, "otlp: disabled");
             None
         }
     }
@@ -88,7 +99,6 @@ fn shutdown_otlp(otlp: Option<Arc<otlp::OtlpExport>>) {
     match Arc::try_unwrap(otlp) {
         Ok(export) => export.shutdown(),
         Err(_) => {
-            // Brief wait if a stray clone remains.
             std::thread::sleep(Duration::from_millis(50));
         }
     }
@@ -100,7 +110,7 @@ fn run_headless(seconds: u64, otlp: Option<Arc<otlp::OtlpExport>>) {
     let stop = Arc::new(AtomicBool::new(false));
 
     let db_path = storage::default_db_path();
-    println!("headless: БД {}", db_path.display());
+    tracing::info!(path = %db_path.display(), "headless: database");
     let storage = storage::Storage::open(&db_path).expect("не удалось открыть БД");
     let writer = std::thread::spawn(move || storage::run_db_writer(db_rx, storage));
 
@@ -130,10 +140,10 @@ fn run_headless(seconds: u64, otlp: Option<Arc<otlp::OtlpExport>>) {
     drop(rx);
     let _ = writer.join().expect("db writer panicked");
     shutdown_otlp(otlp);
-    println!("headless: получено сэмплов в UI-канал: {received}");
+    tracing::info!(received, "headless: samples received on UI channel");
     let storage = storage::Storage::open(&db_path).expect("не удалось открыть БД");
     match storage.count_samples() {
-        Ok(n) => println!("headless: записей в таблице samples: {n}"),
-        Err(e) => println!("headless: ошибка подсчёта: {e}"),
+        Ok(n) => tracing::info!(n, "headless: rows in samples table"),
+        Err(e) => tracing::warn!(error = %e, "headless: count failed"),
     }
 }

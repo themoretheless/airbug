@@ -34,7 +34,7 @@ curl -sf "$BASE/api/metrics?limit=5" >/dev/null && echo "metrics ok"
 curl -sf "$BASE/api/issues" >/dev/null && echo "issues ok"
 
 EVENT='{"event_id":"smoke-1","timestamp":"t","level":"error","message":"smoke","fingerprint":["smoke"],"breadcrumbs":[],"tags":{},"extra":{},"contexts":{}}'
-curl -sf -X POST "$BASE/api/errors" -H 'content-type: application/json' -d "$EVENT" >/dev/null
+curl -sf -X POST "$BASE/api/v1/errors" -H 'content-type: application/json' -d "$EVENT" >/dev/null
 echo "errors ingest ok"
 
 if curl -sf --max-time 1 "http://127.0.0.1:4318" >/dev/null 2>&1 \

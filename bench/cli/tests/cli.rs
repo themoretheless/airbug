@@ -46,7 +46,11 @@ fn notes_json_output() {
     simple_run(&run);
     let store = t.path().to_str().unwrap();
     let p = run.to_str().unwrap();
-    assert!(cli(&["--store", store, "note", p, "hello note"]).status.success());
+    assert!(
+        cli(&["--store", store, "note", p, "hello note"])
+            .status
+            .success()
+    );
     let o = cli(&["--store", store, "notes", p, "--json"]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
@@ -61,7 +65,12 @@ fn context_and_trend_json_outputs() {
     let store = t.path();
     let a = simple_run(&store.join("a"));
     // context --json: identical runs -> no differences.
-    let o = cli(&["context", store.join("a").to_str().unwrap(), store.join("a").to_str().unwrap(), "--json"]);
+    let o = cli(&[
+        "context",
+        store.join("a").to_str().unwrap(),
+        store.join("a").to_str().unwrap(),
+        "--json",
+    ]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v.as_array().unwrap().len(), 0);
@@ -69,14 +78,28 @@ fn context_and_trend_json_outputs() {
     let mut b = a.clone();
     b.environment.insert("os".into(), "other-os".into());
     b.save_new(store.join("b")).unwrap();
-    let o = cli(&["context", store.join("a").to_str().unwrap(), store.join("b").to_str().unwrap(), "--json"]);
+    let o = cli(&[
+        "context",
+        store.join("a").to_str().unwrap(),
+        store.join("b").to_str().unwrap(),
+        "--json",
+    ]);
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     let diffs = v.as_array().unwrap();
     assert_eq!(diffs.len(), 1);
     assert_eq!(diffs[0]["key"], "environment.os");
     assert_eq!(diffs[0]["b"], "other-os");
     // trend --json: one complete run with case "=unsafe,case"/metric "wall" value 42.
-    let o = cli(&["--store", store.to_str().unwrap(), "trend", "--case", "=unsafe,case", "--metric", "wall", "--json"]);
+    let o = cli(&[
+        "--store",
+        store.to_str().unwrap(),
+        "trend",
+        "--case",
+        "=unsafe,case",
+        "--metric",
+        "wall",
+        "--json",
+    ]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     let points = v.as_array().unwrap();
@@ -124,7 +147,11 @@ fn throughput_derives_and_gates_work_units() {
                 ("work.unit".to_string(), "elements".to_string()),
                 ("work.count".to_string(), "10".to_string()),
             ]),
-            metrics: vec![airbug_bench::Metric::duration("wall", "test", "batch_total")],
+            metrics: vec![airbug_bench::Metric::duration(
+                "wall",
+                "test",
+                "batch_total",
+            )],
         })
         .unwrap();
         // ops=1, 1e9 ns batch -> 10 elements/s.
@@ -142,12 +169,23 @@ fn throughput_derives_and_gates_work_units() {
     assert!((rows[0]["median"].as_f64().unwrap() - 10.0).abs() < 1e-6);
     assert_eq!(rows[0]["samples"], 1);
     // Gating: a floor above 10 fails, below passes; a ceiling below 10 fails.
-    assert_eq!(cli(&["throughput", path, "--min", "20"]).status.code(), Some(1));
-    assert_eq!(cli(&["throughput", path, "--min", "5"]).status.code(), Some(0));
-    assert_eq!(cli(&["throughput", path, "--max", "5"]).status.code(), Some(1));
+    assert_eq!(
+        cli(&["throughput", path, "--min", "20"]).status.code(),
+        Some(1)
+    );
+    assert_eq!(
+        cli(&["throughput", path, "--min", "5"]).status.code(),
+        Some(0)
+    );
+    assert_eq!(
+        cli(&["throughput", path, "--max", "5"]).status.code(),
+        Some(1)
+    );
     // Misuse: inverted range.
     assert_eq!(
-        cli(&["throughput", path, "--min", "100", "--max", "10"]).status.code(),
+        cli(&["throughput", path, "--min", "100", "--max", "10"])
+            .status
+            .code(),
         Some(2)
     );
 }
@@ -222,17 +260,31 @@ fn list_text_ids_and_json_metrics_with_counts() {
 fn completions_generate_per_shell_and_reject_unknown() {
     for shell in ["bash", "zsh", "fish", "powershell", "elvish"] {
         let o = cli(&["completions", shell]);
-        assert!(o.status.success(), "{shell}: {}", String::from_utf8_lossy(&o.stderr));
+        assert!(
+            o.status.success(),
+            "{shell}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
         let script = String::from_utf8(o.stdout).unwrap();
         assert!(!script.is_empty(), "{shell}: empty script");
         // Every generator embeds the completed binary name and the real subcommands.
-        assert!(script.contains("cargo-airbug-bench"), "{shell}: missing binary name");
-        assert!(script.contains("doctor") && script.contains("compare"), "{shell}: missing subcommands");
+        assert!(
+            script.contains("cargo-airbug-bench"),
+            "{shell}: missing binary name"
+        );
+        assert!(
+            script.contains("doctor") && script.contains("compare"),
+            "{shell}: missing subcommands"
+        );
     }
     // The cargo-subcommand invocation form produces the same output.
     let o = cli(&["airbug-bench", "completions", "zsh"]);
     assert!(o.status.success());
-    assert!(String::from_utf8(o.stdout).unwrap().starts_with("#compdef cargo-airbug-bench"));
+    assert!(
+        String::from_utf8(o.stdout)
+            .unwrap()
+            .starts_with("#compdef cargo-airbug-bench")
+    );
     // Generation is read-only and never touches the shell configuration.
     assert!(!cli(&["completions", "tcsh"]).status.success());
 }
@@ -268,40 +320,48 @@ fn process_success_failure_timeout_and_immutable_output() {
             .unwrap()
             .contains("hello world")
     );
-    assert!(!cli(&["run", "--program", "/bin/echo", "--output", p])
-        .status
-        .success());
+    assert!(
+        !cli(&["run", "--program", "/bin/echo", "--output", p])
+            .status
+            .success()
+    );
     let bad = t.path().join("bad");
-    assert!(!cli(&[
-        "run",
-        "--program",
-        "/usr/bin/false",
-        "--output",
-        bad.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        !cli(&[
+            "run",
+            "--program",
+            "/usr/bin/false",
+            "--output",
+            bad.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     assert_eq!(
         airbug_bench::Run::load(&bad).unwrap().status,
         airbug_bench::Status::Failed
     );
     let timeout = t.path().join("timeout");
-    assert!(!cli(&[
-        "run",
-        "--program",
-        "/bin/sleep",
-        "--timeout-ms",
-        "20",
-        "--output",
-        timeout.to_str().unwrap(),
-        "--",
-        "2"
-    ])
-    .status
-    .success());
-    assert!(fs::read_to_string(timeout.join("run.json"))
-        .unwrap()
-        .contains("timed out"));
+    assert!(
+        !cli(&[
+            "run",
+            "--program",
+            "/bin/sleep",
+            "--timeout-ms",
+            "20",
+            "--output",
+            timeout.to_str().unwrap(),
+            "--",
+            "2"
+        ])
+        .status
+        .success()
+    );
+    assert!(
+        fs::read_to_string(timeout.join("run.json"))
+            .unwrap()
+            .contains("timed out")
+    );
 }
 #[cfg(unix)]
 #[test]
@@ -382,27 +442,31 @@ fn forma_import_preserves_scope_and_rejects_missing_rows() {
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let run = airbug_bench::Run::load(out).unwrap();
     assert_eq!(run.cases.len(), 11);
-    assert!(run.cases.iter().all(|c| c
-        .metrics
-        .iter()
-        .any(|m| m.id == "gpu.pass.mean" && m.phase == "gpu_diagnostic")));
-    assert!(run
-        .observations
-        .iter()
-        .filter(|o| o.metric == "gpu.pass.mean")
-        .all(|o| o.value.is_none()));
+    assert!(run.cases.iter().all(|c| {
+        c.metrics
+            .iter()
+            .any(|m| m.id == "gpu.pass.mean" && m.phase == "gpu_diagnostic")
+    }));
+    assert!(
+        run.observations
+            .iter()
+            .filter(|o| o.metric == "gpu.pass.mean")
+            .all(|o| o.value.is_none())
+    );
     let p = src.join("results.json");
     let mut rows: Vec<serde_json::Value> = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
     rows.pop();
     fs::write(p, serde_json::to_vec(&rows).unwrap()).unwrap();
-    assert!(!cli(&[
-        "import-forma",
-        src.to_str().unwrap(),
-        "-o",
-        t.path().join("bad").to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        !cli(&[
+            "import-forma",
+            src.to_str().unwrap(),
+            "-o",
+            t.path().join("bad").to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
 }
 
 #[test]
@@ -521,66 +585,80 @@ fn history_last_notes_export_and_bundle_roundtrip() {
     let store = t.path().to_str().unwrap();
     assert!(cli(&["--store", store, "report", "last"]).status.success());
     let original = fs::read(run.join("run.json")).unwrap();
-    assert!(cli(&["--store", store, "note", "last", "portable note"])
-        .status
-        .success());
+    assert!(
+        cli(&["--store", store, "note", "last", "portable note"])
+            .status
+            .success()
+    );
     assert_eq!(original, fs::read(run.join("run.json")).unwrap());
     let report = cli(&["--store", store, "report", "last"]);
-    assert!(String::from_utf8(report.stdout)
-        .unwrap()
-        .contains("portable note"));
+    assert!(
+        String::from_utf8(report.stdout)
+            .unwrap()
+            .contains("portable note")
+    );
     let csv = t.path().join("out.csv");
-    assert!(cli(&[
-        "--store",
-        store,
-        "export",
-        "last",
-        "--format",
-        "csv",
-        "-o",
-        csv.to_str().unwrap()
-    ])
-    .status
-    .success());
-    assert!(fs::read_to_string(csv)
-        .unwrap()
-        .contains("\"'=unsafe,case\""));
+    assert!(
+        cli(&[
+            "--store",
+            store,
+            "export",
+            "last",
+            "--format",
+            "csv",
+            "-o",
+            csv.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    assert!(
+        fs::read_to_string(csv)
+            .unwrap()
+            .contains("\"'=unsafe,case\"")
+    );
     let jsonl = t.path().join("out.jsonl");
-    assert!(cli(&[
-        "--store",
-        store,
-        "export",
-        "last",
-        "--format",
-        "jsonl",
-        "-o",
-        jsonl.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "--store",
+            store,
+            "export",
+            "last",
+            "--format",
+            "jsonl",
+            "-o",
+            jsonl.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     let value: serde_json::Value =
         serde_json::from_str(fs::read_to_string(jsonl).unwrap().trim()).unwrap();
     assert_eq!(value["observation"]["value"], "42");
     let bundle = t.path().join("run.bundle.json");
-    assert!(cli(&[
-        "--store",
-        store,
-        "bundle",
-        "last",
-        "-o",
-        bundle.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "--store",
+            store,
+            "bundle",
+            "last",
+            "-o",
+            bundle.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     let restored = t.path().join("restored");
-    assert!(cli(&[
-        "unpack",
-        bundle.to_str().unwrap(),
-        "-o",
-        restored.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "unpack",
+            bundle.to_str().unwrap(),
+            "-o",
+            restored.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     assert_eq!(original, fs::read(restored.join("run.json")).unwrap());
     let other = t.path().join("empty-store");
     let o = cli(&[
@@ -590,9 +668,11 @@ fn history_last_notes_export_and_bundle_roundtrip() {
         restored.to_str().unwrap(),
     ]);
     assert!(o.status.success());
-    assert!(String::from_utf8(o.stdout)
-        .unwrap()
-        .contains("portable note"));
+    assert!(
+        String::from_utf8(o.stdout)
+            .unwrap()
+            .contains("portable note")
+    );
     let h = cli(&["--store", store, "history", "--json"]);
     let h: serde_json::Value = serde_json::from_slice(&h.stdout).unwrap();
     assert_eq!(h.as_array().unwrap().len(), 2);
@@ -603,26 +683,30 @@ fn bundle_rejects_tampering_before_creating_output() {
     let run = t.path().join("run");
     simple_run(&run);
     let bundle = t.path().join("bundle.json");
-    assert!(cli(&[
-        "bundle",
-        run.to_str().unwrap(),
-        "-o",
-        bundle.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "bundle",
+            run.to_str().unwrap(),
+            "-o",
+            bundle.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     let mut v: serde_json::Value = serde_json::from_slice(&fs::read(&bundle).unwrap()).unwrap();
     v["files"][0]["name"] = "../escaped".into();
     fs::write(&bundle, serde_json::to_vec(&v).unwrap()).unwrap();
     let out = t.path().join("out");
-    assert!(!cli(&[
-        "unpack",
-        bundle.to_str().unwrap(),
-        "-o",
-        out.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        !cli(&[
+            "unpack",
+            bundle.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     assert!(!out.exists());
 }
 #[cfg(unix)]
@@ -682,9 +766,11 @@ fn uncertainty_policy_does_not_allow_missing_capabilities() {
         "warn",
     ]);
     assert!(o.status.success());
-    assert!(String::from_utf8(o.stderr)
-        .unwrap()
-        .contains("inconclusive"));
+    assert!(
+        String::from_utf8(o.stderr)
+            .unwrap()
+            .contains("inconclusive")
+    );
 }
 #[test]
 fn context_trend_and_ci_template() {
@@ -692,9 +778,11 @@ fn context_trend_and_ci_template() {
     let run = t.path().join("run");
     simple_run(&run);
     let o = cli(&["context", run.to_str().unwrap(), run.to_str().unwrap()]);
-    assert!(String::from_utf8(o.stdout)
-        .unwrap()
-        .contains("No differences"));
+    assert!(
+        String::from_utf8(o.stdout)
+            .unwrap()
+            .contains("No differences")
+    );
     let out = t.path().join("trend.html");
     let o = cli(&[
         "--store",
@@ -753,14 +841,16 @@ fn privacy_multivariant_resume_and_retention() {
         "[REDACTED]"
     );
     let bundle = t.path().join("export.json");
-    assert!(cli(&[
-        "bundle",
-        run.to_str().unwrap(),
-        "-o",
-        bundle.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "bundle",
+            run.to_str().unwrap(),
+            "-o",
+            bundle.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     assert!(!fs::read_to_string(bundle).unwrap().contains("sensitive"));
     let multi = t.path().join("multi");
     let p = serde_json::json!({"candidate":{"path":"/usr/bin/true","cwd":null},"baseline":{"path":"/usr/bin/true","cwd":null},"variants":{"third":{"path":"/usr/bin/true","cwd":null}},"repetitions":6});
@@ -788,15 +878,17 @@ fn privacy_multivariant_resume_and_retention() {
     let resumed = t.path().join("resumed");
     let p = serde_json::json!({"candidate":{"path":"/bin/sh","args":["-c","test -f \"$1\"","--",marker],"cwd":null},"repetitions":2,"privacy":{"allow_env":[],"secret_env":[]}});
     fs::write(&plan, serde_json::to_vec(&p).unwrap()).unwrap();
-    assert!(!cli(&[
-        "run",
-        "--plan",
-        plan.to_str().unwrap(),
-        "-o",
-        partial.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        !cli(&[
+            "run",
+            "--plan",
+            plan.to_str().unwrap(),
+            "-o",
+            partial.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     let original = fs::read(partial.join("run.json")).unwrap();
     fs::write(&marker, "").unwrap();
     let o = cli(&[
@@ -906,14 +998,16 @@ fn experiment_reports_preserve_failures_and_family_uncertainty() {
     assert!(page.contains("Effect estimates and confidence intervals"));
     assert!(page.contains("href=\"#run-0\""));
     assert_eq!(page.matches("class=\"run-card\"").count(), 7);
-    assert!(!cli(&[
-        "report",
-        root.to_str().unwrap(),
-        "-o",
-        html.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        !cli(&[
+            "report",
+            root.to_str().unwrap(),
+            "-o",
+            html.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     // Explicit collection-level correction: 6 identical pairs suffice alone but not for 7 runs.
     paired.observations.retain(|o| o.pair.unwrap() < 6);
     fs::write(
@@ -922,14 +1016,16 @@ fn experiment_reports_preserve_failures_and_family_uncertainty() {
     )
     .unwrap();
     let out = t.path().join("uncertain.json");
-    assert!(cli(&[
-        "report",
-        root.to_str().unwrap(),
-        "-o",
-        out.to_str().unwrap()
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "report",
+            root.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
     let d: serde_json::Value = serde_json::from_slice(&fs::read(out).unwrap()).unwrap();
     let e = d["entries"]
         .as_array()
@@ -989,34 +1085,39 @@ fn memory_requires_instrumentation_and_dry_run_is_read_only() {
     let t = tempfile::tempdir().unwrap();
     let out = t.path().join("memory");
     let path = out.to_str().unwrap();
-    assert!(cli(&[
-        "run",
-        "--memory",
-        "--no-ui",
-        "--dry-run",
-        "--program",
-        "/bin/echo",
-        "-o",
-        path
-    ])
-    .status
-    .success());
+    assert!(
+        cli(&[
+            "run",
+            "--memory",
+            "--no-ui",
+            "--dry-run",
+            "--program",
+            "/bin/echo",
+            "-o",
+            path
+        ])
+        .status
+        .success()
+    );
     assert!(!out.exists());
-    assert!(!cli(&[
-        "run",
-        "--memory",
-        "--no-ui",
-        "--program",
-        "/bin/echo",
-        "-o",
-        path
-    ])
-    .status
-    .success());
+    assert!(
+        !cli(&[
+            "run",
+            "--memory",
+            "--no-ui",
+            "--program",
+            "/bin/echo",
+            "-o",
+            path
+        ])
+        .status
+        .success()
+    );
     let run = airbug_bench::Run::load(&out).unwrap();
     assert_eq!(run.status, airbug_bench::Status::Failed);
-    assert!(run
-        .notes
-        .iter()
-        .any(|n| n.contains("memory profile missing")));
+    assert!(
+        run.notes
+            .iter()
+            .any(|n| n.contains("memory profile missing"))
+    );
 }

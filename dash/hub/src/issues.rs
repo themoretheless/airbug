@@ -1,20 +1,18 @@
 //! Issue store + ingest for airbug-err events (SQLite).
-use crate::{
-    config::RootPaths,
-    error::{HubError, Result},
-};
-use airbug_err::Event;
+use crate::error::{HubError, Result};
+use airbug_err::{EVENT_SCHEMA_VERSION, Event};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fs,
-    io::Write,
-    net::TcpStream,
     path::{Path, PathBuf},
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+/// Supported ingest schema major (matches [`EVENT_SCHEMA_VERSION`]).
+pub const SUPPORTED_EVENT_SCHEMA: u32 = EVENT_SCHEMA_VERSION;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -88,28 +86,93 @@ pub struct IssueSummary {
     pub service: Option<String>,
 }
 
-struct DbState {
+/// Port for issue persistence (DIP).
+pub trait IssueStore: Send + Sync {
+    fn ingest(&self, event: Event, webhook: Option<&str>) -> Result<IngestResponse>;
+    fn list(&self) -> IssuesList;
+    fn get(&self, id: &str) -> Option<Issue>;
+    fn set_status(&self, id: &str, status: IssueStatus) -> Result<Issue>;
+}
+
+/// SQLite-backed [`IssueStore`].
+pub struct SqliteIssueStore {
     path: PathBuf,
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
-static DB: Mutex<Option<DbState>> = Mutex::new(None);
-
-pub fn db_path(root: &Path) -> PathBuf {
-    RootPaths::new(root).issues_db()
-}
-
-fn with_db<T>(root: &Path, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
-    let path = db_path(root);
-    let mut guard = DB.lock().map_err(|e| HubError::msg(format!("lock poisoned: {e}")))?;
-    let reopen = guard.as_ref().map(|s| s.path != path).unwrap_or(true);
-    if reopen {
-        *guard = Some(DbState {
-            conn: open(&path)?,
+impl SqliteIssueStore {
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
+        let path = path.into();
+        let conn = open(&path)?;
+        Ok(Self {
             path,
-        });
+            conn: Mutex::new(conn),
+        })
     }
-    f(&guard.as_ref().expect("db just opened").conn)
+
+    fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+        let guard = self
+            .conn
+            .lock()
+            .map_err(|e| HubError::msg(format!("lock poisoned: {e}")))?;
+        f(&guard)
+    }
+}
+
+impl IssueStore for SqliteIssueStore {
+    fn ingest(&self, event: Event, webhook: Option<&str>) -> Result<IngestResponse> {
+        validate_schema(&event)?;
+        self.with_conn(|conn| ingest_unlocked(conn, event, webhook))
+    }
+
+    fn list(&self) -> IssuesList {
+        let path_s = self.path.display().to_string();
+        match self.with_conn(list_unlocked) {
+            Ok(issues) => IssuesList {
+                path: path_s,
+                available: true,
+                note: if issues.is_empty() {
+                    "No issues yet. Point airbug-err at POST /api/v1/errors.".into()
+                } else {
+                    format!("{} issue(s)", issues.len())
+                },
+                issues,
+            },
+            Err(e) => IssuesList {
+                path: path_s,
+                available: false,
+                issues: vec![],
+                note: e.to_string(),
+            },
+        }
+    }
+
+    fn get(&self, id: &str) -> Option<Issue> {
+        self.with_conn(|conn| Ok(get_unlocked(conn, id)?)).ok()
+    }
+
+    fn set_status(&self, id: &str, status: IssueStatus) -> Result<Issue> {
+        self.with_conn(|conn| {
+            let n = conn.execute(
+                "UPDATE issues SET status = ?1 WHERE id = ?2",
+                params![status.as_str(), id],
+            )?;
+            if n == 0 {
+                return Err(HubError::msg(format!("issue not found: {id}")));
+            }
+            Ok(get_unlocked(conn, id)?)
+        })
+    }
+}
+
+pub fn validate_schema(event: &Event) -> Result<()> {
+    if event.schema_version == 0 || event.schema_version > SUPPORTED_EVENT_SCHEMA {
+        return Err(HubError::msg(format!(
+            "unsupported event schema_version {} (supported major ≤ {SUPPORTED_EVENT_SCHEMA})",
+            event.schema_version
+        )));
+    }
+    Ok(())
 }
 
 fn open(path: &Path) -> rusqlite::Result<Connection> {
@@ -177,109 +240,110 @@ fn map_issue_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Issue> {
     })
 }
 
-/// Ingest one typed airbug-err [`Event`].
-pub fn ingest(root: &Path, event: Event, webhook: Option<&str>) -> Result<IngestResponse> {
-    with_db(root, |conn| {
-        let fp = fingerprint_key(&event);
-        let ts = if event.timestamp.is_empty() {
-            now_iso()
+fn ingest_unlocked(
+    conn: &Connection,
+    event: Event,
+    webhook: Option<&str>,
+) -> Result<IngestResponse> {
+    let fp = fingerprint_key(&event);
+    let ts = if event.timestamp.is_empty() {
+        now_iso()
+    } else {
+        event.timestamp.clone()
+    };
+    let title = event.title();
+    let level = event.level.as_str().to_string();
+    let release = event.release.clone();
+    let environment = event.environment.clone();
+    let service = event.service.clone();
+    let event_json = serde_json::to_string(&event).unwrap_or_else(|_| "{}".into());
+
+    let existing: Option<(String, i64, String)> = conn
+        .query_row(
+            "SELECT id, count, status FROM issues WHERE fingerprint = ?1",
+            params![fp],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    if let Some((id, count, status)) = existing {
+        let new_count = count + 1;
+        let new_status = if status == "resolved" {
+            "unresolved"
         } else {
-            event.timestamp.clone()
+            status.as_str()
         };
-        let title = event.title();
-        let level = event.level.as_str().to_string();
-        let release = event.release.clone();
-        let environment = event.environment.clone();
-        let service = event.service.clone();
-        let event_json = serde_json::to_string(&event).unwrap_or_else(|_| "{}".into());
-
-        let existing: Option<(String, i64, String)> = conn
-            .query_row(
-                "SELECT id, count, status FROM issues WHERE fingerprint = ?1",
-                params![fp],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .optional()?;
-
-        if let Some((id, count, status)) = existing {
-            let new_count = count + 1;
-            let new_status = if status == "resolved" {
-                "unresolved"
-            } else {
-                status.as_str()
-            };
-            conn.execute(
-                "UPDATE issues SET count=?1, last_seen=?2, title=?3, level=?4,
+        conn.execute(
+            "UPDATE issues SET count=?1, last_seen=?2, title=?3, level=?4,
                  release=?5, environment=?6, service=?7, last_event=?8, status=?9
                  WHERE id=?10",
-                params![
-                    new_count,
-                    ts,
-                    title,
-                    level,
-                    release,
-                    environment,
-                    service,
-                    event_json,
-                    new_status,
-                    id
-                ],
-            )?;
-            return Ok(IngestResponse {
-                ok: true,
-                issue_id: id,
-                is_new: false,
-                count: new_count as u64,
-            });
-        }
-
-        let next_id: i64 = conn
-            .query_row(
-                "UPDATE meta SET value = value + 1 WHERE key = 'next_id' RETURNING value",
-                [],
-                |row| row.get(0),
-            )
-            .or_else(|_| {
-                conn.execute(
-                    "UPDATE meta SET value = value + 1 WHERE key = 'next_id'",
-                    [],
-                )?;
-                conn.query_row("SELECT value FROM meta WHERE key = 'next_id'", [], |row| {
-                    row.get(0)
-                })
-            })?;
-
-        let id = format!("ISSUE-{next_id}");
-        conn.execute(
-            "INSERT INTO issues(id, fingerprint, title, level, status, count, first_seen, last_seen,
-             release, environment, service, last_event)
-             VALUES(?1,?2,?3,?4,'unresolved',1,?5,?5,?6,?7,?8,?9)",
             params![
-                id,
-                fp,
+                new_count,
+                ts,
                 title,
                 level,
-                ts,
                 release,
                 environment,
                 service,
-                event_json
+                event_json,
+                new_status,
+                id
             ],
         )?;
-
-        if let Some(url) = webhook {
-            let issue = get_unlocked(conn, &id).ok();
-            if let Some(issue) = issue {
-                fire_webhook(url, &id, &issue);
-            }
-        }
-
-        Ok(IngestResponse {
+        return Ok(IngestResponse {
             ok: true,
             issue_id: id,
-            is_new: true,
-            count: 1,
-        })
+            is_new: false,
+            count: new_count as u64,
+        });
+    }
+
+    let next_id: i64 = conn
+        .query_row(
+            "UPDATE meta SET value = value + 1 WHERE key = 'next_id' RETURNING value",
+            [],
+            |row| row.get(0),
+        )
+        .or_else(|_| {
+            conn.execute(
+                "UPDATE meta SET value = value + 1 WHERE key = 'next_id'",
+                [],
+            )?;
+            conn.query_row("SELECT value FROM meta WHERE key = 'next_id'", [], |row| {
+                row.get(0)
+            })
+        })?;
+
+    let id = format!("ISSUE-{next_id}");
+    conn.execute(
+        "INSERT INTO issues(id, fingerprint, title, level, status, count, first_seen, last_seen,
+             release, environment, service, last_event)
+             VALUES(?1,?2,?3,?4,'unresolved',1,?5,?5,?6,?7,?8,?9)",
+        params![
+            id,
+            fp,
+            title,
+            level,
+            ts,
+            release,
+            environment,
+            service,
+            event_json
+        ],
+    )?;
+
+    if let Some(url) = webhook {
+        let issue = get_unlocked(conn, &id).ok();
+        if let Some(issue) = issue {
+            fire_webhook(url, &id, &issue);
+        }
+    }
+
+    Ok(IngestResponse {
+        ok: true,
+        issue_id: id,
+        is_new: true,
+        count: 1,
     })
 }
 
@@ -293,6 +357,28 @@ fn get_unlocked(conn: &Connection, id: &str) -> rusqlite::Result<Issue> {
     )
 }
 
+fn list_unlocked(conn: &Connection) -> Result<Vec<IssueSummary>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service
+             FROM issues ORDER BY last_seen DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(IssueSummary {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            level: row.get(2)?,
+            status: IssueStatus::parse(&row.get::<_, String>(3)?),
+            count: row.get::<_, i64>(4)? as u64,
+            first_seen: row.get(5)?,
+            last_seen: row.get(6)?,
+            release: row.get(7)?,
+            environment: row.get(8)?,
+            service: row.get(9)?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
 fn fire_webhook(url: &str, issue_id: &str, issue: &Issue) {
     let url = url.to_string();
     let body = serde_json::json!({
@@ -300,114 +386,52 @@ fn fire_webhook(url: &str, issue_id: &str, issue: &Issue) {
         "issue": issue,
     });
     std::thread::spawn(move || {
-        if let Err(e) = post_json(&url, &body) {
-            eprintln!("issues webhook: {e}");
+        if let Err(e) = post_json_webhook(&url, &body) {
+            tracing::warn!(error = %e, "issues webhook failed");
         }
     });
 }
 
-fn post_json(url: &str, body: &Value) -> Result<()> {
-    let (host, port, path) = parse_http_url(url)?;
-    let payload = serde_json::to_vec(body)?;
-    let mut stream = TcpStream::connect((host.as_str(), port))
-        .map_err(|e| HubError::msg(format!("connect {host}:{port}: {e}")))?;
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(5)));
-    let req = format!(
-        "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        payload.len()
-    );
-    stream.write_all(req.as_bytes())?;
-    stream.write_all(&payload)?;
+fn post_json_webhook(url: &str, body: &Value) -> Result<()> {
+    validate_webhook_url(url)?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| HubError::msg(e.to_string()))?;
+    let response = client
+        .post(url)
+        .json(body)
+        .send()
+        .map_err(|e| HubError::msg(e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(HubError::msg(format!("webhook HTTP {}", response.status())));
+    }
     Ok(())
 }
 
-fn parse_http_url(url: &str) -> Result<(String, u16, String)> {
+/// Webhooks: `http://` only; prefer loopback hosts.
+pub fn validate_webhook_url(url: &str) -> Result<()> {
     if url.starts_with("https://") {
         return Err(HubError::msg(
-            "webhook HTTPS is not supported (plain TCP only); use http:// for local hooks",
+            "webhook HTTPS is not supported; use http:// for local hooks",
         ));
     }
     let rest = url
         .strip_prefix("http://")
         .ok_or_else(|| HubError::msg("webhook must be http://…"))?;
-    let (authority, path) = match rest.split_once('/') {
-        Some((a, p)) => (a, format!("/{p}")),
-        None => (rest, "/".into()),
-    };
-    let (host, port) = if let Some((h, p)) = authority.rsplit_once(':') {
-        (
-            h.to_string(),
-            p.parse::<u16>()
-                .map_err(|_| HubError::msg(format!("bad webhook port: {p}")))?,
-        )
-    } else {
-        (authority.to_string(), 80)
-    };
+    let authority = rest.split_once('/').map(|(a, _)| a).unwrap_or(rest);
+    let host = authority
+        .rsplit_once(':')
+        .map(|(h, _)| h)
+        .unwrap_or(authority);
     if host.is_empty() {
         return Err(HubError::msg("webhook URL missing host"));
     }
-    Ok((host, port, path))
-}
-
-pub fn list(root: &Path) -> IssuesList {
-    let path = db_path(root);
-    let path_s = path.display().to_string();
-    match with_db(root, |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service
-             FROM issues ORDER BY last_seen DESC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(IssueSummary {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                level: row.get(2)?,
-                status: IssueStatus::parse(&row.get::<_, String>(3)?),
-                count: row.get::<_, i64>(4)? as u64,
-                first_seen: row.get(5)?,
-                last_seen: row.get(6)?,
-                release: row.get(7)?,
-                environment: row.get(8)?,
-                service: row.get(9)?,
-            })
-        })?;
-        let issues: Vec<IssueSummary> = rows.filter_map(|r| r.ok()).collect();
-        Ok(issues)
-    }) {
-        Ok(issues) => IssuesList {
-            path: path_s,
-            available: true,
-            note: if issues.is_empty() {
-                "No issues yet. Point airbug-err at POST /api/errors.".into()
-            } else {
-                format!("{} issue(s)", issues.len())
-            },
-            issues,
-        },
-        Err(e) => IssuesList {
-            path: path_s,
-            available: false,
-            issues: vec![],
-            note: e.to_string(),
-        },
+    let loopback = host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+    if !loopback {
+        tracing::warn!(%host, "webhook host is not loopback; local-toolkit threat model assumes localhost");
     }
-}
-
-pub fn get(root: &Path, id: &str) -> Option<Issue> {
-    with_db(root, |conn| Ok(get_unlocked(conn, id)?)).ok()
-}
-
-pub fn set_status(root: &Path, id: &str, status: IssueStatus) -> Result<Issue> {
-    with_db(root, |conn| {
-        let n = conn.execute(
-            "UPDATE issues SET status = ?1 WHERE id = ?2",
-            params![status.as_str(), id],
-        )?;
-        if n == 0 {
-            return Err(HubError::msg(format!("issue not found: {id}")));
-        }
-        Ok(get_unlocked(conn, id)?)
-    })
+    Ok(())
 }
 
 pub fn status_from_action(action: &str) -> Option<IssueStatus> {
@@ -424,13 +448,9 @@ mod tests {
     use super::*;
     use std::env;
 
-    #[test]
-    fn ingest_groups_by_fingerprint() {
-        let dir = env::temp_dir().join(format!("airbug-issues-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
-
-        let event = Event {
+    fn sample_event() -> Event {
+        Event {
+            schema_version: EVENT_SCHEMA_VERSION,
             event_id: "a".into(),
             timestamp: "t1".into(),
             level: airbug_err::Severity::Error,
@@ -449,17 +469,28 @@ mod tests {
             user: None,
             extra: Default::default(),
             contexts: Default::default(),
-        };
-        let r1 = ingest(&dir, event.clone(), None).unwrap();
+        }
+    }
+
+    #[test]
+    fn ingest_groups_by_fingerprint() {
+        let dir = env::temp_dir().join(format!("airbug-issues-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
+        let store =
+            SqliteIssueStore::open(crate::config::RootPaths::new(&dir).issues_db()).unwrap();
+
+        let event = sample_event();
+        let r1 = store.ingest(event.clone(), None).unwrap();
         assert!(r1.is_new);
         let mut event2 = event;
         event2.event_id = "b".into();
         event2.timestamp = "t2".into();
-        let r2 = ingest(&dir, event2, None).unwrap();
+        let r2 = store.ingest(event2, None).unwrap();
         assert!(!r2.is_new);
         assert_eq!(r2.count, 2);
         assert_eq!(r1.issue_id, r2.issue_id);
-        let list = list(&dir);
+        let list = store.list();
         assert_eq!(list.issues.len(), 1);
         assert_eq!(list.issues[0].count, 2);
         let _ = fs::remove_dir_all(&dir);
@@ -467,7 +498,15 @@ mod tests {
 
     #[test]
     fn webhook_rejects_https() {
-        let err = parse_http_url("https://example.com/hook").unwrap_err();
+        let err = validate_webhook_url("https://example.com/hook").unwrap_err();
         assert!(err.to_string().contains("HTTPS"));
+    }
+
+    #[test]
+    fn rejects_unsupported_schema() {
+        let mut event = sample_event();
+        event.schema_version = 99;
+        let err = validate_schema(&event).unwrap_err();
+        assert!(err.to_string().contains("schema_version"));
     }
 }

@@ -1,5 +1,5 @@
 //! Small reusable helpers without an async runtime or platform dependencies.
-use crate::{error, Case, Config, Result};
+use crate::{Case, Config, Result, error};
 use std::{
     cell::{OnceCell, RefCell},
     rc::Rc,

@@ -62,8 +62,7 @@ impl Sampler {
     pub fn sample(&mut self) -> Sample {
         self.system.refresh_cpu_all();
         self.system.refresh_memory();
-        self.system
-            .refresh_processes(ProcessesToUpdate::All, true);
+        self.system.refresh_processes(ProcessesToUpdate::All, true);
         self.networks.refresh(true);
         self.disks.refresh(true);
 
@@ -83,22 +82,24 @@ impl Sampler {
             .map(|(_, d)| d.total_transmitted())
             .sum();
         let (net_rx_rate, net_tx_rate) = match self.prev_net.replace((rx, tx)) {
-            Some((prx, ptx)) => ((rx.saturating_sub(prx)) as f64, (tx.saturating_sub(ptx)) as f64),
+            Some((prx, ptx)) => (
+                (rx.saturating_sub(prx)) as f64,
+                (tx.saturating_sub(ptx)) as f64,
+            ),
             None => (0.0, 0.0),
         };
 
-        let dr: u64 = self
-            .disks
-            .iter()
-            .map(|d| d.usage().total_read_bytes)
-            .sum();
+        let dr: u64 = self.disks.iter().map(|d| d.usage().total_read_bytes).sum();
         let dw: u64 = self
             .disks
             .iter()
             .map(|d| d.usage().total_written_bytes)
             .sum();
         let (disk_read_rate, disk_write_rate) = match self.prev_disk.replace((dr, dw)) {
-            Some((pr, pw)) => ((dr.saturating_sub(pr)) as f64, (dw.saturating_sub(pw)) as f64),
+            Some((pr, pw)) => (
+                (dr.saturating_sub(pr)) as f64,
+                (dw.saturating_sub(pw)) as f64,
+            ),
             None => (0.0, 0.0),
         };
 
@@ -116,10 +117,8 @@ impl Sampler {
                     ),
                     None => (0.0, 0.0),
                 };
-                self.prev_proc_disk.insert(
-                    pid_u32,
-                    (usage.total_read_bytes, usage.total_written_bytes),
-                );
+                self.prev_proc_disk
+                    .insert(pid_u32, (usage.total_read_bytes, usage.total_written_bytes));
                 ProcSample {
                     pid: pid_u32,
                     name: p.name().to_string_lossy().into_owned(),

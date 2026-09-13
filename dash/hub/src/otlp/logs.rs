@@ -1,5 +1,7 @@
 //! Read OTLP log records written by the local collector file exporter.
-use super::{any_value, nano_time, normalize_severity, resource_attr, split_json_values, tail_text};
+use super::{
+    any_value, nano_time, normalize_severity, resource_attr, split_json_values, tail_text,
+};
 use crate::config::{self, RootPaths};
 use serde::Serialize;
 use serde_json::Value;

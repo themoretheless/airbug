@@ -1,4 +1,4 @@
-use airbug_bench::{error, model::write_new, Result, Run, Status};
+use airbug_bench::{Result, Run, Status, error, model::write_new};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -123,7 +123,9 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
     let manifest = fs::canonicalize(manifest)?;
     let root = manifest.parent().unwrap();
     let original = fs::read_to_string(&manifest)?;
-    let mut doc = original.parse::<toml_edit::DocumentMut>()?;
+    let mut doc = original
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| error(e.to_string()))?;
     if doc.get("package").is_none() {
         return Err(error(
             "virtual workspace: select a member with --manifest-path",
@@ -147,23 +149,24 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
     }
     if doc
         .get("dev-dependencies")
-        .and_then(|t| t.get("bench"))
+        .and_then(|t| t.get("airbug-bench").or_else(|| t.get("bench")))
         .is_none()
     {
         let path = library
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../bench"));
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."));
         let path = fs::canonicalize(path)
             .map_err(|_| error("local bench source missing; provide --library-path"))?;
         if !path.join("Cargo.toml").is_file() {
             return Err(error("--library-path must contain Cargo.toml"));
         }
         let mut dep = toml_edit::InlineTable::new();
+        dep.insert("package", toml_edit::Value::from("airbug-bench"));
         dep.insert(
             "path",
             toml_edit::Value::from(path.to_string_lossy().as_ref()),
         );
-        doc["dev-dependencies"]["bench"] = toml_edit::value(dep);
+        doc["dev-dependencies"]["airbug-bench"] = toml_edit::value(dep);
     }
     let mut bench = toml_edit::Table::new();
     bench["name"] = toml_edit::value("bench");
@@ -220,7 +223,10 @@ fn main() -> airbug_bench::Result<()> {
         let _ = fs::remove_file(config);
         return Err(e.into());
     }
-    println!("Created benches/bench.rs and bench.json; registered Cargo target.\nRun: cargo airbug-bench bench --manifest-path {} -o .airbug-bench/first",manifest.display());
+    println!(
+        "Created benches/bench.rs and bench.json; registered Cargo target.\nRun: cargo airbug-bench bench --manifest-path {} -o .airbug-bench/first",
+        manifest.display()
+    );
     Ok(())
 }
 #[derive(Serialize, Deserialize)]

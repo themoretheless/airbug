@@ -125,11 +125,7 @@ impl AlertsView {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         ui.heading("Пороги");
-        for rule in [
-            &mut self.cpu_rule,
-            &mut self.ram_rule,
-            &mut self.disk_rule,
-        ] {
+        for rule in [&mut self.cpu_rule, &mut self.ram_rule, &mut self.disk_rule] {
             ui.horizontal(|ui| {
                 ui.checkbox(&mut rule.enabled, rule.name);
                 ui.add(

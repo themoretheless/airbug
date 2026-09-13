@@ -76,6 +76,7 @@ mod tests {
 
     fn sample_event(ty: &str, frames: Vec<Frame>) -> Event {
         Event {
+            schema_version: crate::EVENT_SCHEMA_VERSION,
             event_id: "e1".into(),
             timestamp: "t".into(),
             level: Severity::Error,

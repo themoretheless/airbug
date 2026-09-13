@@ -44,7 +44,7 @@ pub(crate) fn scan_err(root: &Path) -> DomainCard {
             Status::Reserved
         },
         summary: if ready {
-            "Panic/error SDK present; ingest via POST /api/errors.".into()
+            "Panic/error SDK present; ingest via POST /api/v1/errors.".into()
         } else {
             "No error-monitoring crate yet.".into()
         },

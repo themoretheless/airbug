@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use egui_plot::{Line, Plot, PlotPoints};
 
-use super::{fmt_bytes, SharedState};
+use super::{SharedState, fmt_bytes};
 use crate::sampler::ProcSample;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -77,7 +77,10 @@ impl ProcessesView {
             let ord = match self.sort_col {
                 SortCol::Name => a.name.cmp(&b.name),
                 SortCol::Pid => a.pid.cmp(&b.pid),
-                SortCol::Cpu => a.cpu.partial_cmp(&b.cpu).unwrap_or(std::cmp::Ordering::Equal),
+                SortCol::Cpu => a
+                    .cpu
+                    .partial_cmp(&b.cpu)
+                    .unwrap_or(std::cmp::Ordering::Equal),
                 SortCol::Mem => a.mem.cmp(&b.mem),
                 SortCol::Read => a
                     .read_rate
@@ -88,11 +91,7 @@ impl ProcessesView {
                     .partial_cmp(&b.write_rate)
                     .unwrap_or(std::cmp::Ordering::Equal),
             };
-            if desc {
-                ord.reverse()
-            } else {
-                ord
-            }
+            if desc { ord.reverse() } else { ord }
         });
 
         let header = |ui: &mut egui::Ui, col: SortCol, label: &str, view: &mut ProcessesView| {

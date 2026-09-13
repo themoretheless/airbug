@@ -65,7 +65,9 @@ impl Wait {
                     }
                     thread::sleep(Duration::from_millis(100));
                 }
-                Err(ContainerError::Timeout("container did not reach running state".into()))
+                Err(ContainerError::Timeout(
+                    "container did not reach running state".into(),
+                ))
             }
             Self::Message { text, stdout_only } => {
                 while Instant::now() < deadline {

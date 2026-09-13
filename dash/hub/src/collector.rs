@@ -70,7 +70,10 @@ fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
         return Ok(None);
     }
 
-    eprintln!("collector: starting Docker stack ({}) …", compose_file.display());
+    eprintln!(
+        "collector: starting Docker stack ({}) …",
+        compose_file.display()
+    );
     let status = compose_cmd(&compose_file, &["up", "-d", "--remove-orphans"])?;
     if !status.success() {
         eprintln!("collector: docker compose up failed — trying otelcol binary …");

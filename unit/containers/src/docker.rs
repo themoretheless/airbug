@@ -146,10 +146,10 @@ impl Runtime {
         ] {
             if let Some(bindings) = ports.get(&key).and_then(|v| v.as_array()) {
                 for binding in bindings {
-                    if let Some(host) = binding.get("HostPort").and_then(|v| v.as_str()) {
-                        if let Ok(port) = host.parse::<u16>() {
-                            return Ok(port);
-                        }
+                    if let Some(host) = binding.get("HostPort").and_then(|v| v.as_str())
+                        && let Ok(port) = host.parse::<u16>()
+                    {
+                        return Ok(port);
                     }
                 }
             }
@@ -219,11 +219,7 @@ impl ContainerBuilder {
     }
 
     /// `WithEnvironment`.
-    pub fn with_environment(
-        mut self,
-        key: impl Into<String>,
-        value: impl Into<String>,
-    ) -> Self {
+    pub fn with_environment(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
         self
     }

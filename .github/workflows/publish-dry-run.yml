@@ -1,0 +1,30 @@
+# Validate publishable package archives.
+# Leaf macros package cleanly; unit consumer archives are checked by verify_packages.py
+# (path-patched) until macros/airbug are on crates.io.
+name: Publish dry-run
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'unit/**'
+      - 'bench/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/publish-dry-run.yml'
+permissions:
+  contents: read
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: rustup toolchain install stable --profile minimal
+      - name: package leaf macros
+        run: |
+          cargo +stable package -p airbug-macros --locked --allow-dirty
+          cargo +stable package -p airbug-bench-macros --locked --allow-dirty
+      - name: verify airbug package archives
+        run: python unit/tools/verify_packages.py --toolchain stable

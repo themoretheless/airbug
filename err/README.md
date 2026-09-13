@@ -4,7 +4,7 @@ Error / panic reporting for Rust apps in the airbug monorepo
 (**Sentry ∪ Bugsnag ∪ Rollbar** capabilities that matter for Rust).
 
 Package: `airbug-err` — client SDK. Hub stores grouped **issues** at
-`POST /api/errors` → `dash/hub/data/issues.sqlite`.
+`POST /api/v1/errors` → `dash/hub/data/issues.sqlite`.
 
 ## Quick start
 
@@ -23,7 +23,7 @@ use airbug_err::{add_breadcrumb, capture_error, capture_message, configure_scope
 
 let _guard = airbug_err::init(
     Options::new()
-        .endpoint("http://127.0.0.1:8790/api/errors")
+        .endpoint("http://127.0.0.1:8790/api/v1/errors")
         .release(env!("CARGO_PKG_VERSION"))
         .environment("dev")
         .service("checkout"),

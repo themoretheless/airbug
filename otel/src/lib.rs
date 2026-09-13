@@ -73,6 +73,9 @@ pub struct TelemetryGuard {
     _runtime: Option<tokio::runtime::Runtime>,
 }
 
+/// Explicit handle returned by [`install`] / [`init`] for embed and tests.
+pub type TelemetryHandle = TelemetryGuard;
+
 /// Alias for [`TelemetryGuard`].
 #[deprecated(note = "renamed to TelemetryGuard")]
 pub type TracerGuard = TelemetryGuard;
@@ -127,10 +130,17 @@ fn install_logs(provider: SdkLoggerProvider) -> SdkLoggerProvider {
 
 /// Install global OTLP tracer, meter, and logger providers.
 ///
+/// Prefer [`install`] when you want an explicit [`TelemetryHandle`] name.
+///
 /// Default feature `otlp-http` uses HTTP/protobuf. For gRPC:
 /// `--no-default-features --features otlp-grpc`. If both features are enabled
 /// (e.g. `--all-features`), gRPC wins.
 pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
+    install(config)
+}
+
+/// Install providers and return a [`TelemetryHandle`] (same as [`init`]).
+pub fn install(config: TelemetryConfig) -> Result<TelemetryHandle, TelemetryError> {
     #[cfg(not(any(feature = "otlp-http", feature = "otlp-grpc")))]
     compile_error!("enable airbug-otel feature otlp-http or otlp-grpc");
 
@@ -169,12 +179,12 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
 
         global::set_tracer_provider(tracer.clone());
         global::set_meter_provider(meter.clone());
-        return Ok(TelemetryGuard {
+        Ok(TelemetryGuard {
             tracer,
             meter,
             logs,
             _runtime: Some(runtime),
-        });
+        })
     }
 
     #[cfg(all(feature = "otlp-http", not(feature = "otlp-grpc")))]
@@ -204,11 +214,11 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
 
         global::set_tracer_provider(tracer.clone());
         global::set_meter_provider(meter.clone());
-        return Ok(TelemetryGuard {
+        Ok(TelemetryGuard {
             tracer,
             meter,
             logs,
-        });
+        })
     }
 
     #[cfg(not(any(feature = "otlp-http", feature = "otlp-grpc")))]
@@ -219,7 +229,11 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
 }
 
 /// Run `f` inside a named span on the global tracer `scope`.
-pub fn in_span<T>(scope: &'static str, name: impl Into<Cow<'static, str>>, f: impl FnOnce() -> T) -> T {
+pub fn in_span<T>(
+    scope: &'static str,
+    name: impl Into<Cow<'static, str>>,
+    f: impl FnOnce() -> T,
+) -> T {
     let tracer = global::tracer(scope);
     tracer.in_span(name, |_cx| f())
 }
@@ -248,7 +262,11 @@ impl F64Gauge {
         }
     }
 
-    pub fn with_description(scope: &'static str, name: &'static str, description: &'static str) -> Self {
+    pub fn with_description(
+        scope: &'static str,
+        name: &'static str,
+        description: &'static str,
+    ) -> Self {
         Self {
             inner: meter(scope)
                 .f64_gauge(name)
@@ -274,7 +292,11 @@ impl U64Gauge {
         }
     }
 
-    pub fn with_description(scope: &'static str, name: &'static str, description: &'static str) -> Self {
+    pub fn with_description(
+        scope: &'static str,
+        name: &'static str,
+        description: &'static str,
+    ) -> Self {
         Self {
             inner: meter(scope)
                 .u64_gauge(name)

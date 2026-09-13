@@ -94,11 +94,14 @@ impl HistoryView {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            for m in [Metric::Cpu, Metric::Ram, Metric::Gpu, Metric::Net, Metric::Disk] {
-                if ui
-                    .selectable_label(self.metric == m, m.label())
-                    .clicked()
-                {
+            for m in [
+                Metric::Cpu,
+                Metric::Ram,
+                Metric::Gpu,
+                Metric::Net,
+                Metric::Disk,
+            ] {
+                if ui.selectable_label(self.metric == m, m.label()).clicked() {
                     self.metric = m;
                 }
             }
@@ -173,12 +176,36 @@ impl HistoryView {
                     .collect(),
             )],
             Metric::Net => vec![
-                ("rx B/s", self.points.iter().map(|p| [p.ts as f64, p.net_rx]).collect()),
-                ("tx B/s", self.points.iter().map(|p| [p.ts as f64, p.net_tx]).collect()),
+                (
+                    "rx B/s",
+                    self.points
+                        .iter()
+                        .map(|p| [p.ts as f64, p.net_rx])
+                        .collect(),
+                ),
+                (
+                    "tx B/s",
+                    self.points
+                        .iter()
+                        .map(|p| [p.ts as f64, p.net_tx])
+                        .collect(),
+                ),
             ],
             Metric::Disk => vec![
-                ("read B/s", self.points.iter().map(|p| [p.ts as f64, p.disk_r]).collect()),
-                ("write B/s", self.points.iter().map(|p| [p.ts as f64, p.disk_w]).collect()),
+                (
+                    "read B/s",
+                    self.points
+                        .iter()
+                        .map(|p| [p.ts as f64, p.disk_r])
+                        .collect(),
+                ),
+                (
+                    "write B/s",
+                    self.points
+                        .iter()
+                        .map(|p| [p.ts as f64, p.disk_w])
+                        .collect(),
+                ),
             ],
         };
 

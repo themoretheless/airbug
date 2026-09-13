@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Options::new()
             .endpoint(
                 std::env::var("AIRBUG_ERR_ENDPOINT")
-                    .unwrap_or_else(|_| "http://127.0.0.1:8790/api/errors".into()),
+                    .unwrap_or_else(|_| "http://127.0.0.1:8790/api/v1/errors".into()),
             )
             .release(env!("CARGO_PKG_VERSION"))
             .environment("dev")
@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _ = capture_message_with_level_helper();
     let err = std::io::Error::other("demo failure");
     let _ = capture_error(&err);
-    println!("events sent (if hub is listening on /api/errors)");
+    println!("events sent (if hub is listening on /api/v1/errors)");
     Ok(())
 }
 

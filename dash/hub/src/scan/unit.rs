@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use crate::scan::{
-    count_tests, mtime_detail, read_json, Action, Artifact, DomainCard, Status,
-};
+use crate::scan::{Action, Artifact, DomainCard, Status, UnitReportV1, mtime_detail, read_json};
 
 pub(crate) fn scan_unit(root: &Path) -> DomainCard {
     let report_dir = root.join("target/airbug-report");
@@ -13,15 +11,13 @@ pub(crate) fn scan_unit(root: &Path) -> DomainCard {
     let mut summary = "No report yet. Generate with the airbug report tool.".into();
 
     if report_json.is_file() {
-        match read_json(&report_json) {
-            Ok(value) => {
-                let tests = value.get("tests").and_then(|t| t.as_array());
-                let (passed, failed, broken) = count_tests(tests);
-                let title = value
-                    .get("title")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Airbug report");
-                let commit = value.get("commit").and_then(|v| v.as_str()).unwrap_or("");
+        match read_json(&report_json).and_then(|value| {
+            serde_json::from_value::<UnitReportV1>(value).map_err(|e| e.to_string())
+        }) {
+            Ok(report) => {
+                let (passed, failed, broken) = report.counts();
+                let title = report.title.as_deref().unwrap_or("Airbug report");
+                let commit = report.commit.as_deref().unwrap_or("");
                 summary = format!(
                     "{title}: {passed} passed, {failed} failed, {broken} broken{}",
                     if commit.is_empty() {

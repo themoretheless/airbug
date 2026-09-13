@@ -20,10 +20,10 @@ pub fn tail_text(path: &Path, max_bytes: u64) -> std::io::Result<String> {
     file.seek(SeekFrom::Start(start))?;
     let mut buf = String::new();
     file.read_to_string(&mut buf)?;
-    if start > 0 {
-        if let Some(i) = buf.find('{') {
-            return Ok(buf[i..].to_string());
-        }
+    if start > 0
+        && let Some(i) = buf.find('{')
+    {
+        return Ok(buf[i..].to_string());
     }
     Ok(buf)
 }

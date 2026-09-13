@@ -94,7 +94,9 @@ pub fn resume(source: &Path, out: &Path) -> Result<()> {
         }
     }
     if prefix == plan.repetitions {
-        return Err(error("all scheduled processes present; do not reinterpret failed validation as resumable measurement"));
+        return Err(error(
+            "all scheduled processes present; do not reinterpret failed validation as resumable measurement",
+        ));
     }
     // Multi-variant balance must remain intact, so restart at its last complete rotation block.
     if !plan.variants.is_empty() {
@@ -144,7 +146,9 @@ pub fn profile(
         serde_json::to_string(&descriptor)?,
     );
     if case.starts_with("forma/") && case.ends_with("/gpu") {
-        return Err(error("GPU-only profiler replay needs a dedicated single-case GPU worker; normal Forma cases are supported"));
+        return Err(error(
+            "GPU-only profiler replay needs a dedicated single-case GPU worker; normal Forma cases are supported",
+        ));
     }
     let original = plan.candidate.path.clone();
     let mut workload = vec![];

@@ -1,3 +1,4 @@
+mod app;
 mod collector;
 mod config;
 mod error;
@@ -9,7 +10,18 @@ mod serve;
 
 use std::{env, path::PathBuf, process, sync::Arc};
 
+fn init_tracing() {
+    let filter = env::var("AIRBUG_LOG")
+        .or_else(|_| env::var("RUST_LOG"))
+        .unwrap_or_else(|_| "info".into());
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::new(filter))
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 fn main() {
+    init_tracing();
     let mut args = env::args().skip(1).peekable();
     let command = args.next().unwrap_or_else(|| "serve".into());
     let mut root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -53,7 +65,7 @@ fn main() {
                 match collector::CollectorHandle::start(&root) {
                     Ok(handle) => handle,
                     Err(err) => {
-                        eprintln!("hub collector failed: {err}");
+                        tracing::error!(error = %err, "hub collector failed");
                         process::exit(1);
                     }
                 }
@@ -64,20 +76,26 @@ fn main() {
             if collector.is_some() {
                 let root_for_handler = Arc::new(root.clone());
                 if let Err(err) = ctrlc::set_handler(move || {
-                    eprintln!("\ncollector: stopping (Ctrl+C) …");
+                    tracing::info!("collector: stopping (Ctrl+C)");
                     collector::emergency_stop(root_for_handler.as_ref());
                     process::exit(0);
                 }) {
-                    eprintln!("collector: could not install Ctrl+C handler: {err}");
+                    tracing::warn!(error = %err, "could not install Ctrl+C handler");
                 }
             }
 
-            let opts = serve::ServeOpts { webhook };
-            if let Err(err) = serve::serve(root, port, opts) {
+            let app = match app::HubApp::new(root, port, webhook) {
+                Ok(app) => Arc::new(app),
+                Err(err) => {
+                    tracing::error!(error = %err, "hub init failed");
+                    process::exit(1);
+                }
+            };
+            if let Err(err) = serve::serve(app) {
                 if let Some(handle) = collector {
                     handle.stop();
                 }
-                eprintln!("hub serve failed: {err}");
+                tracing::error!(error = %err, "hub serve failed");
                 process::exit(1);
             }
         }

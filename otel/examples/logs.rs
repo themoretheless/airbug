@@ -4,7 +4,7 @@
 //! cargo run -p airbug-hub -- serve --root . --collector
 //! cargo run -p airbug-otel --example logs
 //! ```
-use airbug_otel::{init, log_error, log_info, log_warn, TelemetryConfig};
+use airbug_otel::{TelemetryConfig, init, log_error, log_info, log_warn};
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
