@@ -1,16 +1,523 @@
-<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>bench — отчёты</title>
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>airbug bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
-:root{font:15px system-ui;color:#182536;background:#f4f6fa}*{box-sizing:border-box}body{margin:0}header{padding:22px 30px;background:#17263b;color:white;display:flex;align-items:center;justify-content:space-between}h1{font-size:22px;margin:0}header small{color:#a9bdd7}main{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 85px)}aside{padding:22px;border-right:1px solid #dce3ec;background:white}input,select,button,a.action{font:inherit;padding:10px;border:1px solid #c8d4e2;border-radius:7px}input,select{width:100%;background:white}button,a.action{cursor:pointer;background:#fff;color:#164a80;text-decoration:none}button:hover,a.action:hover{background:#edf4fd}label{display:block;margin:18px 0 7px;font-size:13px;color:#52647a}#runs{list-style:none;padding:0;max-height:60vh;overflow:auto}#runs button{width:100%;text-align:left;margin-bottom:7px;overflow-wrap:anywhere}#runs button.active{background:#e3efff;border-color:#357bd1}.content{padding:24px;min-width:0}.toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:18px}.toolbar label{margin:0 0 6px}.toolbar .baseline{flex:1;min-width:180px}.margin{width:110px}#status{color:#52647a;margin:12px 0}iframe{width:100%;height:75vh;border:1px solid #dce3ec;border-radius:10px;background:white}#empty{padding:30px;background:white;border-radius:10px}#count{color:#63758c;font-size:13px}@media(max-width:800px){main{grid-template-columns:1fr}aside{border:0}#runs{max-height:180px}.content{padding:14px}header{padding:18px}iframe{height:80vh}}
+:root {
+  --ink: #101820;
+  --mute: #5c6b78;
+  --line: #c9d5df;
+  --paper: #f2f5f7;
+  --deep: #0e2a3a;
+  --signal: #0f8f7b;
+  --signal-soft: #d7f3ee;
+  --warn: #b45309;
+  --bad: #9f1239;
+  --ok: #0f766e;
+  --surface: color-mix(in srgb, #ffffff 82%, transparent);
+  --shadow: 0 18px 40px #0e2a3a14;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font: 15px/1.45 "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--ink);
+  background:
+    radial-gradient(900px 480px at 8% -8%, #0f8f7b22, transparent 55%),
+    radial-gradient(700px 420px at 100% 0%, #0e2a3a18, transparent 50%),
+    linear-gradient(165deg, #f7fafb 0%, #e4edf2 48%, #d5e3ea 100%);
+  background-attachment: fixed;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(#0e2a3a0d 1px, transparent 1px),
+    linear-gradient(90deg, #0e2a3a0d 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.75rem 0.85rem;
+  animation: rise 500ms ease-out both;
+}
+.brand {
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--deep);
+}
+.brand em {
+  font-style: italic;
+  color: var(--signal);
+}
+.top-meta {
+  color: var(--mute);
+  font-size: 0.78rem;
+}
+
+#live {
+  position: relative;
+  z-index: 1;
+  margin: 0.5rem 1.75rem 0;
+  padding: 1.25rem 1.35rem 1.35rem;
+  background: var(--surface);
+  border: 1px solid #0e2a3a22;
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+  animation: rise 620ms 60ms ease-out both;
+}
+body.mode-live #live {
+  margin: 8vh auto 0;
+  max-width: 42rem;
+  padding: 2rem 2.1rem 2.2rem;
+}
+body.mode-live .workspace { display: none; }
+body.mode-report #live[data-terminal] {
+  margin: 0.35rem 1.75rem 0;
+  padding: 0.7rem 1rem;
+  border-color: color-mix(in srgb, var(--signal) 35%, #0e2a3a22);
+  box-shadow: none;
+}
+body.mode-report #live[data-terminal] .live-kicker { margin-bottom: 0.25rem; }
+body.mode-report #live[data-terminal] #live-text {
+  font-size: 1.05rem;
+  line-height: 1.3;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: 0;
+}
+.live-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.live-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 4px #0f8f7b22;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+#live[data-state="failed"] .live-dot,
+#live[data-state="cancelled"] .live-dot { background: var(--bad); box-shadow: 0 0 0 4px #9f123922; animation: none; }
+#live[data-state="complete"] .live-dot { background: var(--ok); animation: none; }
+#live-text {
+  display: block;
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(1.45rem, 3.2vw, 2.1rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--deep);
+}
+.live-sub {
+  margin: 0.55rem 0 0;
+  color: var(--mute);
+  font-size: 0.84rem;
+}
+#progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 0.55rem;
+  margin: 1.2rem 0 0;
+  border: 0;
+  background: #0e2a3a14;
+  overflow: hidden;
+}
+#progress[hidden] { display: none; }
+#progress::-webkit-progress-bar { background: #0e2a3a14; }
+#progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #0b6f61, #1bb79e, #7ad9c8);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+  transform-origin: left center;
+}
+#progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #0b6f61, #1bb79e);
+}
+
+.workspace {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) 1fr;
+  gap: 1px;
+  margin: 1rem 1.75rem 1.75rem;
+  min-height: calc(100vh - 7.5rem);
+  background: #0e2a3a22;
+  border: 1px solid #0e2a3a22;
+  animation: rise 700ms 100ms ease-out both;
+}
+aside, .content {
+  background: color-mix(in srgb, #f8fbfc 90%, transparent);
+  backdrop-filter: blur(6px);
+}
+aside { padding: 1.15rem 1.1rem 1.4rem; }
+.content { padding: 1.2rem 1.3rem 1.5rem; min-width: 0; }
+aside h2, #heading {
+  margin: 0 0 0.85rem;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+  color: var(--deep);
+  font-weight: 400;
+}
+label {
+  display: block;
+  margin: 0.95rem 0 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+input, select, button, a.action {
+  font: inherit;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--deep);
+  text-decoration: none;
+}
+input, select { width: 100%; }
+button, a.action {
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+button:hover:not(:disabled), a.action:hover {
+  background: var(--signal-soft);
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+}
+button:active:not(:disabled), a.action:active { transform: translateY(1px); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+#refresh, #all, #build { width: 100%; }
+#all { margin-top: 0.55rem; }
+#count {
+  margin: 0.55rem 0 0;
+  color: var(--mute);
+  font-size: 0.78rem;
+}
+#runs {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  max-height: 58vh;
+  overflow: auto;
+}
+#runs li { margin: 0 0 0.4rem; }
+#runs button {
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: transparent;
+}
+#runs button.active {
+  background: var(--signal-soft);
+  border-color: color-mix(in srgb, var(--signal) 50%, var(--line));
+}
+.toolbar {
+  display: flex;
+  gap: 0.65rem;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+.toolbar label { margin: 0 0 0.35rem; }
+.toolbar .baseline { flex: 1; min-width: 170px; }
+.toolbar .margin { width: 110px; }
+.toolbar .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: end;
+}
+.toolbar .actions > * { width: auto; }
+#status {
+  min-height: 1.3em;
+  margin: 0 0 0.85rem;
+  color: var(--mute);
+  font-size: 0.84rem;
+}
+#empty {
+  padding: 2rem 1.4rem;
+  border: 1px dashed #0e2a3a33;
+  color: var(--mute);
+  background:
+    linear-gradient(135deg, #ffffffaa, transparent 55%),
+    #f4f8fa;
+}
+iframe {
+  width: 100%;
+  height: 72vh;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+@media (max-width: 860px) {
+  .top, #live { margin-left: 1rem; margin-right: 1rem; }
+  body.mode-live #live { margin-top: 4vh; }
+  .workspace {
+    grid-template-columns: 1fr;
+    margin: 1rem;
+    min-height: 0;
+  }
+  #runs { max-height: 180px; }
+  iframe { height: 78vh; }
+}
 </style>
-<header><h1>bench <small>/ отчёты</small></h1><span>Локальные эксперименты</span></header>
-<main><aside><button id="refresh">Обновить список</button><label for="search">Поиск экспериментов</label><input id="search" type="search" placeholder="Например, forma"><p id="count"></p><button id="all">Все запуски</button><ul id="runs"></ul></aside>
-<section class="content"><div id="live" role="status" aria-live="polite" hidden><strong id="live-text"></strong><progress id="progress" style="width:100%;margin:12px 0" max="1" value="0"></progress></div><h2 id="heading">Общий отчёт</h2><div class="toolbar"><div class="baseline"><label for="baseline">Сравнить с baseline</label><select id="baseline"><option value="">Автоматическое сравнение</option></select></div><div class="margin"><label for="threshold">Порог, %</label><input id="threshold" type="number" value="5" min="0" max="100" step="0.5"></div><a class="action" id="memory" target="_blank" rel="noopener" hidden>Память</a><button id="build">Построить</button><a class="action" id="open" target="_blank" rel="noopener" hidden>Открыть</a><a class="action" id="json" download="report.json" hidden>JSON</a><a class="action" id="md" download="report.md" hidden>Markdown</a></div><p id="status" role="status" aria-live="polite"></p><div id="empty">Выберите запуск или постройте общий отчёт. Измерения повторно не запускаются.</div><iframe id="viewer" title="Отчёт эксперимента" hidden sandbox="allow-scripts allow-same-origin allow-modals"></iframe></section></main>
+<body class="mode-report">
+<header class="top">
+  <h1 class="brand">airbug <em>bench</em></h1>
+  <span class="top-meta" id="mode-label">Локальные эксперименты</span>
+</header>
+
+<div id="live" role="status" aria-live="polite" hidden>
+  <p class="live-kicker"><span class="live-dot" aria-hidden="true"></span><span id="live-phase">Live</span></p>
+  <strong id="live-text"></strong>
+  <p class="live-sub" id="live-sub" hidden></p>
+  <progress id="progress" max="1" value="0"></progress>
+</div>
+
+<main class="workspace">
+  <aside>
+    <h2>Запуски</h2>
+    <button id="refresh" type="button">Обновить список</button>
+    <label for="search">Поиск</label>
+    <input id="search" type="search" placeholder="Например, forma">
+    <p id="count"></p>
+    <button id="all" type="button">Все запуски</button>
+    <ul id="runs"></ul>
+  </aside>
+  <section class="content">
+    <h2 id="heading">Общий отчёт</h2>
+    <div class="toolbar">
+      <div class="baseline">
+        <label for="baseline">Сравнить с baseline</label>
+        <select id="baseline"><option value="">Автоматическое сравнение</option></select>
+      </div>
+      <div class="margin">
+        <label for="threshold">Порог, %</label>
+        <input id="threshold" type="number" value="5" min="0" max="100" step="0.5">
+      </div>
+      <div class="actions">
+        <a class="action" id="memory" target="_blank" rel="noopener" hidden>Память</a>
+        <button id="build" type="button">Построить</button>
+        <a class="action" id="open" target="_blank" rel="noopener" hidden>Открыть</a>
+        <a class="action" id="json" download="report.json" hidden>JSON</a>
+        <a class="action" id="md" download="report.md" hidden>Markdown</a>
+      </div>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <div id="empty">Выберите запуск или постройте общий отчёт. Измерения повторно не запускаются.</div>
+    <iframe id="viewer" title="Отчёт эксперимента" hidden sandbox="allow-scripts allow-same-origin allow-modals"></iframe>
+  </section>
+</main>
+
 <script>
-const $=id=>document.getElementById(id);let runs=[],selected=null,version=0;
-function list(){const q=$('search').value.toLowerCase();$('runs').replaceChildren();const visible=runs.filter(r=>r.label.toLowerCase().includes(q));$('count').textContent=`${visible.length} из ${runs.length} запусков`;for(const r of visible){const li=document.createElement('li'),b=document.createElement('button');b.textContent=r.label+(r.available?'':' · незавершён');b.classList.toggle('active',selected===r.id);b.onclick=()=>{selected=r.id;$('memory').hidden=!r.memory;$('memory').href='memory?id='+r.id;$('heading').textContent=r.label;$('baseline').disabled=false;list();build()};li.append(b);$('runs').append(li)}}
-async function refresh(){version++;$('status').textContent='Загрузка списка…';try{const res=await fetch('api/runs');if(!res.ok)throw Error(await res.text());runs=await res.json();selected=null;$('memory').hidden=true;$('heading').textContent='Общий отчёт';$('baseline').replaceChildren(new Option('Автоматическое сравнение',''));for(const r of runs)$('baseline').add(new Option(r.label,r.id));$('baseline').disabled=true;if(runs.length===1&&runs[0].memory){$('memory').hidden=false;$('memory').href='memory?id='+runs[0].id;}list();$('viewer').hidden=true;$('empty').hidden=false;for(const id of ['open','json','md'])$(id).hidden=true;$('status').textContent='Список обновлён'}catch(e){$('status').textContent=e.message}}
-async function build(){const current=++version;const value=$('threshold').value;if(value===''||!$('threshold').checkValidity()){$('status').textContent='Укажите порог от 0 до 100%';return}const p=new URLSearchParams({threshold:value});if(selected!==null)p.set('id',selected);if(selected!==null&&$('baseline').value!=='')p.set('baseline',$('baseline').value);$('status').textContent='Построение отчёта…';$('viewer').hidden=true;for(const id of ['open','json','md'])$(id).hidden=true;try{const url='report?'+p;const res=await fetch(url);if(!res.ok)throw Error(await res.text());const html=await res.text();if(current!==version)return;$('viewer').srcdoc=html;$('viewer').hidden=false;$('empty').hidden=true;$('open').href=url;$('json').href=url+'&format=json';$('md').href=url+'&format=md';for(const id of ['open','json','md'])$(id).hidden=false;$('status').textContent='Отчёт готов. Отсутствие сравнения не означает успешную проверку.'}catch(e){if(current===version)$('status').textContent=e.message}}
-$('search').oninput=list;$('refresh').onclick=refresh;$('build').onclick=build;$('all').onclick=()=>{selected=null;$('memory').hidden=true;$('heading').textContent='Общий отчёт';$('baseline').disabled=true;list();build()};refresh();
-let finished=false;
-async function watch(){try{const response=await fetch('api/live');if(!response.ok)throw Error('status unavailable');const state=await response.json();const active=['running','preparing'].includes(state.state);$('live').hidden=state.state==='idle';if(active){$('live-text').textContent=state.state==='preparing'?'Подготовка бенчмарка…':`Выполнено ${state.completed} из ${state.total} процессов · ${state.variant||''}`;$('progress').max=state.total||1;$('progress').value=state.completed||0;$('build').disabled=true;$('all').disabled=true;$('baseline').disabled=true;}else if(['complete','failed','cancelled'].includes(state.state)){if(!finished){finished=true;$('build').disabled=false;$('all').disabled=false;$('live-text').textContent=state.state==='complete'?'Бенчмарк завершён. Результаты сохранены.':`Бенчмарк ${state.state==='failed'?'завершился с ошибкой':'отменён'}. Частичные результаты сохранены.`;$('progress').hidden=true;await refresh();await build();}return;}}catch(e){$('live-text').textContent='Связь с runner потеряна. Сохранённые результаты можно открыть через bench serve.';}setTimeout(watch,1500)}watch();
-</script></html>
+const $=id=>document.getElementById(id);
+let runs=[],selected=null,version=0,finished=false;
+
+function setMode(mode){
+  document.body.classList.toggle('mode-live', mode==='live');
+  document.body.classList.toggle('mode-report', mode!=='live');
+  $('mode-label').textContent=mode==='live'?'Идёт измерение':'Локальные эксперименты';
+}
+
+function list(){
+  const q=$('search').value.toLowerCase();
+  $('runs').replaceChildren();
+  const visible=runs.filter(r=>r.label.toLowerCase().includes(q));
+  $('count').textContent=`${visible.length} из ${runs.length} запусков`;
+  for(const r of visible){
+    const li=document.createElement('li'),b=document.createElement('button');
+    b.type='button';
+    b.textContent=r.label+(r.available?'':' · незавершён');
+    b.classList.toggle('active',selected===r.id);
+    b.onclick=()=>{
+      selected=r.id;
+      $('memory').hidden=!r.memory;
+      $('memory').href='memory?id='+r.id;
+      $('heading').textContent=r.label;
+      $('baseline').disabled=false;
+      list();
+      build();
+    };
+    li.append(b);
+    $('runs').append(li);
+  }
+}
+
+async function refresh(){
+  version++;
+  $('status').textContent='Загрузка списка…';
+  try{
+    const res=await fetch('api/runs');
+    if(!res.ok) throw Error(await res.text());
+    runs=await res.json();
+    selected=null;
+    $('memory').hidden=true;
+    $('heading').textContent='Общий отчёт';
+    $('baseline').replaceChildren(new Option('Автоматическое сравнение',''));
+    for(const r of runs) $('baseline').add(new Option(r.label,r.id));
+    $('baseline').disabled=true;
+    if(runs.length===1&&runs[0].memory){
+      $('memory').hidden=false;
+      $('memory').href='memory?id='+runs[0].id;
+    }
+    list();
+    $('viewer').hidden=true;
+    $('empty').hidden=false;
+    for(const id of ['open','json','md']) $(id).hidden=true;
+    $('status').textContent='Список обновлён';
+  }catch(e){
+    $('status').textContent=e.message;
+  }
+}
+
+async function build(){
+  const current=++version;
+  const value=$('threshold').value;
+  if(value===''||!$('threshold').checkValidity()){
+    $('status').textContent='Укажите порог от 0 до 100%';
+    return;
+  }
+  const p=new URLSearchParams({threshold:value});
+  if(selected!==null) p.set('id',selected);
+  if(selected!==null&&$('baseline').value!=='') p.set('baseline',$('baseline').value);
+  $('status').textContent='Построение отчёта…';
+  $('viewer').hidden=true;
+  for(const id of ['open','json','md']) $(id).hidden=true;
+  try{
+    const url='report?'+p;
+    const res=await fetch(url);
+    if(!res.ok) throw Error(await res.text());
+    const html=await res.text();
+    if(current!==version) return;
+    $('viewer').srcdoc=html;
+    $('viewer').hidden=false;
+    $('empty').hidden=true;
+    $('open').href=url;
+    $('json').href=url+'&format=json';
+    $('md').href=url+'&format=md';
+    for(const id of ['open','json','md']) $(id).hidden=false;
+    $('status').textContent='Отчёт готов. Отсутствие сравнения не означает успешную проверку.';
+  }catch(e){
+    if(current===version) $('status').textContent=e.message;
+  }
+}
+
+$('search').oninput=list;
+$('refresh').onclick=refresh;
+$('build').onclick=build;
+$('all').onclick=()=>{
+  selected=null;
+  $('memory').hidden=true;
+  $('heading').textContent='Общий отчёт';
+  $('baseline').disabled=true;
+  list();
+  build();
+};
+refresh();
+
+async function watch(){
+  try{
+    const response=await fetch('api/live');
+    if(!response.ok) throw Error('status unavailable');
+    const state=await response.json();
+    const active=['running','preparing'].includes(state.state);
+    $('live').hidden=state.state==='idle';
+    $('live').dataset.state=state.state||'';
+    if(active){
+      setMode('live');
+      $('live').removeAttribute('data-terminal');
+      $('live-phase').textContent=state.state==='preparing'?'Подготовка':'Измерение';
+      $('progress').hidden=false;
+      if(state.state==='preparing'){
+        $('live-text').textContent='Подготовка бенчмарка…';
+        $('live-sub').hidden=true;
+        $('progress').removeAttribute('value');
+      }else{
+        const done=state.completed||0;
+        const total=state.total||1;
+        $('live-text').textContent=`Выполнено ${done} из ${total}`;
+        $('live-sub').hidden=!state.variant;
+        $('live-sub').textContent=state.variant?`Процесс · ${state.variant}`:'';
+        $('progress').max=total;
+        $('progress').value=done;
+      }
+      $('build').disabled=true;
+      $('all').disabled=true;
+      $('baseline').disabled=true;
+    }else if(['complete','failed','cancelled'].includes(state.state)){
+      setMode('report');
+      $('live').dataset.terminal='';
+      $('live-phase').textContent=state.state==='complete'?'Готово':state.state==='failed'?'Ошибка':'Отмена';
+      $('progress').hidden=true;
+      $('live-sub').hidden=true;
+      if(!finished){
+        finished=true;
+        $('build').disabled=false;
+        $('all').disabled=false;
+        $('live-text').textContent=state.state==='complete'
+          ?'Бенчмарк завершён. Результаты сохранены.'
+          :`Бенчмарк ${state.state==='failed'?'завершился с ошибкой':'отменён'}. Частичные результаты сохранены.`;
+        await refresh();
+        await build();
+      }
+      return;
+    }else{
+      setMode('report');
+    }
+  }catch(e){
+    setMode('report');
+    $('live').hidden=false;
+    $('live').dataset.state='failed';
+    $('live-phase').textContent='Связь';
+    $('live-text').textContent='Связь с runner потеряна. Сохранённые результаты можно открыть через bench serve.';
+    $('live-sub').hidden=true;
+    $('progress').hidden=true;
+  }
+  setTimeout(watch,1500);
+}
+watch();
+</script>
+</body>
+</html>
