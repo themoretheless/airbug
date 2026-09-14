@@ -107,7 +107,17 @@ body.mode-live #live {
 }
 body.mode-live .workspace { display: none; }
 body.mode-report #live[data-terminal] {
+  margin: 0.35rem 1.75rem 0;
+  padding: 0.7rem 1rem;
   border-color: color-mix(in srgb, var(--signal) 35%, #0e2a3a22);
+  box-shadow: none;
+}
+body.mode-report #live[data-terminal] .live-kicker { margin-bottom: 0.25rem; }
+body.mode-report #live[data-terminal] #live-text {
+  font-size: 1.05rem;
+  line-height: 1.3;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: 0;
 }
 .live-kicker {
   display: flex;
@@ -154,6 +164,7 @@ body.mode-report #live[data-terminal] {
   background: #0e2a3a14;
   overflow: hidden;
 }
+#progress[hidden] { display: none; }
 #progress::-webkit-progress-bar { background: #0e2a3a14; }
 #progress::-webkit-progress-value {
   background: linear-gradient(90deg, #0b6f61, #1bb79e, #7ad9c8);
@@ -479,6 +490,8 @@ async function watch(){
       setMode('report');
       $('live').dataset.terminal='';
       $('live-phase').textContent=state.state==='complete'?'Готово':state.state==='failed'?'Ошибка':'Отмена';
+      $('progress').hidden=true;
+      $('live-sub').hidden=true;
       if(!finished){
         finished=true;
         $('build').disabled=false;
@@ -486,8 +499,6 @@ async function watch(){
         $('live-text').textContent=state.state==='complete'
           ?'Бенчмарк завершён. Результаты сохранены.'
           :`Бенчмарк ${state.state==='failed'?'завершился с ошибкой':'отменён'}. Частичные результаты сохранены.`;
-        $('live-sub').hidden=true;
-        $('progress').hidden=true;
         await refresh();
         await build();
       }
