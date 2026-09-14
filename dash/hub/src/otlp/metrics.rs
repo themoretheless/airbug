@@ -1,5 +1,5 @@
 //! Read OTLP metric points written by the local collector file exporter.
-use super::{any_value, nano_time, resource_attr, split_json_values, tail_text};
+use super::{any_value, nano_time, resource_attr, resource_attrs, split_json_values, tail_text};
 use crate::config::{self, RootPaths};
 use serde::Serialize;
 use serde_json::Value;
@@ -36,6 +36,8 @@ pub struct MetricPoint {
     pub service: String,
     pub scope: String,
     pub attrs: String,
+    #[serde(default)]
+    pub attr_map: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +57,10 @@ pub struct SeriesPoint {
 }
 
 pub fn read_recent(root: &Path, limit: usize) -> MetricsResponse {
+    read_filtered(root, limit, None)
+}
+
+pub fn read_filtered(root: &Path, limit: usize, run_id: Option<&str>) -> MetricsResponse {
     let paths = RootPaths::new(root);
     let path = paths.metrics_file();
     let path_s = path.display().to_string();
@@ -70,8 +76,14 @@ pub fn read_recent(root: &Path, limit: usize) -> MetricsResponse {
         };
     }
 
-    match tail_parse(&path, limit) {
-        Ok(points) => {
+    match tail_parse(&path, limit.saturating_mul(4).max(limit)) {
+        Ok(mut points) => {
+            if let Some(rid) = run_id {
+                points.retain(|p| p.attr_map.get("airbug.run_id").map(|s| s.as_str()) == Some(rid));
+            }
+            if points.len() > limit {
+                points = points.split_off(points.len() - limit);
+            }
             let latest = latest_by_name(&points);
             let series = build_series(&points);
             let histogram = build_histogram(&points, 16);
@@ -79,7 +91,11 @@ pub fn read_recent(root: &Path, limit: usize) -> MetricsResponse {
                 path: path_s,
                 available: true,
                 note: if points.is_empty() {
-                    "Metrics file is empty or still buffering.".into()
+                    if run_id.is_some() {
+                        "No metrics for this airbug.run_id yet.".into()
+                    } else {
+                        "Metrics file is empty or still buffering.".into()
+                    }
                 } else {
                     format!(
                         "{} recent point(s), {} series, {} unique name(s)",
@@ -233,6 +249,7 @@ fn extract_points(value: &Value, out: &mut Vec<MetricPoint>) {
 
     for rm in resource_metrics {
         let service = resource_attr(rm, "service.name");
+        let base_attrs = resource_attrs(rm);
         let scopes = rm
             .get("scopeMetrics")
             .or_else(|| rm.get("scope_metrics"))
@@ -271,7 +288,16 @@ fn extract_points(value: &Value, out: &mut Vec<MetricPoint>) {
                             other => other,
                         })
                     }) {
-                        push_data_points(block, kind, &name, &unit, &service, &scope, out);
+                        push_data_points(
+                            block,
+                            kind,
+                            &name,
+                            &unit,
+                            &service,
+                            &scope,
+                            &base_attrs,
+                            out,
+                        );
                     }
                 }
             }
@@ -286,6 +312,7 @@ fn push_data_points(
     unit: &str,
     service: &str,
     scope: &str,
+    base_attrs: &HashMap<String, String>,
     out: &mut Vec<MetricPoint>,
 ) {
     let points = block
@@ -298,7 +325,20 @@ fn push_data_points(
     for dp in points {
         let (time, time_ms) = nano_time(dp, &["timeUnixNano", "time_unix_nano"]);
         let value = point_value(dp);
-        let attrs = point_attrs(dp);
+        let mut attr_map = base_attrs.clone();
+        if let Some(attrs) = dp.get("attributes").and_then(|v| v.as_array()) {
+            for a in attrs {
+                let Some(k) = a.get("key").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                attr_map.insert(k.to_string(), a.get("value").map(any_value).unwrap_or_default());
+            }
+        }
+        let attrs = attr_map
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(" ");
         out.push(MetricPoint {
             time,
             time_ms,
@@ -309,6 +349,7 @@ fn push_data_points(
             service: service.to_string(),
             scope: scope.to_string(),
             attrs,
+            attr_map,
         });
     }
 }
@@ -373,6 +414,7 @@ mod tests {
                 service: String::new(),
                 scope: String::new(),
                 attrs: String::new(),
+                attr_map: HashMap::new(),
             })
             .collect();
         let h = build_histogram(&points, 5);

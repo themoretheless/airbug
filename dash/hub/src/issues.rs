@@ -98,6 +98,16 @@ pub struct IssueSummary {
 pub trait IssueStore: Send + Sync {
     fn ingest(&self, event: Event, webhook: Option<&str>) -> Result<IngestResponse>;
     fn list(&self) -> IssuesList;
+    fn list_filtered(&self, run_id: Option<&str>) -> IssuesList {
+        let mut list = self.list();
+        let Some(rid) = run_id else {
+            return list;
+        };
+        // Fallback: trait default cannot see last_event; concrete stores override.
+        let _ = rid;
+        list.note = format!("{} (run filter requires store support)", list.note);
+        list
+    }
     fn get(&self, id: &str) -> Option<Issue>;
     fn set_status(&self, id: &str, status: IssueStatus) -> Result<Issue>;
 }
@@ -141,6 +151,32 @@ impl IssueStore for SqliteIssueStore {
                 available: true,
                 note: if issues.is_empty() {
                     "No issues yet. Point airbug-err at POST /api/v1/errors.".into()
+                } else {
+                    format!("{} issue(s)", issues.len())
+                },
+                issues,
+            },
+            Err(e) => IssuesList {
+                path: path_s,
+                available: false,
+                issues: vec![],
+                note: e.to_string(),
+            },
+        }
+    }
+
+    fn list_filtered(&self, run_id: Option<&str>) -> IssuesList {
+        let path_s = self.path.display().to_string();
+        match self.with_conn(|conn| list_unlocked_filtered(conn, run_id)) {
+            Ok(issues) => IssuesList {
+                path: path_s,
+                available: true,
+                note: if issues.is_empty() {
+                    if run_id.is_some() {
+                        "No issues for this airbug.run_id.".into()
+                    } else {
+                        "No issues yet. Point airbug-err at POST /api/v1/errors.".into()
+                    }
                 } else {
                     format!("{} issue(s)", issues.len())
                 },
@@ -459,25 +495,55 @@ fn get_unlocked(conn: &Connection, id: &str) -> rusqlite::Result<Issue> {
 }
 
 fn list_unlocked(conn: &Connection) -> Result<Vec<IssueSummary>> {
+    list_unlocked_filtered(conn, None)
+}
+
+fn list_unlocked_filtered(conn: &Connection, run_id: Option<&str>) -> Result<Vec<IssueSummary>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service
+        "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service, last_event
              FROM issues ORDER BY last_seen DESC",
     )?;
     let rows = stmt.query_map([], |row| {
-        Ok(IssueSummary {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            level: row.get(2)?,
-            status: IssueStatus::parse(&row.get::<_, String>(3)?),
-            count: row.get::<_, i64>(4)? as u64,
-            first_seen: row.get(5)?,
-            last_seen: row.get(6)?,
-            release: row.get(7)?,
-            environment: row.get(8)?,
-            service: row.get(9)?,
-        })
+        let last_raw: String = row.get(10)?;
+        Ok((
+            IssueSummary {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                level: row.get(2)?,
+                status: IssueStatus::parse(&row.get::<_, String>(3)?),
+                count: row.get::<_, i64>(4)? as u64,
+                first_seen: row.get(5)?,
+                last_seen: row.get(6)?,
+                release: row.get(7)?,
+                environment: row.get(8)?,
+                service: row.get(9)?,
+            },
+            last_raw,
+        ))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let mut out = Vec::new();
+    for row in rows {
+        let (summary, last_raw) = row?;
+        if let Some(rid) = run_id {
+            let Ok(v) = serde_json::from_str::<Value>(&last_raw) else {
+                continue;
+            };
+            let matched = v
+                .pointer("/tags/airbug.run_id")
+                .and_then(|x| x.as_str())
+                .or_else(|| {
+                    v.get("tags")
+                        .and_then(|t| t.get("airbug.run_id"))
+                        .and_then(|x| x.as_str())
+                })
+                == Some(rid);
+            if !matched {
+                continue;
+            }
+        }
+        out.push(summary);
+    }
+    Ok(out)
 }
 
 fn fire_webhook(url: &str, issue_id: &str, issue: &Issue) {

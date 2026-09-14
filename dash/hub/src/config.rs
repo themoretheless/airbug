@@ -59,7 +59,28 @@ impl RootPaths {
     }
 
     pub fn issues_db(&self) -> PathBuf {
-        self.root.join("dash/hub/data/issues.sqlite")
+        self.hub_data_dir().join("issues.sqlite")
+    }
+
+    pub fn hub_data_dir(&self) -> PathBuf {
+        self.root.join("dash/hub/data")
+    }
+
+    pub fn hub_id_file(&self) -> PathBuf {
+        self.hub_data_dir().join("hub_id")
+    }
+
+    pub fn runs_db(&self) -> PathBuf {
+        self.hub_data_dir().join("runs.sqlite")
+    }
+
+    /// Artifact root for registered bench runs: `<root>/.airbug-bench/runs`.
+    pub fn bench_runs_dir(&self) -> PathBuf {
+        self.root.join(".airbug-bench/runs")
+    }
+
+    pub fn bench_run_dir(&self, run_id: &str) -> PathBuf {
+        self.bench_runs_dir().join(run_id)
     }
 
     pub fn unit_report_dir(&self) -> PathBuf {

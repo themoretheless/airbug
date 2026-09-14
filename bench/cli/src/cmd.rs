@@ -442,7 +442,8 @@ pub(crate) fn execute() -> Result<i32> {
             no_ui,
             no_open,
             memory,
-            output: out,
+            hub,
+            output: out_arg,
             args,
         } => {
             if plan.is_some()
@@ -455,6 +456,19 @@ pub(crate) fn execute() -> Result<i32> {
             {
                 return Err(error("--plan cannot be combined with command overrides"));
             }
+            let title = plan
+                .as_ref()
+                .and_then(|p| p.file_stem())
+                .map(|s| s.to_string_lossy().into_owned())
+                .or_else(|| {
+                    program
+                        .as_ref()
+                        .and_then(|p| p.file_name())
+                        .map(|s| s.to_string_lossy().into_owned())
+                })
+                .unwrap_or_else(|| "airbug-bench".into());
+            let (out, _reg) =
+                crate::hub::resolve_output(hub.as_deref(), out_arg, &title, Some(&title))?;
             let mut plan = if let Some(p) = plan {
                 serde_json::from_reader(std::fs::File::open(p)?)?
             } else {

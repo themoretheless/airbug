@@ -177,3 +177,135 @@ fn serve_status_ingest_issues() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn serve_bench_runs_progress_and_run_id_filter() {
+    let root: PathBuf = std::env::temp_dir().join(format!("airbug-hub-runs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+    std::fs::create_dir_all(root.join("dash/collector/data")).unwrap();
+
+    let port = free_port();
+    let child = hub_bin()
+        .args([
+            "serve",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &port.to_string(),
+        ])
+        .spawn()
+        .expect("spawn hub");
+    let _hub = HubProc(child);
+    wait_ready(port, Instant::now() + Duration::from_secs(10));
+
+    let (st, status_body) = http(port, "GET", "/api/v1/status", None);
+    assert_eq!(st, 200, "{status_body}");
+    let hub_id = status_body
+        .split("\"hub_id\"")
+        .nth(1)
+        .and_then(|s| s.split('"').nth(1))
+        .expect("hub_id")
+        .to_string();
+    assert!(!hub_id.is_empty());
+
+    let (st, status2) = http(port, "GET", "/api/v1/status", None);
+    assert_eq!(st, 200);
+    assert!(status2.contains(&hub_id), "hub_id should be stable: {status2}");
+
+    let (st, reg) = http(
+        port,
+        "POST",
+        "/api/v1/bench/runs",
+        Some(r#"{"title":"smoke","command":"test"}"#),
+    );
+    assert_eq!(st, 200, "{reg}");
+    assert!(reg.contains(&hub_id), "{reg}");
+    let run_id = reg
+        .split("\"run_id\"")
+        .nth(1)
+        .and_then(|s| s.split('"').nth(1))
+        .expect("run_id")
+        .to_string();
+    let out_dir = reg
+        .split("\"out_dir\"")
+        .nth(1)
+        .and_then(|s| s.split('"').nth(1))
+        .expect("out_dir")
+        .to_string();
+
+    let (st, list) = http(port, "GET", "/api/v1/bench/runs", None);
+    assert_eq!(st, 200, "{list}");
+    assert!(list.contains(&run_id), "{list}");
+
+    std::fs::write(
+        PathBuf::from(&out_dir).join("progress.json"),
+        r#"{"state":"running","completed":2,"total":5,"variant":"quick"}"#,
+    )
+    .unwrap();
+
+    let (st, detail) = http(port, "GET", &format!("/api/v1/bench/runs/{run_id}"), None);
+    assert_eq!(st, 200, "{detail}");
+    assert!(detail.contains("running") || detail.contains("\"completed\""), "{detail}");
+    assert!(detail.contains("\"completed\":2") || detail.contains("\"completed\": 2"), "{detail}");
+
+    std::fs::write(
+        PathBuf::from(&out_dir).join("status-final.json"),
+        r#"{"state":"complete"}"#,
+    )
+    .unwrap();
+    let (st, detail) = http(port, "GET", &format!("/api/v1/bench/runs/{run_id}"), None);
+    assert_eq!(st, 200, "{detail}");
+    assert!(detail.contains("complete"), "{detail}");
+
+    let log_line = format!(
+        r#"{{"time":"2026-01-01T00:00:00Z","severity":"INFO","body":"bench log","service":"smoke","airbug.run_id":"{run_id}"}}"#
+    );
+    std::fs::write(root.join("dash/collector/data/logs.json"), format!("{log_line}\n")).unwrap();
+
+    let (st, logs) = http(
+        port,
+        "GET",
+        &format!("/api/v1/logs?limit=20&run_id={run_id}"),
+        None,
+    );
+    assert_eq!(st, 200, "{logs}");
+    assert!(logs.contains("bench log"), "{logs}");
+
+    let (st, logs_other) = http(
+        port,
+        "GET",
+        "/api/v1/logs?limit=20&run_id=00000000-0000-0000-0000-000000000000",
+        None,
+    );
+    assert_eq!(st, 200, "{logs_other}");
+    assert!(!logs_other.contains("bench log"), "{logs_other}");
+
+    let event = format!(
+        r#"{{
+      "schema_version": 1,
+      "event_id": "run-err-1",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "level": "error",
+      "message": "run correlated boom",
+      "fingerprint": ["run:fp"],
+      "breadcrumbs": [],
+      "tags": {{"airbug.run_id": "{run_id}"}},
+      "extra": {{}},
+      "contexts": {{}}
+    }}"#
+    );
+    let (st, body) = http(port, "POST", "/api/v1/errors", Some(&event));
+    assert_eq!(st, 200, "{body}");
+
+    let (st, issues) = http(
+        port,
+        "GET",
+        &format!("/api/v1/issues?run_id={run_id}"),
+        None,
+    );
+    assert_eq!(st, 200, "{issues}");
+    assert!(issues.contains("run correlated boom") || issues.contains("ISSUE-"), "{issues}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}

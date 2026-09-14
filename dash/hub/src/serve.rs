@@ -4,7 +4,7 @@ use crate::{
     config,
     error::HubError,
     http::{self, Request},
-    issues, otlp, scan,
+    issues, otlp, runs, scan,
 };
 use std::{
     net::{TcpListener, TcpStream},
@@ -23,6 +23,7 @@ pub fn serve(app: Arc<HubApp>) -> std::io::Result<()> {
     let listener = TcpListener::bind(("127.0.0.1", app.port))?;
     tracing::info!(
         port = app.port,
+        hub_id = %app.hub_id,
         root = %app.paths.root.display(),
         "airbug hub listening"
     );
@@ -76,6 +77,9 @@ fn handle(stream: &mut TcpStream, app: &HubApp) -> std::io::Result<()> {
         ("GET", p) if p.starts_with("/report/") => {
             serve_unit_report(stream, &app.paths.root, &p["/report/".len()..])
         }
+        ("GET", p) if p.starts_with("/bench/") => {
+            serve_bench_artifact(stream, &app.paths.root, &p["/bench/".len()..])
+        }
         _ => http::respond(
             stream,
             "404 Not Found",
@@ -95,29 +99,48 @@ fn handle_api(
     let rest = if rest.is_empty() { "/" } else { rest };
     match (method, rest) {
         ("GET", "/") => {
-            let snap = scan::scan_with_port(&app.paths.root, app.port);
+            let snap = scan::scan_with_hub(&app.paths.root, app.port, &app.hub_id);
             http::respond_json(stream, "200 OK", &snap.apis)
         }
         ("GET", "/status") => {
-            let snap = scan::scan_with_port(&app.paths.root, app.port);
+            let snap = scan::scan_with_hub(&app.paths.root, app.port, &app.hub_id);
             http::respond_json(stream, "200 OK", &snap)
         }
         ("GET", "/logs") => {
             let limit =
                 http::query_usize(&req.query, "limit", config::DEFAULT_LOGS_LIMIT).clamp(1, 500);
-            http::respond_json(stream, "200 OK", &otlp::read_logs(&app.paths.root, limit))
+            let run_id = http::query_str(&req.query, "run_id");
+            http::respond_json(
+                stream,
+                "200 OK",
+                &otlp::read_logs_filtered(&app.paths.root, limit, run_id.as_deref()),
+            )
         }
         ("GET", "/metrics") => {
             let limit = http::query_usize(&req.query, "limit", config::DEFAULT_METRICS_LIMIT)
                 .clamp(1, 2000);
+            let run_id = http::query_str(&req.query, "run_id");
             http::respond_json(
                 stream,
                 "200 OK",
-                &otlp::read_metrics(&app.paths.root, limit),
+                &otlp::read_metrics_filtered(&app.paths.root, limit, run_id.as_deref()),
             )
         }
         ("POST", "/errors") => handle_errors_ingest(stream, app, req),
-        ("GET", "/issues") => http::respond_json(stream, "200 OK", &app.issues.list()),
+        ("GET", "/issues") => {
+            let run_id = http::query_str(&req.query, "run_id");
+            http::respond_json(
+                stream,
+                "200 OK",
+                &app.issues.list_filtered(run_id.as_deref()),
+            )
+        }
+        ("POST", "/bench/runs") => handle_create_run(stream, app, req),
+        ("GET", "/bench") | ("GET", "/bench/runs") => match app.runs.list() {
+            Ok(list) => http::respond_json(stream, "200 OK", &list),
+            Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
+        },
+        ("GET", p) if p.starts_with("/bench/runs/") => handle_bench_run_get(stream, app, p),
         ("GET", p) if p.starts_with("/issues/") => {
             let id = &p["/issues/".len()..];
             if id.is_empty() || id.contains('/') {
@@ -141,6 +164,78 @@ fn handle_api(
             "not found",
         ),
     }
+}
+
+fn handle_create_run(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    let body = if req.body.is_empty() {
+        runs::CreateRunRequest {
+            title: None,
+            command: None,
+        }
+    } else {
+        match serde_json::from_slice(&req.body) {
+            Ok(v) => v,
+            Err(e) => return http::respond_err(stream, "400 Bad Request", &HubError::from(e)),
+        }
+    };
+    match app.runs.create(body) {
+        Ok(resp) => http::respond_json(stream, "200 OK", &resp),
+        Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
+    }
+}
+
+fn handle_bench_run_get(stream: &mut TcpStream, app: &HubApp, path: &str) -> std::io::Result<()> {
+    let rest = &path["/bench/runs/".len()..];
+    if rest.is_empty() {
+        return http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "not found",
+        );
+    }
+    if let Some((id, tail)) = rest.split_once('/') {
+        if tail == "report" || tail == "report.html" {
+            return serve_file(stream, &app.paths.bench_run_dir(id).join("report.html"));
+        }
+        if tail == "run.json" {
+            return serve_file(stream, &app.paths.bench_run_dir(id).join("run.json"));
+        }
+        return http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "not found",
+        );
+    }
+    match app.runs.get(rest) {
+        Ok(detail) => http::respond_json(stream, "200 OK", &detail),
+        Err(e) => {
+            let status = if e.to_string().contains("not found") {
+                "404 Not Found"
+            } else {
+                "400 Bad Request"
+            };
+            http::respond_err(stream, status, &e)
+        }
+    }
+}
+
+fn serve_file(stream: &mut TcpStream, path: &Path) -> std::io::Result<()> {
+    if !path.is_file() {
+        return http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "missing",
+        );
+    }
+    let bytes = std::fs::read(path)?;
+    http::respond_bytes(stream, "200 OK", http::mime_for_path(path), &bytes)
 }
 
 fn handle_errors_ingest(
@@ -200,7 +295,38 @@ fn serve_unit_report(stream: &mut TcpStream, root: &Path, name: &str) -> std::io
             "missing",
         );
     };
-    if !path.is_file() {
+    serve_file(stream, &path)
+}
+
+fn serve_bench_artifact(stream: &mut TcpStream, root: &Path, rel: &str) -> std::io::Result<()> {
+    if rel.is_empty() || rel.contains("..") || rel.starts_with('/') || Path::new(rel).is_absolute()
+    {
+        return http::respond(
+            stream,
+            "400 Bad Request",
+            "text/plain; charset=utf-8",
+            "bad path",
+        );
+    }
+    let store = root.join(".airbug-bench");
+    let path = store.join(rel);
+    let Ok(canon_store) = store.canonicalize() else {
+        return http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "missing",
+        );
+    };
+    let Ok(canon) = path.canonicalize() else {
+        return http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "missing",
+        );
+    };
+    if !canon.starts_with(&canon_store) || !canon.is_file() {
         return http::respond(
             stream,
             "404 Not Found",
@@ -208,12 +334,15 @@ fn serve_unit_report(stream: &mut TcpStream, root: &Path, name: &str) -> std::io
             "missing",
         );
     }
-    let bytes = std::fs::read(&path)?;
-    http::respond_bytes(stream, "200 OK", http::mime_for_path(&path), &bytes)
+    let bytes = std::fs::read(&canon)?;
+    http::respond_bytes(stream, "200 OK", http::mime_for_path(&canon), &bytes)
 }
 
 pub fn status_json(root: &Path) -> String {
-    let snap = scan::scan(root);
+    let paths = config::RootPaths::new(root);
+    let hub_id =
+        runs::load_or_create_hub_id(&paths.hub_id_file()).unwrap_or_else(|_| "unknown".into());
+    let snap = scan::scan_with_hub(root, config::DEFAULT_PORT, &hub_id);
     serde_json::to_string_pretty(&snap).unwrap_or_default()
 }
 

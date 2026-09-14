@@ -8,8 +8,38 @@
       { id: "table", label: "Table" },
     ];
     const SEV_ORDER = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
+    const DOMAIN_ORDER = ["unit", "mon", "otel", "err", "collector"];
+    const CATS = [
+      { id: "overview", label: "Overview" },
+      { id: "unit", label: "Unit" },
+      { id: "bench", label: "Bench" },
+      { id: "mon", label: "Mon" },
+      { id: "otel", label: "Otel" },
+      { id: "err", label: "Err" },
+      { id: "collector", label: "Collector" },
+      { id: "issues", label: "Issues" },
+      { id: "metrics", label: "Metrics" },
+      { id: "logs", label: "Logs" },
+      { id: "apis", label: "APIs" },
+    ];
+    const CAT_LEDE = {
+      overview: "Status cards across unit, bench, mon, otel, err, and collector.",
+      unit: "Unit test helpers and airbug report artifacts.",
+      bench: "Live and finished bench runs (GUID sessions).",
+      mon: "Host monitor (airbug-mon).",
+      otel: "OpenTelemetry façade status.",
+      err: "Error/panic ingest surface.",
+      collector: "Local OTLP collector / Jaeger.",
+      issues: "Issue inbox from airbug-err events.",
+      metrics: "OTLP metrics visualizations.",
+      logs: "OTLP log tail and filters.",
+      apis: "Local API endpoints discovered on this hub.",
+    };
 
     const domainsEl = document.getElementById("domains");
+    const domainOneEl = document.getElementById("domain-one");
+    const catsEl = document.getElementById("cats");
+    const ledeEl = document.getElementById("lede");
     const metaEl = document.getElementById("meta");
     const toastEl = document.getElementById("toast");
     const logsMetaEl = document.getElementById("logs-meta");
@@ -33,6 +63,12 @@
     const issueDetailBodyEl = document.getElementById("issue-detail-body");
     const issueActionsEl = document.getElementById("issue-actions");
     let selectedIssueId = null;
+    /** @type {Record<string, any>} */
+    let lastDomains = {};
+    let currentCat = "overview";
+    let currentRunId = null;
+    let benchPollTimer = null;
+    let lastHubId = "";
 
     /** @type {Set<string>} */
     let selectedSeries = new Set();
@@ -44,6 +80,233 @@
     let lastLogs = null;
     /** @type {Set<string>} */
     let selectedSeverities = new Set(SEV_ORDER);
+
+    function parseRoute() {
+      const raw = (location.hash || "").replace(/^#\/?/, "").trim();
+      const parts = raw.split("/").filter(Boolean);
+      const id = parts[0] || "overview";
+      const cat = CATS.some(c => c.id === id) ? id : "overview";
+      const runId = cat === "bench" && parts[1] ? parts[1] : null;
+      return { cat, runId };
+    }
+
+    function panelFor(cat) {
+      if (DOMAIN_ORDER.includes(cat)) return "domain";
+      return cat;
+    }
+
+    function showRoute() {
+      const { cat, runId } = parseRoute();
+      currentCat = cat;
+      currentRunId = runId;
+      ledeEl.textContent = CAT_LEDE[cat] || CAT_LEDE.overview;
+      catsEl.querySelectorAll("a").forEach(a => {
+        a.classList.toggle("active", a.getAttribute("data-cat") === cat);
+      });
+      const want = panelFor(cat);
+      document.querySelectorAll(".panel").forEach(p => {
+        p.hidden = p.getAttribute("data-cat") !== want;
+      });
+      if (DOMAIN_ORDER.includes(cat) && lastDomains[cat]) {
+        domainOneEl.innerHTML = card(lastDomains[cat]);
+        domainOneEl.querySelectorAll("button[data-cmd]").forEach(btn => {
+          btn.addEventListener("click", () => copy(btn.getAttribute("data-cmd")));
+        });
+      }
+      if (cat === "bench") {
+        refreshBench().catch(err => {
+          document.getElementById("bench-meta").textContent = String(err);
+        });
+      } else if (benchPollTimer) {
+        clearInterval(benchPollTimer);
+        benchPollTimer = null;
+      }
+      document.title = "airbug hub · " + (CATS.find(c => c.id === cat)?.label || cat)
+        + (runId ? " · " + runId.slice(0, 8) : "");
+    }
+
+    function renderCats() {
+      catsEl.innerHTML = CATS.map(c =>
+        `<a href="#/${c.id}" data-cat="${c.id}">${escapeHtml(c.label)}</a>`
+      ).join("");
+    }
+
+    function median(nums) {
+      if (!nums.length) return NaN;
+      const s = nums.slice().sort((a, b) => a - b);
+      const m = Math.floor(s.length / 2);
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    }
+
+    function fmtNs(ns) {
+      if (!Number.isFinite(ns)) return "—";
+      if (ns >= 1e9) return (ns / 1e9).toFixed(2) + " s";
+      if (ns >= 1e6) return (ns / 1e6).toFixed(2) + " ms";
+      if (ns >= 1e3) return (ns / 1e3).toFixed(1) + " µs";
+      return ns.toFixed(0) + " ns";
+    }
+
+    async function refreshBench() {
+      const listEl = document.getElementById("bench-list");
+      const detailEl = document.getElementById("bench-detail");
+      const metaElB = document.getElementById("bench-meta");
+      const titleEl = document.getElementById("bench-title");
+      if (currentRunId) {
+        listEl.hidden = true;
+        detailEl.hidden = false;
+        titleEl.textContent = "Bench run";
+        await refreshBenchDetail(currentRunId);
+        if (!benchPollTimer) {
+          benchPollTimer = setInterval(() => {
+            if (currentCat === "bench" && currentRunId) {
+              refreshBenchDetail(currentRunId).catch(() => {});
+            }
+          }, 1500);
+        }
+        return;
+      }
+      if (benchPollTimer) {
+        clearInterval(benchPollTimer);
+        benchPollTimer = null;
+      }
+      listEl.hidden = false;
+      detailEl.hidden = true;
+      titleEl.textContent = "Bench runs";
+      const res = await fetch("/api/v1/bench/runs", { cache: "no-store" });
+      const data = await res.json();
+      metaElB.textContent = (data.note || "") + (data.hub_id ? " · hub " + data.hub_id.slice(0, 8) : "");
+      const runs = data.runs || [];
+      if (!runs.length) {
+        listEl.innerHTML = `<p class="bench-live">${escapeHtml(data.note || "No runs.")}</p>`;
+        return;
+      }
+      listEl.innerHTML = runs.map(r => {
+        const st = escapeAttr(r.state || "registered");
+        return `<a class="bench-row" href="#/bench/${escapeAttr(r.run_id)}">
+          <span class="bench-state ${st}">${escapeHtml(r.state)}</span>
+          <div>
+            <strong>${escapeHtml(r.title || r.run_id)}</strong>
+            <span>${escapeHtml(r.run_id)}</span>
+          </div>
+          <span>${escapeHtml(r.updated_at || "")}</span>
+        </a>`;
+      }).join("");
+    }
+
+    async function refreshBenchDetail(runId) {
+      const res = await fetch("/api/v1/bench/runs/" + encodeURIComponent(runId), { cache: "no-store" });
+      if (!res.ok) {
+        document.getElementById("bench-live").textContent = "run not found";
+        return;
+      }
+      const d = await res.json();
+      document.getElementById("bench-meta").textContent =
+        `${d.state} · hub ${String(d.hub_id || "").slice(0, 8)}`;
+      const live = d.live || {};
+      const completed = Number(live.completed || 0);
+      const total = Number(live.total || 0);
+      const prog = document.getElementById("bench-progress");
+      if (total > 0) {
+        prog.max = total;
+        prog.value = completed;
+      } else {
+        prog.max = 100;
+        prog.value = d.state === "complete" ? 100 : (d.state === "running" ? 50 : 0);
+      }
+      document.getElementById("bench-live").textContent = [
+        live.state || d.state,
+        total ? `${completed}/${total}` : "",
+        live.variant || "",
+      ].filter(Boolean).join(" · ");
+      const links = [];
+      if (d.report_url) links.push(`<a href="${escapeAttr(d.report_url)}" target="_blank" rel="noopener">report.html</a>`);
+      if (d.run_json_url) links.push(`<a href="${escapeAttr(d.run_json_url)}" target="_blank" rel="noopener">run.json</a>`);
+      if (d.jaeger_url) links.push(`<a href="${escapeAttr(d.jaeger_url)}" target="_blank" rel="noopener">Jaeger traces</a>`);
+      document.getElementById("bench-links").innerHTML = links.join(" · ") || "";
+      const frame = document.getElementById("bench-report-frame");
+      if (d.has_report_html && d.report_url) {
+        frame.hidden = false;
+        if (frame.getAttribute("data-src") !== d.report_url) {
+          frame.src = d.report_url;
+          frame.setAttribute("data-src", d.report_url);
+        }
+      } else {
+        frame.hidden = true;
+      }
+      if (d.has_run_json && d.run_json_url) {
+        await renderBenchCharts(d.run_json_url);
+      } else {
+        document.getElementById("bench-charts").innerHTML =
+          `<p class="bench-live">Waiting for run.json (charts appear when the suite finishes or writes partial results).</p>`;
+      }
+      await Promise.all([
+        refreshBenchLogs(runId),
+        refreshBenchMetrics(runId),
+        refreshBenchIssues(runId),
+      ]);
+    }
+
+    async function renderBenchCharts(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return;
+      const run = await res.json();
+      const byCase = {};
+      for (const o of run.observations || []) {
+        if (o.metric !== "wall") continue;
+        if (!byCase[o.case]) byCase[o.case] = [];
+        byCase[o.case].push(Number(o.value));
+      }
+      const families = {};
+      for (const [caseId, values] of Object.entries(byCase)) {
+        const parts = caseId.split("/");
+        const engine = parts[parts.length - 1] || caseId;
+        const family = parts.slice(0, -1).join("/") || caseId;
+        if (!families[family]) families[family] = [];
+        families[family].push({ engine, median: median(values) });
+      }
+      const cards = Object.keys(families).sort().map(family => {
+        const rows = families[family].sort((a, b) => a.median - b.median);
+        const max = Math.max(...rows.map(r => r.median), 1);
+        const tr = rows.map(r => {
+          const pct = Math.max(2, (r.median / max) * 100);
+          return `<tr><td>${escapeHtml(r.engine)}</td><td>${fmtNs(r.median)}<div class="bench-bar" style="width:${pct}%"></div></td></tr>`;
+        }).join("");
+        return `<div class="bench-chart-card"><h4>${escapeHtml(family)}</h4>
+          <table><thead><tr><th>engine</th><th>median wall</th></tr></thead><tbody>${tr}</tbody></table></div>`;
+      }).join("");
+      document.getElementById("bench-charts").innerHTML = cards
+        || `<p class="bench-live">No wall observations in run.json.</p>`;
+    }
+
+    async function refreshBenchLogs(runId) {
+      const el = document.getElementById("bench-logs");
+      const res = await fetch("/api/v1/logs?limit=80&run_id=" + encodeURIComponent(runId), { cache: "no-store" });
+      const data = await res.json();
+      const entries = data.entries || [];
+      el.textContent = entries.length
+        ? entries.map(e => `[${e.severity}] ${e.service} ${e.body}`).join("\n")
+        : (data.note || "No logs.");
+    }
+
+    async function refreshBenchMetrics(runId) {
+      const el = document.getElementById("bench-metrics");
+      const res = await fetch("/api/v1/metrics?limit=80&run_id=" + encodeURIComponent(runId), { cache: "no-store" });
+      const data = await res.json();
+      const points = data.points || [];
+      el.textContent = points.length
+        ? points.slice(-40).map(p => `${p.name}=${p.value} ${p.unit || ""}`.trim()).join("\n")
+        : (data.note || "No metrics.");
+    }
+
+    async function refreshBenchIssues(runId) {
+      const el = document.getElementById("bench-issues");
+      const res = await fetch("/api/v1/issues?run_id=" + encodeURIComponent(runId), { cache: "no-store" });
+      const data = await res.json();
+      const issues = data.issues || [];
+      el.textContent = issues.length
+        ? issues.map(i => `${i.id} · ${i.title} · ${i.status}`).join("\n")
+        : (data.note || "No issues.");
+    }
 
     function toast(text) {
       toastEl.textContent = text;
@@ -88,12 +351,10 @@
     function renderApis(apis) {
       const up = (apis || []).filter(a => a.available);
       if (!up.length) {
-        apisEl.hidden = true;
-        apiListEl.innerHTML = "";
-        apisMetaEl.textContent = "";
+        apiListEl.innerHTML = `<li><p class="api-detail">No local APIs detected yet.</p></li>`;
+        apisMetaEl.textContent = "0 available";
         return;
       }
-      apisEl.hidden = false;
       apisMetaEl.textContent = up.length + " available";
       apiListEl.innerHTML = up.map(a => {
         const href = escapeAttr(a.href);
@@ -688,22 +949,37 @@
     async function refresh() {
       const res = await fetch("/api/v1/status", { cache: "no-store" });
       const data = await res.json();
-      metaEl.innerHTML = `<span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
+      lastHubId = data.hub_id || "";
+      metaEl.innerHTML = `<span>hub <code>${escapeHtml(lastHubId)}</code></span><span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
       document.getElementById("reload").onclick = () => {
         refresh(); refreshLogs(); refreshMetrics(); refreshIssues();
+        if (currentCat === "bench") refreshBench().catch(() => {});
       };
       renderApis(data.apis);
-      const order = ["unit", "bench", "mon", "otel", "err", "collector"];
-      domainsEl.innerHTML = order.map(k => card(data.domains[k])).join("");
+      lastDomains = data.domains || {};
+      const overviewOrder = ["unit", "bench", "mon", "otel", "err", "collector"];
+      domainsEl.innerHTML = overviewOrder.map(k => card(lastDomains[k])).join("");
       domainsEl.querySelectorAll("button[data-cmd]").forEach(btn => {
         btn.addEventListener("click", () => copy(btn.getAttribute("data-cmd")));
       });
+      domainsEl.querySelectorAll("article.domain").forEach(art => {
+        art.style.cursor = "pointer";
+        art.addEventListener("click", ev => {
+          if (ev.target.closest("button, a")) return;
+          location.hash = "#/" + art.getAttribute("data-id");
+        });
+      });
+      showRoute();
     }
 
+    renderCats();
     renderVizPicker();
     renderSevChips();
     logsFilterEl.addEventListener("input", () => paintLogs());
     logsServiceEl.addEventListener("change", () => paintLogs());
+    window.addEventListener("hashchange", () => showRoute());
+    if (!location.hash) location.hash = "#/overview";
+    else showRoute();
 
     refresh().catch(err => {
       metaEl.textContent = "failed to load /api/v1/status: " + err;

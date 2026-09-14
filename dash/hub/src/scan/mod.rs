@@ -17,15 +17,22 @@ use std::{
     time::SystemTime,
 };
 
-use bench::scan_bench;
+use bench::{list_runs, scan_bench};
 use collector::scan_collector;
 use err::scan_err;
 use mon::scan_mon;
 use otel::scan_otel;
 use unit::scan_unit;
 
+pub use bench::{BenchRunRow, BenchRuns};
+
+pub fn bench_runs(root: &Path) -> BenchRuns {
+    list_runs(root)
+}
+
 #[derive(Debug, Serialize)]
 pub struct Snapshot {
+    pub hub_id: String,
     pub root: String,
     pub generated: String,
     pub domains: Domains,
@@ -88,10 +95,14 @@ pub struct Action {
 }
 
 pub fn scan(root: &Path) -> Snapshot {
-    scan_with_port(root, 8790)
+    scan_with_hub(root, 8790, "")
 }
 
 pub fn scan_with_port(root: &Path, port: u16) -> Snapshot {
+    scan_with_hub(root, port, "")
+}
+
+pub fn scan_with_hub(root: &Path, port: u16, hub_id: &str) -> Snapshot {
     let domains = Domains {
         unit: scan_unit(root),
         bench: scan_bench(root),
@@ -101,6 +112,7 @@ pub fn scan_with_port(root: &Path, port: u16) -> Snapshot {
         collector: scan_collector(root),
     };
     Snapshot {
+        hub_id: hub_id.to_string(),
         root: root.display().to_string(),
         generated: iso_now(),
         apis: local_apis(root, port, &domains),

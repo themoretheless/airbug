@@ -5,6 +5,7 @@ mod cmd;
 mod experiment_report;
 mod forma;
 mod git_run;
+mod hub;
 mod matrix;
 mod privacy;
 mod project;

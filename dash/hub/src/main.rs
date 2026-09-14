@@ -5,6 +5,7 @@ mod error;
 mod http;
 mod issues;
 mod otlp;
+mod runs;
 mod scan;
 mod serve;
 

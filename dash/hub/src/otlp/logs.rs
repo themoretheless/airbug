@@ -1,6 +1,7 @@
 //! Read OTLP log records written by the local collector file exporter.
 use super::{
-    any_value, nano_time, normalize_severity, resource_attr, split_json_values, tail_text,
+    any_value, merge_record_attrs, nano_time, normalize_severity, resource_attr, resource_attrs,
+    split_json_values, tail_text,
 };
 use crate::config::{self, RootPaths};
 use serde::Serialize;
@@ -31,9 +32,15 @@ pub struct LogEntry {
     pub body: String,
     pub service: String,
     pub scope: String,
+    #[serde(default)]
+    pub attrs: std::collections::HashMap<String, String>,
 }
 
 pub fn read_recent(root: &Path, limit: usize) -> LogsResponse {
+    read_filtered(root, limit, None)
+}
+
+pub fn read_filtered(root: &Path, limit: usize, run_id: Option<&str>) -> LogsResponse {
     let paths = RootPaths::new(root);
     let path = paths.logs_file();
     let path_s = path.display().to_string();
@@ -48,15 +55,27 @@ pub fn read_recent(root: &Path, limit: usize) -> LogsResponse {
         };
     }
 
-    match tail_parse(&path, limit) {
-        Ok(entries) => {
+    match tail_parse(&path, limit.saturating_mul(4).max(limit)) {
+        Ok(mut entries) => {
+            if let Some(rid) = run_id {
+                entries.retain(|e| {
+                    e.attrs.get("airbug.run_id").map(|s| s.as_str()) == Some(rid)
+                });
+            }
+            if entries.len() > limit {
+                entries = entries.split_off(entries.len() - limit);
+            }
             let by_severity = count_by_severity(&entries);
             let services = distinct_services(&entries);
             LogsResponse {
                 path: path_s,
                 available: true,
                 note: if entries.is_empty() {
-                    "Log file is empty or still buffering.".into()
+                    if run_id.is_some() {
+                        "No logs for this airbug.run_id yet.".into()
+                    } else {
+                        "Log file is empty or still buffering.".into()
+                    }
                 } else {
                     format!("{} recent record(s)", entries.len())
                 },
@@ -131,6 +150,7 @@ fn extract_entries(value: &Value, out: &mut Vec<LogEntry>) {
     if let Some(resource_logs) = value.get("resourceLogs").and_then(|v| v.as_array()) {
         for rl in resource_logs {
             let service = resource_attr(rl, "service.name");
+            let base_attrs = resource_attrs(rl);
             let scopes = rl
                 .get("scopeLogs")
                 .or_else(|| rl.get("scope_logs"))
@@ -165,6 +185,7 @@ fn extract_entries(value: &Value, out: &mut Vec<LogEntry>) {
                         body: record_body(rec),
                         service: service.clone(),
                         scope: scope.clone(),
+                        attrs: merge_record_attrs(base_attrs.clone(), rec),
                     });
                 }
             }
@@ -173,6 +194,10 @@ fn extract_entries(value: &Value, out: &mut Vec<LogEntry>) {
     }
 
     if value.is_object() {
+        let mut attrs = std::collections::HashMap::new();
+        if let Some(rid) = value.get("airbug.run_id").and_then(|v| v.as_str()) {
+            attrs.insert("airbug.run_id".into(), rid.into());
+        }
         out.push(LogEntry {
             time: value
                 .get("time")
@@ -205,6 +230,7 @@ fn extract_entries(value: &Value, out: &mut Vec<LogEntry>) {
                 .unwrap_or("")
                 .to_string(),
             scope: String::new(),
+            attrs,
         });
     }
 }
