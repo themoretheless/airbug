@@ -1,5 +1,11 @@
 //! Reusable validators that collect field errors without panicking.
-use std::fmt;
+use std::{
+    fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 /// One rule that a value failed.
 ///
@@ -33,6 +39,72 @@ impl fmt::Display for ValidationErrors {
     }
 }
 impl std::error::Error for ValidationErrors {}
+
+impl ValidationErrors {
+    /// Convert each error into the application's own error type.
+    pub fn map<E>(self, convert: impl FnMut(ValidationError) -> E) -> Vec<E> {
+        self.0.into_iter().map(convert).collect()
+    }
+
+    /// Append `other`'s failures after this set (declaration / merge order).
+    pub fn merge(mut self, other: Self) -> Self {
+        self.0.extend(other.0);
+        self
+    }
+}
+
+/// Cooperative cancel flag for long-running or parallel validation.
+#[derive(Clone, Debug, Default)]
+pub struct ValidationCancel {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl ValidationCancel {
+    /// A fresh, not-yet-cancelled token.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Signal cancellation to anyone holding a clone of this token.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether [`cancel`](ValidationCancel::cancel) has been called.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+/// Run several validators against one shared value on scoped threads, merging errors.
+pub fn validate_parallel<T: Sync + 'static>(
+    validators: &[&Validator<T>],
+    value: &T,
+) -> Result<(), ValidationErrors> {
+    let mut parts = Vec::with_capacity(validators.len());
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = validators
+            .iter()
+            .map(|validator| scope.spawn(|| validator.validate(value)))
+            .collect();
+        for handle in handles {
+            parts.push(handle.join().expect("validation thread panicked"));
+        }
+    });
+    let mut merged = ValidationErrors(Vec::new());
+    let mut failed = false;
+    for part in parts {
+        if let Err(errors) = part {
+            failed = true;
+            merged = merged.merge(errors);
+        }
+    }
+    if failed {
+        Err(merged)
+    } else {
+        Ok(())
+    }
+}
 
 struct ErrorSink {
     errors: Vec<ValidationError>,
@@ -100,6 +172,11 @@ impl<T: 'static> Validator<T> {
     /// first one. Never panics.
     pub fn validate(&self, value: &T) -> Result<(), ValidationErrors> {
         self.validate_limit(value, self.max_errors)
+    }
+
+    /// Thin async boundary around [`validate`](Validator::validate).
+    pub async fn validate_async(&self, value: &T) -> Result<(), ValidationErrors> {
+        self.validate(value)
     }
     fn validate_limit(&self, value: &T, limit: usize) -> Result<(), ValidationErrors> {
         let mut errors = ErrorSink {
@@ -314,12 +391,6 @@ impl<T: 'static> Validator<T> {
     }
 }
 
-impl ValidationErrors {
-    /// Convert each error into the application's own error type.
-    pub fn map<E>(self, convert: impl FnMut(ValidationError) -> E) -> Vec<E> {
-        self.0.into_iter().map(convert).collect()
-    }
-}
 impl<T: 'static> Validator<T> {
     /// Object-level predicate can compare any number of fields.
     /// A rule over the whole value rather than one field, for comparisons

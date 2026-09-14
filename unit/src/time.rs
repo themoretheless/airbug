@@ -297,3 +297,155 @@ impl Eventually {
         }
     }
 }
+
+/// Shared clock whose [`sleep`](Clock::sleep) blocks until another thread
+/// [`advance`](ParkClock::advance)s enough time or calls [`unpark`](ParkClock::unpark).
+#[derive(Clone)]
+pub struct ParkClock {
+    state: Arc<(Mutex<ParkState>, std::sync::Condvar)>,
+}
+
+struct ParkState {
+    elapsed: Duration,
+    wall: SystemTime,
+    unpark: bool,
+}
+
+impl ParkClock {
+    /// Start at zero elapsed and the given wall time.
+    pub fn new(wall_time: SystemTime) -> Self {
+        Self {
+            state: Arc::new((
+                Mutex::new(ParkState {
+                    elapsed: Duration::ZERO,
+                    wall: wall_time,
+                    unpark: false,
+                }),
+                std::sync::Condvar::new(),
+            )),
+        }
+    }
+
+    /// Move both monotonic and wall time forward, waking sleepers.
+    pub fn advance(&self, duration: Duration) -> Result<(), ClockError> {
+        let (lock, cvar) = &*self.state;
+        let mut state = lock.lock().expect("park clock lock poisoned");
+        state.elapsed = state
+            .elapsed
+            .checked_add(duration)
+            .ok_or(ClockError("monotonic overflow"))?;
+        state.wall = state
+            .wall
+            .checked_add(duration)
+            .ok_or(ClockError("wall time overflow"))?;
+        cvar.notify_all();
+        Ok(())
+    }
+
+    /// Wake any thread blocked in [`sleep`](Clock::sleep) without advancing time.
+    pub fn unpark(&self) {
+        let (lock, cvar) = &*self.state;
+        let mut state = lock.lock().expect("park clock lock poisoned");
+        state.unpark = true;
+        cvar.notify_all();
+    }
+}
+
+impl Clock for ParkClock {
+    fn elapsed(&self) -> Duration {
+        self.state.0.lock().expect("park clock lock poisoned").elapsed
+    }
+
+    fn wall_time(&self) -> SystemTime {
+        self.state.0.lock().expect("park clock lock poisoned").wall
+    }
+
+    fn sleep(&self, duration: Duration) -> Result<(), ClockError> {
+        let (lock, cvar) = &*self.state;
+        let mut state = lock.lock().expect("park clock lock poisoned");
+        let target = state
+            .elapsed
+            .checked_add(duration)
+            .ok_or(ClockError("monotonic overflow"))?;
+        state.unpark = false;
+        while state.elapsed < target && !state.unpark {
+            state = cvar.wait(state).expect("park clock lock poisoned");
+        }
+        state.unpark = false;
+        Ok(())
+    }
+}
+
+/// Absolute monotonic deadline relative to a [`Clock::elapsed`] timeline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Deadline {
+    /// Elapsed time at which the deadline expires.
+    pub end: Duration,
+}
+
+impl Deadline {
+    /// `clock.elapsed() + timeout`.
+    pub fn from_timeout(clock: &impl Clock, timeout: Duration) -> Result<Self, ClockError> {
+        let end = clock
+            .elapsed()
+            .checked_add(timeout)
+            .ok_or(ClockError("deadline overflow"))?;
+        Ok(Self { end })
+    }
+
+    /// Time left until [`end`](Deadline::end), or zero when expired.
+    pub fn remaining(&self, clock: &impl Clock) -> Duration {
+        self.end.saturating_sub(clock.elapsed())
+    }
+
+    /// Whether `clock.elapsed()` has reached or passed [`end`](Deadline::end).
+    pub fn expired(&self, clock: &impl Clock) -> bool {
+        clock.elapsed() >= self.end
+    }
+}
+
+/// Exponential backoff helper for retry loops.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Retry {
+    /// First delay returned by [`next_delay`](Retry::next_delay).
+    pub initial: Duration,
+    /// Multiplier applied after each delay (at least 1).
+    pub factor: u32,
+    /// Cap for each delay.
+    pub max: Duration,
+    current: Duration,
+}
+
+impl Retry {
+    /// Factor 2, max 60s, starting at `initial`.
+    pub fn exponential(initial: Duration) -> Self {
+        Self {
+            initial,
+            factor: 2,
+            max: Duration::from_secs(60),
+            current: initial,
+        }
+    }
+
+    /// Override the growth factor (clamped to at least 1).
+    pub fn factor(mut self, factor: u32) -> Self {
+        self.factor = factor.max(1);
+        self
+    }
+
+    /// Override the per-delay ceiling.
+    pub fn max(mut self, max: Duration) -> Self {
+        self.max = max;
+        self
+    }
+
+    /// Return the next delay and grow `current` by `factor`, capped at `max`.
+    pub fn next_delay(&mut self) -> Duration {
+        let delay = self.current.min(self.max);
+        self.current = self
+            .current
+            .saturating_mul(self.factor.into())
+            .min(self.max);
+        delay
+    }
+}

@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![warn(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![doc = include_str!("../README.md")]
@@ -16,6 +16,7 @@ pub mod order;
 pub mod prop;
 pub mod report;
 pub mod snapshot;
+pub mod strategy;
 pub mod time;
 pub mod validation;
 pub mod verify;
@@ -23,9 +24,12 @@ pub mod verify;
 pub use assertions::assert_that;
 pub use fixture::{FixtureContext, Generate, GenerationError, GenerationErrorKind};
 pub use mock::{Mock, MockError};
-pub use order::CallSequence;
-pub use prop::{Prop, PropError, PropFailure};
-pub use validation::{ValidationError, ValidationErrors, Validator};
+pub use order::{CallDag, CallSequence, CompletionBarrier, happened_before};
+pub use prop::{Prop, PropError, PropFailure, Shrink};
+pub use strategy::Strategy;
+pub use validation::{
+    ValidationCancel, ValidationError, ValidationErrors, Validator, validate_parallel,
+};
 pub use verify::{VerificationErrors, VerifyMocks, with_mocks, with_mocks_async};
 
 #[cfg(feature = "macros")]
@@ -34,16 +38,21 @@ pub use airbug_macros::{Generate, cases, mock};
 /// Common opt-in imports for ordinary Rust tests.
 pub mod prelude {
     pub use crate::checks::{
-        CheckFailure, CheckReport, assert_all, assert_count, assert_error_chain_contains,
-        assert_panics, assert_relative_eq, assert_sorted, assert_subset, assert_superset,
-        assert_text_eq, assert_unique, normalize_newlines,
+        CheckFailure, CheckReport, SoftAssert, assert_all, assert_count, assert_duration_eq,
+        assert_error_chain_contains, assert_instant_near, assert_near, assert_panics,
+        assert_relative_eq, assert_sorted, assert_subset, assert_superset, assert_text_eq,
+        assert_unique, normalize_newlines,
     };
+    #[cfg(feature = "json")]
+    pub use crate::checks::assert_json_path;
     pub use crate::mock::{Capture, Matcher};
-    pub use crate::snapshot::{Snapshots, UpdateMode};
-    pub use crate::time::{Clock, Eventually, ManualClock};
+    pub use crate::native::{DirScope, EnvScope, TempDir};
+    pub use crate::snapshot::{JsonMode, Snapshots, UpdateMode};
+    pub use crate::time::{Clock, Deadline, Eventually, ManualClock, ParkClock, Retry};
     pub use crate::{
-        CallSequence, FixtureContext, Generate, Mock, Prop, Validator, VerifyMocks, assert_contains,
-        assert_same_items, assert_that, check_all, with_mocks, with_mocks_async,
+        CallDag, CallSequence, CompletionBarrier, FixtureContext, Generate, Mock, Prop, Strategy,
+        Validator, VerifyMocks, assert_contains, assert_same_items, assert_that, check_all,
+        happened_before, validate_parallel, with_mocks, with_mocks_async,
     };
     #[cfg(feature = "macros")]
     pub use crate::{cases, mock};

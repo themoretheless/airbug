@@ -1,5 +1,11 @@
 //! Native-style checks and structured failures, without fluent syntax.
-use std::{error::Error, fmt::Debug};
+use std::{
+    error::Error,
+    fmt::Debug,
+    time::{Duration, Instant, SystemTime},
+};
+/// Soft assertion batch: accumulate mismatches, then [`CheckReport::assert`].
+pub type SoftAssert = CheckReport;
 /// One mismatch recorded by a [`CheckReport`], already rendered to strings so
 /// the report can hold failures about differently typed fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,4 +199,67 @@ pub fn assert_panics(expected: &str, body: impl FnOnce() + std::panic::UnwindSaf
             );
         }
     }
+}
+/// Panic unless `|actual - expected| <= tolerance`.
+#[track_caller]
+pub fn assert_duration_eq(actual: Duration, expected: Duration, tolerance: Duration) {
+    let diff = actual.abs_diff(expected);
+    assert!(
+        diff <= tolerance,
+        "expected duration {actual:?} within {tolerance:?} of {expected:?} (diff {diff:?})"
+    );
+}
+/// Panic unless two [`SystemTime`] values differ by at most `tolerance`.
+#[track_caller]
+pub fn assert_near(actual: SystemTime, expected: SystemTime, tolerance: Duration) {
+    let diff = match actual.duration_since(expected) {
+        Ok(d) => d,
+        Err(e) => e.duration(),
+    };
+    assert!(
+        diff <= tolerance,
+        "expected system time {actual:?} within {tolerance:?} of {expected:?} (diff {diff:?})"
+    );
+}
+/// Panic unless two [`Instant`] values differ by at most `tolerance`.
+#[track_caller]
+pub fn assert_instant_near(actual: Instant, expected: Instant, tolerance: Duration) {
+    let diff = if actual >= expected {
+        actual.duration_since(expected)
+    } else {
+        expected.duration_since(actual)
+    };
+    assert!(
+        diff <= tolerance,
+        "expected instant within {tolerance:?} (diff {diff:?})"
+    );
+}
+/// Assert that a dotted JSON path (e.g. `a.b.0`) equals `expected`.
+#[cfg(feature = "json")]
+#[track_caller]
+pub fn assert_json_path(
+    value: &serde_json::Value,
+    path: &str,
+    expected: &serde_json::Value,
+) {
+    let mut current = value;
+    for segment in path.split('.') {
+        assert!(
+            !segment.is_empty(),
+            "json path {path:?} has an empty segment"
+        );
+        current = if let Ok(index) = segment.parse::<usize>() {
+            current.get(index).unwrap_or_else(|| {
+                panic!("json path {path:?}: missing array index {index} at {current}")
+            })
+        } else {
+            current.get(segment).unwrap_or_else(|| {
+                panic!("json path {path:?}: missing field {segment:?} at {current}")
+            })
+        };
+    }
+    assert_eq!(
+        current, expected,
+        "json path {path:?}: expected {expected}, actual {current}"
+    );
 }

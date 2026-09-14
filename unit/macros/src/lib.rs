@@ -207,7 +207,8 @@ fn derive_mock(input: syn::ItemTrait) -> syn::Result<Tokens> {
     {
         return Err(syn::Error::new_spanned(
             &input.ident,
-            "mock supports safe traits without generic parameters or where clauses",
+            "mock supports safe traits without generic parameters or where clauses; \
+             use a manual Mock with mock::borrowed / ExpectationBuilder::map_args",
         ));
     }
     if !input.supertraits.iter().all(|b| matches!(b, syn::TypeParamBound::Trait(t) if t.path.is_ident("Send") || t.path.is_ident("Sync"))) {
@@ -224,7 +225,8 @@ fn derive_mock(input: syn::ItemTrait) -> syn::Result<Tokens> {
         let syn::TraitItem::Fn(method) = item else {
             return Err(syn::Error::new_spanned(
                 item,
-                "mock supports methods only; associated types and constants require a manual adapter",
+                "mock supports methods only; associated types and constants require a manual \
+                 adapter (see airbug::mock::borrowed)",
             ));
         };
         let sig = &method.sig;
@@ -236,7 +238,8 @@ fn derive_mock(input: syn::ItemTrait) -> syn::Result<Tokens> {
         {
             return Err(syn::Error::new_spanned(
                 sig,
-                "mock methods must be safe Rust methods without generics or variadics",
+                "mock methods must be safe Rust methods without generics or variadics; \
+                 use a manual Mock with mock::borrowed / ExpectationBuilder::map_args",
             ));
         }
         let Some(syn::FnArg::Receiver(receiver)) = sig.inputs.first() else {

@@ -17,6 +17,20 @@ pub enum UpdateMode {
     CreateMissing,
     /// Write every snapshot, replacing whatever was there.
     Overwrite,
+    /// Stub for rewriting expected values into test source.
+    ///
+    /// Source rewrite is not implemented: snapshot checks return
+    /// [`SnapshotError::Unsupported`].
+    InlineSource,
+}
+/// Pretty or compact JSON rendering for [`Snapshots::check_json`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum JsonMode {
+    /// Multi-line indented JSON (default).
+    #[default]
+    Pretty,
+    /// Single-line compact JSON.
+    Compact,
 }
 /// Why a snapshot check did not pass.
 #[derive(Debug)]
@@ -42,6 +56,8 @@ pub enum SnapshotError {
         /// Paths of unused snapshot files.
         paths: Vec<String>,
     },
+    /// Requested feature is not available (for example [`UpdateMode::InlineSource`]).
+    Unsupported(&'static str),
 }
 impl From<io::Error> for SnapshotError {
     fn from(error: io::Error) -> Self {
@@ -68,6 +84,7 @@ impl fmt::Display for SnapshotError {
             Self::Obsolete { paths } => {
                 write!(f, "obsolete snapshot files: {}", paths.join(", "))
             }
+            Self::Unsupported(message) => write!(f, "unsupported: {message}"),
         }
     }
 }
@@ -112,6 +129,9 @@ pub struct Snapshots {
     mode: UpdateMode,
     replacements: Vec<(String, String)>,
     max_bytes: usize,
+    #[cfg(feature = "json")]
+    json_mode: JsonMode,
+    schema_stamp: Option<u32>,
 }
 struct LockedFile {
     path: PathBuf,
@@ -137,11 +157,28 @@ impl Snapshots {
             mode: UpdateMode::Verify,
             replacements: Vec::new(),
             max_bytes: 1_048_576,
+            #[cfg(feature = "json")]
+            json_mode: JsonMode::Pretty,
+            schema_stamp: None,
         }
     }
     /// Choose whether this run may write snapshots.
     pub fn mode(mut self, mode: UpdateMode) -> Self {
         self.mode = mode;
+        self
+    }
+    /// Pretty or compact JSON for [`check_json`](Snapshots::check_json).
+    #[cfg(feature = "json")]
+    pub fn json_mode(mut self, mode: JsonMode) -> Self {
+        self.json_mode = mode;
+        self
+    }
+    /// Prefix stored snapshots with `# airbug-snap-v{n}` when set.
+    ///
+    /// Comparisons always use the body after stripping a matching header, so
+    /// older snaps without a header still compare correctly.
+    pub fn schema_stamp(mut self, version: u32) -> Self {
+        self.schema_stamp = Some(version);
         self
     }
     /// Refuse text larger than `limit` bytes, measured after redaction.
@@ -199,6 +236,11 @@ impl Snapshots {
         Self::name(name)?;
         self.check_path(self.directory.join(format!("test-{name}.snap")), actual)
     }
+    /// Snapshot `bytes` as lowercase hex (no spaces) via [`check`](Snapshots::check).
+    pub fn check_bytes(&self, name: &str, bytes: &[u8]) -> Result<(), SnapshotError> {
+        let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        self.check(name, &hex)
+    }
     /// [`check`](Snapshots::check) for one case of a parameterised test, so
     /// each case gets its own file rather than overwriting a shared one.
     pub fn check_case(&self, test: &str, case: &str, actual: &str) -> Result<(), SnapshotError> {
@@ -228,14 +270,14 @@ impl Snapshots {
         }
     }
 
-    /// Canonical JSON snapshot (stable key order, pretty). Requires feature `json`.
+    /// Canonical JSON snapshot (stable key order). Requires feature `json`.
     #[cfg(feature = "json")]
     pub fn check_json(
         &self,
         name: &str,
         actual: &serde_json::Value,
     ) -> Result<(), SnapshotError> {
-        self.check(name, &canonical_json(actual))
+        self.check(name, &canonical_json(actual, self.json_mode))
     }
 
     /// [`check_json`](Snapshots::check_json) with a per-case file.
@@ -246,7 +288,7 @@ impl Snapshots {
         case: &str,
         actual: &serde_json::Value,
     ) -> Result<(), SnapshotError> {
-        self.check_case(test, case, &canonical_json(actual))
+        self.check_case(test, case, &canonical_json(actual, self.json_mode))
     }
 
     /// Snapshot files under this directory that were not referenced by `used`.
@@ -327,10 +369,24 @@ impl Snapshots {
             None => Err(SnapshotError::Missing(path.to_path_buf())),
         }
     }
+    fn with_schema_header(&self, body: &str) -> String {
+        match self.schema_stamp {
+            Some(version) => format!("# airbug-snap-v{version}\n{body}"),
+            None => body.to_string(),
+        }
+    }
     fn check_path(&self, path: PathBuf, actual: &str) -> Result<(), SnapshotError> {
-        let actual = self.prepare(actual)?;
+        if self.mode == UpdateMode::InlineSource {
+            return Err(SnapshotError::Unsupported(
+                "UpdateMode::InlineSource source rewrite is unsupported",
+            ));
+        }
+        let body = self.prepare(actual)?;
+        let stored = self.with_schema_header(&body);
         if self.mode == UpdateMode::Verify {
-            return Self::compare(&path, self.read(&path)?.as_deref(), &actual);
+            let expected = self.read(&path)?;
+            let expected_body = expected.as_deref().map(strip_schema_header);
+            return Self::compare(&path, expected_body, &body);
         }
         let parent = path.parent().expect("snapshot parent");
         fs::create_dir_all(parent)?;
@@ -351,10 +407,11 @@ impl Snapshots {
             file: Some(lock),
         };
         let existing = self.read(&path)?;
-        let result = if existing.as_deref() == Some(&actual) {
+        let existing_body = existing.as_deref().map(strip_schema_header);
+        let result = if existing_body == Some(body.as_str()) {
             Ok(())
         } else if existing.is_some() && self.mode == UpdateMode::CreateMissing {
-            Self::compare(&path, existing.as_deref(), &actual)
+            Self::compare(&path, existing_body, &body)
         } else {
             let temporary = path.with_extension("tmp");
             let mut file = fs::OpenOptions::new()
@@ -363,7 +420,7 @@ impl Snapshots {
                 .open(&temporary)?;
             let cleanup = Remove(temporary.clone());
             let written = file
-                .write_all(actual.as_bytes())
+                .write_all(stored.as_bytes())
                 .and_then(|_| file.sync_all());
             drop(file);
             written?;
@@ -376,9 +433,23 @@ impl Snapshots {
     }
 }
 
-/// Pretty JSON with recursively sorted object keys for stable snapshots.
+fn strip_schema_header(text: &str) -> &str {
+    let Some(rest) = text.strip_prefix("# airbug-snap-v") else {
+        return text;
+    };
+    let Some(newline) = rest.find('\n') else {
+        return text;
+    };
+    let version = &rest[..newline];
+    if version.is_empty() || !version.bytes().all(|b| b.is_ascii_digit()) {
+        return text;
+    }
+    &rest[newline + 1..]
+}
+
+/// Canonical JSON with recursively sorted object keys for stable snapshots.
 #[cfg(feature = "json")]
-pub fn canonical_json(value: &serde_json::Value) -> String {
+pub fn canonical_json(value: &serde_json::Value, mode: JsonMode) -> String {
     fn sort(value: &serde_json::Value) -> serde_json::Value {
         match value {
             serde_json::Value::Object(map) => {
@@ -396,5 +467,10 @@ pub fn canonical_json(value: &serde_json::Value) -> String {
             other => other.clone(),
         }
     }
-    format!("{}\n", serde_json::to_string_pretty(&sort(value)).expect("Value serializes"))
+    let sorted = sort(value);
+    let text = match mode {
+        JsonMode::Pretty => serde_json::to_string_pretty(&sorted).expect("Value serializes"),
+        JsonMode::Compact => serde_json::to_string(&sorted).expect("Value serializes"),
+    };
+    format!("{text}\n")
 }

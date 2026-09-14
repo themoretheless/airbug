@@ -1,6 +1,6 @@
 [package]
 name = "airbug"
-version = "0.6.1"
+version = "0.6.2"
 edition.workspace = true
 rust-version.workspace = true
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
@@ -35,3 +35,6 @@ required-features = ["macros"]
 [[example]]
 name = "checkout_pilot"
 required-features = ["macros"]
+
+[[example]]
+name = "next50"

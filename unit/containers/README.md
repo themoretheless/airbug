@@ -54,3 +54,33 @@ fn mysql_mongo_rabbit() -> Result<(), ContainerError> {
 
 - Host override: `AIRBUG_CONTAINERS_HOST` (default `127.0.0.1`).
 - Containers are labeled `airbug.containers=true` and removed on drop by default.
+- **CI without Docker:** integration tests soft-skip when `docker`/`podman` is
+  unavailable (`Runtime::detect()` fails). Prefer the same guard in app tests:
+
+```rust
+if airbug_containers::Runtime::detect().is_err() {
+    eprintln!("skip: no docker/podman");
+    return;
+}
+```
+
+Do not fail the job solely because the runner has no container runtime.
+
+## HTTP wait strategies
+
+```rust
+use airbug_containers::Wait;
+use std::time::Duration;
+
+// After publishing a port / knowing the URL:
+Wait::http("http://127.0.0.1:8080/health")
+    .poll(Duration::from_secs(30))?;
+
+Wait::http_json("http://127.0.0.1:8080/ready", "status", "ok")
+    .poll(Duration::from_secs(30))?;
+```
+
+`http` waits for HTTP 2xx. `http_json` additionally requires the response body
+to contain `expect` (and `path` when non-empty). See `examples/postgres_wait.rs`
+for a Postgres-shaped flow that skips without Docker.
+

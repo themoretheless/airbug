@@ -163,6 +163,11 @@ pub fn attach_text(name: &str, text: &str) -> io::Result<()> {
     attach_bytes(name, "text/plain; charset=utf-8", text.as_bytes())
 }
 
+/// Attach a JSON document (`application/json`) from a UTF-8 string.
+pub fn attach_json(name: &str, json: &str) -> io::Result<()> {
+    attach_bytes(name, "application/json", json.as_bytes())
+}
+
 /// Attach bytes under a display name and media type. Names never become paths.
 /// Binary files are download-only; the UI does not execute HTML or SVG content.
 pub fn attach_bytes(name: &str, media_type: &str, bytes: &[u8]) -> io::Result<()> {
@@ -233,6 +238,35 @@ pub fn assert_equal<T: Debug + PartialEq + ?Sized>(name: &str, expected: &T, act
 /// Whether this process was configured to emit structured diagnostics.
 pub fn is_enabled() -> bool {
     directory().is_some()
+}
+
+/// Record a flaky-label event when reporting is enabled; otherwise a no-op.
+pub fn flaky(reason: &str) {
+    if directory().is_none() {
+        return;
+    }
+    record(&format!(
+        "{{\"type\":\"flaky\",\"parent\":{},\"reason\":{}}}",
+        parent(),
+        quote(clipped(reason))
+    ));
+}
+
+/// Literal redaction pairs for [`crate::snapshot::Snapshots::redact`].
+pub mod redact {
+    /// Common secret patterns as `(from, to)` replacements.
+    pub fn secrets() -> Vec<(String, String)> {
+        vec![
+            ("Bearer ".into(), "Bearer <redacted>".into()),
+            ("bearer ".into(), "bearer <redacted>".into()),
+            ("Authorization: ".into(), "Authorization: <redacted>".into()),
+            ("api_key=".into(), "api_key=<redacted>".into()),
+            ("api-key=".into(), "api-key=<redacted>".into()),
+            ("token=".into(), "token=<redacted>".into()),
+            ("password=".into(), "password=<redacted>".into()),
+            ("secret=".into(), "secret=<redacted>".into()),
+        ]
+    }
 }
 
 #[cfg(test)]

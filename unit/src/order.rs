@@ -14,7 +14,14 @@ struct State {
     failures: Vec<String>,
 }
 /// Register expectations in desired order with `.in_sequence(&sequence)`.
-/// Ordering is about admission, not answer completion. Verify mocks as well.
+///
+/// **Admission ≠ completion.** [`CallSequence`] only orders when a mock *admits*
+/// a call into its answer (count + step advance). An answer may still be running
+/// (async task, thread join, etc.) when the next step is admitted. There is no
+/// `await_done` on this type: wait for operation completion in the application
+/// under test. See [`CompletionBarrier`] for an explicit stub of that gap.
+///
+/// Verify mocks as well as the sequence.
 #[derive(Clone)]
 pub struct CallSequence {
     name: Arc<str>,
@@ -145,5 +152,101 @@ impl SequenceStep {
             .expect("sequence lock poisoned")
             .failures
             .push(detail.into());
+    }
+}
+
+/// Partial-order admissions: edges require `before` to be admitted earlier than `after`.
+#[derive(Clone, Debug, Default)]
+pub struct CallDag {
+    edges: Vec<(String, String)>,
+    admitted: Vec<String>,
+}
+
+impl CallDag {
+    /// Empty DAG with no edges or admissions.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Require `before` to be admitted earlier than `after`.
+    pub fn edge(mut self, before: impl Into<String>, after: impl Into<String>) -> Self {
+        self.edges.push((before.into(), after.into()));
+        self
+    }
+
+    /// Record that `name` ran, in chronological order.
+    pub fn admit(&mut self, name: impl Into<String>) {
+        self.admitted.push(name.into());
+    }
+
+    /// Whether `a` was admitted strictly earlier than `b` in this DAG.
+    pub fn happened_before(&self, a: &str, b: &str) -> bool {
+        let ai = self.admitted.iter().position(|n| n == a);
+        let bi = self.admitted.iter().position(|n| n == b);
+        matches!((ai, bi), (Some(ai), Some(bi)) if ai < bi)
+    }
+
+    /// Check that every admitted node respects all edges.
+    pub fn verify(&self) -> Result<(), String> {
+        for (index, name) in self.admitted.iter().enumerate() {
+            for (before, after) in &self.edges {
+                if after != name {
+                    continue;
+                }
+                let ok = self.admitted[..index].iter().any(|n| n == before);
+                if !ok {
+                    return Err(format!(
+                        "happens-before violated: `{before}` must precede `{after}`"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// [`verify`](CallDag::verify), panicking on failure.
+    #[track_caller]
+    pub fn assert(&self) {
+        self.verify().unwrap_or_else(|error| panic!("{error}"));
+    }
+}
+
+/// True when the earliest `seq` for `a` is strictly less than the earliest for `b`.
+pub fn happened_before(a: &str, b: &str, events: &[(&str, u64)]) -> bool {
+    let seq_a = events
+        .iter()
+        .filter(|(name, _)| *name == a)
+        .map(|(_, seq)| *seq)
+        .min();
+    let seq_b = events
+        .iter()
+        .filter(|(name, _)| *name == b)
+        .map(|(_, seq)| *seq)
+        .min();
+    match (seq_a, seq_b) {
+        (Some(sa), Some(sb)) => sa < sb,
+        _ => false,
+    }
+}
+
+/// Stub for completion-order waits that [`CallSequence`] deliberately does not provide.
+///
+/// Admission order is covered by [`CallSequence`]. Waiting until async answers
+/// *finish* belongs to the application (join handles, `.await`, barriers you own).
+/// Methods here return a clear error / panic so call sites do not mistake this
+/// for a working completion API.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CompletionBarrier;
+
+impl CompletionBarrier {
+    /// Not implemented. Use application join/await for completion ordering.
+    pub fn await_done(&self) -> Result<(), &'static str> {
+        Err("not implemented: use application join/await")
+    }
+
+    /// Same gap as [`await_done`](Self::await_done), as a panic.
+    #[track_caller]
+    pub fn await_done_unchecked(&self) -> ! {
+        panic!("not implemented: use application join/await")
     }
 }

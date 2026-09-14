@@ -1,4 +1,5 @@
 //! Strict thread-safe mocks. User matchers, capture cloning and answers run outside locks.
+pub mod borrowed;
 mod capture;
 mod expectation;
 mod journal;
@@ -16,6 +17,7 @@ use crate::order::SequenceStep;
 use journal::Journal;
 use std::{
     fmt,
+    future::{self, Pending},
     sync::{Arc, Mutex},
 };
 
@@ -102,6 +104,12 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
             })),
         }
     }
+    /// Forever-pending future for async tests that probe cancellation / hang paths.
+    ///
+    /// Same as [`pending_response`].
+    pub fn pending<T>() -> Pending<T> {
+        pending_response()
+    }
     /// First matching rule wins even if exhausted. Counts default to exactly one.
     pub fn expect(
         &self,
@@ -120,6 +128,7 @@ impl<A: fmt::Debug + 'static, R: 'static> Mock<A, R> {
             max: 1,
             capture: None,
             sequence: None,
+            arg_map: None,
         }
     }
     /// Opt-in bounded journal; zero disables it. Contains Debug representations.
@@ -271,4 +280,9 @@ impl<A: fmt::Debug + 'static, R: 'static> VerifyMocks for Mock<A, R> {
         self.verify()
             .map_err(|error| VerificationErrors(vec![error]))
     }
+}
+
+/// Forever-pending future for async tests (`std::future::pending`).
+pub fn pending_response<T>() -> Pending<T> {
+    future::pending()
 }

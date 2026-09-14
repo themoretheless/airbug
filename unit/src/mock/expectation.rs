@@ -7,6 +7,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+type ArgMap<A> = Arc<dyn Fn(&A) -> A + Send + Sync>;
+
 /// A rule being configured on a [`Mock`]: how many calls it accepts, whether it
 /// captures arguments, whether it belongs to an ordered sequence.
 ///
@@ -24,6 +26,7 @@ pub struct ExpectationBuilder<A, R> {
     pub(super) max: usize,
     pub(super) capture: Option<Recorder<A>>,
     pub(super) sequence: Option<CallSequence>,
+    pub(super) arg_map: Option<ArgMap<A>>,
 }
 impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
     /// Require exactly `count` calls.
@@ -65,6 +68,23 @@ impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
         self.sequence = Some(sequence.clone());
         self
     }
+    /// Map arguments before this rule's matcher, capture, and answer see them.
+    ///
+    /// Escape hatch for adapting call-site values into the mock's owned `A`
+    /// (for example normalizing strings). For `&str` / slice `ToOwned` patterns
+    /// shared with `#[mock]`, see [`super::borrowed`]. Generic methods and
+    /// associated types that `#[mock]` rejects should use a manual [`Mock`]
+    /// plus this helper or [`super::borrowed::map_args`].
+    pub fn map_args(mut self, map: impl Fn(&A) -> A + Send + Sync + 'static) -> Self {
+        let map: ArgMap<A> = Arc::new(map);
+        let map_match = Arc::clone(&map);
+        let inner = self.matcher.clone();
+        self.matcher = Matcher::new(inner.name().to_owned(), move |args| {
+            inner.matches(&map_match(args))
+        });
+        self.arg_map = Some(map);
+        self
+    }
     fn insert(self, answer: Answer<A, R>, repeatable: bool) {
         let mut state = self.mock.state.lock().expect("mock lock poisoned");
         if state.started {
@@ -86,6 +106,17 @@ impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
         } else {
             None
         };
+        let (answer, capture) = if let Some(map) = self.arg_map {
+            let map_answer = Arc::clone(&map);
+            let mapped_answer: Answer<A, R> =
+                Arc::new(move |args: A| answer(map_answer(&args)));
+            let mapped_capture = self.capture.map(|capture| {
+                Arc::new(move |args: &A| capture(&map(args))) as Recorder<A>
+            });
+            (mapped_answer, mapped_capture)
+        } else {
+            (answer, self.capture)
+        };
         state.expectations.push(Expectation {
             label: self.label,
             matcher: self.matcher,
@@ -94,7 +125,7 @@ impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
             max: self.max,
             actual: 0,
             repeatable,
-            capture: self.capture,
+            capture,
             sequence,
         });
     }

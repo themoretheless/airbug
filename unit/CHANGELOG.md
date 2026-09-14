@@ -17,6 +17,12 @@
   a `airbug-checkout-domain` dev-dependency crate instead of a file the tests reached
   into with `#[path]`.
 
+# 0.6.2
+
+- NEXT50 complete: Strategy, Prop shrink, SoftAssert, native scopes, CallDag,
+  validation async/parallel, ParkClock/Retry, containers HTTP wait
+- Stubs documented: InlineSource, CompletionBarrier, associated-type adapters
+
 # 0.6.1
 
 - NEXT50 slice 1: `Prop`, `Eventually::check_async`, obsolete snapshots

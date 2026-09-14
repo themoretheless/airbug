@@ -401,6 +401,68 @@ impl FixtureContext {
             }
         }
     }
+    /// Weighted choice via cumulative weights. Empty slices, length mismatch, or
+    /// all-zero weights are errors.
+    pub fn choose_weighted<'a, T>(
+        &mut self,
+        values: &'a [T],
+        weights: &[u32],
+    ) -> Result<&'a T, GenerationError> {
+        if values.is_empty() {
+            let mut error = GenerationError::custom("cannot choose_weighted from an empty slice");
+            error.seed = Some(self.seed);
+            return Err(error);
+        }
+        if values.len() != weights.len() {
+            let mut error = GenerationError::custom("choose_weighted values/weights length mismatch");
+            error.seed = Some(self.seed);
+            return Err(error);
+        }
+        let total: u64 = weights.iter().map(|&w| u64::from(w)).sum();
+        if total == 0 {
+            let mut error = GenerationError::custom("choose_weighted requires a nonzero weight");
+            error.seed = Some(self.seed);
+            return Err(error);
+        }
+        let threshold = total.wrapping_neg() % total;
+        let pick = loop {
+            let n = self.next();
+            if n >= threshold {
+                break n % total;
+            }
+        };
+        let mut cumulative = 0u64;
+        for (index, &weight) in weights.iter().enumerate() {
+            cumulative += u64::from(weight);
+            if pick < cumulative {
+                return Ok(&values[index]);
+            }
+        }
+        Ok(&values[values.len() - 1])
+    }
+    /// Uniform `u64` in the inclusive range `[min, max]`.
+    pub fn draw_u64(&mut self, min: u64, max: u64) -> Result<u64, GenerationError> {
+        if min > max {
+            let mut error = GenerationError::custom("draw_u64 requires min <= max");
+            error.seed = Some(self.seed);
+            return Err(error);
+        }
+        let span = max.wrapping_sub(min).wrapping_add(1);
+        if span == 0 {
+            return Ok(self.next());
+        }
+        let threshold = span.wrapping_neg() % span;
+        loop {
+            let n = self.next();
+            if n >= threshold {
+                return Ok(min + n % span);
+            }
+        }
+    }
+    /// Uniform `f64` in `[0, 1)`, matching [`Generate`] for `f64`.
+    pub fn draw_f64(&mut self) -> f64 {
+        (self.next() >> 11) as f64 / ((1u64 << 53) as f64)
+    }
     /// Registers checked sequential u64 values. The last u64 value is emitted once.
     pub fn sequence_u64(&mut self, start: u64) -> &mut Self {
         let next = std::cell::Cell::new(Some(start));
