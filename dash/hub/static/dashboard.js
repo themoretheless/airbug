@@ -646,8 +646,14 @@
       }
       const issue = await res.json();
       issueDetailEl.hidden = false;
-      issueDetailTitleEl.textContent = issue.id + " · " + (issue.title || "");
-      issueDetailBodyEl.textContent = JSON.stringify(issue.last_event || issue, null, 2);
+      const stored = Array.isArray(issue.events) ? issue.events.length : 0;
+      issueDetailTitleEl.textContent =
+        issue.id + " · " + (issue.title || "") +
+        ` · ${stored} stored / ${issue.count || 0} lifetime`;
+      const detailPayload = (issue.events && issue.events.length)
+        ? { events: issue.events, last_event: issue.last_event }
+        : (issue.last_event || issue);
+      issueDetailBodyEl.textContent = JSON.stringify(detailPayload, null, 2);
       issueActionsEl.innerHTML = ["resolve", "ignore", "reopen"].map(a =>
         `<button type="button" data-action="${a}">${a}</button>`
       ).join("");

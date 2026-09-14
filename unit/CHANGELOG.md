@@ -17,6 +17,11 @@
   a `airbug-checkout-domain` dev-dependency crate instead of a file the tests reached
   into with `#[path]`.
 
+# 0.6.1
+
+- NEXT50 slice 1: `Prop`, `Eventually::check_async`, obsolete snapshots
+- Feature `json`: `Snapshots::check_json` / `check_json_case`
+
 # 0.6.0
 
 - Package-family release tag `airbug-v0.6.0` (independent of bench)

@@ -1,6 +1,9 @@
 //! Blocking HTTP transport to airbug-hub `/api/v1/errors`.
 use crate::event::Event;
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 /// Failure while delivering an event.
 #[derive(Debug, thiserror::Error)]
@@ -61,3 +64,46 @@ impl EventTransport for HttpTransport {
 #[deprecated(note = "renamed to HttpTransport")]
 #[allow(dead_code)]
 pub type Transport = HttpTransport;
+
+/// In-memory [`EventTransport`] for tests and local inspection.
+#[derive(Clone, Default)]
+pub struct MemoryTransport {
+    events: Arc<Mutex<Vec<Event>>>,
+}
+
+impl MemoryTransport {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn events(&self) -> Vec<Event> {
+        self.events.lock().map(|g| g.clone()).unwrap_or_default()
+    }
+
+    pub fn last(&self) -> Option<Event> {
+        self.events.lock().ok()?.last().cloned()
+    }
+
+    pub fn clear(&self) {
+        if let Ok(mut g) = self.events.lock() {
+            g.clear();
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.events.lock().map(|g| g.len()).unwrap_or(0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl EventTransport for MemoryTransport {
+    fn send(&self, event: &Event) -> Result<(), TransportError> {
+        if let Ok(mut g) = self.events.lock() {
+            g.push(event.clone());
+        }
+        Ok(())
+    }
+}

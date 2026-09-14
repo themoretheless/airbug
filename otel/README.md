@@ -38,17 +38,24 @@ guard.shutdown()?;
 |---------|-----------|------------------------|
 | `otlp-http` (default) | OTLP HTTP/protobuf | 4318 |
 | `otlp-grpc` | OTLP gRPC (tonic) | 4317 |
+| `testing` | in-memory exporters + `install_test` | — |
 
-Enable only one for normal builds. With `--all-features`, gRPC wins.
+Enable only one OTLP transport for normal builds. With `--all-features`, gRPC wins.
+
+```bash
+cargo test -p airbug-otel --features testing
+```
 
 ## API
 
 | Item | Role |
 |------|------|
 | `TelemetryConfig` / `TelemetryError` / `TelemetryGuard` | service name + endpoint; errors; keep-alive guard |
+| `TelemetryHandle` | alias for `TelemetryGuard` (`install` / `init`) |
 | `TraceConfig` / `TraceError` / `TracerGuard` | deprecated aliases |
-| `init` | global tracer, meter, **and** logger (OTLP) |
-| `TelemetryGuard` | flush on `shutdown` / `Drop` |
+| `init` / `install` | global tracer, meter, **and** logger (OTLP) |
+| `install_test` | in-memory providers (`feature = "testing"`) |
+| `TelemetryGuard::force_flush` / `shutdown` | flush without / with teardown |
 | `in_span` / `set_attribute` | span helpers |
 | `meter` / `add_counter` / `record_histogram` | metric helpers |
 | `emit_log` / `log_info` / `log_warn` / `log_error` | log helpers |

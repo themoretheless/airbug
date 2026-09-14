@@ -13,6 +13,7 @@ pub mod fixture;
 pub mod mock;
 pub mod native;
 pub mod order;
+pub mod prop;
 pub mod report;
 pub mod snapshot;
 pub mod time;
@@ -23,6 +24,7 @@ pub use assertions::assert_that;
 pub use fixture::{FixtureContext, Generate, GenerationError, GenerationErrorKind};
 pub use mock::{Mock, MockError};
 pub use order::CallSequence;
+pub use prop::{Prop, PropError, PropFailure};
 pub use validation::{ValidationError, ValidationErrors, Validator};
 pub use verify::{VerificationErrors, VerifyMocks, with_mocks, with_mocks_async};
 
@@ -40,7 +42,7 @@ pub mod prelude {
     pub use crate::snapshot::{Snapshots, UpdateMode};
     pub use crate::time::{Clock, Eventually, ManualClock};
     pub use crate::{
-        CallSequence, FixtureContext, Generate, Mock, Validator, VerifyMocks, assert_contains,
+        CallSequence, FixtureContext, Generate, Mock, Prop, Validator, VerifyMocks, assert_contains,
         assert_same_items, assert_that, check_all, with_mocks, with_mocks_async,
     };
     #[cfg(feature = "macros")]

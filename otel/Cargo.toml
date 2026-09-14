@@ -1,6 +1,6 @@
 [package]
 name = "airbug-otel"
-version = "0.6.0"
+version = "0.6.1"
 edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
@@ -16,6 +16,8 @@ default = ["otlp-http"]
 otlp-http = ["opentelemetry-otlp/http-proto", "opentelemetry-otlp/reqwest-blocking-client"]
 ## OTLP over gRPC/tonic (collector port 4317). Needs a Tokio runtime held by TelemetryGuard.
 otlp-grpc = ["dep:tokio", "opentelemetry-otlp/grpc-tonic"]
+## In-memory exporters for unit tests (`install_test`).
+testing = ["opentelemetry_sdk/testing"]
 
 [dependencies]
 opentelemetry = { workspace = true, default-features = false, features = ["trace", "metrics", "logs"] }

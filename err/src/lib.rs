@@ -18,7 +18,7 @@ pub use event::{
     Breadcrumb, EVENT_SCHEMA_VERSION, Event, Exception, Frame, Severity, Stacktrace, User,
 };
 pub use scope::{Scope, add_breadcrumb, configure_scope};
-pub use transport::{EventTransport, HttpTransport, TransportError};
+pub use transport::{EventTransport, HttpTransport, MemoryTransport, TransportError};
 
 use event::Exception as Ex;
 use fingerprint::resolve as resolve_fingerprint;
@@ -141,8 +141,20 @@ pub struct Guard {
     _private: (),
 }
 
+impl Guard {
+    /// Ensure pending work is delivered.
+    ///
+    /// Delivery is currently synchronous on [`EventTransport::send`], so this
+    /// is a documented no-op success. Kept so call sites can flush on shutdown
+    /// without caring about the transport implementation.
+    pub fn flush(&self) -> Result<(), TransportError> {
+        Ok(())
+    }
+}
+
 impl Drop for Guard {
     fn drop(&mut self) {
+        let _ = self.flush();
         if let Ok(mut slot) = client_slot().lock() {
             *slot = None;
         }
@@ -195,7 +207,10 @@ pub fn capture_message_with_level(message: impl AsRef<str>, level: Severity) -> 
 }
 
 /// Capture any `std::error::Error` (with backtrace of the capture site).
-pub fn capture_error(err: &dyn std::error::Error) -> Option<String> {
+///
+/// The exception type is the concrete Rust type name (via [`std::any::type_name_of_val`]),
+/// not a generic `"Error"` stub.
+pub fn capture_error<E: std::error::Error>(err: &E) -> Option<String> {
     let mut chain = Vec::new();
     let mut cur: Option<&dyn std::error::Error> = Some(err);
     while let Some(e) = cur {
@@ -205,7 +220,7 @@ pub fn capture_error(err: &dyn std::error::Error) -> Option<String> {
     let value = chain.join(": ");
     let mut event = base_event(Severity::Error);
     event.exception = Some(Ex {
-        ty: type_name_of_error(err),
+        ty: std::any::type_name_of_val(err).to_string(),
         value,
         stacktrace: Some(Stacktrace {
             frames: collect_frames(),
@@ -218,12 +233,21 @@ pub fn capture_error(err: &dyn std::error::Error) -> Option<String> {
 /// Capture an `anyhow::Error` (feature `anyhow`).
 #[cfg(feature = "anyhow")]
 pub fn capture_anyhow(err: &anyhow::Error) -> Option<String> {
-    capture_error(err.as_ref())
-}
-
-fn type_name_of_error(err: &dyn std::error::Error) -> String {
-    let _ = err;
-    "Error".into()
+    let mut chain = Vec::new();
+    for e in err.chain() {
+        chain.push(e.to_string());
+    }
+    let value = chain.join(": ");
+    let mut event = base_event(Severity::Error);
+    event.exception = Some(Ex {
+        ty: "anyhow::Error".into(),
+        value,
+        stacktrace: Some(Stacktrace {
+            frames: collect_frames(),
+        }),
+    });
+    event.message = Some(err.to_string());
+    send_event(event)
 }
 
 fn base_event(level: Severity) -> Event {
@@ -457,18 +481,10 @@ fn panic_payload(info: &std::panic::PanicHookInfo<'_>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use std::io;
 
     /// Global client is process-wide; serialize tests that call `init*`.
     static INIT_LOCK: Mutex<()> = Mutex::new(());
-
-    struct DropTransport;
-
-    impl EventTransport for DropTransport {
-        fn send(&self, _event: &Event) -> Result<(), TransportError> {
-            Ok(())
-        }
-    }
 
     #[test]
     fn before_send_can_drop() {
@@ -482,7 +498,7 @@ mod tests {
                     *seen2.lock().unwrap() += 1;
                     None
                 }),
-            Arc::new(DropTransport),
+            Arc::new(MemoryTransport::new()),
         )
         .unwrap();
         assert!(capture_message("nope").is_none());
@@ -492,24 +508,50 @@ mod tests {
     #[test]
     fn injectable_transport_receives_event() {
         let _lock = INIT_LOCK.lock().unwrap();
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        struct Capture(Arc<Mutex<Vec<String>>>);
-        impl EventTransport for Capture {
-            fn send(&self, event: &Event) -> Result<(), TransportError> {
-                self.0
-                    .lock()
-                    .unwrap()
-                    .push(event.message.clone().unwrap_or_default());
-                Ok(())
-            }
-        }
+        let transport = MemoryTransport::new();
         let _guard = init_with_transport(
             Options::new().endpoint("unused"),
-            Arc::new(Capture(Arc::clone(&seen))),
+            Arc::new(transport.clone()),
         )
         .unwrap();
         assert!(capture_message("hello").is_some());
-        assert_eq!(seen.lock().unwrap().as_slice(), ["hello"]);
+        assert_eq!(
+            transport.last().and_then(|e| e.message),
+            Some("hello".into())
+        );
+    }
+
+    #[test]
+    fn capture_error_uses_concrete_type_name() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+        let err = io::Error::new(io::ErrorKind::Other, "disk full");
+        assert!(capture_error(&err).is_some());
+        let ty = transport
+            .last()
+            .and_then(|e| e.exception.map(|ex| ex.ty))
+            .unwrap_or_default();
+        assert!(
+            ty.contains("io") && ty.ends_with("Error"),
+            "expected std::io::Error type name, got {ty}"
+        );
+        assert_ne!(ty, "Error");
+    }
+
+    #[test]
+    fn guard_flush_succeeds() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(MemoryTransport::new()),
+        )
+        .unwrap();
+        assert!(guard.flush().is_ok());
     }
 
     #[test]

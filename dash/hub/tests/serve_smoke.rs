@@ -93,7 +93,7 @@ fn serve_status_ingest_issues() {
     assert_eq!(st, 200, "{body}");
     assert!(body.contains("\"domains\""), "{body}");
 
-    let event = r#"{
+    let event1 = r#"{
       "schema_version": 1,
       "event_id": "it-1",
       "timestamp": "2026-01-01T00:00:00.000Z",
@@ -105,12 +105,67 @@ fn serve_status_ingest_issues() {
       "extra": {},
       "contexts": {}
     }"#;
-    let (st, body) = http(port, "POST", "/api/v1/errors", Some(event));
+    let (st, body) = http(port, "POST", "/api/v1/errors", Some(event1));
     assert_eq!(st, 200, "{body}");
     assert!(
         body.contains("\"ok\": true") || body.contains("\"ok\":true"),
         "{body}"
     );
+    let issue_id = body
+        .split("\"issue_id\"")
+        .nth(1)
+        .and_then(|s| s.split('"').nth(1))
+        .expect("issue_id")
+        .to_string();
+
+    let event2 = event1
+        .replace("it-1", "it-2")
+        .replace("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:01.000Z");
+    let (st, body) = http(port, "POST", "/api/v1/errors", Some(&event2));
+    assert_eq!(st, 200, "{body}");
+
+    let (st, body) = http(port, "GET", &format!("/api/v1/issues/{issue_id}"), None);
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("\"events\""), "{body}");
+    assert!(body.contains("it-2"), "{body}");
+
+    let (st, body) = http(
+        port,
+        "POST",
+        &format!("/api/v1/issues/{issue_id}/resolve"),
+        None,
+    );
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("resolved"), "{body}");
+
+    let (st, body) = http(
+        port,
+        "POST",
+        &format!("/api/v1/issues/{issue_id}/ignore"),
+        None,
+    );
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("ignored"), "{body}");
+
+    let (st, body) = http(
+        port,
+        "POST",
+        &format!("/api/v1/issues/{issue_id}/reopen"),
+        None,
+    );
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("unresolved"), "{body}");
+
+    let (st, _) = http(port, "POST", "/api/v1/issues/ISSUE-999/resolve", None);
+    assert_eq!(st, 404);
+
+    let (st, body) = http(
+        port,
+        "POST",
+        &format!("/api/v1/issues/{issue_id}/nope"),
+        None,
+    );
+    assert_eq!(st, 400, "{body}");
 
     let (st, body) = http(port, "GET", "/api/v1/issues", None);
     assert_eq!(st, 200, "{body}");

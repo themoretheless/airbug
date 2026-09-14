@@ -35,7 +35,7 @@ edition = "2024"
 rust-version = "1.96"
 
 [workspace.dependencies]
-airbug-macros = { path = "unit/macros", version = "0.6.0" }
+airbug-macros = { path = "unit/macros", version = "0.6.1" }
 airbug-bench = { path = "bench", version = "0.6.0" }
 airbug-bench-macros = { path = "bench/macros", version = "0.6.0" }
 serde = { version = "1", features = ["derive"] }

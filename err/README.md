@@ -57,9 +57,11 @@ Env override: `AIRBUG_ERR_ENDPOINT`. Hub webhook: `AIRBUG_ISSUES_WEBHOOK` or `--
 | Release / environment / service | yes |
 | Contexts (OS, hostname, rust) | yes |
 | Backtrace frames | yes |
-| Default + custom fingerprint | yes |
+| Default + custom fingerprint | yes (type + top frames; values/ids stripped) |
 | `before_send` | yes |
 | Sample rate | yes |
+| `MemoryTransport` | yes (tests / inject) |
+| `Guard::flush` | yes (sync no-op today) |
 | `anyhow` helper | feature `anyhow` |
 | Issues grouping + counts | hub |
 | Issue states resolve / ignore / reopen | hub |

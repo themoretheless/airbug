@@ -37,6 +37,11 @@ pub enum SnapshotError {
         /// Rendered difference, from [`text_diff`].
         diff: String,
     },
+    /// Snapshot files exist that no current check referenced.
+    Obsolete {
+        /// Paths of unused snapshot files.
+        paths: Vec<String>,
+    },
 }
 impl From<io::Error> for SnapshotError {
     fn from(error: io::Error) -> Self {
@@ -59,6 +64,9 @@ impl fmt::Display for SnapshotError {
             ),
             Self::Mismatch { path, diff } => {
                 write!(f, "snapshot differs at {}\n{diff}", path.display())
+            }
+            Self::Obsolete { paths } => {
+                write!(f, "obsolete snapshot files: {}", paths.join(", "))
             }
         }
     }
@@ -203,7 +211,6 @@ impl Snapshots {
             actual,
         )
     }
-    /// Compare an inline literal; never edits source files, regardless of update mode.
     /// Compare against a literal written in the test instead of a file.
     /// Applies redaction and the size limit, and never writes anything.
     pub fn inline(&self, expected: &str, actual: &str) -> Result<(), SnapshotError> {
@@ -217,6 +224,73 @@ impl Snapshots {
             Err(SnapshotError::Mismatch {
                 path: PathBuf::from("<inline>"),
                 diff: text_diff(expected, &actual),
+            })
+        }
+    }
+
+    /// Canonical JSON snapshot (stable key order, pretty). Requires feature `json`.
+    #[cfg(feature = "json")]
+    pub fn check_json(
+        &self,
+        name: &str,
+        actual: &serde_json::Value,
+    ) -> Result<(), SnapshotError> {
+        self.check(name, &canonical_json(actual))
+    }
+
+    /// [`check_json`](Snapshots::check_json) with a per-case file.
+    #[cfg(feature = "json")]
+    pub fn check_json_case(
+        &self,
+        test: &str,
+        case: &str,
+        actual: &serde_json::Value,
+    ) -> Result<(), SnapshotError> {
+        self.check_case(test, case, &canonical_json(actual))
+    }
+
+    /// Snapshot files under this directory that were not referenced by `used`.
+    ///
+    /// `used` are snapshot **names** (as passed to [`check`](Snapshots::check)),
+    /// not full paths. Only top-level `test-*.snap` files are considered.
+    pub fn list_obsolete(&self, used: &[&str]) -> Result<Vec<PathBuf>, SnapshotError> {
+        let used: std::collections::BTreeSet<String> =
+            used.iter().map(|n| format!("test-{n}.snap")).collect();
+        let mut obsolete = Vec::new();
+        let entries = match fs::read_dir(&self.directory) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(obsolete),
+            Err(e) => return Err(e.into()),
+        };
+        for entry in entries {
+            let entry = entry?;
+            let meta = entry.metadata()?;
+            if !meta.is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            if name.starts_with("test-") && name.ends_with(".snap") && !used.contains(name) {
+                obsolete.push(entry.path());
+            }
+        }
+        obsolete.sort();
+        Ok(obsolete)
+    }
+
+    /// Fail if any top-level snapshot file is not in `used`.
+    pub fn assert_no_obsolete(&self, used: &[&str]) -> Result<(), SnapshotError> {
+        let obsolete = self.list_obsolete(used)?;
+        if obsolete.is_empty() {
+            Ok(())
+        } else {
+            Err(SnapshotError::Obsolete {
+                paths: obsolete
+                    .into_iter()
+                    .map(|p| p.display().to_string())
+                    .collect(),
             })
         }
     }
@@ -300,4 +374,27 @@ impl Snapshots {
         drop(lock_cleanup);
         result
     }
+}
+
+/// Pretty JSON with recursively sorted object keys for stable snapshots.
+#[cfg(feature = "json")]
+pub fn canonical_json(value: &serde_json::Value) -> String {
+    fn sort(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(map) => {
+                let mut keys: Vec<_> = map.keys().cloned().collect();
+                keys.sort();
+                let mut out = serde_json::Map::new();
+                for key in keys {
+                    out.insert(key.clone(), sort(&map[&key]));
+                }
+                serde_json::Value::Object(out)
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(sort).collect())
+            }
+            other => other.clone(),
+        }
+    }
+    format!("{}\n", serde_json::to_string_pretty(&sort(value)).expect("Value serializes"))
 }

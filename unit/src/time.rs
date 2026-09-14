@@ -219,4 +219,81 @@ impl Eventually {
             }
         }
     }
+
+    /// Async sibling of [`check`](Eventually::check): awaits each probe on the
+    /// caller's runtime. The clock still controls timeouts and sleep between
+    /// attempts (use [`ManualClock`] in tests).
+    pub async fn check_async<T, Fut>(
+        &self,
+        clock: &impl Clock,
+        mut probe: impl FnMut() -> Fut,
+        predicate: impl Fn(&T) -> bool,
+    ) -> Result<T, EventuallyError>
+    where
+        T: fmt::Debug,
+        Fut: core::future::Future<Output = T>,
+    {
+        let mut history = std::collections::VecDeque::new();
+        let mut attempts = 0;
+        let fail = |reason: String, attempts, history: std::collections::VecDeque<Observation>| {
+            EventuallyError {
+                reason,
+                attempts,
+                history: history.into_iter().collect(),
+            }
+        };
+        if self.interval.is_zero() {
+            return Err(fail(
+                "poll interval must be positive".into(),
+                attempts,
+                history,
+            ));
+        }
+        let start = clock.elapsed();
+        let deadline = start
+            .checked_add(self.timeout)
+            .ok_or_else(|| fail("deadline overflow".into(), 0, history.clone()))?;
+        loop {
+            if attempts > 0 && clock.elapsed() > deadline {
+                return Err(fail("deadline exceeded".into(), attempts, history));
+            }
+            let value = probe().await;
+            attempts += 1;
+            let now = clock.elapsed();
+            if now < start {
+                return Err(fail("clock moved backwards".into(), attempts, history));
+            }
+            if self.history_limit > 0 {
+                if history.len() == self.history_limit {
+                    history.pop_front();
+                }
+                history.push_back(Observation {
+                    elapsed: now - start,
+                    value: format!("{value:?}"),
+                });
+            }
+            let matched = now <= deadline && predicate(&value);
+            let after_predicate = clock.elapsed();
+            if after_predicate < now {
+                return Err(fail("clock moved backwards".into(), attempts, history));
+            }
+            let now = after_predicate;
+            if matched && now <= deadline {
+                return Ok(value);
+            }
+            if now >= deadline {
+                return Err(fail("deadline exceeded".into(), attempts, history));
+            }
+            clock
+                .sleep(self.interval.min(deadline - now))
+                .map_err(|e| fail(e.to_string(), attempts, history.clone()))?;
+            if clock.elapsed() <= now {
+                return Err(fail(
+                    "clock sleep made no progress".into(),
+                    attempts,
+                    history,
+                ));
+            }
+        }
+    }
 }

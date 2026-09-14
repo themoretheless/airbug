@@ -1,6 +1,6 @@
 [package]
 name = "airbug"
-version = "0.6.0"
+version = "0.6.1"
 edition.workspace = true
 rust-version.workspace = true
 description = "Object generation graphs, fluent assertions, validation, and method mocks"
@@ -8,7 +8,7 @@ license = "MIT"
 repository = "https://github.com/themoretheless/airbug"
 keywords = ["testing", "mocking", "assertions", "fixtures", "validation"]
 categories = ["development-tools::testing", "development-tools"]
-include = ["src/**", "examples/**", "Cargo.toml", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "PILOT.md", "WEB_REPORT.md", "tools/airbug_report.py", "tools/report/**", "tools/tests/*.py"]
+include = ["src/**", "examples/**", "Cargo.toml", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "NEXT50.md", "PILOT.md", "WEB_REPORT.md", "tools/airbug_report.py", "tools/report/**", "tools/tests/*.py"]
 
 # Without this docs.rs would build with default features, hiding the entire
 # macro API (#[mock], #[cases], #[derive(Generate)]) from the published docs.
@@ -18,9 +18,12 @@ all-features = true
 [features]
 default = []
 macros = ["dep:airbug-macros", "airbug-checkout-domain/macros"]
+## Canonical JSON snapshots (`Snapshots::check_json`).
+json = ["dep:serde_json"]
 
 [dependencies]
 airbug-macros = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 airbug-checkout-domain = { path = "checkout-domain" }

@@ -149,15 +149,16 @@ dependencies = [
 
 [[package]]
 name = "airbug"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "airbug-checkout-domain",
  "airbug-macros",
+ "serde_json",
 ]
 
 [[package]]
 name = "airbug-bench"
-version = "0.1.1"
+version = "0.6.0"
 dependencies = [
  "airbug-bench-macros",
  "backtrace",
@@ -170,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-bench-macros"
-version = "0.1.1"
+version = "0.6.0"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -178,21 +179,21 @@ dependencies = [
 
 [[package]]
 name = "airbug-checkout-domain"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "airbug",
 ]
 
 [[package]]
 name = "airbug-containers"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "airbug-err"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -207,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-hub"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "airbug-err",
  "ctrlc",
@@ -222,7 +223,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-macros"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -232,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-mon"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "airbug-otel",
  "chrono",
@@ -251,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-otel"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
@@ -799,7 +800,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-airbug-bench"
-version = "0.1.1"
+version = "0.6.0"
 dependencies = [
  "airbug-bench",
  "clap",
@@ -3177,6 +3178,8 @@ dependencies = [
  "rand 0.9.5",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]

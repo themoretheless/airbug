@@ -13,6 +13,11 @@ use std::{
 
 /// Supported ingest schema major (matches [`EVENT_SCHEMA_VERSION`]).
 pub const SUPPORTED_EVENT_SCHEMA: u32 = EVENT_SCHEMA_VERSION;
+/// Max occurrences retained per issue in SQLite.
+pub const EVENT_STORE_CAP: i64 = 100;
+/// Max occurrences returned on GET detail.
+pub const EVENT_RETURN_CAP: i64 = 20;
+const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -54,6 +59,9 @@ pub struct Issue {
     pub environment: Option<String>,
     pub service: Option<String>,
     pub last_event: Value,
+    /// Recent occurrences (newest last), capped for API responses.
+    #[serde(default)]
+    pub events: Vec<Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -201,9 +209,63 @@ fn open(path: &Path) -> rusqlite::Result<Connection> {
              last_event TEXT NOT NULL
          );
          CREATE INDEX IF NOT EXISTS idx_issues_last_seen ON issues(last_seen DESC);
-         INSERT OR IGNORE INTO meta(key, value) VALUES('next_id', 0);",
+         INSERT OR IGNORE INTO meta(key, value) VALUES('next_id', 0);
+         INSERT OR IGNORE INTO meta(key, value) VALUES('schema_version', 1);",
     )?;
+    migrate(&conn)?;
     Ok(conn)
+}
+
+fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+    let version: i64 = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+    if version < 2 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS issue_events (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 issue_id TEXT NOT NULL REFERENCES issues(id),
+                 event_id TEXT NOT NULL,
+                 ts TEXT NOT NULL,
+                 payload TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_issue_events_issue_ts
+                 ON issue_events(issue_id, id DESC);",
+        )?;
+        // Backfill one occurrence from denormalized last_event when empty.
+        let mut stmt = conn.prepare(
+            "SELECT id, last_seen, last_event FROM issues
+             WHERE id NOT IN (SELECT DISTINCT issue_id FROM issue_events)",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        for row in rows {
+            let (issue_id, ts, payload) = row?;
+            let event_id = serde_json::from_str::<Value>(&payload)
+                .ok()
+                .and_then(|v| v.get("event_id")?.as_str().map(str::to_string))
+                .unwrap_or_else(|| "backfill".into());
+            conn.execute(
+                "INSERT INTO issue_events(issue_id, event_id, ts, payload) VALUES(?1,?2,?3,?4)",
+                params![issue_id, event_id, ts, payload],
+            )?;
+        }
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES('schema_version', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![SCHEMA_VERSION],
+        )?;
+    }
+    Ok(())
 }
 
 fn fingerprint_key(event: &Event) -> String {
@@ -237,7 +299,42 @@ fn map_issue_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Issue> {
             let raw: String = row.get(11)?;
             serde_json::from_str(&raw).unwrap_or(Value::Null)
         },
+        events: Vec::new(),
     })
+}
+
+fn load_events(conn: &Connection, issue_id: &str) -> rusqlite::Result<Vec<Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT payload FROM issue_events WHERE issue_id = ?1
+         ORDER BY id DESC LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![issue_id, EVENT_RETURN_CAP], |row| {
+        let raw: String = row.get(0)?;
+        Ok(serde_json::from_str(&raw).unwrap_or(Value::Null))
+    })?;
+    let mut events: Vec<Value> = rows.filter_map(|r| r.ok()).collect();
+    events.reverse(); // newest last
+    Ok(events)
+}
+
+fn record_occurrence(
+    conn: &Connection,
+    issue_id: &str,
+    event: &Event,
+    ts: &str,
+    payload: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO issue_events(issue_id, event_id, ts, payload) VALUES(?1,?2,?3,?4)",
+        params![issue_id, event.event_id, ts, payload],
+    )?;
+    conn.execute(
+        "DELETE FROM issue_events WHERE issue_id = ?1 AND id NOT IN (
+             SELECT id FROM issue_events WHERE issue_id = ?1 ORDER BY id DESC LIMIT ?2
+         )",
+        params![issue_id, EVENT_STORE_CAP],
+    )?;
+    Ok(())
 }
 
 fn ingest_unlocked(
@@ -290,6 +387,7 @@ fn ingest_unlocked(
                 id
             ],
         )?;
+        record_occurrence(conn, &id, &event, &ts, &event_json)?;
         return Ok(IngestResponse {
             ok: true,
             issue_id: id,
@@ -331,6 +429,7 @@ fn ingest_unlocked(
             event_json
         ],
     )?;
+    record_occurrence(conn, &id, &event, &ts, &event_json)?;
 
     if let Some(url) = webhook {
         let issue = get_unlocked(conn, &id).ok();
@@ -348,13 +447,15 @@ fn ingest_unlocked(
 }
 
 fn get_unlocked(conn: &Connection, id: &str) -> rusqlite::Result<Issue> {
-    conn.query_row(
+    let mut issue = conn.query_row(
         "SELECT id, fingerprint, title, level, status, count, first_seen, last_seen,
                 release, environment, service, last_event
          FROM issues WHERE id = ?1",
         params![id],
         map_issue_row,
-    )
+    )?;
+    issue.events = load_events(conn, id)?;
+    Ok(issue)
 }
 
 fn list_unlocked(conn: &Connection) -> Result<Vec<IssueSummary>> {
@@ -493,6 +594,76 @@ mod tests {
         let list = store.list();
         assert_eq!(list.issues.len(), 1);
         assert_eq!(list.issues[0].count, 2);
+        let detail = store.get(&r1.issue_id).unwrap();
+        assert_eq!(detail.events.len(), 2);
+        assert_eq!(detail.events[1]["event_id"], "b");
+        assert_eq!(detail.last_event["event_id"], "b");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn occurrence_cap_keeps_lifetime_count() {
+        let dir = env::temp_dir().join(format!("airbug-issues-cap-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
+        let store =
+            SqliteIssueStore::open(crate::config::RootPaths::new(&dir).issues_db()).unwrap();
+        let base = sample_event();
+        let mut last_id = String::new();
+        for i in 0..(EVENT_STORE_CAP as usize + 5) {
+            let mut event = base.clone();
+            event.event_id = format!("e{i}");
+            event.timestamp = format!("t{i}");
+            last_id = store.ingest(event, None).unwrap().issue_id;
+        }
+        let detail = store.get(&last_id).unwrap();
+        assert_eq!(detail.count, EVENT_STORE_CAP as u64 + 5);
+        assert!(detail.events.len() <= EVENT_RETURN_CAP as usize);
+        let stored: i64 = store
+            .with_conn(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM issue_events WHERE issue_id = ?1",
+                    params![last_id],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(stored, EVENT_STORE_CAP);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_status_resolve_ignore_reopen() {
+        let dir = env::temp_dir().join(format!("airbug-issues-status-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
+        let store =
+            SqliteIssueStore::open(crate::config::RootPaths::new(&dir).issues_db()).unwrap();
+        let id = store.ingest(sample_event(), None).unwrap().issue_id;
+        assert_eq!(
+            store.set_status(&id, IssueStatus::Resolved).unwrap().status,
+            IssueStatus::Resolved
+        );
+        assert_eq!(
+            store.set_status(&id, IssueStatus::Ignored).unwrap().status,
+            IssueStatus::Ignored
+        );
+        assert_eq!(
+            store.set_status(&id, IssueStatus::Unresolved).unwrap().status,
+            IssueStatus::Unresolved
+        );
+        // Resolved auto-reopens on ingest; ignored stays ignored.
+        store
+            .set_status(&id, IssueStatus::Resolved)
+            .unwrap();
+        let mut again = sample_event();
+        again.event_id = "reopen".into();
+        store.ingest(again.clone(), None).unwrap();
+        assert_eq!(store.get(&id).unwrap().status, IssueStatus::Unresolved);
+        store.set_status(&id, IssueStatus::Ignored).unwrap();
+        again.event_id = "ignored".into();
+        store.ingest(again, None).unwrap();
+        assert_eq!(store.get(&id).unwrap().status, IssueStatus::Ignored);
         let _ = fs::remove_dir_all(&dir);
     }
 

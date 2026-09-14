@@ -56,7 +56,8 @@ cargo run --features macros --example checkout_pilot -- store-failure
 
 ## Top 50 additions (0.4)
 
-[TOP50.md](TOP50.md) maps all 50 selected ideas to their API and regression test.
+[TOP50.md](TOP50.md) maps the first 50 ideas; [NEXT50.md](NEXT50.md) is the next layer
+(JSON snapshots via feature `json`, `Prop`, `Eventually::check_async`, …).
 The `prelude` is optional; direct module imports remain supported.
 
 ```rust

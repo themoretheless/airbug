@@ -15,10 +15,16 @@ use opentelemetry_sdk::{
     logs::SdkLoggerProvider, metrics::SdkMeterProvider, resource::Resource,
     trace::SdkTracerProvider,
 };
-use std::{borrow::Cow, sync::OnceLock};
+use std::{
+    borrow::Cow,
+    sync::{Mutex, OnceLock},
+};
 
-static LOGS: OnceLock<SdkLoggerProvider> = OnceLock::new();
+static LOGS: OnceLock<Mutex<Option<SdkLoggerProvider>>> = OnceLock::new();
 
+fn logs_slot() -> &'static Mutex<Option<SdkLoggerProvider>> {
+    LOGS.get_or_init(|| Mutex::new(None))
+}
 /// Errors while building or shutting down providers.
 #[derive(Debug, thiserror::Error)]
 pub enum TelemetryError {
@@ -91,8 +97,23 @@ impl TelemetryGuard {
         global::meter(name)
     }
 
+    /// Flush pending telemetry without shutting down.
+    pub fn force_flush(&self) -> Result<(), TelemetryError> {
+        self.tracer
+            .force_flush()
+            .map_err(|e| TelemetryError::Shutdown(format!("traces flush: {e}")))?;
+        self.meter
+            .force_flush()
+            .map_err(|e| TelemetryError::Shutdown(format!("metrics flush: {e}")))?;
+        self.logs
+            .force_flush()
+            .map_err(|e| TelemetryError::Shutdown(format!("logs flush: {e}")))?;
+        Ok(())
+    }
+
     /// Flush pending telemetry and shut down all providers.
     pub fn shutdown(self) -> Result<(), TelemetryError> {
+        clear_logs_provider();
         self.tracer
             .shutdown()
             .map_err(|e| TelemetryError::Shutdown(format!("traces: {e}")))?;
@@ -108,6 +129,7 @@ impl TelemetryGuard {
 
 impl Drop for TelemetryGuard {
     fn drop(&mut self) {
+        clear_logs_provider();
         let _ = self.tracer.shutdown();
         let _ = self.meter.shutdown();
         let _ = self.logs.shutdown();
@@ -124,8 +146,16 @@ fn service_resource(config: &TelemetryConfig) -> Resource {
 }
 
 fn install_logs(provider: SdkLoggerProvider) -> SdkLoggerProvider {
-    let _ = LOGS.set(provider.clone());
+    if let Ok(mut slot) = logs_slot().lock() {
+        *slot = Some(provider.clone());
+    }
     provider
+}
+
+fn clear_logs_provider() {
+    if let Ok(mut slot) = logs_slot().lock() {
+        *slot = None;
+    }
 }
 
 /// Install global OTLP tracer, meter, and logger providers.
@@ -324,7 +354,10 @@ pub fn record_histogram(scope: &'static str, name: &'static str, value: f64, att
 
 /// Emit a log record after [`init`] (no-op if telemetry was never installed).
 pub fn emit_log(scope: &'static str, severity: Severity, body: impl AsRef<str>) {
-    let Some(provider) = LOGS.get() else {
+    let Ok(slot) = logs_slot().lock() else {
+        return;
+    };
+    let Some(provider) = slot.as_ref() else {
         return;
     };
     let logger = provider.logger(scope);
@@ -350,9 +383,82 @@ pub fn log_error(scope: &'static str, body: impl AsRef<str>) {
     emit_log(scope, Severity::Error, body);
 }
 
+/// In-memory OTLP stand-ins for tests (`feature = "testing"`).
+#[cfg(feature = "testing")]
+#[derive(Clone)]
+pub struct TestExporters {
+    /// Finished spans collected by the in-memory span exporter.
+    pub spans: opentelemetry_sdk::trace::InMemorySpanExporter,
+    /// Finished metrics collected by the in-memory metric exporter.
+    pub metrics: opentelemetry_sdk::metrics::InMemoryMetricExporter,
+    /// Emitted logs collected by the in-memory log exporter.
+    pub logs: opentelemetry_sdk::logs::InMemoryLogExporter,
+}
+
+#[cfg(feature = "testing")]
+impl TestExporters {
+    pub fn reset(&self) {
+        self.spans.reset();
+        self.metrics.reset();
+        self.logs.reset();
+    }
+}
+
+/// Install providers backed by in-memory exporters (no network).
+///
+/// Requires `--features testing`. Serialize tests that call this — globals are
+/// process-wide.
+#[cfg(feature = "testing")]
+pub fn install_test(
+    config: TelemetryConfig,
+) -> Result<(TelemetryHandle, TestExporters), TelemetryError> {
+    use opentelemetry_sdk::metrics::PeriodicReader;
+
+    let resource = service_resource(&config);
+    let spans = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+    let metrics = opentelemetry_sdk::metrics::InMemoryMetricExporter::default();
+    let logs_exporter = opentelemetry_sdk::logs::InMemoryLogExporter::default();
+
+    let tracer = SdkTracerProvider::builder()
+        .with_simple_exporter(spans.clone())
+        .with_resource(resource.clone())
+        .build();
+    let meter = SdkMeterProvider::builder()
+        .with_reader(PeriodicReader::builder(metrics.clone()).build())
+        .with_resource(resource.clone())
+        .build();
+    let logs = install_logs(
+        SdkLoggerProvider::builder()
+            .with_simple_exporter(logs_exporter.clone())
+            .with_resource(resource)
+            .build(),
+    );
+
+    global::set_tracer_provider(tracer.clone());
+    global::set_meter_provider(meter.clone());
+
+    let handle = TelemetryGuard {
+        tracer,
+        meter,
+        logs,
+        #[cfg(feature = "otlp-grpc")]
+        _runtime: None,
+    };
+    let exporters = TestExporters {
+        spans,
+        metrics,
+        logs: logs_exporter,
+    };
+    Ok((handle, exporters))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Globals are process-wide; serialize install/install_test.
+    static INIT_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn config_builders() {
@@ -361,5 +467,43 @@ mod tests {
             .endpoint("http://127.0.0.1:4318");
         assert_eq!(cfg.service_name.as_deref(), Some("demo"));
         assert_eq!(cfg.endpoint.as_deref(), Some("http://127.0.0.1:4318"));
+    }
+
+    #[cfg(feature = "testing")]
+    #[test]
+    fn install_test_captures_span_and_log() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let (handle, exporters) = install_test(TelemetryConfig::new().service_name("test")).unwrap();
+        in_span("airbug.test", "demo-span", || {
+            set_attribute("k", "v");
+        });
+        log_info("airbug.test", "hello from test");
+        handle.force_flush().unwrap();
+        assert!(
+            !exporters.spans.get_finished_spans().unwrap().is_empty(),
+            "expected at least one span"
+        );
+        assert!(
+            !exporters.logs.get_emitted_logs().unwrap().is_empty(),
+            "expected at least one log"
+        );
+        drop(handle);
+        // Re-init must work after Drop cleared the log provider.
+        let (handle2, _) = install_test(TelemetryConfig::new().service_name("test2")).unwrap();
+        drop(handle2);
+    }
+
+    #[cfg(feature = "testing")]
+    #[test]
+    fn install_test_captures_counter() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let (handle, exporters) = install_test(TelemetryConfig::new().service_name("test")).unwrap();
+        add_counter("airbug.test", "hits", 3, &[]);
+        handle.force_flush().unwrap();
+        assert!(
+            !exporters.metrics.get_finished_metrics().unwrap().is_empty(),
+            "expected metrics after flush"
+        );
+        drop(handle);
     }
 }
