@@ -25,6 +25,13 @@ pub enum Wait {
         /// Container port (not host).
         container_port: u16,
     },
+    /// TCP port or a log message is enough; this softens runtime-specific logs.
+    TcpOrMessage {
+        /// Container port (not host).
+        container_port: u16,
+        /// Text that may appear in stdout while the service is still warming up.
+        text: String,
+    },
     /// HTTP GET to an absolute URL returns a 2xx status.
     Http {
         /// Full URL, for example `http://127.0.0.1:8080/health`.
@@ -61,6 +68,15 @@ impl Wait {
     /// Wait until the mapped public port accepts TCP connections.
     pub fn tcp_port(container_port: u16) -> Self {
         Self::Tcp { container_port }
+    }
+
+    /// Wait until either the mapped public port accepts TCP connections or the
+    /// service emits a specific stdout-ready message.
+    pub fn tcp_or_message(container_port: u16, text: impl Into<String>) -> Self {
+        Self::TcpOrMessage {
+            container_port,
+            text: text.into(),
+        }
     }
 
     /// Wait until `GET url` returns HTTP 2xx.
@@ -157,6 +173,27 @@ impl Wait {
                 }
                 Err(ContainerError::Timeout(format!(
                     "timed out waiting for TCP {addr}"
+                )))
+            }
+            Self::TcpOrMessage {
+                container_port,
+                text,
+            } => {
+                let port = mapped(*container_port)?;
+                let addr = format!("{host}:{port}");
+                while Instant::now() < deadline {
+                    if try_connect(&addr) || runtime.logs(id, true)?.contains(text) {
+                        return Ok(());
+                    }
+                    if !runtime.is_running(id)? {
+                        return Err(ContainerError::Failed(
+                            "container exited before readiness condition was met".into(),
+                        ));
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+                Err(ContainerError::Timeout(format!(
+                    "timed out waiting for TCP {addr} or log message `{text}`"
                 )))
             }
             Self::Http { url } => {
@@ -259,9 +296,7 @@ fn http_get(url: &str) -> Option<(u16, String)> {
     let mut stream = TcpStream::connect_timeout(&sock, Duration::from_millis(400)).ok()?;
     let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(400)));
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n"
-    );
+    let request = format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).ok()?;
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).ok()?;

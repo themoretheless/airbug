@@ -414,7 +414,8 @@ impl FixtureContext {
             return Err(error);
         }
         if values.len() != weights.len() {
-            let mut error = GenerationError::custom("choose_weighted values/weights length mismatch");
+            let mut error =
+                GenerationError::custom("choose_weighted values/weights length mismatch");
             error.seed = Some(self.seed);
             return Err(error);
         }

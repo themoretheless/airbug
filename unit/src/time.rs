@@ -353,7 +353,11 @@ impl ParkClock {
 
 impl Clock for ParkClock {
     fn elapsed(&self) -> Duration {
-        self.state.0.lock().expect("park clock lock poisoned").elapsed
+        self.state
+            .0
+            .lock()
+            .expect("park clock lock poisoned")
+            .elapsed
     }
 
     fn wall_time(&self) -> SystemTime {

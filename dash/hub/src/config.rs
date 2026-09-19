@@ -79,12 +79,10 @@ impl RootPaths {
         }
         let path = self.unit_report_dir().join(name);
         let report = self.unit_report_dir();
-        // Best-effort containment without requiring the file to exist yet.
         path.canonicalize()
             .ok()
             .filter(|p| p.starts_with(report.canonicalize().unwrap_or_else(|_| report.clone())))
             .or_else(|| {
-                // File may not exist; still reject obvious escapes via components.
                 if path
                     .components()
                     .any(|c| matches!(c, std::path::Component::ParentDir))

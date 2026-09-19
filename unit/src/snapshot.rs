@@ -272,11 +272,7 @@ impl Snapshots {
 
     /// Canonical JSON snapshot (stable key order). Requires feature `json`.
     #[cfg(feature = "json")]
-    pub fn check_json(
-        &self,
-        name: &str,
-        actual: &serde_json::Value,
-    ) -> Result<(), SnapshotError> {
+    pub fn check_json(&self, name: &str, actual: &serde_json::Value) -> Result<(), SnapshotError> {
         self.check(name, &canonical_json(actual, self.json_mode))
     }
 

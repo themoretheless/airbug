@@ -82,7 +82,7 @@ Threat model: [SECURITY.md](../SECURITY.md).
 
 | Domain | Sources |
 |--------|---------|
-| unit | `target/airbug-report/{report.json,index.html}` |
+| unit | local Rust test results from the workspace |
 | bench | `.airbug-bench/**/run.json` |
 | mon | `~/.local/share/airbug-mon/airbug-mon.db` |
 | otel | `otel/` crate (`airbug-otel` OTLP) |

@@ -326,7 +326,7 @@ fn prop_shrink_from_string() {
 
 #[test]
 fn pending_response_stays_pending() {
-    use airbug::mock::{pending_response, Mock};
+    use airbug::mock::{Mock, pending_response};
     use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
     fn raw() -> RawWaker {
@@ -336,7 +336,10 @@ fn pending_response_stays_pending() {
         fn wake(_: *const ()) {}
         fn wake_by_ref(_: *const ()) {}
         fn drop(_: *const ()) {}
-        RawWaker::new(std::ptr::null(), &RawWakerVTable::new(clone, wake, wake_by_ref, drop))
+        RawWaker::new(
+            std::ptr::null(),
+            &RawWakerVTable::new(clone, wake, wake_by_ref, drop),
+        )
     }
     let waker = unsafe { Waker::from_raw(raw()) };
     let mut cx = Context::from_waker(&waker);

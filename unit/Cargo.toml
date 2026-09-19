@@ -8,7 +8,7 @@ license = "MIT"
 repository = "https://github.com/themoretheless/airbug"
 keywords = ["testing", "mocking", "assertions", "fixtures", "validation"]
 categories = ["development-tools::testing", "development-tools"]
-include = ["src/**", "examples/**", "Cargo.toml", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "NEXT50.md", "PILOT.md", "WEB_REPORT.md", "tools/airbug_report.py", "tools/report/**", "tools/tests/*.py"]
+include = ["src/**", "examples/**", "Cargo.toml", "README.md", "LICENSE", "CHANGELOG.md", "TOP50.md", "NEXT50.md", "PILOT.md"]
 
 # Without this docs.rs would build with default features, hiding the entire
 # macro API (#[mock], #[cases], #[derive(Generate)]) from the published docs.

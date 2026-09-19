@@ -177,3 +177,53 @@ fn serve_status_ingest_issues() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn serve_unit_report_route_and_traversal_guard() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-report-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+    std::fs::create_dir_all(root.join("target/airbug-report")).unwrap();
+    std::fs::write(
+        root.join("target/airbug-report/index.html"),
+        "<html><body>airbug report</body></html>",
+    )
+    .unwrap();
+
+    let port = free_port();
+    let child = hub_bin()
+        .args([
+            "serve",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &port.to_string(),
+        ])
+        .spawn()
+        .expect("spawn hub");
+    let _hub = HubProc(child);
+    wait_ready(port, Instant::now() + Duration::from_secs(10));
+
+    let (st, body) = http(port, "GET", "/api/v1/status", None);
+    assert_eq!(st, 200, "{body}");
+    let status: serde_json::Value = serde_json::from_str(&body).expect("status JSON");
+    let report_api = status["apis"]
+        .as_array()
+        .and_then(|apis| {
+            apis.iter()
+                .find(|api| api["href"] == format!("http://127.0.0.1:{port}/report/index.html"))
+        })
+        .expect("unit report endpoint in status");
+    assert_eq!(report_api["method"], "GET");
+    assert_eq!(report_api["available"], true);
+
+    let (st, body) = http(port, "GET", "/report/index.html", None);
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("airbug report"), "{body}");
+
+    let (st, body) = http(port, "GET", "/report/../secret", None);
+    assert_eq!(st, 404, "{body}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
