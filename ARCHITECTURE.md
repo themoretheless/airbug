@@ -23,7 +23,6 @@ Libraries (`airbug`, `airbug-bench`, `airbug-err`, `airbug-otel`) expose builder
 | Contract | Version field | Notes |
 |----------|---------------|-------|
 | `airbug_err::Event` | `schema_version` (u32, default 1) | Hub rejects unsupported majors |
-| Unit report JSON | `UnitReportV1` shape in hub scan | Producers write `target/airbug-report/report.json` |
 | Bench runs | filesystem `run.json` trees under `.airbug-bench` | Scanned, not a shared crate |
 
 ## Threat model
@@ -33,7 +32,6 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. See [S
 ## Artifact paths
 
 ```text
-target/airbug-report/          # unit HTML/JSON reports
 .airbug-bench/                 # bench store (runs, baselines)
 dash/collector/data/           # OTLP file export
 dash/hub/data/issues.sqlite    # error issues

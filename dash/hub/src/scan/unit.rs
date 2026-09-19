@@ -68,7 +68,7 @@ pub(crate) fn scan_unit(root: &Path) -> DomainCard {
         actions: vec![
             Action {
                 label: "Generate report".into(),
-                command: "python3 unit/tools/airbug_report.py --all-features --locked".into(),
+                command: "cargo run -p airbug --bin airbug_report -- --all-features --locked".into(),
             },
             Action {
                 label: "Run unit tests".into(),
