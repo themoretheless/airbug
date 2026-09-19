@@ -227,3 +227,56 @@ fn serve_unit_report_route_and_traversal_guard() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn serve_unified_event_archive_accepts_trace() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-events-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+
+    let port = free_port();
+    let child = hub_bin()
+        .args([
+            "serve",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &port.to_string(),
+        ])
+        .spawn()
+        .expect("spawn hub");
+    let _hub = HubProc(child);
+    wait_ready(port, Instant::now() + Duration::from_secs(10));
+
+    let event = r#"{
+      "model_version": 1,
+      "event_id": "trace-1",
+      "timestamp": "2026-01-01T00:00:00Z",
+      "service": "checkout",
+      "environment": "test",
+      "release": null,
+      "trace_id": "abc",
+      "span_id": "def",
+      "tags": {},
+      "payload": {
+        "signal": "trace",
+        "data": {
+          "trace_id": "abc",
+          "span_id": "def",
+          "parent_span_id": null,
+          "name": "checkout",
+          "attributes": {"http.method": "GET"}
+        }
+      }
+    }"#;
+    let (st, body) = http(port, "POST", "/api/v1/events", Some(event));
+    assert_eq!(st, 202, "{body}");
+    assert!(body.contains("\"trace\""), "{body}");
+
+    let archived = std::fs::read_to_string(root.join("dash/hub/data/events.jsonl")).unwrap();
+    assert!(archived.contains("\"event_id\":\"trace-1\""), "{archived}");
+    assert!(archived.contains("\"signal\":\"trace\""), "{archived}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}

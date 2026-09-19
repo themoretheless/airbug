@@ -3,7 +3,7 @@ use crate::{
     app::HubApp,
     config,
     error::HubError,
-    event_model::EventEnvelope,
+    event_model::{EVENT_MODEL_VERSION, EventEnvelope, EventPayload},
     http::{self, Request},
     issues, otlp, scan,
 };
@@ -118,6 +118,7 @@ fn handle_api(
             )
         }
         ("POST", "/errors") => handle_errors_ingest(stream, app, req),
+        ("POST", "/events") => handle_unified_event(stream, app, req),
         ("GET", "/issues") => http::respond_json(stream, "200 OK", &app.issues.list()),
         ("GET", p) if p.starts_with("/issues/") => {
             let id = &p["/issues/".len()..];
@@ -129,11 +130,13 @@ fn handle_api(
                     "not found",
                 );
             }
+
             match app.issues.get(id) {
                 Some(issue) => http::respond_json(stream, "200 OK", &issue),
                 None => http::respond_err(stream, "404 Not Found", &HubError::msg("not found")),
             }
         }
+
         ("POST", p) if p.starts_with("/issues/") => handle_issue_action(stream, app, p),
         _ => http::respond(
             stream,
@@ -142,6 +145,60 @@ fn handle_api(
             "not found",
         ),
     }
+}
+
+fn handle_unified_event(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    let envelope: EventEnvelope = match serde_json::from_slice(&req.body) {
+        Ok(value) => value,
+        Err(error) => return http::respond_err(stream, "400 Bad Request", &HubError::from(error)),
+    };
+    if envelope.model_version != EVENT_MODEL_VERSION {
+        return http::respond_err(
+            stream,
+            "400 Bad Request",
+            &HubError::msg(format!(
+                "unsupported event model_version {} (supported {})",
+                envelope.model_version, EVENT_MODEL_VERSION
+            )),
+        );
+    }
+    let payload = serde_json::to_string(&envelope)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let event_id = envelope.event_id.clone();
+    let signal = envelope.signal();
+    let events_path = app.paths.events_file();
+    if let Some(parent) = events_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(events_path)?;
+    writeln!(file, "{payload}")?;
+
+    let issue = match envelope.payload {
+        EventPayload::Error(event) => Some(
+            app.issues
+                .ingest(*event, app.webhook.as_deref())
+                .map_err(|error| std::io::Error::other(error.to_string()))?,
+        ),
+        EventPayload::Trace { .. } | EventPayload::Metric { .. } | EventPayload::Log { .. } => None,
+    };
+    http::respond_json(
+        stream,
+        "202 Accepted",
+        &serde_json::json!({
+            "ok": true,
+            "event_id": event_id,
+            "signal": signal,
+            "issue": issue,
+        }),
+    )
 }
 
 fn handle_errors_ingest(
