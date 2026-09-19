@@ -474,19 +474,34 @@ mod tests {
     fn install_test_captures_span_and_log() {
         let _lock = INIT_LOCK.lock().unwrap();
         let (handle, exporters) =
-            install_test(TelemetryConfig::new().service_name("test")).unwrap();
+            install_test(TelemetryConfig::new().service_name("test-service")).unwrap();
         in_span("airbug.test", "demo-span", || {
             set_attribute("k", "v");
         });
         log_info("airbug.test", "hello from test");
         handle.force_flush().unwrap();
+        let spans = exporters.spans.get_finished_spans().unwrap();
         assert!(
-            !exporters.spans.get_finished_spans().unwrap().is_empty(),
-            "expected at least one span"
+            spans.iter().any(|span| {
+                span.name == "demo-span"
+                    && span
+                        .attributes
+                        .iter()
+                        .any(|attribute| attribute.key.as_str() == "k")
+            }),
+            "expected named span with attribute"
         );
+        let logs = exporters.logs.get_emitted_logs().unwrap();
         assert!(
-            !exporters.logs.get_emitted_logs().unwrap().is_empty(),
-            "expected at least one log"
+            logs.iter().any(|log| {
+                log.record.body().is_some()
+                    && log.record.severity_number() == Some(Severity::Info)
+                    && log
+                        .resource
+                        .get(&opentelemetry::Key::new("service.name"))
+                        .is_some()
+            }),
+            "expected info log with service resource"
         );
         drop(handle);
         // Re-init must work after Drop cleared the log provider.
@@ -506,14 +521,18 @@ mod tests {
             .record(21.5, &[]);
         U64Gauge::new("airbug.test", "queue_depth").record(4, &[]);
         handle.force_flush().unwrap();
+        let metrics = exporters.metrics.get_finished_metrics().unwrap();
+        let names: Vec<_> = metrics
+            .iter()
+            .flat_map(|resource| resource.scope_metrics())
+            .flat_map(|scope| scope.metrics())
+            .map(|metric| metric.name())
+            .collect();
         assert!(
-            exporters
-                .metrics
-                .get_finished_metrics()
-                .unwrap()
+            ["hits", "latency_ms", "temperature", "queue_depth"]
                 .iter()
-                .any(|resource| resource.scope_metrics().next().is_some()),
-            "expected counter, histogram, and gauge metrics after flush"
+                .all(|name| names.contains(name)),
+            "expected counter, histogram, f64 gauge, and u64 gauge metrics: {names:?}"
         );
         drop(handle);
     }
