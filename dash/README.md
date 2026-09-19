@@ -78,6 +78,24 @@ Error JSON shape: `{ "ok": false, "error": "…" }`.
 
 Threat model: [SECURITY.md](../SECURITY.md).
 
+## Unified collector event model
+
+Airbug is a Sentry alternative with its own collector contract rather than a
+Sentry protocol implementation. The hub normalizes error events and OTLP
+signals around one envelope:
+
+| Common field | Purpose |
+|--------------|---------|
+| `event_id`, `timestamp` | Event identity and ordering |
+| `service`, `environment`, `release` | Deployment context |
+| `trace_id`, `span_id` | Error/log/metric correlation |
+| `tags` | Searchable dimensions |
+| `payload.signal` | `error`, `trace`, `metric`, or `log` |
+
+Error payloads retain breadcrumbs, user, exception, stacktrace, contexts, and
+extras. Trace, metric, and log payloads retain their signal-native data while
+sharing the same correlation fields.
+
 ## What it reads
 
 | Domain | Sources |

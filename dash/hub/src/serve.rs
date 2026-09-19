@@ -3,6 +3,7 @@ use crate::{
     app::HubApp,
     config,
     error::HubError,
+    event_model::EventEnvelope,
     http::{self, Request},
     issues, otlp, scan,
 };
@@ -154,6 +155,12 @@ fn handle_errors_ingest(
             return http::respond_err(stream, "400 Bad Request", &HubError::from(e));
         }
     };
+    let envelope = EventEnvelope::from_error(event.clone());
+    tracing::debug!(
+        event_id = %envelope.event_id,
+        signal = ?envelope.signal(),
+        "normalized collector event"
+    );
     match app.issues.ingest(event, app.webhook.as_deref()) {
         Ok(resp) => http::respond_json(stream, "200 OK", &resp),
         Err(e) => {
