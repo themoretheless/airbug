@@ -501,10 +501,19 @@ mod tests {
         let (handle, exporters) =
             install_test(TelemetryConfig::new().service_name("test")).unwrap();
         add_counter("airbug.test", "hits", 3, &[]);
+        record_histogram("airbug.test", "latency_ms", 12.5, &[]);
+        F64Gauge::with_description("airbug.test", "temperature", "Current temperature")
+            .record(21.5, &[]);
+        U64Gauge::new("airbug.test", "queue_depth").record(4, &[]);
         handle.force_flush().unwrap();
         assert!(
-            !exporters.metrics.get_finished_metrics().unwrap().is_empty(),
-            "expected metrics after flush"
+            exporters
+                .metrics
+                .get_finished_metrics()
+                .unwrap()
+                .iter()
+                .any(|resource| resource.scope_metrics().next().is_some()),
+            "expected counter, histogram, and gauge metrics after flush"
         );
         drop(handle);
     }

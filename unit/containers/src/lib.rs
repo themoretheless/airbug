@@ -10,7 +10,7 @@
 //!
 //! let redis = ContainerBuilder::new("redis:7.2.4")
 //!     .with_port_binding(6379, true)
-//!     .with_wait_strategy(Wait::tcp_port(6379))
+//!     .with_wait_strategy(Wait::tcp_or_message(6379, "Ready to accept connections"))
 //!     .build()
 //!     .start()?;
 //!

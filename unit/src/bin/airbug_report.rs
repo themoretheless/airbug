@@ -5,6 +5,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[derive(Debug)]
 struct Options {
     all_features: bool,
     locked: bool,
@@ -101,13 +102,24 @@ fn command_output(output: &std::process::Output) -> String {
 }
 
 fn parse_args() -> Result<Options, Box<dyn std::error::Error>> {
+    parse_args_from(env::args().skip(1))
+}
+
+fn parse_args_from<I, S>(args: I) -> Result<Options, Box<dyn std::error::Error>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let mut all_features = false;
     let mut locked = false;
     let mut doc_tests = false;
     let mut output = PathBuf::from("target/airbug-report");
     let mut toolchain = None;
 
-    let args: Vec<String> = env::args().skip(1).collect();
+    let args: Vec<String> = args
+        .into_iter()
+        .map(|arg| arg.as_ref().to_owned())
+        .collect();
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -209,4 +221,47 @@ fn render_html(outcome: &str, commit: &str, logs: &str) -> String {
 </html>
 "#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Options, parse_args_from};
+    use std::path::PathBuf;
+
+    #[test]
+    fn parse_args_accepts_rust_report_flags() {
+        let options = parse_args_from([
+            "--all-features",
+            "--locked",
+            "--doc-tests",
+            "--output",
+            "artifact/report",
+            "--toolchain",
+            "stable",
+        ])
+        .expect("valid flags");
+
+        assert!(options.all_features);
+        assert!(options.locked);
+        assert!(options.doc_tests);
+        assert_eq!(options.output, PathBuf::from("artifact/report"));
+        assert_eq!(options.toolchain.as_deref(), Some("stable"));
+    }
+
+    #[test]
+    fn parse_args_rejects_missing_value() {
+        let err = parse_args_from(["--output"]).unwrap_err();
+        assert!(err.to_string().contains("requires a value"));
+    }
+
+    #[test]
+    fn parse_args_builds_default_options() {
+        let options = parse_args_from(std::iter::empty::<&str>()).expect("defaults");
+        assert!(!options.all_features);
+        assert!(!options.locked);
+        assert!(!options.doc_tests);
+        assert_eq!(options.output, PathBuf::from("target/airbug-report"));
+        assert_eq!(options.toolchain, None);
+        assert!(matches!(options, Options { .. }));
+    }
 }
