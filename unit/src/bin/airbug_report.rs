@@ -42,24 +42,40 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .arg("--workspace")
         .arg("--exclude")
         .arg("airbug-mon");
-    if options.doc_tests {
-        command.arg("--doc");
-    }
-
     let output = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()?;
 
-    let mut stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    stdout.push_str(&stderr);
+    let mut stdout = command_output(&output);
+    let mut passed = output.status.success();
+    if options.doc_tests {
+        let mut docs = Command::new("cargo");
+        if let Some(toolchain) = &options.toolchain {
+            docs.arg(format!("+{toolchain}"));
+        }
+        docs.current_dir(&root)
+            .arg("test")
+            .arg("--doc")
+            .arg("--workspace")
+            .arg("--exclude")
+            .arg("airbug-mon");
+        if options.all_features {
+            docs.arg("--all-features");
+        }
+        if options.locked {
+            docs.arg("--locked");
+        }
+        let docs_output = docs
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+        passed &= docs_output.status.success();
+        stdout.push_str("\n--- doctests ---\n");
+        stdout.push_str(&command_output(&docs_output));
+    }
 
-    let outcome = if output.status.success() {
-        "passed"
-    } else {
-        "failed"
-    };
+    let outcome = if passed { "passed" } else { "failed" };
     let commit = git_head()?.trim().to_string();
 
     let report = format!(
@@ -71,11 +87,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         render_html(&outcome, &commit, &stdout),
     )?;
 
-    if !output.status.success() {
+    if !passed {
         eprintln!("{stdout}");
     }
 
     Ok(())
+}
+
+fn command_output(output: &std::process::Output) -> String {
+    let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+    text.push_str(&String::from_utf8_lossy(&output.stderr));
+    text
 }
 
 fn parse_args() -> Result<Options, Box<dyn std::error::Error>> {

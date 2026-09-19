@@ -72,6 +72,7 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/api/v1/issues` | Issue list |
 | GET | `/api/v1/issues/:id` | Issue detail (`last_event` + recent `events`) |
 | POST | `/api/v1/issues/:id/{resolve,ignore,reopen}` | Status change |
+| GET | `/report/*` | Unit HTML report files |
 
 Error JSON shape: `{ "ok": false, "error": "…" }`.
 
