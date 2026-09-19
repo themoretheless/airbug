@@ -237,11 +237,7 @@ pub fn assert_instant_near(actual: Instant, expected: Instant, tolerance: Durati
 /// Assert that a dotted JSON path (e.g. `a.b.0`) equals `expected`.
 #[cfg(feature = "json")]
 #[track_caller]
-pub fn assert_json_path(
-    value: &serde_json::Value,
-    path: &str,
-    expected: &serde_json::Value,
-) {
+pub fn assert_json_path(value: &serde_json::Value, path: &str, expected: &serde_json::Value) {
     let mut current = value;
     for segment in path.split('.') {
         assert!(

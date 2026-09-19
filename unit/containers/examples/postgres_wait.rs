@@ -7,8 +7,8 @@
 //! cargo run -p airbug-containers --example postgres_wait
 //! ```
 
-use airbug_containers::prelude::*;
 use airbug_containers::Runtime;
+use airbug_containers::prelude::*;
 use std::time::Duration;
 
 fn main() -> Result<(), ContainerError> {

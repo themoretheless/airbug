@@ -473,7 +473,8 @@ mod tests {
     #[test]
     fn install_test_captures_span_and_log() {
         let _lock = INIT_LOCK.lock().unwrap();
-        let (handle, exporters) = install_test(TelemetryConfig::new().service_name("test")).unwrap();
+        let (handle, exporters) =
+            install_test(TelemetryConfig::new().service_name("test")).unwrap();
         in_span("airbug.test", "demo-span", || {
             set_attribute("k", "v");
         });
@@ -497,7 +498,8 @@ mod tests {
     #[test]
     fn install_test_captures_counter() {
         let _lock = INIT_LOCK.lock().unwrap();
-        let (handle, exporters) = install_test(TelemetryConfig::new().service_name("test")).unwrap();
+        let (handle, exporters) =
+            install_test(TelemetryConfig::new().service_name("test")).unwrap();
         add_counter("airbug.test", "hits", 3, &[]);
         handle.force_flush().unwrap();
         assert!(

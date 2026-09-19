@@ -259,9 +259,7 @@ fn http_get(url: &str) -> Option<(u16, String)> {
     let mut stream = TcpStream::connect_timeout(&sock, Duration::from_millis(400)).ok()?;
     let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(400)));
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n"
-    );
+    let request = format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).ok()?;
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).ok()?;

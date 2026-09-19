@@ -21,7 +21,9 @@ impl<T: 'static> Strategy<T> {
     }
 
     /// Build from an arbitrary draw function.
-    pub fn from_fn(f: impl Fn(&mut FixtureContext) -> Result<T, GenerationError> + 'static) -> Self {
+    pub fn from_fn(
+        f: impl Fn(&mut FixtureContext) -> Result<T, GenerationError> + 'static,
+    ) -> Self {
         Self {
             draw_fn: Box::new(f),
         }

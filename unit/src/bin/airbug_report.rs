@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::PathBuf,
     process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
@@ -39,7 +38,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if options.locked {
         command.arg("--locked");
     }
-    command.arg("--workspace").arg("--exclude").arg("airbug-mon");
+    command
+        .arg("--workspace")
+        .arg("--exclude")
+        .arg("airbug-mon");
     if options.doc_tests {
         command.arg("--doc");
     }
@@ -53,14 +55,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     stdout.push_str(&stderr);
 
-    let outcome = if output.status.success() { "passed" } else { "failed" };
+    let outcome = if output.status.success() {
+        "passed"
+    } else {
+        "failed"
+    };
     let commit = git_head()?.trim().to_string();
 
     let report = format!(
         "{{\n  \"title\": \"Airbug report\",\n  \"commit\": \"{commit}\",\n  \"tests\": [\n    {{\"suite\": \"cargo test\", \"name\": \"workspace\", \"kind\": \"suite\", \"status\": \"{outcome}\"}}\n  ]\n}}\n"
     );
     fs::write(output_dir.join("report.json"), report)?;
-    fs::write(output_dir.join("index.html"), render_html(&outcome, &commit, &stdout))?;
+    fs::write(
+        output_dir.join("index.html"),
+        render_html(&outcome, &commit, &stdout),
+    )?;
 
     if !output.status.success() {
         eprintln!("{stdout}");
@@ -106,7 +115,13 @@ fn parse_args() -> Result<Options, Box<dyn std::error::Error>> {
         i += 1;
     }
 
-    Ok(Options { all_features, locked, doc_tests, output, toolchain })
+    Ok(Options {
+        all_features,
+        locked,
+        doc_tests,
+        output,
+        toolchain,
+    })
 }
 
 fn print_help() {
@@ -121,9 +136,16 @@ fn repo_root() -> PathBuf {
 }
 
 fn git_head() -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::new("git").arg("rev-parse").arg("--short").arg("HEAD").output()?;
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--short")
+        .arg("HEAD")
+        .output()?;
     if !output.status.success() {
-        return Ok(format!("{:.0}", SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs_f64()));
+        return Ok(format!(
+            "{:.0}",
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs_f64()
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -135,7 +157,11 @@ fn render_html(outcome: &str, commit: &str, logs: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;");
-    let status_style = if outcome == "passed" { "#dcfce7; color: #166534;" } else { "#fef2f2; color: #991b1b;" };
+    let status_style = if outcome == "passed" {
+        "#dcfce7; color: #166534;"
+    } else {
+        "#fef2f2; color: #991b1b;"
+    };
 
     format!(
         r#"<!doctype html>

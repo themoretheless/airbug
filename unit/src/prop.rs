@@ -5,8 +5,7 @@
 use crate::fixture::{FixtureContext, Generate, GenerationError};
 use crate::strategy::Strategy;
 use std::{
-    fmt,
-    fs,
+    fmt, fs,
     io::{self, Write},
     path::{Path, PathBuf},
 };
