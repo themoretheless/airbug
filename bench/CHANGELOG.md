@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- `bench::viz`: offline, dependency-free SVG charts (`Plot` builder, forest, strip, diverging bars, timeline lanes, sparkline, dot plot) shared by reports and the live UI
+- `report::comparison_charts` renders effect intervals, per-metric distributions and per-process deltas; `analysis::pairs` and `analysis::summarize` expose comparison math per independent unit
+- Live UI redesign with `api/live-charts`: diagrams are rendered server-side from the UI's own poll history, so the measurement path stays untouched
+- Public serde contracts, `report::plot` signature and report caps unchanged; release tag `airbug-bench-v0.7.0`
+
 ## 0.6.0
 
 - Align bench family semver with unit at `0.6.0`
