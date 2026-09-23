@@ -1,4 +1,4 @@
-//! Strategy combinators over [`Generate`](crate::fixture::Generate) draws.
+//! Strategy combinators over [`crate::fixture::Generate`] draws.
 use crate::fixture::{FixtureContext, Generate, GenerationError};
 
 /// Default filter redraw budget when [`Strategy::filter`] rejects a value.

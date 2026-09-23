@@ -327,7 +327,7 @@ impl Plot {
     }
 
     /// Pixel position of a value along a span; `None` for non-finite input.
-    /// [`Plot::span`] maps the vertical axis bottom-to-top, so `t = 0` is the bottom edge.
+    /// The private `span` helper maps the vertical axis bottom-to-top, so `t = 0` is the bottom edge.
     pub fn at(&self, v: f64, domain: &Domain, span: (f64, f64)) -> Option<f64> {
         if !v.is_finite() {
             return None;
