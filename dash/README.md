@@ -69,6 +69,7 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/api/v1/logs?limit=` | OTLP log tail (+ `by_severity`, `services`) |
 | GET | `/api/v1/metrics?limit=` | OTLP metrics (`series`, `histogram`, `latest`) |
 | POST | `/api/v1/errors` | airbug-err event → issues (`schema_version`) |
+| POST | `/api/v1/events` | Unified error/trace/metric/log envelope |
 | GET | `/api/v1/issues` | Issue list |
 | GET | `/api/v1/issues/:id` | Issue detail (`last_event` + recent `events`) |
 | POST | `/api/v1/issues/:id/{resolve,ignore,reopen}` | Status change |
@@ -77,6 +78,24 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 Error JSON shape: `{ "ok": false, "error": "…" }`.
 
 Threat model: [SECURITY.md](../SECURITY.md).
+
+## Unified collector event model
+
+Airbug is a Sentry alternative with its own collector contract rather than a
+Sentry protocol implementation. The hub normalizes error events and OTLP
+signals around one envelope:
+
+| Common field | Purpose |
+|--------------|---------|
+| `event_id`, `timestamp` | Event identity and ordering |
+| `service`, `environment`, `release` | Deployment context |
+| `trace_id`, `span_id` | Error/log/metric correlation |
+| `tags` | Searchable dimensions |
+| `payload.signal` | `error`, `trace`, `metric`, or `log` |
+
+Error payloads retain breadcrumbs, user, exception, stacktrace, contexts, and
+extras. Trace, metric, and log payloads retain their signal-native data while
+sharing the same correlation fields.
 
 ## What it reads
 

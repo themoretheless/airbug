@@ -2,6 +2,7 @@ mod app;
 mod collector;
 mod config;
 mod error;
+mod event_model;
 mod http;
 mod issues;
 mod otlp;

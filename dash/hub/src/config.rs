@@ -62,6 +62,10 @@ impl RootPaths {
         self.root.join("dash/hub/data/issues.sqlite")
     }
 
+    pub fn events_file(&self) -> PathBuf {
+        self.root.join("dash/hub/data/events.jsonl")
+    }
+
     pub fn unit_report_dir(&self) -> PathBuf {
         self.root.join("target/airbug-report")
     }
