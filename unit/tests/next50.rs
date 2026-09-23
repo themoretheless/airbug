@@ -208,7 +208,7 @@ fn strategy_map_filter_and_for_all_strategy() {
         .filter(|n| *n >= 3);
     let mut ctx = FixtureContext::with_seed(11);
     let value = strategy.draw(&mut ctx).unwrap();
-    assert!(value >= 3 && value < 10);
+    assert!((3..10).contains(&value));
 
     Prop::new(3)
         .trials(15)
