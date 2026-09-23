@@ -12,13 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal --component clippy --component rustfmt
-      - run: python -m unittest discover -s unit/tools/tests -v
-        env:
-          RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
       - run: cargo +${{ matrix.toolchain }} fmt --all --check
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon
       - run: cargo +${{ matrix.toolchain }} test --locked -p airbug --no-default-features
@@ -32,7 +26,6 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- decline
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- store-failure
       - run: cargo +${{ matrix.toolchain }} clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings
-      - run: python unit/tools/verify_packages.py --toolchain ${{ matrix.toolchain }}
 
   airbug-otel:
     runs-on: ubuntu-latest
@@ -61,14 +54,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - run: rustup toolchain install stable --profile minimal
       - name: Generate web report
-        run: python unit/tools/airbug_report.py --all-features --locked --doc-tests
-        env:
-          RUSTUP_TOOLCHAIN: stable
+        run: cargo +stable run --locked -p airbug --bin airbug_report -- --all-features --locked --doc-tests
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -32,6 +32,7 @@ flowchart TD
 | `airbug-bench` | Suite builder, fixture lifetime, типизированный горячий loop, black_box helpers | Хранилище истории, HTML, внешние процессы |
 | `bench-runner` | Worker lifecycle, deterministic schedule, cancellation, timeout, resource leases | Формула «FPS» конкретного renderer |
 | `bench-analysis` | Валидация совместимости, статистика, budgets, диагностические статусы | Запуск измеряемого кода |
+| `bench-viz` (`bench/src/viz.rs`) | Шкала (линейная/лог/категории), тики, SVG-примитивы и готовые диаграммы (forest, strip, bars, timeline, sparkline), экранирование подписей | Статистику решений, запуск измерений, HTTP |
 | `cargo-airbug-bench` | Cargo discovery/build, CLI, пути артефактов, запуск заранее собранных workers | Внутренности Forma |
 | `airbug-bench-macros` | Необязательный синтаксический сахар над тем же builder API | Особый второй execution path |
 | Опциональные адаптеры | Tokio, wgpu, alloc, process metrics, browser, Forma import | Не должны расширять обязательные зависимости ядра |
@@ -120,3 +121,5 @@ JSON числа счётчиков могут превысить точност�
 | Generic allocator wrapper с явным подключением пользователем | В программе допустим один global allocator, у пользователя может быть свой | Автоматически подменять allocator нельзя |
 | Offline files перед сервером | Проверяемость и минимум установки | Dashboard/history добавляются поверх того же протокола |
 | Public model extensible, engine internals private | Не замораживать sampling internals первым релизом | Плагины получают ограниченный versioned contract |
+| Диаграммы рисует сервер (Rust `viz`), а не JS-библиотека в браузере | Один implementation для отчёта и live-UI, автономный offline HTML, в hot path измерений не появляется новой работы | Chart.js/lightweight-charts дали бы зум и hover, но добавили бы CDN-зависимость, расхождение палитр и работу в процессе раннера |
+| Живые диаграммы строятся из истории опросов `progress.json` | Раннер не пишет лишних файлов, сервер видит каждый опрос браузера | Точные границы фаз потребовали бы таймингов в протоколе — то есть в измеряемом пути |

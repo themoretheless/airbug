@@ -39,9 +39,11 @@ impl RedisBuilder {
 
     /// Build and start Redis.
     pub fn start(self) -> Result<RedisContainer, ContainerError> {
+        // Redis startup logs vary across Docker/Podman images and runtimes, so
+        // accept either a live TCP port or the usual stdout-ready message.
         let inner = ContainerBuilder::new(self.image)
             .with_port_binding(6379, true)
-            .with_wait_strategy(Wait::message_on_stdout("Ready to accept connections"))
+            .with_wait_strategy(Wait::tcp_or_message(6379, "Ready to accept connections"))
             .with_startup_timeout(self.startup_timeout)
             .build()?
             .start()?;

@@ -2,8 +2,8 @@
 mod logs;
 mod metrics;
 
-pub use logs::{read_filtered as read_logs_filtered, read_recent as read_logs};
-pub use metrics::{read_filtered as read_metrics_filtered, read_recent as read_metrics};
+pub use logs::read_filtered as read_logs_filtered;
+pub use metrics::read_filtered as read_metrics_filtered;
 
 use serde_json::Value;
 use std::{
@@ -57,7 +57,9 @@ pub fn resource_attr(resource: &Value, key: &str) -> String {
 }
 
 /// Flatten resource (+ optional record) attributes into a string map.
-pub fn resource_attrs(resource_logs_or_metrics: &Value) -> std::collections::HashMap<String, String> {
+pub fn resource_attrs(
+    resource_logs_or_metrics: &Value,
+) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::new();
     let attrs = resource_logs_or_metrics
         .get("resource")
@@ -69,7 +71,10 @@ pub fn resource_attrs(resource_logs_or_metrics: &Value) -> std::collections::Has
             if k.is_empty() {
                 continue;
             }
-            map.insert(k.to_string(), attr.get("value").map(any_value).unwrap_or_default());
+            map.insert(
+                k.to_string(),
+                attr.get("value").map(any_value).unwrap_or_default(),
+            );
         }
     }
     map
@@ -85,7 +90,10 @@ pub fn merge_record_attrs(
             if k.is_empty() {
                 continue;
             }
-            map.insert(k.to_string(), attr.get("value").map(any_value).unwrap_or_default());
+            map.insert(
+                k.to_string(),
+                attr.get("value").map(any_value).unwrap_or_default(),
+            );
         }
     }
     map

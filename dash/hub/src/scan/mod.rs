@@ -24,7 +24,7 @@ use mon::scan_mon;
 use otel::scan_otel;
 use unit::scan_unit;
 
-pub use bench::{BenchRunRow, BenchRuns};
+pub use bench::BenchRuns;
 
 pub fn bench_runs(root: &Path) -> BenchRuns {
     list_runs(root)

@@ -1,6 +1,7 @@
 use crate::{
     Result, Run,
     analysis::{Comparison, median},
+    viz::{self, charts},
 };
 use std::collections::BTreeMap;
 pub fn escape(s: &str) -> String {
@@ -146,6 +147,7 @@ pub fn markdown(run: &Run) -> Result<String> {
     Ok(out)
 }
 pub fn comparison(rows: &[Comparison]) -> String {
+    let summary = crate::analysis::summarize(rows);
     let mut ordered: Vec<_> = rows.iter().collect();
     ordered.sort_by_key(|r| match r.decision {
         crate::analysis::Decision::Regression => 0,
@@ -158,20 +160,14 @@ pub fn comparison(rows: &[Comparison]) -> String {
     let mut out = String::from(
         "# bench comparison\n\n| Case | Metric | A | B | Change % | Interval % | Independent units | Decision |\n|---|---|---:|---:|---:|---|---:|---|\n",
     );
-    let regressions = rows
-        .iter()
-        .filter(|r| r.decision == crate::analysis::Decision::Regression)
-        .count();
-    let unresolved = rows
-        .iter()
-        .filter(|r| {
-            matches!(
-                r.decision,
-                crate::analysis::Decision::Inconclusive | crate::analysis::Decision::Unavailable
-            )
-        })
-        .count();
-    out=out.replacen("# bench comparison\n\n",&format!("# bench comparison\n\n{} metrics · {regressions} regressions · {unresolved} unresolved. Regressions and unresolved results appear first.\n\n",rows.len()),1);
+    out = out.replacen(
+        "# bench comparison\n\n",
+        &format!(
+            "# bench comparison\n\n{} metrics · {} regressions · {} unresolved. Regressions and unresolved results appear first.\n\n",
+            summary.rows, summary.regressions, summary.unresolved
+        ),
+        1,
+    );
     let n = |v: Option<f64>| v.map(|x| format!("{x:.4}")).unwrap_or("n/a".into());
     for r in &rows {
         out.push_str(&format!(
@@ -202,11 +198,7 @@ pub fn comparison(rows: &[Comparison]) -> String {
     out
 }
 fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
+    viz::esc(s)
 }
 /// Render the report's small Markdown subset, never arbitrary HTML.
 pub fn html_fragment(markdown: &str) -> String {
@@ -311,37 +303,131 @@ pub fn advice(r: &Comparison) -> &'static str {
         _ => "",
     }
 }
-/// Dependency-free SVG scatterplot. Fixed numeric coordinates and escaped labels only.
+/// Dependency-free SVG scatterplot of one series. Empty or all-non-finite input plots nothing.
 pub fn plot(label: &str, points: &[(f64, f64)]) -> String {
-    let points: Vec<_> = points
+    let clean: Vec<_> = points
         .iter()
         .copied()
         .filter(|(x, y)| x.is_finite() && y.is_finite())
         .collect();
-    if points.is_empty() {
+    if clean.is_empty() {
         return String::new();
     }
-    let xmin = points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
-    let xmax = points.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
-    let ymin = points.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
-    let ymax = points.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
-    let mut svg = format!(
-        "<figure><figcaption>{}</figcaption><svg role=\"img\" aria-label=\"{}\" viewBox=\"0 0 720 220\" style=\"width:100%;max-width:900px;background:white\"><path d=\"M64 16V180H704\" stroke=\"#a9bdb7\" fill=\"none\"/><text x=\"2\" y=\"25\" font-size=\"11\">{ymax:.3}</text><text x=\"2\" y=\"180\" font-size=\"11\">{ymin:.3}</text><text x=\"64\" y=\"205\" font-size=\"11\">{xmin:.0}</text><text x=\"665\" y=\"205\" font-size=\"11\">{xmax:.0}</text>",
-        html_escape(label),
-        html_escape(label)
-    );
-    let stride = points.len().div_ceil(1000).max(1);
-    for (x, y) in points.iter().step_by(stride) {
-        let px = 64. + (x - xmin) / (xmax - xmin).max(1.) * 640.;
-        let py = if ymax == ymin {
-            98.
-        } else {
-            180. - (y - ymin) / (ymax - ymin) * 164.
-        };
-        svg.push_str(&format!("<circle cx=\"{px:.2}\" cy=\"{py:.2}\" r=\"2.3\" fill=\"#09695d\"><title>x={x}, y={y}</title></circle>"));
+    charts::dot_plot(label, &clean, 1000, "")
+}
+/// Effect and distribution charts that explain a set of comparisons.
+///
+/// The forest plot shows every finite interval estimate; per-unit strip charts appear only
+/// for crossover runs where both variants share a `run.json`, because that is the case where
+/// independent units can be paired without assumptions.
+pub fn comparison_charts(
+    run: &Run,
+    rows: &[Comparison],
+    threshold: f64,
+    max_unit_charts: usize,
+) -> String {
+    let forest_rows: Vec<_> = rows
+        .iter()
+        .filter(|r| {
+            r.change_percent.is_some_and(f64::is_finite)
+                && r.interval_percent
+                    .is_some_and(|(l, h)| l.is_finite() && h.is_finite())
+        })
+        .take(32)
+        .map(|r| charts::Interval {
+            label: format!("{} / {} ({})", r.case, r.metric, r.unit),
+            point: r.change_percent.unwrap(),
+            low: r.interval_percent.unwrap().0,
+            high: r.interval_percent.unwrap().1,
+            decision: r.decision.clone(),
+        })
+        .collect();
+    let mut out = String::new();
+    if forest_rows.is_empty() {
+        out.push_str(
+            "<p>No finite effect intervals available. Missing intervals are not zero changes.</p>",
+        );
+    } else {
+        out.push_str(&charts::forest(
+            "Effect estimates and confidence intervals",
+            &forest_rows,
+            threshold,
+            "Positive means a larger candidate metric, not necessarily slower: colors follow each metric's declared direction. Shaded band and dashed lines: the declared practical margin. At most 32 finite intervals shown; every decision stays in the tables above.",
+        ));
+        let bars_rows: Vec<_> = forest_rows
+            .iter()
+            .map(|r| (r.label.clone(), r.point, r.decision.clone()))
+            .collect();
+        out.push_str(&charts::bars(
+            "Point estimates by metric",
+            &bars_rows,
+            "%",
+            "Bars are the point estimate only; read the interval above before deciding.",
+        ));
     }
-    svg.push_str("</svg></figure>");
-    svg
+    let crossover = {
+        let mut variants = std::collections::BTreeSet::new();
+        for o in &run.observations {
+            variants.insert(o.variant.as_str());
+        }
+        variants == std::collections::BTreeSet::from(["baseline", "candidate"])
+    };
+    if crossover {
+        let mut drawn = 0;
+        for r in rows.iter().filter(|r| r.independent_units >= 2) {
+            if drawn >= max_unit_charts {
+                out.push_str(&format!(
+                    "<p>{} more per-metric unit charts are available in the JSON report.</p>",
+                    rows.iter().filter(|r| r.independent_units >= 2).count() - drawn
+                ));
+                break;
+            }
+            let Ok(units) = crate::analysis::pairs(run, None, &r.case, &r.metric) else {
+                continue;
+            };
+            let lanes = [
+                charts::Lane {
+                    label: "baseline".into(),
+                    values: units.iter().map(|u| u.baseline).collect(),
+                    median: Some(median(
+                        &units.iter().map(|u| u.baseline).collect::<Vec<_>>(),
+                    )),
+                    color: Some(viz::Palette::LIGHT.series(0)),
+                },
+                charts::Lane {
+                    label: "candidate".into(),
+                    values: units.iter().map(|u| u.candidate).collect(),
+                    median: Some(median(
+                        &units.iter().map(|u| u.candidate).collect::<Vec<_>>(),
+                    )),
+                    color: Some(viz::Palette::LIGHT.series(1)),
+                },
+            ];
+            let deltas: Vec<_> = units
+                .iter()
+                .filter_map(|u| u.change_percent.map(|c| (u.unit as f64, c)))
+                .collect();
+            out.push_str(&charts::strip(
+                &format!("{} / {} — independent units", r.case, r.metric),
+                &lanes,
+                &r.unit,
+                "One dot per independent unit (a crossover pair), lanes are variants. This shows spread across units; it is not a confidence interval.",
+            ));
+            if !deltas.is_empty() {
+                out.push_str(&charts::dot_plot(
+                    &format!("{} / {} — change per unit", r.case, r.metric),
+                    &deltas,
+                    200,
+                    "x = pair id, y = candidate relative to baseline, in percent. One point per independent unit; this is a view of spread, not an interval estimate.",
+                ));
+            }
+            drawn += 1;
+        }
+    }
+    if out.is_empty() {
+        return String::new();
+    }
+    format!("<section class=\"charts\"><h3>Effect charts</h3>{out}</section>")
 }
 fn raw_charts(run: &Run) -> Result<String> {
     let mut charts = String::from(

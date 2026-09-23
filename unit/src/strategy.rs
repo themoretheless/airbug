@@ -1,4 +1,4 @@
-//! Strategy combinators over [`Generate`](crate::fixture::Generate) draws.
+//! Strategy combinators over [`crate::fixture::Generate`] draws.
 use crate::fixture::{FixtureContext, Generate, GenerationError};
 
 /// Default filter redraw budget when [`Strategy::filter`] rejects a value.
@@ -21,7 +21,9 @@ impl<T: 'static> Strategy<T> {
     }
 
     /// Build from an arbitrary draw function.
-    pub fn from_fn(f: impl Fn(&mut FixtureContext) -> Result<T, GenerationError> + 'static) -> Self {
+    pub fn from_fn(
+        f: impl Fn(&mut FixtureContext) -> Result<T, GenerationError> + 'static,
+    ) -> Self {
         Self {
             draw_fn: Box::new(f),
         }

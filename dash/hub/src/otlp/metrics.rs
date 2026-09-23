@@ -331,7 +331,10 @@ fn push_data_points(
                 let Some(k) = a.get("key").and_then(|v| v.as_str()) else {
                     continue;
                 };
-                attr_map.insert(k.to_string(), a.get("value").map(any_value).unwrap_or_default());
+                attr_map.insert(
+                    k.to_string(),
+                    a.get("value").map(any_value).unwrap_or_default(),
+                );
             }
         }
         let attrs = attr_map

@@ -87,9 +87,7 @@ pub fn query_usize(query: &str, key: &str, default: usize) -> usize {
 pub fn query_str(query: &str, key: &str) -> Option<String> {
     query.split('&').find_map(|pair| {
         let (k, v) = pair.split_once('=')?;
-        (k == key && !v.is_empty()).then(|| {
-            percent_decode(v).unwrap_or_else(|| v.to_string())
-        })
+        (k == key && !v.is_empty()).then(|| percent_decode(v).unwrap_or_else(|| v.to_string()))
     })
 }
 
@@ -104,7 +102,8 @@ fn percent_decode(s: &str) -> Option<String> {
                 i += 1;
             }
             b'%' if i + 2 < bytes.len() => {
-                let h = u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?, 16).ok()?;
+                let h =
+                    u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?, 16).ok()?;
                 out.push(h);
                 i += 3;
             }

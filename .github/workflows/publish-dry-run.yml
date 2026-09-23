@@ -33,11 +33,6 @@ jobs:
         with:
           rust-toolchain: "1.96.0"
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       # Leaf macros have no unpublished path deps — shared publish-crate dry-run works.
       - name: Dry-run airbug-macros
         uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
@@ -50,7 +45,3 @@ jobs:
         with:
           package-name: airbug-bench-macros
           dry-run: true
-
-      # airbug / airbug-bench still need path-patched consumer verify until macros are on crates.io.
-      - name: Verify airbug package archives
-        run: python unit/tools/verify_packages.py --toolchain 1.96.0

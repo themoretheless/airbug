@@ -145,7 +145,10 @@ impl RunStore {
         let now = iso_now();
         let out_s = out_dir.display().to_string();
         {
-            let conn = self.conn.lock().map_err(|_| HubError::msg("runs db lock"))?;
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| HubError::msg("runs db lock"))?;
             conn.execute(
                 "INSERT INTO runs(run_id, title, command, out_dir, state, created_at, updated_at)
                  VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -170,7 +173,10 @@ impl RunStore {
     }
 
     pub fn list(&self) -> Result<RunsList> {
-        let conn = self.conn.lock().map_err(|_| HubError::msg("runs db lock"))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| HubError::msg("runs db lock"))?;
         let mut stmt = conn.prepare(
             "SELECT run_id, title, command, out_dir, state, created_at, updated_at
              FROM runs ORDER BY updated_at DESC LIMIT 100",
@@ -235,7 +241,10 @@ impl RunStore {
         if !is_uuidish(run_id) {
             return Err(HubError::msg("invalid run_id"));
         }
-        let conn = self.conn.lock().map_err(|_| HubError::msg("runs db lock"))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| HubError::msg("runs db lock"))?;
         let row = conn
             .query_row(
                 "SELECT title, command, out_dir, state, created_at, updated_at FROM runs WHERE run_id = ?1",
@@ -283,7 +292,10 @@ impl RunStore {
     }
 
     fn touch_state(&self, run_id: &str, state: &RunState) -> Result<()> {
-        let conn = self.conn.lock().map_err(|_| HubError::msg("runs db lock"))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| HubError::msg("runs db lock"))?;
         conn.execute(
             "UPDATE runs SET state = ?1, updated_at = ?2 WHERE run_id = ?3",
             params![state.as_str(), iso_now(), run_id],
@@ -325,7 +337,8 @@ fn observe_fs(out: &Path) -> (RunState, Option<Value>) {
 fn observe_live(out: &Path) -> (RunState, Value) {
     let final_path = out.join("status-final.json");
     if final_path.is_file() {
-        let live = read_json_opt(&final_path).unwrap_or_else(|| serde_json::json!({"state":"complete"}));
+        let live =
+            read_json_opt(&final_path).unwrap_or_else(|| serde_json::json!({"state":"complete"}));
         let state = live
             .get("state")
             .and_then(|v| v.as_str())
@@ -339,18 +352,18 @@ fn observe_live(out: &Path) -> (RunState, Value) {
     }
     let progress_path = out.join("progress.json");
     if progress_path.is_file() {
-        let live = read_json_opt(&progress_path)
-            .unwrap_or_else(|| serde_json::json!({"state":"running"}));
+        let live =
+            read_json_opt(&progress_path).unwrap_or_else(|| serde_json::json!({"state":"running"}));
         return (RunState::Running, live);
     }
     if out.join("run.json").is_file() {
-        return (
-            RunState::Complete,
-            serde_json::json!({"state":"complete"}),
-        );
+        return (RunState::Complete, serde_json::json!({"state":"complete"}));
     }
     if out.is_dir() {
-        return (RunState::Registered, serde_json::json!({"state":"registered"}));
+        return (
+            RunState::Registered,
+            serde_json::json!({"state":"registered"}),
+        );
     }
     (RunState::Registered, serde_json::json!({"state":"missing"}))
 }

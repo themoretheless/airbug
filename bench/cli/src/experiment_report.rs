@@ -508,7 +508,19 @@ impl Document {
                 content.push_str(&format!("<p class=\"issue\">{}</p>", esc(issue)));
             }
             if !e.comparisons.is_empty() {
-                content.push_str(&effects(&e.comparisons, self.threshold_percent));
+                if let Some(r) = &e.run {
+                    let comparisons: Vec<_> = e
+                        .comparisons
+                        .iter()
+                        .map(|row| row.comparison.clone())
+                        .collect();
+                    content.push_str(&report::comparison_charts(
+                        r,
+                        &comparisons,
+                        self.threshold_percent,
+                        8,
+                    ));
+                }
             }
             for row in &e.comparisons {
                 content.push_str(&format!(
@@ -585,56 +597,4 @@ impl Document {
         // Only trusted generated markup is inserted; all source values are escaped above.
         Ok(page.replace("<footer>", &format!("{content}<footer>")))
     }
-}
-
-fn effects(rows: &[Row], threshold: f64) -> String {
-    let valid: Vec<_> = rows
-        .iter()
-        .filter(|r| {
-            r.comparison
-                .interval_percent
-                .is_some_and(|(l, h)| l.is_finite() && h.is_finite())
-                && r.comparison.change_percent.is_some_and(f64::is_finite)
-        })
-        .take(32)
-        .collect();
-    if valid.is_empty() {
-        return "<p>No finite effect intervals available. Missing intervals are not zero changes.</p>".into();
-    }
-    let extent = valid
-        .iter()
-        .flat_map(|r| {
-            let (l, h) = r.comparison.interval_percent.unwrap();
-            [l.abs(), h.abs(), r.comparison.change_percent.unwrap().abs()]
-        })
-        .fold(threshold.max(1.), f64::max);
-    let x = |v: f64| 400. + v / extent * 300.;
-    let height = valid.len() * 66 + 75;
-    let mut out = format!(
-        "<details open><summary>Effect estimates and confidence intervals</summary><svg role=\"img\" aria-label=\"Candidate change percent and confidence intervals\" viewBox=\"0 0 800 {height}\" style=\"width:100%;max-width:1000px\"><rect width=\"800\" height=\"{height}\" fill=\"#fff\"/>"
-    );
-    for value in [-threshold, 0., threshold] {
-        out.push_str(&format!("<line x1=\"{:.2}\" x2=\"{:.2}\" y1=\"15\" y2=\"{}\" stroke=\"#a4b4b2\" stroke-dasharray=\"4 4\"/>",x(value),x(value),height-40));
-    }
-    for (i, r) in valid.iter().enumerate() {
-        let y = 35 + i * 66;
-        let (l, h) = r.comparison.interval_percent.unwrap();
-        let change = r.comparison.change_percent.unwrap();
-        let color = match r.comparison.decision {
-            Decision::Regression => "#b32c34",
-            Decision::Improvement | Decision::WithinMargin => "#09695d",
-            _ => "#685286",
-        };
-        let label = format!(
-            "{} / {} / {}",
-            r.comparison.case, r.comparison.metric, r.variant
-        );
-        let short: String = label.chars().take(90).collect();
-        out.push_str(&format!("<g><title>{}: {:.3}% [{:.3}, {:.3}]</title><text x=\"20\" y=\"{y}\" font-size=\"12\">{}</text><line x1=\"{:.2}\" x2=\"{:.2}\" y1=\"{}\" y2=\"{}\" stroke=\"{color}\" stroke-width=\"5\"/><circle cx=\"{:.2}\" cy=\"{}\" r=\"5\" fill=\"{color}\"/></g>",esc(&label),change,l,h,esc(&short),x(l),x(h),y+18,y+18,x(change),y+18));
-    }
-    for (value, anchor) in [(-extent, "start"), (0., "middle"), (extent, "end")] {
-        out.push_str(&format!("<text x=\"{:.2}\" y=\"{}\" text-anchor=\"{anchor}\" font-size=\"12\">{value:.2}%</text>",x(value),height-15));
-    }
-    out.push_str("</svg><p>Positive means a larger candidate metric, not necessarily slower. Colors follow each metric's declared direction. Dashed lines: zero and practical margin. At most 32 finite intervals shown; all decisions remain in tables.</p></details>");
-    out
 }

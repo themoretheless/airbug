@@ -58,9 +58,7 @@ pub fn read_filtered(root: &Path, limit: usize, run_id: Option<&str>) -> LogsRes
     match tail_parse(&path, limit.saturating_mul(4).max(limit)) {
         Ok(mut entries) => {
             if let Some(rid) = run_id {
-                entries.retain(|e| {
-                    e.attrs.get("airbug.run_id").map(|s| s.as_str()) == Some(rid)
-                });
+                entries.retain(|e| e.attrs.get("airbug.run_id").map(|s| s.as_str()) == Some(rid));
             }
             if entries.len() > limit {
                 entries = entries.split_off(entries.len() - limit);

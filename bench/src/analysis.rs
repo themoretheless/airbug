@@ -276,6 +276,86 @@ pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<V
     Ok(result)
 }
 
+/// One independent unit of a comparison: a crossover pair, or a process when the two sides
+/// come from separate runs.
+#[derive(Debug, Clone, Serialize)]
+pub struct Pair {
+    pub unit: u32,
+    pub baseline: f64,
+    pub candidate: f64,
+    /// Candidate relative to baseline in percent; `None` when the baseline is not positive.
+    pub change_percent: Option<f64>,
+}
+
+/// The independent units behind one case and metric, using the same aggregation as
+/// [`compare`] so a chart can never disagree with the interval it annotates.
+///
+/// Arguments follow [`compare`]: `(run, None)` for a paired crossover run,
+/// `(baseline_run, Some(candidate_run))` for separate runs.
+pub fn pairs(a: &Run, b: Option<&Run>, case: &str, metric: &str) -> Result<Vec<Pair>> {
+    let descriptor = a
+        .cases
+        .iter()
+        .find(|c| c.id == case)
+        .and_then(|c| c.metrics.iter().find(|m| m.id == metric))
+        .ok_or_else(|| error("unknown case or metric"))?;
+    let side = |run: &Run, variant: &str| -> Result<BTreeMap<u32, f64>> {
+        let mut out = BTreeMap::new();
+        for (process, (pair, value)) in values(run, case, descriptor, variant)? {
+            let unit = match (b.is_none(), pair) {
+                (true, Some(pair)) => pair,
+                (false, _) => process,
+                (true, None) => return Err(error("process has no pair id")),
+            };
+            if out.insert(unit, value).is_some() {
+                return Err(error("duplicate unit for case and metric"));
+            }
+        }
+        Ok(out)
+    };
+    let base = side(a, if b.is_some() { "candidate" } else { "baseline" })?;
+    let candidate = side(b.unwrap_or(a), "candidate")?;
+    if base.keys().collect::<BTreeSet<_>>() != candidate.keys().collect::<BTreeSet<_>>() {
+        return Err(error("incomplete A/B pairs"));
+    }
+    Ok(base
+        .into_iter()
+        .map(|(unit, baseline)| {
+            let candidate = candidate[&unit];
+            Pair {
+                unit,
+                baseline,
+                candidate,
+                change_percent: (baseline > 0.)
+                    .then(|| (candidate / baseline - 1.) * 100.)
+                    .filter(|v| v.is_finite()),
+            }
+        })
+        .collect())
+}
+
+/// How many comparison rows need attention; the report sorts and headlines with these.
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+pub struct Summary {
+    pub rows: usize,
+    pub regressions: usize,
+    pub unresolved: usize,
+}
+
+pub fn summarize(rows: &[Comparison]) -> Summary {
+    Summary {
+        rows: rows.len(),
+        regressions: rows
+            .iter()
+            .filter(|r| r.decision == Decision::Regression)
+            .count(),
+        unresolved: rows
+            .iter()
+            .filter(|r| matches!(r.decision, Decision::Inconclusive | Decision::Unavailable))
+            .count(),
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct MultiComparison {
     pub reference: String,

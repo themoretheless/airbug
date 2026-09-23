@@ -180,7 +180,8 @@ fn serve_status_ingest_issues() {
 
 #[test]
 fn serve_bench_runs_progress_and_run_id_filter() {
-    let root: PathBuf = std::env::temp_dir().join(format!("airbug-hub-runs-{}", std::process::id()));
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-runs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
     std::fs::create_dir_all(root.join("dash/collector/data")).unwrap();
@@ -211,7 +212,10 @@ fn serve_bench_runs_progress_and_run_id_filter() {
 
     let (st, status2) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200);
-    assert!(status2.contains(&hub_id), "hub_id should be stable: {status2}");
+    assert!(
+        status2.contains(&hub_id),
+        "hub_id should be stable: {status2}"
+    );
 
     let (st, reg) = http(
         port,
@@ -246,8 +250,14 @@ fn serve_bench_runs_progress_and_run_id_filter() {
 
     let (st, detail) = http(port, "GET", &format!("/api/v1/bench/runs/{run_id}"), None);
     assert_eq!(st, 200, "{detail}");
-    assert!(detail.contains("running") || detail.contains("\"completed\""), "{detail}");
-    assert!(detail.contains("\"completed\":2") || detail.contains("\"completed\": 2"), "{detail}");
+    assert!(
+        detail.contains("running") || detail.contains("\"completed\""),
+        "{detail}"
+    );
+    assert!(
+        detail.contains("\"completed\":2") || detail.contains("\"completed\": 2"),
+        "{detail}"
+    );
 
     std::fs::write(
         PathBuf::from(&out_dir).join("status-final.json"),
@@ -261,7 +271,11 @@ fn serve_bench_runs_progress_and_run_id_filter() {
     let log_line = format!(
         r#"{{"time":"2026-01-01T00:00:00Z","severity":"INFO","body":"bench log","service":"smoke","airbug.run_id":"{run_id}"}}"#
     );
-    std::fs::write(root.join("dash/collector/data/logs.json"), format!("{log_line}\n")).unwrap();
+    std::fs::write(
+        root.join("dash/collector/data/logs.json"),
+        format!("{log_line}\n"),
+    )
+    .unwrap();
 
     let (st, logs) = http(
         port,
@@ -305,7 +319,113 @@ fn serve_bench_runs_progress_and_run_id_filter() {
         None,
     );
     assert_eq!(st, 200, "{issues}");
-    assert!(issues.contains("run correlated boom") || issues.contains("ISSUE-"), "{issues}");
+    assert!(
+        issues.contains("run correlated boom") || issues.contains("ISSUE-"),
+        "{issues}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn serve_unit_report_route_and_traversal_guard() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-report-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+    std::fs::create_dir_all(root.join("target/airbug-report")).unwrap();
+    std::fs::write(
+        root.join("target/airbug-report/index.html"),
+        "<html><body>airbug report</body></html>",
+    )
+    .unwrap();
+
+    let port = free_port();
+    let child = hub_bin()
+        .args([
+            "serve",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &port.to_string(),
+        ])
+        .spawn()
+        .expect("spawn hub");
+    let _hub = HubProc(child);
+    wait_ready(port, Instant::now() + Duration::from_secs(10));
+
+    let (st, body) = http(port, "GET", "/api/v1/status", None);
+    assert_eq!(st, 200, "{body}");
+    let status: serde_json::Value = serde_json::from_str(&body).expect("status JSON");
+    let report_api = status["apis"]
+        .as_array()
+        .and_then(|apis| {
+            apis.iter()
+                .find(|api| api["href"] == format!("http://127.0.0.1:{port}/report/index.html"))
+        })
+        .expect("unit report endpoint in status");
+    assert_eq!(report_api["method"], "GET");
+    assert_eq!(report_api["available"], true);
+
+    let (st, body) = http(port, "GET", "/report/index.html", None);
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("airbug report"), "{body}");
+
+    let (st, body) = http(port, "GET", "/report/../secret", None);
+    assert_eq!(st, 404, "{body}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn serve_unified_event_archive_accepts_trace() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-events-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+
+    let port = free_port();
+    let child = hub_bin()
+        .args([
+            "serve",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &port.to_string(),
+        ])
+        .spawn()
+        .expect("spawn hub");
+    let _hub = HubProc(child);
+    wait_ready(port, Instant::now() + Duration::from_secs(10));
+
+    let event = r#"{
+      "model_version": 1,
+      "event_id": "trace-1",
+      "timestamp": "2026-01-01T00:00:00Z",
+      "service": "checkout",
+      "environment": "test",
+      "release": null,
+      "trace_id": "abc",
+      "span_id": "def",
+      "tags": {},
+      "payload": {
+        "signal": "trace",
+        "data": {
+          "trace_id": "abc",
+          "span_id": "def",
+          "parent_span_id": null,
+          "name": "checkout",
+          "attributes": {"http.method": "GET"}
+        }
+      }
+    }"#;
+    let (st, body) = http(port, "POST", "/api/v1/events", Some(event));
+    assert_eq!(st, 202, "{body}");
+    assert!(body.contains("\"trace\""), "{body}");
+
+    let archived = std::fs::read_to_string(root.join("dash/hub/data/events.jsonl")).unwrap();
+    assert!(archived.contains("\"event_id\":\"trace-1\""), "{archived}");
+    assert!(archived.contains("\"signal\":\"trace\""), "{archived}");
 
     let _ = std::fs::remove_dir_all(&root);
 }

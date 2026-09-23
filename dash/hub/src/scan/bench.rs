@@ -1,6 +1,4 @@
-use crate::scan::{
-    Action, Artifact, DomainCard, Status, find_run_json, mtime_detail, rel_label, run_detail,
-};
+use crate::scan::{Action, Artifact, DomainCard, Status, find_run_json, mtime_detail, run_detail};
 use serde::Serialize;
 use std::path::Path;
 
@@ -37,12 +35,9 @@ pub(crate) fn list_runs(root: &Path) -> BenchRuns {
             // strip ".airbug-bench/" for /bench/<rel>
             let under = path.strip_prefix(&store).ok()?.display().to_string();
             let report = dir.join("report.html");
-            let report_url = report.is_file().then(|| {
-                format!(
-                    "/bench/{}",
-                    report.strip_prefix(&store).unwrap().display()
-                )
-            });
+            let report_url = report
+                .is_file()
+                .then(|| format!("/bench/{}", report.strip_prefix(&store).unwrap().display()));
             let id = dir
                 .strip_prefix(&store)
                 .map(|p| p.display().to_string())

@@ -715,13 +715,14 @@ mod tests {
             IssueStatus::Ignored
         );
         assert_eq!(
-            store.set_status(&id, IssueStatus::Unresolved).unwrap().status,
+            store
+                .set_status(&id, IssueStatus::Unresolved)
+                .unwrap()
+                .status,
             IssueStatus::Unresolved
         );
         // Resolved auto-reopens on ingest; ignored stays ignored.
-        store
-            .set_status(&id, IssueStatus::Resolved)
-            .unwrap();
+        store.set_status(&id, IssueStatus::Resolved).unwrap();
         let mut again = sample_event();
         again.event_id = "reopen".into();
         store.ingest(again.clone(), None).unwrap();

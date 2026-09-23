@@ -71,7 +71,10 @@ fn parse_http_url(url: &str) -> Result<(String, u16, String)> {
         format!("/{path}")
     };
     let (host, port) = if let Some((h, p)) = authority.split_once(':') {
-        (h.to_string(), p.parse().map_err(|_| error("invalid hub port"))?)
+        (
+            h.to_string(),
+            p.parse().map_err(|_| error("invalid hub port"))?,
+        )
     } else {
         (authority.to_string(), 80)
     };

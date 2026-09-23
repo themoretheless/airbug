@@ -83,6 +83,10 @@ impl RootPaths {
         self.bench_runs_dir().join(run_id)
     }
 
+    pub fn events_file(&self) -> PathBuf {
+        self.root.join("dash/hub/data/events.jsonl")
+    }
+
     pub fn unit_report_dir(&self) -> PathBuf {
         self.root.join("target/airbug-report")
     }
@@ -100,12 +104,10 @@ impl RootPaths {
         }
         let path = self.unit_report_dir().join(name);
         let report = self.unit_report_dir();
-        // Best-effort containment without requiring the file to exist yet.
         path.canonicalize()
             .ok()
             .filter(|p| p.starts_with(report.canonicalize().unwrap_or_else(|_| report.clone())))
             .or_else(|| {
-                // File may not exist; still reject obvious escapes via components.
                 if path
                     .components()
                     .any(|c| matches!(c, std::path::Component::ParentDir))
