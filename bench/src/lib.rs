@@ -13,6 +13,7 @@ pub mod model;
 pub mod report;
 mod suite;
 mod suite_measure;
+pub mod viz;
 pub use model::*;
 pub use suite::{Config, DropPolicy, Suite};
 

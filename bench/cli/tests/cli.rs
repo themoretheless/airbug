@@ -996,6 +996,10 @@ fn experiment_reports_preserve_failures_and_family_uncertainty() {
     assert!(!page.contains("<img src=x"));
     assert!(page.contains("&lt;img src=x"));
     assert!(page.contains("Effect estimates and confidence intervals"));
+    assert!(page.contains("Point estimates by metric"));
+    assert!(page.contains("independent units"));
+    assert!(page.contains("it is not a confidence interval"));
+    assert!(page.matches("<figure class=\"viz\">").count() >= 4);
     assert!(page.contains("href=\"#run-0\""));
     assert_eq!(page.matches("class=\"run-card\"").count(), 7);
     assert!(
