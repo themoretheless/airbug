@@ -1,6 +1,8 @@
 //! Start/stop the local OpenTelemetry Collector.
 //!
 //! Order: Docker Compose (collector + Jaeger) → `otelcol-contrib` / `otelcol` binary.
+//! Compose is reached through `docker compose` when the CLI plugin is installed,
+//! otherwise through a standalone `docker-compose` binary.
 use crate::config::RootPaths;
 use std::{
     fs, io,
@@ -32,7 +34,7 @@ impl CollectorHandle {
 
         eprintln!("collector: neither Docker nor otelcol found");
         eprintln!(
-            "  Docker:  docker compose -f {} up -d",
+            "  Docker:  docker compose -f {} up -d   (plugin, or a standalone docker-compose)",
             paths.compose_file().display()
         );
         eprintln!("  Binary:  install otelcol-contrib (or otelcol) on PATH");
@@ -69,9 +71,21 @@ fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
         eprintln!("collector: Docker not available — trying otelcol binary …");
         return Ok(None);
     }
+    let Some((program, lead)) = compose_program() else {
+        eprintln!(
+            "collector: Docker is up but neither `docker compose` nor `docker-compose` works — \
+             trying otelcol binary …"
+        );
+        return Ok(None);
+    };
 
+    let front_end = if lead.is_empty() {
+        program.to_string()
+    } else {
+        format!("{program} {}", lead.join(" "))
+    };
     eprintln!(
-        "collector: starting Docker stack ({}) …",
+        "collector: starting Docker stack ({front_end} -f {}) …",
         compose_file.display()
     );
     let status = compose_cmd(&compose_file, &["up", "-d", "--remove-orphans"])?;
@@ -81,9 +95,17 @@ fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
     }
 
     wait_port(4318, Duration::from_secs(45));
-    eprintln!("collector: OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317");
-    eprintln!("collector: Jaeger UI http://127.0.0.1:16686/");
-    eprintln!("  export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318");
+    if probe().otlp_http {
+        eprintln!("collector: OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317");
+        eprintln!("collector: Jaeger UI http://127.0.0.1:16686/");
+        eprintln!("  export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318");
+    } else {
+        eprintln!(
+            "collector: Docker stack is up but :4318 never opened — logs and metrics panels \
+             stay empty; check `docker-compose -f {} logs otel-collector`",
+            compose_file.display()
+        );
+    }
 
     Ok(Some(CollectorHandle {
         compose_file: Some(compose_file),
@@ -199,13 +221,27 @@ fn command_ok(program: &str, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
+/// `(program, leading args)` for whichever Compose front-end this host has.
+fn compose_program() -> Option<(&'static str, &'static [&'static str])> {
+    if command_ok("docker", &["compose", "version"]) {
+        return Some(("docker", &["compose"]));
+    }
+    if command_ok("docker-compose", &["version"]) {
+        return Some(("docker-compose", &[]));
+    }
+    None
+}
+
 fn compose_cmd(file: &Path, args: &[&str]) -> io::Result<std::process::ExitStatus> {
-    Command::new("docker")
-        .arg("compose")
-        .arg("-f")
-        .arg(file)
-        .args(args)
-        .status()
+    let (program, lead) = compose_program().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "no Compose front-end: install the docker compose plugin or docker-compose",
+        )
+    })?;
+    let mut command = Command::new(program);
+    command.args(lead).arg("-f").arg(file).args(args);
+    command.status()
 }
 
 fn wait_port(port: u16, budget: Duration) {
@@ -245,7 +281,7 @@ impl CollectorProbe {
 pub fn emergency_stop(root: &Path) {
     let paths = RootPaths::new(root);
     let compose = paths.compose_file();
-    if compose.is_file() && command_ok("docker", &["version"]) {
+    if compose.is_file() && compose_program().is_some() {
         let _ = compose_cmd(&compose, &["down"]);
     }
     let pid_file = paths.otelcol_pid();

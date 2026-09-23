@@ -85,7 +85,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(output_dir.join("report.json"), report)?;
     fs::write(
         output_dir.join("index.html"),
-        render_html(&outcome, &commit, &stdout),
+        render_html(outcome, &commit, &stdout),
     )?;
 
     if !passed {

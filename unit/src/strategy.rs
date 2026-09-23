@@ -6,8 +6,10 @@ const FILTER_RETRIES: usize = 64;
 
 /// A fallible value source for property tests and fixtures.
 pub struct Strategy<T> {
-    draw_fn: Box<dyn Fn(&mut FixtureContext) -> Result<T, GenerationError>>,
+    draw_fn: Draw<T>,
 }
+
+type Draw<T> = Box<dyn Fn(&mut FixtureContext) -> Result<T, GenerationError>>;
 
 impl<T: 'static> Strategy<T> {
     /// Draw via [`T::generate`](Generate::generate).
