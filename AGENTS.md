@@ -19,7 +19,7 @@ cargo airbug-bench run --program ./target/release/mybench \
 - Port and key are fresh per start. Never reuse a link from an earlier run; never
   guess one.
 - The page refills itself every 1.5 s from `<output>/progress.json`
-  (`bench/cli/src/web_ui.rs:84`); `<output>/status-final.json` plus
+  (`bench/cli/src/web_ui.rs:197`); `<output>/status-final.json` plus
   `report.html` / `report.json` / `report.md` land after completion. Reading
   `progress.json` directly is fine for reporting progress in chat.
 - Send SIGINT only after the user is done looking; artifacts are already on disk.
@@ -76,15 +76,20 @@ Checks, in order:
 
 ## `airbug` (unit) has no live dashboard
 
-`airbug` is a test-support library with no binary — there is nothing to attach a URL to
-during `cargo test`. Do not invent one.
+`airbug` is a test-support library. Its one binary, `airbug_report`, blocks on
+`cargo test --workspace` and writes the report only afterwards, so there is nothing to
+attach a URL to while tests run. Do not invent one.
 
-- Machine-readable reports appear only when a reporter sets `AIRBUG_REPORT_DIR`
-  (`unit/src/report.rs`); `unit/tools/airbug_report.py` writes
-  `target/airbug-report/index.html`.
-- `cargo run -p airbug-hub -- serve --root .` (default `:8790`) shows the unit report
-  under `/report/` and scans `.airbug-bench` for finished `run.json`. Hub is post-hoc:
-  it does not render in-flight work.
+```sh
+cargo run -p airbug --bin airbug_report -- --all-features --locked --doc-tests
+```
+
+- It writes `target/airbug-report/{report.json,index.html}` at the end
+  (`unit/src/bin/airbug_report.rs:85`); CI does exactly this and uploads the folder.
+- Hand over `http://127.0.0.1:8790/report/` — the hub serves that folder — and say it is
+  a snapshot that appears only when the run finishes, not a live view.
+- Per-test machine-readable events are written only when something exports
+  `AIRBUG_REPORT_DIR` (`unit/src/report.rs:28`); the report binary does not set it.
 
 ## Deeper docs
 
