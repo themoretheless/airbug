@@ -18,13 +18,11 @@ exporters:
     verbosity: basic
   file/logs:
     path: __LOGS_PATH__
-    append: true
     rotation:
       max_megabytes: 32
       max_backups: 3
   file/metrics:
     path: __METRICS_PATH__
-    append: true
     rotation:
       max_megabytes: 32
       max_backups: 3

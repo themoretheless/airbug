@@ -61,10 +61,11 @@ Checks, in order:
    that URL; never assume the default port was free.
 2. Is OTLP listening? `nc -z 127.0.0.1 4318`, or the `apis[]` entries in the status
    JSON. Dead collector means the logs and metrics panels stay empty forever.
-   `--collector` tries the `docker compose` plugin, then an `otelcol*` binary on `PATH`
-   (`dash/hub/src/collector.rs`); a standalone `docker-compose` binary is *not* tried,
-   so with only that installed and no otelcol the collector does not start and hub
-   carries on serving. Report that instead of claiming a live view.
+   `--collector` tries the `docker compose` plugin, then a standalone `docker-compose`
+   binary, then an `otelcol*` binary on `PATH` (`dash/hub/src/collector.rs`); with none
+   of them the collector does not start and hub carries on serving. A container that is
+   *up* is not enough — read the `collector:` lines on stderr, which say so when
+   `:4318` never opened. Report that instead of claiming a live view.
 3. Traces are not in the hub at all — they render only in Jaeger on
    `http://127.0.0.1:16686/`, which the Docker path brings up and the otelcol-binary
    path does not (`dash/README.md:95`). No Jaeger → no trace UI, say so rather than
@@ -72,7 +73,9 @@ Checks, in order:
 4. For progress in chat without a browser: `cargo run -p airbug-hub -- status --root .`
    prints the same snapshot as JSON.
 5. `serve --collector` runs until SIGINT and tears the stack down on exit; start it in
-   the background.
+   the background. Without `--collector` no handler is installed, and a background job
+   started from a non-interactive shell inherits SIGINT as ignored — stop it with
+   SIGTERM.
 
 ## `airbug` (unit) has no live dashboard
 
