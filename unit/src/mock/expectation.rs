@@ -108,11 +108,10 @@ impl<A: fmt::Debug + 'static, R: 'static> ExpectationBuilder<A, R> {
         };
         let (answer, capture) = if let Some(map) = self.arg_map {
             let map_answer = Arc::clone(&map);
-            let mapped_answer: Answer<A, R> =
-                Arc::new(move |args: A| answer(map_answer(&args)));
-            let mapped_capture = self.capture.map(|capture| {
-                Arc::new(move |args: &A| capture(&map(args))) as Recorder<A>
-            });
+            let mapped_answer: Answer<A, R> = Arc::new(move |args: A| answer(map_answer(&args)));
+            let mapped_capture = self
+                .capture
+                .map(|capture| Arc::new(move |args: &A| capture(&map(args))) as Recorder<A>);
             (mapped_answer, mapped_capture)
         } else {
             (answer, self.capture)

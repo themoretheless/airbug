@@ -99,11 +99,7 @@ pub fn validate_parallel<T: Sync + 'static>(
             merged = merged.merge(errors);
         }
     }
-    if failed {
-        Err(merged)
-    } else {
-        Ok(())
-    }
+    if failed { Err(merged) } else { Ok(()) }
 }
 
 struct ErrorSink {

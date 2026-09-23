@@ -37,14 +37,14 @@ pub use airbug_macros::{Generate, cases, mock};
 
 /// Common opt-in imports for ordinary Rust tests.
 pub mod prelude {
+    #[cfg(feature = "json")]
+    pub use crate::checks::assert_json_path;
     pub use crate::checks::{
         CheckFailure, CheckReport, SoftAssert, assert_all, assert_count, assert_duration_eq,
         assert_error_chain_contains, assert_instant_near, assert_near, assert_panics,
         assert_relative_eq, assert_sorted, assert_subset, assert_superset, assert_text_eq,
         assert_unique, normalize_newlines,
     };
-    #[cfg(feature = "json")]
-    pub use crate::checks::assert_json_path;
     pub use crate::mock::{Capture, Matcher};
     pub use crate::native::{DirScope, EnvScope, TempDir};
     pub use crate::snapshot::{JsonMode, Snapshots, UpdateMode};

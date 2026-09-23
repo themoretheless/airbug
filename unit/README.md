@@ -435,12 +435,7 @@ cargo run --features macros --example native_service
 cargo clippy --workspace --all-features --all-targets -- -D warnings
 cargo fmt --all --check
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
-python3 unit/tools/verify_packages.py --toolchain stable
 ```
-
-The package verifier requires Python 3.9+ and tests both extracted .crate archives
-in an external consumer. It uses a local patch for the unpublished macro crate,
-working around Cargo's temporary-registry checksum error. It does not publish.
 
 The service example exercises all four modules and ensures invalid orders do
 not reach the repository. CI runs tests on Linux, macOS, and Windows with Rust
@@ -450,20 +445,6 @@ Version 0.3 adds opt-in macros and native helpers. Version 0.2 changes Generate:
 to try_build()?. Validator callbacks now require Send + Sync. This is a release
 candidate for the documented surface, not compatibility with every .NET API.
 Publishing and a stable 1.0 contract require a release review and successful CI.
-
-## Web test reports
-
-Generate a standalone browser report with suite summaries, searchable test cases,
-status filters, failure logs and the last 20 runs:
-
-```sh
-python3 unit/tools/airbug_report.py --all-features --locked --doc-tests
-```
-
-Open `target/airbug-report/index.html`. The optional Python 3.9+ tool executes real
-native tests one process per case and preserves failure exit codes. Doctests are
-an opt-in aggregate entry. It needs no frontend dependencies or report server.
-See [WEB_REPORT.md](WEB_REPORT.md) for execution differences, options and CI usage.
 
 Structured diagnostics are opt-in via `airbug::report::step`, `try_step`,
 `attach_text`, `attach_bytes`, `assert_equal` and `assert_text_equal`.
