@@ -63,10 +63,12 @@ jobs:
             airbug-err|airbug-otel|airbug-mon|airbug-hub|airbug-containers) pkgs="${{ inputs.package }}" ;;
             *) echo "unknown package"; exit 1 ;;
           esac
+          metadata="$(cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml)"
           for pkg in $pkgs; do
-            got="$(cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml | sed -n "s/.*\"name\":\s*\"${pkg}\",\s*\"version\":\s*\"\([^"]*\)\".*/\1/p" | head -n 1)"
+            got="$(jq -r --arg pkg "$pkg" '[.packages[] | select(.name == $pkg)][0].version // empty' <<<"$metadata")"
             test -n "$got" || { echo "unable to resolve $pkg version"; exit 1; }
             test "$got" = "$expected" || { echo "$pkg version $got != $expected"; exit 1; }
+            echo "$pkg = $got"
           done
 
       - name: Validate release version
