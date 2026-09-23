@@ -7,6 +7,8 @@ use airbug::time::{Clock, Eventually, ManualClock};
 use std::time::{Duration, SystemTime};
 
 fn main() {
+    // Reflexivity is trivially true by design; this line exercises Prop's trial plumbing.
+    #[allow(clippy::eq_op)]
     Prop::new(7)
         .trials(8)
         .for_all::<u64, _>(|n| Ok(*n == *n))

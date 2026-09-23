@@ -446,10 +446,7 @@ impl Retry {
     /// Return the next delay and grow `current` by `factor`, capped at `max`.
     pub fn next_delay(&mut self) -> Duration {
         let delay = self.current.min(self.max);
-        self.current = self
-            .current
-            .saturating_mul(self.factor.into())
-            .min(self.max);
+        self.current = self.current.saturating_mul(self.factor).min(self.max);
         delay
     }
 }

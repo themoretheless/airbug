@@ -530,7 +530,7 @@ mod tests {
             Arc::new(transport.clone()),
         )
         .unwrap();
-        let err = io::Error::new(io::ErrorKind::Other, "disk full");
+        let err = io::Error::other("disk full");
         assert!(capture_error(&err).is_some());
         let ty = transport
             .last()
