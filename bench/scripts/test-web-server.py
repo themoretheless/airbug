@@ -11,6 +11,8 @@ try:
     def get(path):
         return urllib.request.urlopen(url + path, timeout=20).read()
     assert b'<iframe' in get('')
+    # A served directory is post-hoc, so there are no in-flight lanes to draw.
+    assert b'<svg' not in get('api/live-charts')
     rows = json.loads(get('api/runs'))
     assert rows
     for row in rows:

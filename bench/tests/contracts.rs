@@ -1,4 +1,4 @@
-use airbug_bench::analysis::{Decision, compare, median_interval};
+use airbug_bench::analysis::{self, Decision, compare, median_interval};
 use airbug_bench::*;
 use std::{
     collections::BTreeMap,
@@ -526,6 +526,55 @@ fn diagnostic_reports_prioritize_regressions_and_plot_raw_data() {
     let plot = report::plot("<script>", &[(0., 1.), (1., 2.)]);
     assert!(!plot.contains("<script>"));
     assert!(plot.contains("&lt;script&gt;"));
+}
+
+#[test]
+fn comparison_charts_plot_intervals_and_units_without_overclaiming() {
+    let r = paired(6, 1.2);
+    let rows = compare(&r, None, 5., 0.05).unwrap();
+    let charts = report::comparison_charts(&r, &rows, 5., 8);
+    assert!(charts.contains("<section class=\"charts\">"));
+    assert!(charts.contains("Effect estimates and confidence intervals"));
+    assert!(charts.contains("Point estimates by metric"));
+    assert!(charts.contains("independent units"));
+    assert!(charts.contains("change per unit"));
+    assert!(charts.contains("it is not a confidence interval"));
+    assert_eq!(
+        charts.matches("<figure").count(),
+        charts.matches("<svg role=\"img\" aria-label=").count()
+    );
+
+    let mut hostile = rows.clone();
+    hostile[0].case = "<img src=x>".into();
+    let charts = report::comparison_charts(&r, &hostile, 5., 8);
+    assert!(charts.contains("&lt;img src=x&gt;"));
+    assert!(!charts.contains("<img src=x>"));
+
+    let mut candidate = r.clone();
+    candidate.observations.retain(|o| o.variant == "candidate");
+    // An external baseline run carries its own "candidate" variant, so the compared run has
+    // a single variant and per-unit crossover charts must not appear.
+    let baseline = candidate.clone();
+    let external = compare(&candidate, Some(&baseline), 5., 0.05).unwrap();
+    let charts = report::comparison_charts(&candidate, &external, 5., 8);
+    assert!(charts.contains("<section class=\"charts\">"));
+    assert!(!charts.contains("independent units"));
+    assert!(!charts.contains("change per unit"));
+    // Without intervals the section says so instead of drawing an empty chart.
+    assert!(charts.contains("No finite effect intervals available"));
+    assert!(!charts.contains("<svg"));
+}
+
+#[test]
+fn pairs_keep_the_independent_unit_identity_behind_every_dot() {
+    let r = paired(4, 1.5);
+    let units = analysis::pairs(&r, None, "case", "latency").unwrap();
+    assert_eq!(units.len(), 4);
+    assert_eq!(units[3].unit, 3);
+    assert_eq!(units[3].baseline, 103.);
+    assert_eq!(units[3].candidate, 154.5);
+    assert_eq!(units[3].change_percent, Some(50.));
+    assert!(analysis::pairs(&r, None, "missing", "latency").is_err());
 }
 
 #[test]

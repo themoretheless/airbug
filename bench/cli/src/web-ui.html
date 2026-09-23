@@ -175,6 +175,26 @@ body.mode-report #live[data-terminal] #live-text {
 #progress::-moz-progress-bar {
   background: linear-gradient(90deg, #0b6f61, #1bb79e);
 }
+#live-charts { margin: 1.15rem 0 0; }
+#live-charts figure {
+  margin: 0 0 0.8rem;
+  padding: 0.7rem 0.8rem 0.75rem;
+  background: #fff;
+  border: 1px solid #0e2a3a1a;
+}
+#live-charts figcaption {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+#live-charts .viz-notes {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+  color: var(--mute);
+}
+body.mode-report #live-charts { display: none; }
 
 .workspace {
   position: relative;
@@ -314,6 +334,7 @@ iframe {
   <strong id="live-text"></strong>
   <p class="live-sub" id="live-sub" hidden></p>
   <progress id="progress" max="1" value="0"></progress>
+  <div id="live-charts" aria-label="Диаграммы хода измерения" hidden></div>
 </div>
 
 <main class="workspace">
@@ -457,6 +478,24 @@ $('all').onclick=()=>{
 };
 refresh();
 
+/// The server renders the live lane and trend figures from its own poll history, so the
+/// measurement path stays untouched and the browser only pastes the result.
+let chartsInFlight=false;
+async function drawCharts(){
+  if(chartsInFlight) return;
+  chartsInFlight=true;
+  const box=$('live-charts');
+  try{
+    const res=await fetch('api/live-charts');
+    if(!res.ok) throw Error(await res.text());
+    box.innerHTML=await res.text();
+    box.hidden=!box.children.length;
+  }catch(e){
+    box.hidden=true;
+  }
+  chartsInFlight=false;
+}
+
 async function watch(){
   try{
     const response=await fetch('api/live');
@@ -467,6 +506,7 @@ async function watch(){
     $('live').dataset.state=state.state||'';
     if(active){
       setMode('live');
+      drawCharts();
       $('live').removeAttribute('data-terminal');
       $('live-phase').textContent=state.state==='preparing'?'Подготовка':'Измерение';
       $('progress').hidden=false;

@@ -25,6 +25,9 @@ with tempfile.TemporaryDirectory(prefix='bench-live-') as tmp:
                 raise AssertionError('report allowed during measurement')
             except urllib.error.HTTPError as e:
                 assert e.code == 400
+            charts = urllib.request.urlopen(url + 'api/live-charts', timeout=5).read()
+            assert b'<figure class="viz"' in charts, charts
+            assert b'<svg role="img"' in charts and b'viz-notes' in charts
             if cancel:
                 proc.send_signal(signal.SIGINT)
                 proc.wait(timeout=15)
@@ -48,4 +51,4 @@ with tempfile.TemporaryDirectory(prefix='bench-live-') as tmp:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
-print('Live HTTP: running progress, deferred report, completion, cancellation and persisted exports passed')
+print('Live HTTP: running progress, live charts, deferred report, completion, cancellation and persisted exports passed')
