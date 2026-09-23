@@ -22,10 +22,13 @@ cargo test -p airbug-hub
 
 Collector lives in `dash/collector/`. `--collector` tries, in order:
 
-1. **Docker Compose** — `otel-collector` + Jaeger UI (`docker-compose.yml` + `config.yaml`)
+1. **Docker Compose** — `otel-collector` + Jaeger UI (`docker-compose.yml` + `config.yaml`).
+   Reached through the `docker compose` plugin, or a standalone `docker-compose` binary when the plugin is absent.
 2. **Binary** — `otelcol-contrib` or `otelcol` on `PATH` with `config.standalone.yaml` (no Jaeger)
 
-Ctrl+C stops whichever backend was started.
+Ctrl+C stops whichever backend was started. Without `--collector` the hub installs no
+signal handler, and a background job started from a non-interactive shell inherits
+SIGINT as ignore — stop it with SIGTERM.
 
 Send app telemetry:
 
