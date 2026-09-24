@@ -562,6 +562,23 @@ impl Document {
                         variant.clone(),
                     )
                 });
+                let matrix: Vec<_> = groups
+                    .iter()
+                    .map(|((case, metric, variant), values)| {
+                        let unit = r
+                            .cases
+                            .iter()
+                            .find(|c| c.id == *case)
+                            .and_then(|c| c.metrics.iter().find(|m| m.id == *metric))
+                            .map(|m| format!(" ({})", m.unit))
+                            .unwrap_or_default();
+                        (
+                            format!("{case} / {metric}{unit} / {variant}"),
+                            values.iter().map(|(p, v)| (*p, *v)).collect(),
+                        )
+                    })
+                    .collect();
+                content.push_str(&report::process_heat(&matrix));
                 for ((case, metric, variant), values) in groups.into_iter().take(per_run) {
                     if chart_budget == 0 {
                         break;

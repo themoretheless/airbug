@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `bench::viz`: figures build themselves in — marks go out in staggered groups driven by `viz::REVEAL_CSS`, with no JavaScript, no SMIL and no second implementation of the scales in the browser. Print and `prefers-reduced-motion` render the finished frame, and a page without the CSS renders the same pixels
+- `bench::viz::charts::heatmap` and `Palette::heat`: matrix diagrams with global, per-row and signed-around-zero ramps; missing values stay blank instead of being colored as zero, every cell keeps a full-label tooltip, and `max_cells` bounds the markup
+- `viz::charts::ecdf` draws the cumulative share per lane on a shared value scale; `comparison_charts` adds it next to the strip for a crossover run with at least five independent units (a cumulative line over three units is the same dots with a second axis)
+- Lines and bars draw themselves along their own length instead of fading in: marks carry `pathLength="100"` and a `dv` class, so `REVEAL_CSS` needs 28 bytes per drawn mark and no measured length, against 22 bytes per reveal group and 689 bytes of CSS per page
+- `report::process_heat` renders the process matrix on the run and comparison pages; `comparison_charts` adds a case × metric change heat whenever effect intervals are available
+- `Plot::svg` and `Plot::inline` stay static, so the live UI keeps repainting without restarting animations
+- `cargo run -p airbug-bench --example viz_gallery` writes a playground page with every diagram rendered from synthetic data plus its measured markup size, and CSS-only motion controls; the renderer gained no playground-specific options
+
 ## 0.7.0
 
 - `bench::viz`: offline, dependency-free SVG charts (`Plot` builder, forest, strip, diverging bars, timeline lanes, sparkline, dot plot) shared by reports and the live UI

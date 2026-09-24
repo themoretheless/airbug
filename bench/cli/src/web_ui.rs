@@ -365,6 +365,9 @@ mod tests {
         assert!(render(dir.path(), dir.path(), "path=/etc/passwd").is_err());
         let (_, page) = route(dir.path(), dir.path(), &live, "").unwrap();
         assert!(page.contains("iframe"));
+        // The page repaints every 1.5 s, so it must not carry the CSS that would restart a
+        // reveal on every poll: the diagrams there are always the finished frame.
+        assert!(!page.contains("airbug-reveal"));
     }
 
     #[test]
@@ -388,6 +391,7 @@ mod tests {
         .unwrap();
         let (_, charts) = route(dir.path(), dir.path(), &live, "api/live-charts").unwrap();
         assert!(charts.contains("<svg"), "{charts}");
+        assert!(charts.contains("<g class=\"rv\""), "{charts}");
         assert!(charts.contains("baseline"));
         assert!(charts.contains("candidate"));
         assert!(charts.contains("of 4 done"));

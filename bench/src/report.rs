@@ -254,8 +254,13 @@ pub fn html_fragment(markdown: &str) -> String {
     body
 }
 /// Self-contained page for the report Markdown subset.
+///
+/// Carries [`viz::REVEAL_CSS`] so every figure built by [`viz::Plot::figure`] draws itself in;
+/// pages that poll and repaint (the live UI) must not include it.
 pub fn html(markdown: &str) -> String {
-    include_str!("report-template.html").replace("<!--CONTENT-->", &html_fragment(markdown))
+    include_str!("report-template.html")
+        .replace("<!--CONTENT-->", &html_fragment(markdown))
+        .replace("/*VIZ_CSS*/", viz::REVEAL_CSS)
 }
 pub fn html_run(run: &Run) -> Result<String> {
     let mut text = markdown(run)?;
@@ -365,6 +370,48 @@ pub fn comparison_charts(
             "Bars are the point estimate only; read the interval above before deciding.",
         ));
     }
+    let mut cases: Vec<String> = Vec::new();
+    let mut columns: Vec<String> = Vec::new();
+    for r in rows {
+        if !cases.contains(&r.case) {
+            cases.push(r.case.clone());
+        }
+        let column = format!("{} ({})", r.metric, r.unit);
+        if !columns.contains(&column) {
+            columns.push(column);
+        }
+    }
+    // An effect heat without any interval behind it would overclaim, so it shares the gate the
+    // forest and bar charts use; the matrix itself covers every case, not just the 32 rows.
+    if !forest_rows.is_empty() && columns.len() > 1 {
+        let mut heat: Vec<_> = cases
+            .iter()
+            .map(|c| charts::HeatRow {
+                label: c.clone(),
+                cells: vec![None; columns.len()],
+            })
+            .collect();
+        for r in rows {
+            let (Some(row), Some(col)) = (
+                cases.iter().position(|c| *c == r.case),
+                columns
+                    .iter()
+                    .position(|m| *m == format!("{} ({})", r.metric, r.unit)),
+            ) else {
+                continue;
+            };
+            heat[row].cells[col] = r.change_percent.filter(|v| v.is_finite());
+        }
+        out.push_str(&charts::heatmap(
+            "Change by case and metric, in percent",
+            &columns,
+            &heat,
+            charts::Heat::Signed { center: 0. },
+            "%",
+            240,
+            "One cell per case and metric: the point estimate of the change against the baseline, shaded on a ramp centered at zero. Colors follow each metric's declared direction, so red is a regression wherever the axis points. Cells carry no interval; read the forest above for significance.",
+        ));
+    }
     let crossover = {
         let mut variants = std::collections::BTreeSet::new();
         for o in &run.observations {
@@ -413,6 +460,15 @@ pub fn comparison_charts(
                 &r.unit,
                 "One dot per independent unit (a crossover pair), lanes are variants. This shows spread across units; it is not a confidence interval.",
             ));
+            // Below five units a cumulative line is the same dots with a second axis.
+            if units.len() >= 5 {
+                out.push_str(&charts::ecdf(
+                    &format!("{} / {} — cumulative share", r.case, r.metric),
+                    &lanes,
+                    &r.unit,
+                    "Share of independent units at or below the value on the x axis, one line per variant. Where the strip above shows which units were slow, this asks how much of a variant fits under a budget. A line crossing another is not a significance test.",
+                ));
+            }
             if !deltas.is_empty() {
                 out.push_str(&charts::dot_plot(
                     &format!("{} / {} — change per unit", r.case, r.metric),
@@ -428,6 +484,57 @@ pub fn comparison_charts(
         return String::new();
     }
     format!("<section class=\"charts\"><h3>Effect charts</h3>{out}</section>")
+}
+/// Process matrix: one row per series, one cell per process slot.
+///
+/// Each row is shaded on its own range, so series measured in different units still show their
+/// spread; the median of a process's observations fills the cell, which keeps a chatty process
+/// from outweighing its siblings. Empty when the matrix has a single column — one process is a
+/// number, not a picture.
+pub fn process_heat(series: &[(String, Vec<(u32, f64)>)]) -> String {
+    let mut slots: Vec<u32> = Vec::new();
+    for (_, values) in series {
+        for (process, _) in values {
+            if !slots.contains(process) {
+                slots.push(*process);
+            }
+        }
+    }
+    slots.sort_unstable();
+    if slots.len() < 2 {
+        return String::new();
+    }
+    let columns: Vec<String> = slots.iter().map(|p| format!("#{p}")).collect();
+    let rows: Vec<_> = series
+        .iter()
+        .map(|(label, values)| charts::HeatRow {
+            label: label.clone(),
+            cells: slots
+                .iter()
+                .map(|slot| {
+                    let ys: Vec<f64> = values
+                        .iter()
+                        .filter(|(p, _)| p == slot)
+                        .map(|(_, y)| *y)
+                        .collect();
+                    if ys.is_empty() {
+                        None
+                    } else {
+                        Some(crate::analysis::median(&ys))
+                    }
+                })
+                .collect(),
+        })
+        .collect();
+    charts::heatmap(
+        "Median per process",
+        &columns,
+        &rows,
+        charts::Heat::RowLocal,
+        "",
+        240,
+        "One row per case, metric and variant; one cell per process, shaded on that row's own range. Read it for a process that drifts away from its siblings, not for levels: rows carry different metrics and units, so they are normalized separately. A blank means that process has no value for the row.",
+    )
 }
 fn raw_charts(run: &Run) -> Result<String> {
     let mut charts = String::from(
@@ -460,7 +567,18 @@ fn raw_charts(run: &Run) -> Result<String> {
                 .push((o.sequence as f64, v));
         }
     }
-    for ((case, metric, variant, process), mut values) in groups.into_iter().take(64) {
+    let entries: Vec<_> = groups.into_iter().collect();
+    let mut series: Vec<(String, Vec<(u32, f64)>)> = Vec::new();
+    for ((case, metric, variant, process), values) in &entries {
+        let label = format!("{case} / {metric} / {variant}");
+        let cell = crate::analysis::median(&values.iter().map(|(_, y)| *y).collect::<Vec<_>>());
+        match series.iter_mut().find(|(l, _)| *l == label) {
+            Some((_, values)) => values.push((*process, cell)),
+            None => series.push((label, vec![(*process, cell)])),
+        }
+    }
+    charts.push_str(&process_heat(&series));
+    for ((case, metric, variant, process), mut values) in entries.into_iter().take(64) {
         values.sort_by(|a, b| a.0.total_cmp(&b.0));
         charts.push_str(&format!(
             "<details><summary>{}</summary>{}</details>",
