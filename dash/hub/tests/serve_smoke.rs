@@ -2,7 +2,7 @@
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -17,16 +17,6 @@ fn hub_bin() -> Command {
 fn free_port() -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.local_addr().unwrap().port()
-}
-
-fn wait_ready(port: u16, deadline: Instant) {
-    while Instant::now() < deadline {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            return;
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-    panic!("hub did not become ready on {port}");
 }
 
 fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String) {
@@ -60,6 +50,65 @@ fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String
     (status, body)
 }
 
+/// Spawn a hub serving `root` and hand back the port it really owns.
+///
+/// `free_port` gives the port away before the child binds it, so two tests in this binary can
+/// be handed the same one and the loser's hub then exits on a bind error. Talking to the winner
+/// would keep the test green until that hub is killed, which resets this test's in-flight
+/// request, so a start counts only once the child itself names this root, and a lost port is
+/// retried with a fresh one.
+fn start_hub(root: &Path) -> (u16, HubProc) {
+    let marker = root.file_name().unwrap().to_string_lossy().into_owned();
+    for _ in 0..10 {
+        let port = free_port();
+        let child = hub_bin()
+            .args([
+                "serve",
+                "--root",
+                root.to_str().unwrap(),
+                "--port",
+                &port.to_string(),
+            ])
+            .spawn()
+            .expect("spawn hub");
+        let mut hub = HubProc(child);
+        if serves_root(&mut hub, port, &marker) {
+            return (port, hub);
+        }
+    }
+    panic!("no hub serves {marker}")
+}
+
+/// Poll `/api/v1/status` until this exact child reports our root, giving up if it dies first.
+fn serves_root(hub: &mut HubProc, port: u16, marker: &str) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if hub.0.try_wait().ok().flatten().is_some() {
+            return false;
+        }
+        if try_get(port, "/api/v1/status").is_some_and(|body| body.contains(marker)) {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    false
+}
+
+/// A GET that reports failure instead of panicking, for probing a hub that may not be ours.
+fn try_get(port: u16, path: &str) -> Option<String> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
+    stream
+        .write_all(
+            format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                .as_bytes(),
+        )
+        .ok()?;
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
 struct HubProc(Child);
 
 impl Drop for HubProc {
@@ -75,19 +124,7 @@ fn serve_status_ingest_issues() {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let (st, body) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200, "{body}");
@@ -186,19 +223,7 @@ fn serve_bench_runs_progress_and_run_id_filter() {
     std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
     std::fs::create_dir_all(root.join("dash/collector/data")).unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let (st, status_body) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200, "{status_body}");
@@ -340,19 +365,7 @@ fn serve_unit_report_route_and_traversal_guard() {
     )
     .unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let (st, body) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200, "{body}");
@@ -384,19 +397,7 @@ fn serve_unified_event_archive_accepts_trace() {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let event = r#"{
       "model_version": 1,
