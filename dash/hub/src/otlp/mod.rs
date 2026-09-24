@@ -2,8 +2,8 @@
 mod logs;
 mod metrics;
 
-pub use logs::read_recent as read_logs;
-pub use metrics::read_recent as read_metrics;
+pub use logs::read_filtered as read_logs_filtered;
+pub use metrics::read_filtered as read_metrics_filtered;
 
 use serde_json::Value;
 use std::{
@@ -50,20 +50,53 @@ pub fn split_json_values(input: &str) -> Vec<&str> {
 }
 
 pub fn resource_attr(resource: &Value, key: &str) -> String {
-    let attrs = resource
+    resource_attrs(resource)
+        .get(key)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Flatten resource (+ optional record) attributes into a string map.
+pub fn resource_attrs(
+    resource_logs_or_metrics: &Value,
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    let attrs = resource_logs_or_metrics
         .get("resource")
         .and_then(|r| r.get("attributes"))
         .and_then(|a| a.as_array());
-    let Some(attrs) = attrs else {
-        return String::new();
-    };
-    for attr in attrs {
-        let k = attr.get("key").and_then(|v| v.as_str()).unwrap_or("");
-        if k == key {
-            return attr.get("value").map(any_value).unwrap_or_default();
+    if let Some(attrs) = attrs {
+        for attr in attrs {
+            let k = attr.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            if k.is_empty() {
+                continue;
+            }
+            map.insert(
+                k.to_string(),
+                attr.get("value").map(any_value).unwrap_or_default(),
+            );
         }
     }
-    String::new()
+    map
+}
+
+pub fn merge_record_attrs(
+    mut map: std::collections::HashMap<String, String>,
+    record: &Value,
+) -> std::collections::HashMap<String, String> {
+    if let Some(attrs) = record.get("attributes").and_then(|a| a.as_array()) {
+        for attr in attrs {
+            let k = attr.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            if k.is_empty() {
+                continue;
+            }
+            map.insert(
+                k.to_string(),
+                attr.get("value").map(any_value).unwrap_or_default(),
+            );
+        }
+    }
+    map
 }
 
 pub fn any_value(v: &Value) -> String {

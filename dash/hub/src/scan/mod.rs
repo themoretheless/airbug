@@ -26,6 +26,7 @@ use unit::scan_unit;
 
 #[derive(Debug, Serialize)]
 pub struct Snapshot {
+    pub hub_id: String,
     pub root: String,
     pub generated: String,
     pub domains: Domains,
@@ -87,11 +88,7 @@ pub struct Action {
     pub command: String,
 }
 
-pub fn scan(root: &Path) -> Snapshot {
-    scan_with_port(root, 8790)
-}
-
-pub fn scan_with_port(root: &Path, port: u16) -> Snapshot {
+pub fn scan_with_hub(root: &Path, port: u16, hub_id: &str) -> Snapshot {
     let domains = Domains {
         unit: scan_unit(root),
         bench: scan_bench(root),
@@ -101,6 +98,7 @@ pub fn scan_with_port(root: &Path, port: u16) -> Snapshot {
         collector: scan_collector(root),
     };
     Snapshot {
+        hub_id: hub_id.to_string(),
         root: root.display().to_string(),
         generated: iso_now(),
         apis: local_apis(root, port, &domains),
@@ -244,12 +242,6 @@ pub(crate) fn mtime_detail(path: &Path) -> String {
         },
         Err(_) => "mtime unknown".into(),
     }
-}
-
-pub(crate) fn rel_label(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| path.display().to_string())
 }
 
 pub(crate) fn human_bytes(n: u64) -> String {

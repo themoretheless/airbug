@@ -11,57 +11,107 @@
 </head>
 <body>
   <main class="shell">
-    <h1 class="brand">airbug <em>hub</em></h1>
-    <p class="lede">One view across unit tests, benches, host metrics, OpenTelemetry, errors/issues, and the local collector. Reads artifacts; does not own the products.</p>
+    <header class="top">
+      <h1 class="brand">airbug <em>hub</em></h1>
+      <nav class="cats" id="cats" aria-label="Categories"></nav>
+    </header>
+    <p class="lede" id="lede">Local developer hub — pick a category.</p>
     <div class="meta" id="meta">loading…</div>
-    <section class="apis" id="apis" hidden>
-      <div class="apis-head">
-        <h2>Local APIs</h2>
-        <div class="apis-meta" id="apis-meta"></div>
-      </div>
-      <ul class="api-list" id="api-list"></ul>
+
+    <section class="panel" data-cat="overview" id="panel-overview" hidden>
+      <section class="domains" id="domains" aria-live="polite"></section>
     </section>
-    <section class="domains" id="domains" aria-live="polite"></section>
-    <section class="issues" aria-live="polite">
-      <div class="issues-head">
-        <h2>Issues</h2>
-        <div class="issues-meta" id="issues-meta">loading…</div>
-      </div>
-      <div class="issues-layout">
-        <div class="issues-panel" id="issues-panel"><p class="issues-empty">waiting…</p></div>
-        <aside class="issue-detail" id="issue-detail" hidden>
-          <div class="issue-detail-head">
-            <h3 id="issue-detail-title">Issue</h3>
-            <div class="issue-actions" id="issue-actions"></div>
+
+    <section class="panel" data-cat="domain" id="panel-domain" hidden>
+      <section class="domains domains-one" id="domain-one" aria-live="polite"></section>
+    </section>
+
+    <section class="panel" data-cat="bench" id="panel-bench" hidden>
+      <section class="bench" aria-live="polite">
+        <div class="bench-head">
+          <h2 id="bench-title">Bench runs</h2>
+          <div class="bench-meta" id="bench-meta">loading…</div>
+        </div>
+        <div id="bench-list" class="bench-list"></div>
+        <div id="bench-detail" class="bench-detail" hidden>
+          <a class="bench-back" href="#/bench">← all runs</a>
+          <div class="bench-progress-wrap">
+            <progress id="bench-progress" max="100" value="0"></progress>
+            <div id="bench-live" class="bench-live"></div>
           </div>
-          <pre class="issue-detail-body" id="issue-detail-body"></pre>
-        </aside>
-      </div>
+          <div class="bench-links" id="bench-links"></div>
+          <div id="bench-charts" class="bench-charts"></div>
+          <iframe id="bench-report-frame" class="bench-report-frame" title="Bench report" hidden></iframe>
+          <div class="bench-tele">
+            <h3>Logs</h3>
+            <div id="bench-logs" class="bench-tele-panel"></div>
+            <h3>Metrics</h3>
+            <div id="bench-metrics" class="bench-tele-panel"></div>
+            <h3>Issues</h3>
+            <div id="bench-issues" class="bench-tele-panel"></div>
+          </div>
+        </div>
+      </section>
     </section>
-    <section class="metrics" aria-live="polite">
-      <div class="metrics-head">
-        <h2>Metrics</h2>
-        <div class="metrics-meta" id="metrics-meta">loading…</div>
-      </div>
-      <div class="viz-picker" id="viz-picker" role="tablist" aria-label="Visualization type"></div>
-      <div class="metrics-pick" id="metrics-pick" hidden></div>
-      <div class="metrics-boards" id="metrics-boards"></div>
-      <div class="metrics-panel" id="metrics-panel"><p class="metrics-empty">waiting…</p></div>
+
+    <section class="panel" data-cat="apis" id="panel-apis" hidden>
+      <section class="apis" id="apis">
+        <div class="apis-head">
+          <h2>Local APIs</h2>
+          <div class="apis-meta" id="apis-meta"></div>
+        </div>
+        <ul class="api-list" id="api-list"></ul>
+      </section>
     </section>
-    <section class="logs" aria-live="polite">
-      <div class="logs-head">
-        <h2>Logs</h2>
-        <div class="logs-meta" id="logs-meta">loading…</div>
-      </div>
-      <div class="logs-toolbar" id="logs-toolbar">
-        <input type="search" id="logs-filter" placeholder="filter body…" autocomplete="off" />
-        <select id="logs-service" aria-label="Service">
-          <option value="">all services</option>
-        </select>
-        <div class="sev-chips" id="sev-chips"></div>
-      </div>
-      <div class="sev-bar" id="sev-bar" hidden></div>
-      <div class="logs-panel" id="logs-panel"><p class="logs-empty">waiting…</p></div>
+
+    <section class="panel" data-cat="issues" id="panel-issues" hidden>
+      <section class="issues" aria-live="polite">
+        <div class="issues-head">
+          <h2>Issues</h2>
+          <div class="issues-meta" id="issues-meta">loading…</div>
+        </div>
+        <div class="issues-layout">
+          <div class="issues-panel" id="issues-panel"><p class="issues-empty">waiting…</p></div>
+          <aside class="issue-detail" id="issue-detail" hidden>
+            <div class="issue-detail-head">
+              <h3 id="issue-detail-title">Issue</h3>
+              <div class="issue-actions" id="issue-actions"></div>
+            </div>
+            <pre class="issue-detail-body" id="issue-detail-body"></pre>
+          </aside>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel" data-cat="metrics" id="panel-metrics" hidden>
+      <section class="metrics" aria-live="polite">
+        <div class="metrics-head">
+          <h2>Metrics</h2>
+          <div class="metrics-meta" id="metrics-meta">loading…</div>
+        </div>
+        <div class="viz-picker" id="viz-picker" role="tablist" aria-label="Visualization type"></div>
+        <div class="metrics-pick" id="metrics-pick" hidden></div>
+        <div class="metrics-boards" id="metrics-boards"></div>
+        <div class="metrics-panel" id="metrics-panel"><p class="metrics-empty">waiting…</p></div>
+      </section>
+    </section>
+
+    <section class="panel" data-cat="logs" id="panel-logs" hidden>
+      <section class="logs" aria-live="polite">
+        <div class="logs-head">
+          <h2>Logs</h2>
+          <div class="logs-meta" id="logs-meta">loading…</div>
+        </div>
+        <div class="logs-toolbar" id="logs-toolbar">
+          <input type="search" id="logs-filter" placeholder="filter body…" autocomplete="off" />
+          <select id="logs-service" aria-label="Service">
+            <option value="">all services</option>
+          </select>
+          <div class="sev-chips" id="sev-chips"></div>
+        </div>
+        <div class="sev-bar" id="sev-bar" hidden></div>
+        <div class="logs-panel" id="logs-panel"><p class="logs-empty">waiting…</p></div>
+      </section>
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
