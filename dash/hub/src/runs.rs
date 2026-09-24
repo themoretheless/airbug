@@ -130,10 +130,6 @@ impl RunStore {
         })
     }
 
-    pub fn hub_id(&self) -> &str {
-        &self.hub_id
-    }
-
     pub fn create(&self, req: CreateRunRequest) -> Result<CreateRunResponse> {
         let run_id = Uuid::new_v4().to_string();
         let title = req

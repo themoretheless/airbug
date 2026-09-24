@@ -17,18 +17,12 @@ use std::{
     time::SystemTime,
 };
 
-use bench::{list_runs, scan_bench};
+use bench::scan_bench;
 use collector::scan_collector;
 use err::scan_err;
 use mon::scan_mon;
 use otel::scan_otel;
 use unit::scan_unit;
-
-pub use bench::BenchRuns;
-
-pub fn bench_runs(root: &Path) -> BenchRuns {
-    list_runs(root)
-}
 
 #[derive(Debug, Serialize)]
 pub struct Snapshot {
@@ -92,14 +86,6 @@ pub struct Artifact {
 pub struct Action {
     pub label: String,
     pub command: String,
-}
-
-pub fn scan(root: &Path) -> Snapshot {
-    scan_with_hub(root, 8790, "")
-}
-
-pub fn scan_with_port(root: &Path, port: u16) -> Snapshot {
-    scan_with_hub(root, port, "")
 }
 
 pub fn scan_with_hub(root: &Path, port: u16, hub_id: &str) -> Snapshot {
@@ -256,12 +242,6 @@ pub(crate) fn mtime_detail(path: &Path) -> String {
         },
         Err(_) => "mtime unknown".into(),
     }
-}
-
-pub(crate) fn rel_label(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| path.display().to_string())
 }
 
 pub(crate) fn human_bytes(n: u64) -> String {

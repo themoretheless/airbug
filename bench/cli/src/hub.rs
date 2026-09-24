@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 #[derive(Debug, Deserialize)]
@@ -93,7 +93,7 @@ pub fn resolve_output(
         apply_otel_resource(&reg.hub_id, &reg.run_id);
         if let Some(user_out) = output {
             // Prefer hub-issued directory; warn if user passed a different -o.
-            if user_out != PathBuf::from(&reg.out_dir) {
+            if user_out != Path::new(&reg.out_dir) {
                 eprintln!(
                     "bench: ignoring --output {} in favor of hub out_dir {}",
                     user_out.display(),

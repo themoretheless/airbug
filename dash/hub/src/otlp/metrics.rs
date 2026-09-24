@@ -56,10 +56,6 @@ pub struct SeriesPoint {
     pub v: f64,
 }
 
-pub fn read_recent(root: &Path, limit: usize) -> MetricsResponse {
-    read_filtered(root, limit, None)
-}
-
 pub fn read_filtered(root: &Path, limit: usize, run_id: Option<&str>) -> MetricsResponse {
     let paths = RootPaths::new(root);
     let path = paths.metrics_file();
@@ -291,11 +287,13 @@ fn extract_points(value: &Value, out: &mut Vec<MetricPoint>) {
                         push_data_points(
                             block,
                             kind,
-                            &name,
-                            &unit,
-                            &service,
-                            &scope,
-                            &base_attrs,
+                            &PointSource {
+                                name: &name,
+                                unit: &unit,
+                                service: &service,
+                                scope: &scope,
+                                base_attrs: &base_attrs,
+                            },
                             out,
                         );
                     }
@@ -305,16 +303,16 @@ fn extract_points(value: &Value, out: &mut Vec<MetricPoint>) {
     }
 }
 
-fn push_data_points(
-    block: &Value,
-    kind: &str,
-    name: &str,
-    unit: &str,
-    service: &str,
-    scope: &str,
-    base_attrs: &HashMap<String, String>,
-    out: &mut Vec<MetricPoint>,
-) {
+/// Where a point came from: the same labels apply to every data point of one metric block.
+struct PointSource<'a> {
+    name: &'a str,
+    unit: &'a str,
+    service: &'a str,
+    scope: &'a str,
+    base_attrs: &'a HashMap<String, String>,
+}
+
+fn push_data_points(block: &Value, kind: &str, src: &PointSource<'_>, out: &mut Vec<MetricPoint>) {
     let points = block
         .get("dataPoints")
         .or_else(|| block.get("data_points"))
@@ -325,7 +323,7 @@ fn push_data_points(
     for dp in points {
         let (time, time_ms) = nano_time(dp, &["timeUnixNano", "time_unix_nano"]);
         let value = point_value(dp);
-        let mut attr_map = base_attrs.clone();
+        let mut attr_map = src.base_attrs.clone();
         if let Some(attrs) = dp.get("attributes").and_then(|v| v.as_array()) {
             for a in attrs {
                 let Some(k) = a.get("key").and_then(|v| v.as_str()) else {
@@ -345,12 +343,12 @@ fn push_data_points(
         out.push(MetricPoint {
             time,
             time_ms,
-            name: name.to_string(),
+            name: src.name.to_string(),
             kind: kind.to_string(),
             value,
-            unit: unit.to_string(),
-            service: service.to_string(),
-            scope: scope.to_string(),
+            unit: src.unit.to_string(),
+            service: src.service.to_string(),
+            scope: src.scope.to_string(),
             attrs,
             attr_map,
         });
@@ -381,23 +379,6 @@ fn point_value(dp: &Value) -> f64 {
         return n;
     }
     0.0
-}
-
-fn point_attrs(dp: &Value) -> String {
-    let attrs = dp
-        .get("attributes")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    attrs
-        .iter()
-        .filter_map(|a| {
-            let k = a.get("key")?.as_str()?;
-            let v = a.get("value").map(any_value).unwrap_or_default();
-            Some(format!("{k}={v}"))
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 #[cfg(test)]

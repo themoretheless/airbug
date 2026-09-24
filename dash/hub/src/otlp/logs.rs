@@ -36,10 +36,6 @@ pub struct LogEntry {
     pub attrs: std::collections::HashMap<String, String>,
 }
 
-pub fn read_recent(root: &Path, limit: usize) -> LogsResponse {
-    read_filtered(root, limit, None)
-}
-
 pub fn read_filtered(root: &Path, limit: usize, run_id: Option<&str>) -> LogsResponse {
     let paths = RootPaths::new(root);
     let path = paths.logs_file();
@@ -302,7 +298,7 @@ mod tests {
             r#"{"body":"hello","severity":"WARN","service":"demo"}"#,
         )
         .unwrap();
-        let resp = read_recent(&dir, 50);
+        let resp = read_filtered(&dir, 50, None);
         assert!(resp.available);
         assert_eq!(resp.entries.len(), 1);
         assert_eq!(resp.entries[0].body, "hello");

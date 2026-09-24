@@ -67,7 +67,7 @@ pub(crate) fn scan_bench(root: &Path) -> DomainCard {
     let listed = list_runs(root);
     let mut artifacts = Vec::new();
     let mut status = Status::Missing;
-    let mut summary = listed.note.clone();
+    let summary = listed.note.clone();
 
     if Path::new(&listed.store).is_dir() {
         if listed.runs.is_empty() {
