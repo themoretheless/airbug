@@ -64,7 +64,11 @@ if airbug_containers::Runtime::detect().is_err() {
 }
 ```
 
-Do not fail the job solely because the runner has no container runtime.
+Do not fail the job solely because the runner has no container runtime. A runtime
+of the wrong container OS is the same kind of environment fact: a Windows-mode
+daemon answers `docker version` and then refuses every Linux image with
+`no matching manifest for windows/…`, so the smoke tests skip on that one
+message and treat any other runtime error as the failure it is.
 
 ## HTTP wait strategies
 
