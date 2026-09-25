@@ -50,6 +50,19 @@ fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String
     (status, body)
 }
 
+/// Read a top-level string field out of a JSON response body.
+///
+/// Every id and path here goes through the parser rather than a `split('"')`: a Windows
+/// `out_dir` is a verbatim path (`\\?\C:\…`), which the wire encodes with escaped
+/// backslashes and a hand-rolled split would hand back still escaped.
+fn json_str(body: &str, key: &str) -> String {
+    let value: serde_json::Value = serde_json::from_str(body).expect("response should be JSON");
+    value[key]
+        .as_str()
+        .unwrap_or_else(|| panic!("{key} should be a string in {body}"))
+        .to_string()
+}
+
 /// Spawn a hub serving `root` and hand back the port it really owns.
 ///
 /// `free_port` gives the port away before the child binds it, so two tests in this binary can
@@ -148,12 +161,7 @@ fn serve_status_ingest_issues() {
         body.contains("\"ok\": true") || body.contains("\"ok\":true"),
         "{body}"
     );
-    let issue_id = body
-        .split("\"issue_id\"")
-        .nth(1)
-        .and_then(|s| s.split('"').nth(1))
-        .expect("issue_id")
-        .to_string();
+    let issue_id = json_str(&body, "issue_id");
 
     let event2 = event1
         .replace("it-1", "it-2")
@@ -227,12 +235,7 @@ fn serve_bench_runs_progress_and_run_id_filter() {
 
     let (st, status_body) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200, "{status_body}");
-    let hub_id = status_body
-        .split("\"hub_id\"")
-        .nth(1)
-        .and_then(|s| s.split('"').nth(1))
-        .expect("hub_id")
-        .to_string();
+    let hub_id = json_str(&status_body, "hub_id");
     assert!(!hub_id.is_empty());
 
     let (st, status2) = http(port, "GET", "/api/v1/status", None);
@@ -250,18 +253,8 @@ fn serve_bench_runs_progress_and_run_id_filter() {
     );
     assert_eq!(st, 200, "{reg}");
     assert!(reg.contains(&hub_id), "{reg}");
-    let run_id = reg
-        .split("\"run_id\"")
-        .nth(1)
-        .and_then(|s| s.split('"').nth(1))
-        .expect("run_id")
-        .to_string();
-    let out_dir = reg
-        .split("\"out_dir\"")
-        .nth(1)
-        .and_then(|s| s.split('"').nth(1))
-        .expect("out_dir")
-        .to_string();
+    let run_id = json_str(&reg, "run_id");
+    let out_dir = json_str(&reg, "out_dir");
 
     let (st, list) = http(port, "GET", "/api/v1/bench/runs", None);
     assert_eq!(st, 200, "{list}");
