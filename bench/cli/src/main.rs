@@ -35,12 +35,8 @@ fn main() {
         .stack_size(MAIN_STACK)
         .spawn(run)
         .expect("cli: start worker thread");
-    let code = match worker.join() {
-        Ok(code) => code,
-        // The worker reported its own panic; 101 is what a panicking main would have given.
-        Err(_) => 101,
-    };
-    std::process::exit(code);
+    // A panicking worker has already reported itself; 101 is what a panicking main would give.
+    std::process::exit(worker.join().unwrap_or(101));
 }
 
 fn run() -> i32 {
