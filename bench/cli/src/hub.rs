@@ -26,6 +26,7 @@ pub fn register(hub_base: &str, title: &str, command: Option<&str>) -> Result<Re
     let body = serde_json::to_vec(&body)?;
     let (host, port, path) = parse_http_url(&url)?;
     let mut stream = connect(&host, port)?;
+    stream.set_read_timeout(Some(RESPONSE_BUDGET))?;
     write!(
         stream,
         "POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -33,7 +34,9 @@ pub fn register(hub_base: &str, title: &str, command: Option<&str>) -> Result<Re
     )?;
     stream.write_all(&body)?;
     let mut buf = Vec::new();
-    stream.read_to_end(&mut buf)?;
+    stream
+        .read_to_end(&mut buf)
+        .map_err(|e| error(format!("hub register: {host}:{port} gave no response: {e}")))?;
     let text = String::from_utf8_lossy(&buf);
     let Some(idx) = text.find("\r\n\r\n") else {
         return Err(error("hub register: malformed HTTP response"));
@@ -65,6 +68,12 @@ pub fn apply_otel_resource(hub_id: &str, run_id: &str) {
 /// A loopback connect is sub-millisecond, so this is slack rather than an expected delay; the
 /// point is the ceiling. See [`connect`].
 const CONNECT_BUDGET: Duration = Duration::from_secs(2);
+
+/// How long the hub gets to answer once the connection is up.
+///
+/// A connect deadline alone leaves the other half of the request unbounded: a hub whose handler
+/// blocks accepts the socket and then says nothing, and `read_to_end` would wait for it forever.
+const RESPONSE_BUDGET: Duration = Duration::from_secs(5);
 
 /// Connect with a deadline instead of the platform's own timeout.
 ///
@@ -141,7 +150,11 @@ pub fn resolve_output(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{io::Read, net::TcpListener, thread::spawn as spawn_thread};
+    use std::{
+        io::Read,
+        net::{Shutdown, TcpListener},
+        thread::spawn as spawn_thread,
+    };
 
     /// A hub that answers nothing must cost the run the connect budget, not the platform's TCP
     /// timeout.
@@ -163,17 +176,45 @@ mod tests {
         );
     }
 
+    /// Read one request the way the hub's own parser does: headers, then exactly the body the
+    /// `Content-Length` promises.
+    ///
+    /// A stand-in hub cannot get away with one `read`: `register` writes its header and body as
+    /// separate segments, so a single read returns a fragment. It cannot use `read_to_end`
+    /// either, because the client waits for the hub to close, not the other way round.
+    fn read_request(socket: &mut TcpStream) -> String {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut chunk = [0u8; 256];
+        let head_end = loop {
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+            let read = socket.read(&mut chunk).expect("request headers");
+            assert_ne!(read, 0, "the request ended before its headers");
+            buf.extend_from_slice(&chunk[..read]);
+        };
+        let headers = String::from_utf8_lossy(&buf[..head_end]).to_string();
+        let length: usize = headers
+            .lines()
+            .find(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+            .and_then(|line| line.split_once(':'))
+            .and_then(|(_, value)| value.trim().parse().ok())
+            .expect("a Content-Length");
+        while buf.len() < head_end + length {
+            let read = socket.read(&mut chunk).expect("request body");
+            assert_ne!(read, 0, "the request ended before its body");
+            buf.extend_from_slice(&chunk[..read]);
+        }
+        headers
+    }
+
     #[test]
     fn register_reads_back_a_run_from_a_hub_that_answers() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind a stand-in hub");
         let port = listener.local_addr().expect("stand-in hub addr").port();
         let server = spawn_thread(move || {
             let (mut socket, _) = listener.accept().expect("a registration");
-            // One fixed read: register never shuts its write side, so read_to_end here would
-            // wait for a close that only ever comes from the hub.
-            let mut request = [0u8; 1024];
-            let read = socket.read(&mut request).expect("the request");
-            let head = String::from_utf8_lossy(&request[..read.min(request.len())]);
+            let head = read_request(&mut socket);
             assert!(
                 head.starts_with("POST /api/v1/bench/runs HTTP/1.1"),
                 "unexpected request head: {head}"
@@ -184,7 +225,9 @@ mod tests {
                       {\"hub_id\":\"h1\",\"run_id\":\"r1\",\"out_dir\":\"/tmp/r1\",\"dash_url\":\"http://127.0.0.1:8790/\"}",
                 )
                 .expect("the response");
-            drop(socket);
+            // FIN, not a bare close: register reads until the peer hangs up, and closing a socket
+            // that still holds unread bytes would answer with a reset instead.
+            socket.shutdown(Shutdown::Write).expect("a clean goodbye");
         });
 
         let reg = register(
@@ -196,5 +239,34 @@ mod tests {
         assert_eq!((reg.hub_id.as_str(), reg.run_id.as_str()), ("h1", "r1"));
         assert_eq!(reg.out_dir, "/tmp/r1");
         server.join().expect("the stand-in hub");
+    }
+
+    /// A hub that takes the connection and then says nothing must cost the response budget, not
+    /// the run. A handler blocked inside the hub — the shape #9 fixed in the status route — is
+    /// exactly this: the socket is established, so nothing arrives and nothing refuses.
+    #[test]
+    fn a_hub_that_never_answers_fails_within_the_response_budget() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind a silent stand-in hub");
+        let port = listener.local_addr().expect("stand-in hub addr").port();
+        let (shutdown, held) = std::sync::mpsc::channel::<()>();
+        let server = spawn_thread(move || {
+            let (_socket, _) = listener.accept().expect("a registration");
+            // Dropping `_socket` here would send a FIN and turn the test into an EOF check, so it
+            // waits until the test asks for it.
+            let _ = held.recv();
+        });
+
+        let start = Instant::now();
+        let err = register(&format!("http://127.0.0.1:{port}"), "probe", None)
+            .unwrap_err()
+            .to_string();
+        let elapsed = start.elapsed();
+        let _ = shutdown.send(());
+        assert!(err.contains("gave no response"), "{err}");
+        assert!(
+            elapsed >= Duration::from_secs(4) && elapsed < Duration::from_secs(10),
+            "silent hub cost {elapsed:?}, expected the {RESPONSE_BUDGET:?} response budget"
+        );
+        server.join().expect("the silent stand-in hub");
     }
 }
