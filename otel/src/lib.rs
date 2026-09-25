@@ -46,7 +46,8 @@ pub type TraceError = TelemetryError;
 pub struct TelemetryConfig {
     /// Logical service name (`service.name`). Default: `OTEL_SERVICE_NAME` or `"airbug"`.
     pub service_name: Option<String>,
-    /// OTLP endpoint override. HTTP default `http://localhost:4318`; gRPC `http://localhost:4317`.
+    /// OTLP endpoint override. Must speak the protocol in use: HTTP
+    /// `http://localhost:4318`, gRPC `http://localhost:4317`.
     pub endpoint: Option<String>,
 }
 
@@ -162,11 +163,43 @@ fn clear_logs_provider() {
 ///
 /// Prefer [`install`] when you want an explicit [`TelemetryHandle`] name.
 ///
-/// Default feature `otlp-http` uses HTTP/protobuf. For gRPC:
-/// `--no-default-features --features otlp-grpc`. If both features are enabled
-/// (e.g. `--all-features`), gRPC wins.
+/// The wire protocol is HTTP/protobuf unless `OTEL_EXPORTER_OTLP_PROTOCOL`
+/// says otherwise, so the endpoint and the protocol agree: `:4318` for HTTP,
+/// `:4317` for `grpc`. With only `otlp-http` (the default) gRPC is not even
+/// compiled in; with only `--no-default-features --features otlp-grpc` the
+/// choice is forced to gRPC. Enabling both features keeps HTTP as the
+/// default and lets `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` opt into gRPC.
 pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
     install(config)
+}
+
+/// OTLP wire protocol used by [`install`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Protocol {
+    /// OTLP over gRPC; collector port 4317.
+    Grpc,
+    /// OTLP over HTTP/protobuf; collector port 4318.
+    Http,
+}
+
+/// Protocol for the value of `OTEL_EXPORTER_OTLP_PROTOCOL`, clamped to what
+/// this build compiled in. `None` means the variable is unset.
+fn resolve_protocol(requested: Option<&str>) -> Protocol {
+    let available = |protocol: Protocol| match protocol {
+        Protocol::Grpc => cfg!(feature = "otlp-grpc"),
+        Protocol::Http => cfg!(feature = "otlp-http"),
+    };
+    let fallback = if available(Protocol::Http) {
+        Protocol::Http
+    } else {
+        Protocol::Grpc
+    };
+    let chosen = match requested.map(|value| value.trim().to_ascii_lowercase()) {
+        Some(ref value) if value == "grpc" => Protocol::Grpc,
+        Some(ref value) if value.starts_with("http") => Protocol::Http,
+        _ => fallback,
+    };
+    if available(chosen) { chosen } else { fallback }
 }
 
 /// Install providers and return a [`TelemetryHandle`] (same as [`init`]).
@@ -175,87 +208,97 @@ pub fn install(config: TelemetryConfig) -> Result<TelemetryHandle, TelemetryErro
     compile_error!("enable airbug-otel feature otlp-http or otlp-grpc");
 
     let resource = service_resource(&config);
-
-    #[cfg(feature = "otlp-grpc")]
-    {
-        let runtime = tokio::runtime::Runtime::new()?;
-        let endpoint = config.endpoint.clone();
-        let (span_exporter, metric_exporter, log_exporter) = runtime.block_on(async {
-            let mut spans = SpanExporter::builder().with_tonic();
-            let mut metrics = MetricExporter::builder().with_tonic();
-            let mut logs = LogExporter::builder().with_tonic();
-            if let Some(ref endpoint) = endpoint {
-                spans = spans.with_endpoint(endpoint.clone());
-                metrics = metrics.with_endpoint(endpoint.clone());
-                logs = logs.with_endpoint(endpoint.clone());
-            }
-            Ok::<_, TelemetryError>((spans.build()?, metrics.build()?, logs.build()?))
-        })?;
-
-        let tracer = SdkTracerProvider::builder()
-            .with_batch_exporter(span_exporter)
-            .with_resource(resource.clone())
-            .build();
-        let meter = SdkMeterProvider::builder()
-            .with_periodic_exporter(metric_exporter)
-            .with_resource(resource.clone())
-            .build();
-        let logs = install_logs(
-            SdkLoggerProvider::builder()
-                .with_batch_exporter(log_exporter)
-                .with_resource(resource)
-                .build(),
-        );
-
-        global::set_tracer_provider(tracer.clone());
-        global::set_meter_provider(meter.clone());
-        Ok(TelemetryGuard {
-            tracer,
-            meter,
-            logs,
-            _runtime: Some(runtime),
-        })
+    let requested = std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").ok();
+    match resolve_protocol(requested.as_deref()) {
+        #[cfg(feature = "otlp-grpc")]
+        Protocol::Grpc => install_grpc(resource, config.endpoint),
+        #[cfg(feature = "otlp-http")]
+        Protocol::Http => install_http(resource, config.endpoint),
+        #[cfg(not(all(feature = "otlp-http", feature = "otlp-grpc")))]
+        _ => unreachable!("resolve_protocol only returns a compiled-in feature"),
     }
+}
 
-    #[cfg(all(feature = "otlp-http", not(feature = "otlp-grpc")))]
-    {
-        let mut spans = SpanExporter::builder().with_http();
-        let mut metrics = MetricExporter::builder().with_http();
-        let mut logs = LogExporter::builder().with_http();
-        if let Some(endpoint) = config.endpoint {
+#[cfg(feature = "otlp-grpc")]
+fn install_grpc(
+    resource: Resource,
+    endpoint: Option<String>,
+) -> Result<TelemetryHandle, TelemetryError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    let (span_exporter, metric_exporter, log_exporter) = runtime.block_on(async {
+        let mut spans = SpanExporter::builder().with_tonic();
+        let mut metrics = MetricExporter::builder().with_tonic();
+        let mut logs = LogExporter::builder().with_tonic();
+        if let Some(ref endpoint) = endpoint {
             spans = spans.with_endpoint(endpoint.clone());
             metrics = metrics.with_endpoint(endpoint.clone());
-            logs = logs.with_endpoint(endpoint);
+            logs = logs.with_endpoint(endpoint.clone());
         }
-        let tracer = SdkTracerProvider::builder()
-            .with_batch_exporter(spans.build()?)
-            .with_resource(resource.clone())
-            .build();
-        let meter = SdkMeterProvider::builder()
-            .with_periodic_exporter(metrics.build()?)
-            .with_resource(resource.clone())
-            .build();
-        let logs = install_logs(
-            SdkLoggerProvider::builder()
-                .with_batch_exporter(logs.build()?)
-                .with_resource(resource)
-                .build(),
-        );
+        Ok::<_, TelemetryError>((spans.build()?, metrics.build()?, logs.build()?))
+    })?;
 
-        global::set_tracer_provider(tracer.clone());
-        global::set_meter_provider(meter.clone());
-        Ok(TelemetryGuard {
-            tracer,
-            meter,
-            logs,
-        })
-    }
+    let tracer = SdkTracerProvider::builder()
+        .with_batch_exporter(span_exporter)
+        .with_resource(resource.clone())
+        .build();
+    let meter = SdkMeterProvider::builder()
+        .with_periodic_exporter(metric_exporter)
+        .with_resource(resource.clone())
+        .build();
+    let logs = install_logs(
+        SdkLoggerProvider::builder()
+            .with_batch_exporter(log_exporter)
+            .with_resource(resource)
+            .build(),
+    );
 
-    #[cfg(not(any(feature = "otlp-http", feature = "otlp-grpc")))]
-    {
-        let _ = (config, resource);
-        unreachable!()
+    global::set_tracer_provider(tracer.clone());
+    global::set_meter_provider(meter.clone());
+    Ok(TelemetryGuard {
+        tracer,
+        meter,
+        logs,
+        _runtime: Some(runtime),
+    })
+}
+
+#[cfg(feature = "otlp-http")]
+fn install_http(
+    resource: Resource,
+    endpoint: Option<String>,
+) -> Result<TelemetryHandle, TelemetryError> {
+    let mut spans = SpanExporter::builder().with_http();
+    let mut metrics = MetricExporter::builder().with_http();
+    let mut logs = LogExporter::builder().with_http();
+    if let Some(endpoint) = endpoint {
+        spans = spans.with_endpoint(endpoint.clone());
+        metrics = metrics.with_endpoint(endpoint.clone());
+        logs = logs.with_endpoint(endpoint);
     }
+    let tracer = SdkTracerProvider::builder()
+        .with_batch_exporter(spans.build()?)
+        .with_resource(resource.clone())
+        .build();
+    let meter = SdkMeterProvider::builder()
+        .with_periodic_exporter(metrics.build()?)
+        .with_resource(resource.clone())
+        .build();
+    let logs = install_logs(
+        SdkLoggerProvider::builder()
+            .with_batch_exporter(logs.build()?)
+            .with_resource(resource)
+            .build(),
+    );
+
+    global::set_tracer_provider(tracer.clone());
+    global::set_meter_provider(meter.clone());
+    Ok(TelemetryGuard {
+        tracer,
+        meter,
+        logs,
+        #[cfg(feature = "otlp-grpc")]
+        _runtime: None,
+    })
 }
 
 /// Run `f` inside a named span on the global tracer `scope`.
@@ -467,6 +510,40 @@ mod tests {
             .endpoint("http://127.0.0.1:4318");
         assert_eq!(cfg.service_name.as_deref(), Some("demo"));
         assert_eq!(cfg.endpoint.as_deref(), Some("http://127.0.0.1:4318"));
+    }
+
+    #[test]
+    fn protocol_defaults_to_a_compiled_feature() {
+        let expected = if cfg!(feature = "otlp-http") {
+            Protocol::Http
+        } else {
+            Protocol::Grpc
+        };
+        assert_eq!(resolve_protocol(None), expected);
+        assert_eq!(resolve_protocol(Some("")), expected);
+        assert_eq!(resolve_protocol(Some("nonsense")), expected);
+    }
+
+    #[test]
+    fn protocol_grpc_requires_the_grpc_feature() {
+        let expected = if cfg!(feature = "otlp-grpc") {
+            Protocol::Grpc
+        } else {
+            Protocol::Http
+        };
+        assert_eq!(resolve_protocol(Some("grpc")), expected);
+        assert_eq!(resolve_protocol(Some("  gRPC ")), expected);
+    }
+
+    #[test]
+    fn protocol_http_requires_the_http_feature() {
+        let expected = if cfg!(feature = "otlp-http") {
+            Protocol::Http
+        } else {
+            Protocol::Grpc
+        };
+        assert_eq!(resolve_protocol(Some("http/protobuf")), expected);
+        assert_eq!(resolve_protocol(Some("http/json")), expected);
     }
 
     #[cfg(feature = "testing")]
