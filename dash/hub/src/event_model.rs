@@ -17,6 +17,17 @@ pub enum Signal {
     Log,
 }
 
+impl Signal {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Trace => "trace",
+            Self::Metric => "metric",
+            Self::Log => "log",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "signal", content = "data", rename_all = "snake_case")]
 pub enum EventPayload {
@@ -84,6 +95,12 @@ impl EventEnvelope {
 
     pub fn signal(&self) -> Signal {
         self.payload.signal()
+    }
+
+    pub fn match_tags(&self, tag_filters: &[(String, String)]) -> bool {
+        tag_filters
+            .iter()
+            .all(|(key, expected)| self.tags.get(key).is_some_and(|value| value == expected))
     }
 }
 

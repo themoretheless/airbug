@@ -119,6 +119,7 @@ fn handle_api(
         }
         ("POST", "/errors") => handle_errors_ingest(stream, app, req),
         ("POST", "/events") => handle_unified_event(stream, app, req),
+        ("GET", "/events") => handle_event_search(stream, app, req),
         ("GET", "/issues") => http::respond_json(stream, "200 OK", &app.issues.list()),
         ("GET", p) if p.starts_with("/issues/") => {
             let id = &p["/issues/".len()..];
@@ -197,6 +198,83 @@ fn handle_unified_event(
             "event_id": event_id,
             "signal": signal,
             "issue": issue,
+        }),
+    )
+}
+
+fn handle_event_search(stream: &mut TcpStream, app: &HubApp, req: &Request) -> std::io::Result<()> {
+    let path = app.paths.events_file();
+    let records = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(_) => {
+            return http::respond_json(
+                stream,
+                "200 OK",
+                &serde_json::json!({"items": [], "count": 0}),
+            );
+        }
+    };
+
+    let mut items = Vec::new();
+    for line in records.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Ok(envelope): Result<EventEnvelope, _> = serde_json::from_str(trimmed) else {
+            continue;
+        };
+        items.push(envelope);
+    }
+
+    let service = http::query_value(&req.query, "service");
+    let env = http::query_value(&req.query, "environment");
+    let release = http::query_value(&req.query, "release");
+    let signal = http::query_value(&req.query, "signal");
+    let tag_pairs: Vec<(String, String)> = req
+        .query
+        .split('&')
+        .filter_map(|pair| {
+            let (key, value) = pair.split_once('=')?;
+            key.strip_prefix("tag_")
+                .map(|tag_key| (tag_key.to_string(), value.to_string()))
+        })
+        .collect();
+
+    let mut filtered = items;
+    if let Some(service) = service {
+        filtered.retain(|event| event.service.as_deref() == Some(service.as_str()));
+    }
+    if let Some(env) = env {
+        filtered.retain(|event| event.environment.as_deref() == Some(env.as_str()));
+    }
+    if let Some(release) = release {
+        filtered.retain(|event| event.release.as_deref() == Some(release.as_str()));
+    }
+    if let Some(signal) = signal {
+        filtered.retain(|event| event.signal().as_str() == signal.as_str());
+    }
+    if !tag_pairs.is_empty() {
+        filtered.retain(|event| event.match_tags(&tag_pairs));
+    }
+
+    let limit = http::query_usize(&req.query, "limit", 50).clamp(1, 500);
+    let offset = http::query_usize(&req.query, "offset", 0);
+    let total = filtered.len();
+    let page = filtered
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect::<Vec<_>>();
+
+    http::respond_json(
+        stream,
+        "200 OK",
+        &serde_json::json!({
+            "count": total,
+            "limit": limit,
+            "offset": offset,
+            "items": page,
         }),
     )
 }
