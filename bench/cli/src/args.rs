@@ -30,6 +30,15 @@ pub(crate) enum Action {
         plan: PathBuf,
         #[arg(short, long)]
         output: PathBuf,
+        /// Start and open the live interface even without an interactive terminal.
+        #[arg(long, conflicts_with = "no_ui")]
+        ui: bool,
+        /// Disable the automatic interface (CI/headless runs).
+        #[arg(long)]
+        no_ui: bool,
+        /// Print the interface URL without launching a browser.
+        #[arg(long)]
+        no_open: bool,
     },
     /// Search a bounded first-parent history; audit every commit to detect nonmonotonic regressions.
     Bisect {

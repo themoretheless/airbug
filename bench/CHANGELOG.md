@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `cargo airbug-bench matrix` accepts `--ui`, `--no-ui` and `--no-open`: one live page for the whole session, whose counter sums processes over every combination and whose chart lanes are labelled with the cell's axis values (`--cpu 2 · candidate`). Aggregation reads the cells' own `progress.json` / `status-final.json` server-side, so the runner and its artifacts are unchanged.
+
 ## 0.7.0
 
 - `bench::viz`: offline, dependency-free SVG charts (`Plot` builder, forest, strip, diverging bars, timeline lanes, sparkline, dot plot) shared by reports and the live UI
