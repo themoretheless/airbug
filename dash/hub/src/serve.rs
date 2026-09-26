@@ -309,7 +309,7 @@ fn handle_errors_for_hub(
     req: &Request,
     hub_uuid: &str,
 ) -> std::io::Result<()> {
-    if hub_uuid != app.hub_id.to_string() {
+    if app.hub_id != hub_uuid {
         return http::respond_err(stream, "404 Not Found", &HubError::msg("hub not found"));
     }
     handle_errors_ingest(stream, app, req)
