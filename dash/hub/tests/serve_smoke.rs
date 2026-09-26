@@ -2,7 +2,7 @@
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -17,16 +17,6 @@ fn hub_bin() -> Command {
 fn free_port() -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.local_addr().unwrap().port()
-}
-
-fn wait_ready(port: u16, deadline: Instant) {
-    while Instant::now() < deadline {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            return;
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-    panic!("hub did not become ready on {port}");
 }
 
 fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String) {
@@ -60,6 +50,78 @@ fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String
     (status, body)
 }
 
+/// Read a top-level string field out of a JSON response body.
+///
+/// Every id and path here goes through the parser rather than a `split('"')`: a Windows
+/// `out_dir` is a verbatim path (`\\?\C:\…`), which the wire encodes with escaped
+/// backslashes and a hand-rolled split would hand back still escaped.
+fn json_str(body: &str, key: &str) -> String {
+    let value: serde_json::Value = serde_json::from_str(body).expect("response should be JSON");
+    value[key]
+        .as_str()
+        .unwrap_or_else(|| panic!("{key} should be a string in {body}"))
+        .to_string()
+}
+
+/// Spawn a hub serving `root` and hand back the port it really owns.
+///
+/// `free_port` gives the port away before the child binds it, so two tests in this binary can
+/// be handed the same one and the loser's hub then exits on a bind error. Talking to the winner
+/// would keep the test green until that hub is killed, which resets this test's in-flight
+/// request, so a start counts only once the child itself names this root, and a lost port is
+/// retried with a fresh one.
+fn start_hub(root: &Path) -> (u16, HubProc) {
+    let marker = root.file_name().unwrap().to_string_lossy().into_owned();
+    for _ in 0..10 {
+        let port = free_port();
+        let child = hub_bin()
+            .args([
+                "serve",
+                "--root",
+                root.to_str().unwrap(),
+                "--port",
+                &port.to_string(),
+            ])
+            .spawn()
+            .expect("spawn hub");
+        let mut hub = HubProc(child);
+        if serves_root(&mut hub, port, &marker) {
+            return (port, hub);
+        }
+    }
+    panic!("no hub serves {marker}")
+}
+
+/// Poll `/api/v1/status` until this exact child reports our root, giving up if it dies first.
+fn serves_root(hub: &mut HubProc, port: u16, marker: &str) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if hub.0.try_wait().ok().flatten().is_some() {
+            return false;
+        }
+        if try_get(port, "/api/v1/status").is_some_and(|body| body.contains(marker)) {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    false
+}
+
+/// A GET that reports failure instead of panicking, for probing a hub that may not be ours.
+fn try_get(port: u16, path: &str) -> Option<String> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
+    stream
+        .write_all(
+            format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                .as_bytes(),
+        )
+        .ok()?;
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
 struct HubProc(Child);
 
 impl Drop for HubProc {
@@ -75,19 +137,7 @@ fn serve_status_ingest_issues() {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let (st, body) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200, "{body}");
@@ -111,12 +161,7 @@ fn serve_status_ingest_issues() {
         body.contains("\"ok\": true") || body.contains("\"ok\":true"),
         "{body}"
     );
-    let issue_id = body
-        .split("\"issue_id\"")
-        .nth(1)
-        .and_then(|s| s.split('"').nth(1))
-        .expect("issue_id")
-        .to_string();
+    let issue_id = json_str(&body, "issue_id");
 
     let event2 = event1
         .replace("it-1", "it-2")
@@ -179,6 +224,128 @@ fn serve_status_ingest_issues() {
 }
 
 #[test]
+fn serve_bench_runs_progress_and_run_id_filter() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-runs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+    std::fs::create_dir_all(root.join("dash/collector/data")).unwrap();
+
+    let (port, _hub) = start_hub(&root);
+
+    let (st, status_body) = http(port, "GET", "/api/v1/status", None);
+    assert_eq!(st, 200, "{status_body}");
+    let hub_id = json_str(&status_body, "hub_id");
+    assert!(!hub_id.is_empty());
+
+    let (st, status2) = http(port, "GET", "/api/v1/status", None);
+    assert_eq!(st, 200);
+    assert!(
+        status2.contains(&hub_id),
+        "hub_id should be stable: {status2}"
+    );
+
+    let (st, reg) = http(
+        port,
+        "POST",
+        "/api/v1/bench/runs",
+        Some(r#"{"title":"smoke","command":"test"}"#),
+    );
+    assert_eq!(st, 200, "{reg}");
+    assert!(reg.contains(&hub_id), "{reg}");
+    let run_id = json_str(&reg, "run_id");
+    let out_dir = json_str(&reg, "out_dir");
+
+    let (st, list) = http(port, "GET", "/api/v1/bench/runs", None);
+    assert_eq!(st, 200, "{list}");
+    assert!(list.contains(&run_id), "{list}");
+
+    std::fs::write(
+        PathBuf::from(&out_dir).join("progress.json"),
+        r#"{"state":"running","completed":2,"total":5,"variant":"quick"}"#,
+    )
+    .unwrap();
+
+    let (st, detail) = http(port, "GET", &format!("/api/v1/bench/runs/{run_id}"), None);
+    assert_eq!(st, 200, "{detail}");
+    assert!(
+        detail.contains("running") || detail.contains("\"completed\""),
+        "{detail}"
+    );
+    assert!(
+        detail.contains("\"completed\":2") || detail.contains("\"completed\": 2"),
+        "{detail}"
+    );
+
+    std::fs::write(
+        PathBuf::from(&out_dir).join("status-final.json"),
+        r#"{"state":"complete"}"#,
+    )
+    .unwrap();
+    let (st, detail) = http(port, "GET", &format!("/api/v1/bench/runs/{run_id}"), None);
+    assert_eq!(st, 200, "{detail}");
+    assert!(detail.contains("complete"), "{detail}");
+
+    let log_line = format!(
+        r#"{{"time":"2026-01-01T00:00:00Z","severity":"INFO","body":"bench log","service":"smoke","airbug.run_id":"{run_id}"}}"#
+    );
+    std::fs::write(
+        root.join("dash/collector/data/logs.json"),
+        format!("{log_line}\n"),
+    )
+    .unwrap();
+
+    let (st, logs) = http(
+        port,
+        "GET",
+        &format!("/api/v1/logs?limit=20&run_id={run_id}"),
+        None,
+    );
+    assert_eq!(st, 200, "{logs}");
+    assert!(logs.contains("bench log"), "{logs}");
+
+    let (st, logs_other) = http(
+        port,
+        "GET",
+        "/api/v1/logs?limit=20&run_id=00000000-0000-0000-0000-000000000000",
+        None,
+    );
+    assert_eq!(st, 200, "{logs_other}");
+    assert!(!logs_other.contains("bench log"), "{logs_other}");
+
+    let event = format!(
+        r#"{{
+      "schema_version": 1,
+      "event_id": "run-err-1",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "level": "error",
+      "message": "run correlated boom",
+      "fingerprint": ["run:fp"],
+      "breadcrumbs": [],
+      "tags": {{"airbug.run_id": "{run_id}"}},
+      "extra": {{}},
+      "contexts": {{}}
+    }}"#
+    );
+    let (st, body) = http(port, "POST", "/api/v1/errors", Some(&event));
+    assert_eq!(st, 200, "{body}");
+
+    let (st, issues) = http(
+        port,
+        "GET",
+        &format!("/api/v1/issues?run_id={run_id}"),
+        None,
+    );
+    assert_eq!(st, 200, "{issues}");
+    assert!(
+        issues.contains("run correlated boom") || issues.contains("ISSUE-"),
+        "{issues}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn serve_unit_report_route_and_traversal_guard() {
     let root: PathBuf =
         std::env::temp_dir().join(format!("airbug-hub-report-{}", std::process::id()));
@@ -191,19 +358,7 @@ fn serve_unit_report_route_and_traversal_guard() {
     )
     .unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let (st, body) = http(port, "GET", "/api/v1/status", None);
     assert_eq!(st, 200, "{body}");
@@ -235,19 +390,7 @@ fn serve_unified_event_archive_accepts_trace() {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
 
-    let port = free_port();
-    let child = hub_bin()
-        .args([
-            "serve",
-            "--root",
-            root.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .spawn()
-        .expect("spawn hub");
-    let _hub = HubProc(child);
-    wait_ready(port, Instant::now() + Duration::from_secs(10));
+    let (port, _hub) = start_hub(&root);
 
     let event = r#"{
       "model_version": 1,
