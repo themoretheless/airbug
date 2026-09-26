@@ -128,6 +128,17 @@ fn handle_api(
             )
         }
         ("POST", "/errors") => handle_errors_ingest(stream, app, req),
+        ("POST", p) if p.starts_with("/errors/") => {
+            let Some(hub_uuid) = p.strip_prefix("/errors/") else {
+                return http::respond(
+                    stream,
+                    "404 Not Found",
+                    "text/plain; charset=utf-8",
+                    "not found",
+                );
+            };
+            handle_errors_for_hub(stream, app, req, hub_uuid)
+        }
         ("POST", "/events") => handle_unified_event(stream, app, req),
         ("GET", "/issues") => {
             let run_id = http::query_str(&req.query, "run_id");
@@ -290,6 +301,18 @@ fn handle_unified_event(
             "issue": issue,
         }),
     )
+}
+
+fn handle_errors_for_hub(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+    hub_uuid: &str,
+) -> std::io::Result<()> {
+    if hub_uuid != app.hub_id.to_string() {
+        return http::respond_err(stream, "404 Not Found", &HubError::msg("hub not found"));
+    }
+    handle_errors_ingest(stream, app, req)
 }
 
 fn handle_errors_ingest(
