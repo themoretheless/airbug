@@ -1,8 +1,33 @@
-//! Integration smoke tests. Skipped (soft) when Docker/Podman is unavailable.
+//! Integration smoke tests. Skipped (soft) when Docker/Podman is unavailable or runs the
+//! other container OS, so a host without Linux images is not reported as a broken module.
 use airbug_containers::prelude::*;
 
 fn docker_available() -> bool {
     airbug_containers::Runtime::detect().is_ok()
+}
+
+/// Start a container, or give up on the host rather than on the module.
+///
+/// A daemon running the other container OS answers `docker version` just fine and then cannot
+/// pull a Linux image at all, which is an environment fact every runner keeps the right to
+/// refuse. Any other failure still panics with the original message.
+fn start_or_skip<T>(started: Result<T, ContainerError>, what: &str) -> Option<T> {
+    match started {
+        Ok(container) => Some(container),
+        Err(err) if manifest_missing(&err) => {
+            eprintln!("skip: {what} needs another container OS: {err}");
+            None
+        }
+        Err(err) => panic!("{what} should start: {err}"),
+    }
+}
+
+/// Whether the CLI said the image has no manifest for the daemon's container OS.
+fn manifest_missing(err: &ContainerError) -> bool {
+    let ContainerError::Command { message, .. } = err else {
+        return false;
+    };
+    message.contains("no matching manifest")
 }
 
 #[test]
@@ -11,7 +36,9 @@ fn redis_module_starts_and_maps_port() {
         eprintln!("skip: no docker/podman");
         return;
     }
-    let redis = RedisBuilder::new().start().expect("redis should start");
+    let Some(redis) = start_or_skip(RedisBuilder::new().start(), "redis") else {
+        return;
+    };
     let port = redis
         .container()
         .get_mapped_public_port(6379)
@@ -27,13 +54,14 @@ fn generic_builder_nginx_style_port() {
         eprintln!("skip: no docker/podman");
         return;
     }
-    let container = ContainerBuilder::new("nginx:1.27-alpine")
+    let built = ContainerBuilder::new("nginx:1.27-alpine")
         .with_port_binding(80, true)
         .with_wait_strategy(Wait::tcp_port(80))
         .build()
-        .expect("build")
-        .start()
-        .expect("start nginx");
+        .expect("build");
+    let Some(container) = start_or_skip(built.start(), "nginx") else {
+        return;
+    };
     let port = container.get_mapped_public_port(80).expect("port");
     assert!(port > 0);
 }
@@ -44,7 +72,9 @@ fn mysql_module_connection_string() {
         eprintln!("skip: no docker/podman");
         return;
     }
-    let mysql = MySqlBuilder::new().start().expect("mysql");
+    let Some(mysql) = start_or_skip(MySqlBuilder::new().start(), "mysql") else {
+        return;
+    };
     let uri = mysql.get_connection_string().expect("uri");
     assert!(uri.starts_with("mysql://"));
     assert!(mysql.container().get_mapped_public_port(3306).unwrap() > 0);
@@ -56,7 +86,9 @@ fn mongodb_module_connection_string() {
         eprintln!("skip: no docker/podman");
         return;
     }
-    let mongo = MongoDbBuilder::new().start().expect("mongo");
+    let Some(mongo) = start_or_skip(MongoDbBuilder::new().start(), "mongo") else {
+        return;
+    };
     let uri = mongo.get_connection_string().expect("uri");
     assert!(uri.starts_with("mongodb://"));
 }
@@ -67,7 +99,9 @@ fn rabbitmq_module_connection_string() {
         eprintln!("skip: no docker/podman");
         return;
     }
-    let rabbit = RabbitMqBuilder::new().start().expect("rabbit");
+    let Some(rabbit) = start_or_skip(RabbitMqBuilder::new().start(), "rabbit") else {
+        return;
+    };
     let uri = rabbit.get_connection_string().expect("uri");
     assert!(uri.starts_with("amqp://"));
     assert!(rabbit.get_management_port().unwrap() > 0);
@@ -134,4 +168,28 @@ fn soft_skip_documented_when_no_docker() {
     if !docker_available() {
         eprintln!("skip: no docker/podman");
     }
+}
+
+#[test]
+fn only_a_missing_manifest_earns_a_skip() {
+    // The one message a wrong-container-OS host produces, from a real Windows-mode runner.
+    let foreign_os = ContainerError::Command {
+        program: "docker".into(),
+        args: vec!["run".into(), "-d".into(), "redis:7.2.4".into()],
+        message: "Unable to find image 'redis:7.2.4' locally\n7.2.4: Pulling from library/redis\n\
+                  docker: no matching manifest for windows(10.0.26100)/amd64 in the manifest list entries"
+            .into(),
+    };
+    assert!(manifest_missing(&foreign_os));
+    // Any other runtime trouble stays a failure a host may not quietly skip past.
+    let refused = ContainerError::Command {
+        program: "docker".into(),
+        args: vec!["run".into()],
+        message: "docker: error during connect: the pipe is being closed".into(),
+    };
+    assert!(!manifest_missing(&refused));
+    assert!(!manifest_missing(&ContainerError::Timeout("redis".into())));
+    assert!(!manifest_missing(&ContainerError::RuntimeUnavailable(
+        "gone".into()
+    )));
 }
