@@ -9,9 +9,31 @@ use clap::{CommandFactory, Parser};
 use std::{
     fs::OpenOptions,
     io::{IsTerminal, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
 };
+
+/// Serve `out` as a live experiment and print its URL. Without a terminal the
+/// interface is opt-in, so an agent asks for it with `--ui --no-open`.
+fn start_interface(out: &Path, store: &Path, ui: bool, no_ui: bool, no_open: bool) -> Result<bool> {
+    if no_ui || !(ui || std::io::stdout().is_terminal()) {
+        return Ok(false);
+    }
+    let url = web_ui::start_live(out, store)?;
+    println!("Live benchmark: {url}");
+    if !no_open {
+        web_ui::open_browser(&url);
+    }
+    Ok(true)
+}
+
+/// Hold a finished interface open until SIGINT; artifacts are already on disk.
+fn hold_interface() {
+    println!("Interface remains available. Ctrl+C to close; results are already saved.");
+    while !runner::cancelled() {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
 
 pub(crate) fn output(text: &str, path: Option<PathBuf>) -> Result<()> {
     if let Some(p) = path {
@@ -30,8 +52,19 @@ pub(crate) fn execute() -> Result<i32> {
     let cli = Cli::parse_from(args);
     let load = |p: PathBuf| Run::load(project::resolve(&cli.store, &p)?);
     match cli.command {
-        Action::Matrix { plan, output } => {
-            matrix::run(serde_json::from_slice(&std::fs::read(plan)?)?, &output)?
+        Action::Matrix {
+            plan,
+            output,
+            ui,
+            no_ui,
+            no_open,
+        } => {
+            let live = start_interface(&output, &cli.store, ui, no_ui, no_open)?;
+            let result = matrix::run(serde_json::from_slice(&std::fs::read(plan)?)?, &output);
+            if live && result.is_ok() && !runner::cancelled() {
+                hold_interface();
+            }
+            result?
         }
         Action::Bisect {
             repo,
@@ -505,14 +538,7 @@ pub(crate) fn execute() -> Result<i32> {
                 return Ok(0);
             }
             runner::preflight(plan.clone(), &out)?;
-            let live = !no_ui && (ui || std::io::stdout().is_terminal());
-            if live {
-                let url = web_ui::start_live(&out, &cli.store)?;
-                println!("Live benchmark: {url}");
-                if !no_open {
-                    web_ui::open_browser(&url);
-                }
-            }
+            let live = start_interface(&out, &cli.store, ui, no_ui, no_open)?;
             let result = runner::run(plan, &out);
             if out.join("run.json").is_file() {
                 let doc = experiment_report::build(experiment_report::Options {
@@ -532,12 +558,7 @@ pub(crate) fn execute() -> Result<i32> {
                 println!("Saved results and reports: {}", out.display());
             }
             if live && !runner::cancelled() && out.join("status-final.json").is_file() {
-                println!(
-                    "Interface remains available. Ctrl+C to close; results are already saved."
-                );
-                while !runner::cancelled() {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
+                hold_interface();
             }
             result?;
             if memory {
