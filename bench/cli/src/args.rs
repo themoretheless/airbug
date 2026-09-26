@@ -289,8 +289,11 @@ pub(crate) enum Action {
         /// One diagnostic memory-profile run; requires an instrumented Rust worker.
         #[arg(long)]
         memory: bool,
+        /// airbug-hub base URL (or env AIRBUG_HUB); registers a GUID run before measuring.
+        #[arg(long, env = "AIRBUG_HUB")]
+        hub: Option<String>,
         #[arg(short, long)]
-        output: PathBuf,
+        output: Option<PathBuf>,
         #[arg(last = true)]
         args: Vec<String>,
     },

@@ -34,9 +34,28 @@ Send app telemetry:
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+# Correlate with a hub bench run (from POST /api/v1/bench/runs):
+# export OTEL_RESOURCE_ATTRIBUTES=airbug.hub_id=…,airbug.run_id=…
 cargo run -p airbug-otel --example span
 cargo run -p airbug-otel --example metrics
 cargo run -p airbug-otel --example logs
+```
+
+### Live bench sessions (register-then-run)
+
+Hub does **not** spawn benches. Client registers, writes artifacts under `.airbug-bench/runs/{run_id}/`, and sends OTLP with correlation attrs.
+
+1. `POST /api/v1/bench/runs` → `{hub_id, run_id, out_dir, dash_url}`
+2. Write `progress.json` while running; `status-final.json` + `run.json` / `report.html` when done
+3. Open `http://127.0.0.1:8790/#/bench/{run_id}` (printed before measure)
+
+Correlation keys (OTEL resource / err tags): `airbug.hub_id`, `airbug.run_id`.  
+Hub instance UUID lives in `dash/hub/data/hub_id` and is exposed on `GET /api/v1/status`.
+
+```bash
+export AIRBUG_HUB=http://127.0.0.1:8790
+cargo run -p cargo-airbug-bench -- run --plan …   # registers, sets -o to out_dir
+# or lin: scripts/ci-bench.sh
 ```
 
 ## Architecture (`airbug-hub`)
@@ -53,6 +72,7 @@ dash/hub/src/
   scan/            domain cards (unit, bench, mon, otel, err, collector)
   otlp/            shared file tail + logs/metrics parsers
   issues.rs        IssueStore + SqliteIssueStore + http:// webhook (reqwest)
+  runs.rs          GUID hub_id + bench run registry (runs.sqlite)
   static/          dashboard.html + dashboard.css + dashboard.js
 ```
 
@@ -67,13 +87,18 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/` | Dashboard HTML |
 | GET | `/static/dashboard.css` | Styles |
 | GET | `/static/dashboard.js` | Client UI |
-| GET | `/api/v1/status` | Domain snapshot + Local APIs |
+| GET | `/api/v1/status` | Domain snapshot + Local APIs + `hub_id` |
 | GET | `/api/v1` | API catalog only |
-| GET | `/api/v1/logs?limit=` | OTLP log tail (+ `by_severity`, `services`) |
-| GET | `/api/v1/metrics?limit=` | OTLP metrics (`series`, `histogram`, `latest`) |
-| POST | `/api/v1/errors` | airbug-err event → issues (`schema_version`) |
+| GET | `/api/v1/logs?limit=&run_id=` | OTLP log tail (+ `by_severity`, `services`); filter by `airbug.run_id` |
+| GET | `/api/v1/metrics?limit=&run_id=` | OTLP metrics (`series`, `histogram`, `latest`); optional `run_id` filter |
+| POST | `/api/v1/bench/runs` | Register run → `{hub_id, run_id, out_dir, dash_url}` |
+| GET | `/api/v1/bench/runs` | List runs (running first, then recent done) |
+| GET | `/api/v1/bench/runs/:id` | Manifest + live `progress.json` / `status-final.json` |
+| GET | `/api/v1/bench/runs/:id/report` | Report when present |
+| GET | `/bench/runs/:id/*` | Bench artifacts under `.airbug-bench/runs/{id}/` |
+| POST | `/api/v1/errors` | airbug-err event → issues (`schema_version`; tag `airbug.run_id`) |
 | POST | `/api/v1/events` | Unified error/trace/metric/log envelope |
-| GET | `/api/v1/issues` | Issue list |
+| GET | `/api/v1/issues?run_id=` | Issue list (optional filter by tag) |
 | GET | `/api/v1/issues/:id` | Issue detail (`last_event` + recent `events`) |
 | POST | `/api/v1/issues/:id/{resolve,ignore,reopen}` | Status change |
 | GET | `/report/*` | Unit HTML report files |
@@ -104,8 +129,8 @@ sharing the same correlation fields.
 
 | Domain | Sources |
 |--------|---------|
-| unit | local Rust test results from the workspace |
-| bench | `.airbug-bench/**/run.json` |
+| unit | `target/airbug-report/{report.json,index.html}` |
+| bench | `.airbug-bench/**/run.json` + GUID registry `dash/hub/data/runs.sqlite` |
 | mon | `~/.local/share/airbug-mon/airbug-mon.db` |
 | otel | `otel/` crate (`airbug-otel` OTLP) |
 | err | `err/` crate (`airbug-err`) + `dash/hub/data/issues.sqlite` |

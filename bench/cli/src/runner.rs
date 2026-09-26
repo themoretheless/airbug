@@ -153,7 +153,17 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
     if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent)?;
     }
-    fs::create_dir(out)?;
+    if out.exists() {
+        let empty = fs::read_dir(out)?.next().is_none();
+        if !empty {
+            return Err(error(format!(
+                "output directory already exists and is not empty: {}",
+                out.display()
+            )));
+        }
+    } else {
+        fs::create_dir(out)?;
+    }
     fs::create_dir(out.join("logs"))?;
     let mut result = Run::new();
     if let Some(policy) = &privacy {
@@ -522,7 +532,10 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
 /// Read-only preflight. Never invokes the workload or writes the output directory.
 pub fn preflight(mut plan: Plan, out: &Path) -> Result<serde_json::Value> {
     if out.exists() {
-        return Err(error("output already exists"));
+        let empty = fs::read_dir(out)?.next().is_none();
+        if !empty {
+            return Err(error("output already exists"));
+        }
     }
     if plan.repetitions == 0
         || plan.repetitions > 10000

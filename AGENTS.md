@@ -45,6 +45,12 @@ cargo run -p airbug-hub -- serve --root . --collector
 there is no token, so the link stays valid across restarts. Hand it over anyway only
 after the checks below — every one of them degrades silently to an empty page.
 
+**Several hubs at once:** each hub has its own `hub_id`, printed by `/api/v1/status`. A shared
+port is not enough then — a hub started for another project swallows this project's errors. Point
+`airbug-err` at the intended hub with `Options::new().endpoint("…/api/v1/errors").hub_id(uuid)`,
+which posts to `/api/v1/errors/{uuid}` and makes a mismatched hub answer 404. For logs and
+metrics, correlate instead of rerouting: `OTEL_RESOURCE_ATTRIBUTES="airbug.hub_id=<uuid>"`.
+
 - Route the signals to it before starting what you measure:
   `export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318` (`otel/src/lib.rs:49`).
   That endpoint means HTTP, and HTTP is what `airbug-otel` uses even in an

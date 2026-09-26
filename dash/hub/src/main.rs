@@ -6,6 +6,7 @@ mod event_model;
 mod http;
 mod issues;
 mod otlp;
+mod runs;
 mod scan;
 mod serve;
 
