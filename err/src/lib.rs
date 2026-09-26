@@ -43,6 +43,7 @@ fn client_slot() -> &'static Mutex<Option<Client>> {
 #[derive(Clone)]
 pub struct Options {
     pub endpoint: String,
+    pub hub_id: Option<String>,
     pub release: Option<String>,
     pub environment: Option<String>,
     pub service: Option<String>,
@@ -58,6 +59,7 @@ impl std::fmt::Debug for Options {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Options")
             .field("endpoint", &self.endpoint)
+            .field("hub_id", &self.hub_id)
             .field("release", &self.release)
             .field("environment", &self.environment)
             .field("service", &self.service)
@@ -72,6 +74,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             endpoint: default_endpoint(),
+            hub_id: None,
             release: None,
             environment: None,
             service: None,
@@ -89,6 +92,11 @@ impl Options {
 
     pub fn endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.endpoint = endpoint.into();
+        self
+    }
+
+    pub fn hub_id(mut self, hub_id: impl Into<String>) -> Self {
+        self.hub_id = Some(hub_id.into());
         self
     }
 
@@ -165,7 +173,11 @@ impl Drop for Guard {
 ///
 /// One init per process is the supported model.
 pub fn init(options: Options) -> Result<Guard, TransportError> {
-    let transport = HttpTransport::new(options.endpoint.clone())?;
+    let transport = if let Some(hub_id) = &options.hub_id {
+        HttpTransport::with_hub_id(&options.endpoint, Some(hub_id.clone()))?
+    } else {
+        HttpTransport::new(&options.endpoint)?
+    };
     init_with_transport(options, Arc::new(transport))
 }
 

@@ -22,18 +22,27 @@ pub trait EventTransport: Send + Sync {
 /// Sends events synchronously over HTTP (suitable for `Drop` flush).
 #[derive(Debug, Clone)]
 pub struct HttpTransport {
-    endpoint: String,
+    pub endpoint: String,
+    pub hub_id: Option<String>,
     client: reqwest::blocking::Client,
 }
 
 impl HttpTransport {
     pub fn new(endpoint: impl Into<String>) -> Result<Self, TransportError> {
+        Self::with_hub_id(endpoint, None)
+    }
+
+    pub fn with_hub_id(
+        endpoint: impl Into<String>,
+        hub_id: Option<String>,
+    ) -> Result<Self, TransportError> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
             .map_err(|e| TransportError::Http(e.to_string()))?;
         Ok(Self {
             endpoint: endpoint.into(),
+            hub_id,
             client,
         })
     }
@@ -41,9 +50,14 @@ impl HttpTransport {
 
 impl EventTransport for HttpTransport {
     fn send(&self, event: &Event) -> Result<(), TransportError> {
+        let url = if let Some(ref hub_id) = self.hub_id {
+            format!("{}/{}", self.endpoint.trim_end_matches('/'), hub_id)
+        } else {
+            self.endpoint.clone()
+        };
         let response = self
             .client
-            .post(&self.endpoint)
+            .post(&url)
             .json(event)
             .send()
             .map_err(|e| TransportError::Http(e.to_string()))?;
