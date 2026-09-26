@@ -6,7 +6,7 @@
 use crate::config::RootPaths;
 use std::{
     fs, io,
-    net::TcpStream,
+    net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     time::{Duration, Instant},
@@ -247,7 +247,7 @@ fn compose_cmd(file: &Path, args: &[&str]) -> io::Result<std::process::ExitStatu
 fn wait_port(port: u16, budget: Duration) {
     let deadline = Instant::now() + budget;
     while Instant::now() < deadline {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+        if port_open(port) {
             return;
         }
         std::thread::sleep(Duration::from_millis(250));
@@ -258,9 +258,51 @@ fn wait_port(port: u16, budget: Duration) {
 /// Probe localhost OTLP / Jaeger for the hub status card.
 pub fn probe() -> CollectorProbe {
     CollectorProbe {
-        otlp_http: TcpStream::connect(("127.0.0.1", 4318)).is_ok(),
-        otlp_grpc: TcpStream::connect(("127.0.0.1", 4317)).is_ok(),
-        jaeger_ui: TcpStream::connect(("127.0.0.1", 16686)).is_ok(),
+        otlp_http: port_open(4318),
+        otlp_grpc: port_open(4317),
+        jaeger_ui: port_open(16686),
+    }
+}
+
+/// Whether a loopback port accepts, giving up after [`PROBE_BUDGET`].
+fn port_open(port: u16) -> bool {
+    port_open_at(SocketAddr::from(([127, 0, 0, 1], port)), PROBE_BUDGET)
+}
+
+fn port_open_at(addr: SocketAddr, budget: Duration) -> bool {
+    TcpStream::connect_timeout(&addr, budget).is_ok()
+}
+
+/// How long a port may take to answer before the probe calls it down.
+///
+/// A port the host reserves for its own virtualisation is silently dropped rather than refused,
+/// so an untimed connect waits out the whole TCP timeout — long enough to stall the status route
+/// this feeds, which the dashboard polls every few seconds.
+const PROBE_BUDGET: Duration = Duration::from_millis(250);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_dropped_syn_is_down_rather_than_hanging() {
+        // RFC 5737 TEST-NET-1 answers nothing, which is the failure a reserved loopback port
+        // shows on a Windows runner: no refusal to come back from, only silence.
+        let black_hole = SocketAddr::from(([192, 0, 2, 1], 4318));
+        let started = Instant::now();
+        assert!(!port_open_at(black_hole, PROBE_BUDGET));
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn an_open_port_is_reported_up() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        assert!(port_open(port));
     }
 }
 
