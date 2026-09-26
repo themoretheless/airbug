@@ -51,4 +51,46 @@ with tempfile.TemporaryDirectory(prefix='bench-live-') as tmp:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
-print('Live HTTP: running progress, live charts, deferred report, completion, cancellation and persisted exports passed')
+    # A matrix session shows one aggregated counter over every combination.
+    plan = pathlib.Path(tmp) / 'matrix-plan.json'
+    plan.write_text(json.dumps({
+        'plan': {'candidate': {'path': '/bin/sh', 'args': ['-c', 'sleep 0.5'], 'cwd': None}, 'repetitions': 2},
+        'axes': {'--cpu': ['1', '2']},
+    }))
+    matrix = pathlib.Path(tmp) / 'matrix'
+    proc = subprocess.Popen(['target/release/cargo-airbug-bench', 'matrix', '--ui', '--no-open', '--plan', str(plan), '-o', str(matrix)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        url = proc.stdout.readline().strip().split('Live benchmark: ')[1]
+        def live():
+            return json.load(urllib.request.urlopen(url + 'api/live', timeout=5))
+        deadline = time.monotonic() + 30
+        def wait(predicate):
+            while not predicate(live()):
+                assert time.monotonic() < deadline, live()
+                time.sleep(0.05)
+        wait(lambda s: s['state'] == 'running')
+        # Two cells of two processes each; the lane names the combination.
+        assert live()['total'] == 4, live()
+        assert live()['variant'].startswith('--cpu'), live()
+        try:
+            urllib.request.urlopen(url + 'report?format=json')
+            raise AssertionError('report allowed during a matrix cell')
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+        charts = urllib.request.urlopen(url + 'api/live-charts', timeout=5).read()
+        assert b'<svg role="img"' in charts, charts
+        wait(lambda s: s['state'] == 'complete')
+        assert live()['completed'] == 4, live()
+        entries = json.load(urllib.request.urlopen(url + 'report?format=json'))['entries']
+        assert len(entries) == 2 and [e['status'] for e in entries] == ['complete'] * 2, entries
+        for cell in ('0', '1'):
+            for name in ('run.json', 'status-final.json'):
+                assert (matrix / cell / name).is_file(), f'{cell}/{name}'
+        proc.send_signal(signal.SIGINT)
+        proc.wait(timeout=10)
+        assert proc.returncode == 0, proc.stderr.read()
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+print('Live HTTP: running progress, live charts, deferred report, completion, cancellation, matrix aggregation and persisted exports passed')
