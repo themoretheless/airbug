@@ -53,6 +53,10 @@ metrics, correlate instead of rerouting: `OTEL_RESOURCE_ATTRIBUTES="airbug.hub_i
 
 - Route the signals to it before starting what you measure:
   `export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318` (`otel/src/lib.rs:49`).
+  That endpoint means HTTP, and HTTP is what `airbug-otel` uses even in an
+  `--all-features` build; `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` is the only way to get
+  gRPC, and then the endpoint must move to `:4317`. Mismatched pairs fail at
+  shutdown with a bare `transport error`.
 - Errors need no setup: `airbug-err` posts to `http://127.0.0.1:8790/api/v1/errors`
   by default; point it elsewhere with `AIRBUG_ERR_ENDPOINT` (`err/src/lib.rs:129`).
 - Host metrics: `cargo run -p airbug-mon --release -- --otlp`, or

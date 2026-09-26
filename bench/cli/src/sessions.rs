@@ -156,8 +156,8 @@ pub fn profile(
     while let Some(a) = iter.next() {
         if matches!(a.as_str(), "--filter" | "--exclude" | "--tag") {
             iter.next();
-        } else if !matches!(a.as_str(), "--exact" | "--glob")
-            && !(case.starts_with("forma/") && a == "--gpu-timestamps")
+        } else if !(matches!(a.as_str(), "--exact" | "--glob")
+            || case.starts_with("forma/") && a == "--gpu-timestamps")
         {
             workload.push(a);
         }

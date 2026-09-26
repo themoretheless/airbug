@@ -15,6 +15,7 @@ default = ["otlp-http"]
 ## OTLP over HTTP/protobuf (default collector port 4318).
 otlp-http = ["opentelemetry-otlp/http-proto", "opentelemetry-otlp/reqwest-blocking-client"]
 ## OTLP over gRPC/tonic (collector port 4317). Needs a Tokio runtime held by TelemetryGuard.
+## With both OTLP features enabled, HTTP stays the default and OTEL_EXPORTER_OTLP_PROTOCOL=grpc opts in.
 otlp-grpc = ["dep:tokio", "opentelemetry-otlp/grpc-tonic"]
 ## In-memory exporters for unit tests (`install_test`).
 testing = ["opentelemetry_sdk/testing"]

@@ -40,7 +40,11 @@ guard.shutdown()?;
 | `otlp-grpc` | OTLP gRPC (tonic) | 4317 |
 | `testing` | in-memory exporters + `install_test` | — |
 
-Enable only one OTLP transport for normal builds. With `--all-features`, gRPC wins.
+Enable only one OTLP transport for normal builds. With `--all-features` both
+compile in and HTTP stays the default, so `OTEL_EXPORTER_OTLP_ENDPOINT` pointing at
+`:4318` keeps working; opt into gRPC with `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` and
+switch the endpoint to `:4317`. A requested transport that is not compiled in is
+ignored in favour of the one that is.
 
 ```bash
 cargo test -p airbug-otel --features testing
