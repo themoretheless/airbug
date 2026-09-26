@@ -23,15 +23,29 @@ fn init_tracing() {
         .try_init();
 }
 
+/// Stack the CLI work runs on instead of the process' main thread.
+///
+/// Windows reserves 1 MiB for a main thread, and a debug build overflows that inside argument
+/// parsing, which kills every `cargo test` on that platform; release frames fit.
+const MAIN_STACK: usize = 16 * 1024 * 1024;
+
 fn main() {
+    let worker = std::thread::Builder::new()
+        .stack_size(MAIN_STACK)
+        .spawn(run)
+        .expect("cli: start worker thread");
+    // A panicking worker has already reported itself; 101 is what a panicking main would give.
+    std::process::exit(worker.join().unwrap_or(101));
+}
+
+fn run() -> i32 {
     init_tracing();
     runner::install_cancel_handler();
     match cmd::execute() {
-        Ok(0) => {}
-        Ok(code) => std::process::exit(code),
+        Ok(code) => code,
         Err(e) => {
             eprintln!("bench: {e}");
-            std::process::exit(2);
+            2
         }
     }
 }
