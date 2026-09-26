@@ -498,10 +498,10 @@ pub fn install_test(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
     /// Globals are process-wide; serialize install/install_test.
-    static INIT_LOCK: Mutex<()> = Mutex::new(());
+    #[cfg(feature = "testing")]
+    static INIT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn config_builders() {
