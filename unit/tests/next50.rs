@@ -137,6 +137,8 @@ fn prop_for_all_and_replay() {
 
 #[test]
 fn prop_for_all2_draws_pair() {
+    // Both halves are trivially true by design; this exercises for_all2's pair plumbing.
+    #[allow(clippy::overly_complex_bool_expr)]
     Prop::new(3)
         .trials(10)
         .for_all2::<u64, bool, _>(|a, b| Ok(*a == *a && (*b || !*b)))
