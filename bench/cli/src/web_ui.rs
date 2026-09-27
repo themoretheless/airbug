@@ -382,6 +382,9 @@ pub fn start_live(root: &Path, store: &Path) -> Result<String> {
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
     let token = token();
     let url = format!("http://{}/{token}/", listener.local_addr()?);
+    // Before the thread starts: the listener is already bound, so a reader that finds the URL
+    // early is queued rather than refused, while the reverse order loses the URL entirely.
+    record_url(root, &url)?;
     let root = root.to_path_buf();
     let store = store.to_path_buf();
     let live = shared();
@@ -389,6 +392,29 @@ pub fn start_live(root: &Path, store: &Path) -> Result<String> {
         let _ = connections(listener, &root, &store, &token, &live);
     });
     Ok(url)
+}
+
+/// Leave the URL where a later process can find it, next to rather than inside the run.
+///
+/// `runner::run` refuses a non-empty output directory and starts only after this returns, so a
+/// file in `root` would abort the run it describes. A caller that outlived the terminal — an
+/// agent handing the link over twice, a cron step — otherwise has no way back to the port and
+/// token, which are random per start.
+fn record_url(root: &Path, url: &str) -> Result<()> {
+    let path = format!("{}.live.json", root.display());
+    if let Some(parent) = Path::new(&path)
+        .parent()
+        .and_then(|p| (!p.as_os_str().is_empty()).then_some(p))
+    {
+        use std::fs;
+        fs::create_dir_all(parent)?;
+    }
+    let body = serde_json::to_string_pretty(&serde_json::json!({
+        "url": url,
+        "pid": std::process::id(),
+    }))?;
+    std::fs::write(&path, body)?;
+    Ok(())
 }
 fn token() -> String {
     format!(
@@ -633,5 +659,23 @@ mod tests {
         assert_eq!(live.samples.len(), 1);
         live.observe("running", "candidate", 2, 3);
         assert_eq!(live.samples.len(), 2);
+    }
+
+    #[test]
+    fn a_live_server_records_its_url_beside_the_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("run");
+        std::fs::create_dir(&out).unwrap();
+        let url = start_live(&out, &out).unwrap();
+        let recorded: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("run.live.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(recorded["url"], serde_json::Value::from(url.as_str()));
+        assert_eq!(
+            recorded["pid"].as_u64(),
+            Some(u64::from(std::process::id()))
+        );
+        assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
     }
 }
