@@ -523,6 +523,11 @@ fn diagnostic_reports_prioritize_regressions_and_plot_raw_data() {
     let html = report::html_run(&r).unwrap();
     assert!(html.contains("<svg"));
     assert!(html.contains("Raw observation plots"));
+    assert!(html.contains("Median per process"));
+    assert!(html.contains(airbug_bench::viz::REVEAL_CSS));
+    assert!(!html.contains("/*VIZ_CSS*/"));
+    assert_eq!(html.matches("@keyframes airbug-reveal").count(), 1);
+    assert!(html.contains("prefers-reduced-motion"));
     let plot = report::plot("<script>", &[(0., 1.), (1., 2.)]);
     assert!(!plot.contains("<script>"));
     assert!(plot.contains("&lt;script&gt;"));
@@ -539,6 +544,16 @@ fn comparison_charts_plot_intervals_and_units_without_overclaiming() {
     assert!(charts.contains("independent units"));
     assert!(charts.contains("change per unit"));
     assert!(charts.contains("it is not a confidence interval"));
+    // Six units are enough for a cumulative view; the lines are drawn in, not faded.
+    assert!(charts.contains("cumulative share"));
+    assert!(charts.contains("pathLength=\"100\" class=\"dv\""));
+    let few = report::comparison_charts(
+        &paired(4, 1.2),
+        &compare(&paired(4, 1.2), None, 5., 0.05).unwrap(),
+        5.,
+        8,
+    );
+    assert!(!few.contains("cumulative share"), "{few}");
     assert_eq!(
         charts.matches("<figure").count(),
         charts.matches("<svg role=\"img\" aria-label=").count()
@@ -563,6 +578,27 @@ fn comparison_charts_plot_intervals_and_units_without_overclaiming() {
     // Without intervals the section says so instead of drawing an empty chart.
     assert!(charts.contains("No finite effect intervals available"));
     assert!(!charts.contains("<svg"));
+}
+
+#[test]
+fn comparison_heat_maps_every_case_against_every_metric() {
+    let r = paired(6, 1.2);
+    let mut rows = compare(&r, None, 5., 0.05).unwrap();
+    let mut extra = rows[0].clone();
+    extra.case = "other".into();
+    extra.metric = "cpu".into();
+    rows.push(extra);
+    // `max_unit_charts = 0` keeps the per-unit charts out of this assertion's way.
+    let charts = report::comparison_charts(&r, &rows, 5., 0);
+    assert!(charts.contains("Change by case and metric, in percent"));
+    assert!(charts.contains("case · latency"));
+    assert!(charts.contains("other · cpu"));
+    assert!(!charts.contains("independent units"));
+    let single_metric = report::comparison_charts(&r, &rows[..1], 5., 8);
+    assert!(
+        !single_metric.contains("Change by case and metric"),
+        "one column is a bar chart, not a matrix"
+    );
 }
 
 #[test]
