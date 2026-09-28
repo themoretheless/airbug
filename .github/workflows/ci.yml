@@ -19,6 +19,10 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast
       - run: cargo +${{ matrix.toolchain }} test --locked -p airbug --no-default-features
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast
+      - name: Check cargo bench attribute harness
+        run: python bench/scripts/test-cargo-bench.py
+        env:
+          RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
       - run: cargo +${{ matrix.toolchain }} doc --locked --workspace --all-features --no-deps --exclude airbug-mon
         env:
           RUSTDOCFLAGS: -D warnings

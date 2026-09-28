@@ -10,6 +10,54 @@
 
 ## Быстрый запуск
 
+### Как `cargo test`: функции с атрибутом и `cargo bench`
+
+В своём проекте добавьте зависимость и benchmark target:
+
+```toml
+[dev-dependencies]
+airbug-bench = { path = "/path/to/airbug/bench", features = ["macros"] }
+
+[[bench]]
+name = "collections"
+harness = false
+```
+
+Файл `benches/collections.rs`:
+
+```rust
+#[airbug_bench::suite]
+mod collections {
+    #[bench]
+    fn sort() {
+        let mut data = std::hint::black_box(vec![3, 1, 2]);
+        data.sort_unstable();
+        std::hint::black_box(data);
+    }
+}
+```
+
+`#[airbug_bench::suite]` создаёт `main` и регистрирует функции с `#[bench]`
+или `#[airbug_bench::bench]` непосредственно внутри модуля. Один такой модуль
+размещается в корне benchmark-файла; ручная регистрация и nightly не нужны.
+Функции синхронные, без аргументов и generic-параметров; могут возвращать результат.
+Для вложенных модулей и сложных fixtures используйте существующий `Suite` builder.
+
+```sh
+cargo bench --bench collections
+cargo bench --bench collections sort
+cargo bench --bench collections -- --list
+cargo bench --bench collections collections/sort -- --exact --profile quick
+# Готовый пример в этом репозитории:
+cargo bench -p airbug-bench --features macros --bench attributed
+```
+
+Cargo использует оптимизированный bench-профиль. Список не исполняет функции.
+Прямой `cargo bench` печатает результаты в терминал; live dashboard у него нет.
+Существующие targets с `Suite::main()` также принимают фильтр по имени от Cargo.
+
+### Запуск через runner
+
 ```sh
 cargo build --release --workspace --offline
 cargo build --release --examples --offline
@@ -39,7 +87,7 @@ airbug-bench = { path = "../bench" }
 
 Локальный checkout: `airbug-bench = { path = "/path/to/airbug/bench" }`. Для Cargo benchmark target задайте `harness = false`.
 
-CI monorepo: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (MSRV **1.96**, workspace `cargo test` / clippy). Отдельного `release.yml` в этом репозитории нет — версии поднимаются вручную в crate `Cargo.toml`.
+CI monorepo: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (MSRV **1.96**, workspace `cargo test` / clippy). Версии семейства обновляются вместе в Cargo.toml; `.github/workflows/release.yml` создаёт GitHub Release и обновляет ветку `release`.
 
 ```rust
 use airbug_bench::{DropPolicy, Suite};

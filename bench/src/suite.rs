@@ -497,8 +497,11 @@ impl<'a> Suite<'a> {
         let mut dry_run = false;
         let mut json = false;
         let mut output = None;
+        let mut filter_set = false;
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                // Cargo supplies this even for targets with harness = false.
+                "--bench" => {}
                 "--dry-run" => dry_run = true,
                 "--profile" => {
                     args.next().ok_or_else(|| error("profile requires value"))?;
@@ -514,6 +517,10 @@ impl<'a> Suite<'a> {
                 "--list" => list = true,
                 "--json" => json = true,
                 "--filter" => {
+                    if filter_set {
+                        return Err(error("benchmark filter specified twice"));
+                    }
+                    filter_set = true;
                     selection.pattern = args
                         .next()
                         .ok_or_else(|| error("--filter requires value"))?
@@ -546,9 +553,16 @@ impl<'a> Suite<'a> {
                 }
                 "--help" | "-h" => {
                     println!(
-                        "--list --profile quick|normal|thorough --filter TEXT [--exact|--glob] --exclude GLOB --tag TAG --samples N --sample-ms N --warmup-ms N --json --output NEW_DIRECTORY"
+                        "[FILTER] --bench --list --profile quick|normal|thorough --filter TEXT [--exact|--glob] --exclude GLOB --tag TAG --samples N --sample-ms N --warmup-ms N --json --output NEW_DIRECTORY"
                     );
                     return Ok(());
+                }
+                _ if !arg.starts_with('-') => {
+                    if filter_set {
+                        return Err(error("benchmark filter specified twice"));
+                    }
+                    filter_set = true;
+                    selection.pattern = arg;
                 }
                 _ => return Err(error(format!("unknown argument {arg}"))),
             }

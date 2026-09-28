@@ -71,6 +71,10 @@ pub fn error(message: impl Into<String>) -> BenchError {
 /// ```
 #[cfg(feature = "macros")]
 pub use airbug_bench_macros::bench;
+/// Generate a benchmark executable from an inline module of `#[bench]` functions.
+/// Use once at the root of a `harness = false` Cargo benchmark target.
+#[cfg(feature = "macros")]
+pub use airbug_bench_macros::suite;
 pub mod diagnostics;
 pub mod workloads;
 

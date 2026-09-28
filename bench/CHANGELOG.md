@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+- `#[airbug_bench::suite]` generates a benchmark executable and registers its directly contained `#[bench]` functions; enable `macros` and set `harness = false` to run it with stable `cargo bench`.
+- `Suite::main()` accepts Cargo's `--bench` flag and positional name filters, including `--exact` and `--list`; duplicate filters produce an explicit error.
+- Add an attributed benchmark example and an end-to-end Cargo invocation regression script.
+- Release tag `airbug-bench-v0.9.0`
 
 - `bench::viz`: figures build themselves in — marks go out in staggered groups driven by `viz::REVEAL_CSS`, with no JavaScript, no SMIL and no second implementation of the scales in the browser. Print and `prefers-reduced-motion` render the finished frame, and a page without the CSS renders the same pixels
 - `bench::viz::charts::heatmap` and `Palette::heat`: matrix diagrams with global, per-row and signed-around-zero ramps; missing values stay blank instead of being colored as zero, every cell keeps a full-label tooltip, and `max_cells` bounds the markup

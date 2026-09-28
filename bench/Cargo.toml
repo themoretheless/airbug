@@ -1,6 +1,6 @@
 [package]
 name = "airbug-bench"
-version = "0.8.0"
+version = "0.9.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 rust-version.workspace = true
@@ -31,6 +31,11 @@ targets = ["workloads"]
 [[bench]]
 name = "workloads"
 harness = false
+
+[[bench]]
+name = "attributed"
+harness = false
+required-features = ["macros"]
 
 [[example]]
 name = "memory"
