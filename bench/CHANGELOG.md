@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- `cargo airbug-bench matrix` accepts `--ui`, `--no-ui` and `--no-open`: one live page for the whole session, whose counter sums processes over every combination and whose chart lanes are labelled with the cell's axis values (`--cpu 2 · candidate`). Aggregation reads the cells' own `progress.json` / `status-final.json` server-side, so the runner and its artifacts are unchanged.
+- `cargo airbug-bench run --hub <base-url>` (or `AIRBUG_HUB`) registers the run with a local airbug-hub and measures into the hub-issued directory, so the dashboard URL is printed before the first sample and `--output` yields to it with a warning. Both halves of the request are bounded — a hub that refuses, drops the SYN or never answers costs seconds rather than the platform's TCP timeout.
+- The CLI runs on a 16 MiB worker thread. Windows reserves 1 MiB for a main thread and a debug build overflowed it inside argument parsing, which killed every `cargo test` on that platform.
+- Release tag `airbug-bench-v0.8.0`
+
 ## 0.7.0
 
 - `bench::viz`: offline, dependency-free SVG charts (`Plot` builder, forest, strip, diverging bars, timeline lanes, sparkline, dot plot) shared by reports and the live UI

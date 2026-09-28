@@ -2,7 +2,7 @@ use crate::experiment_report::{self, Options};
 use airbug_bench::{Result, error};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::hash_map::RandomState,
+    collections::{BTreeMap, hash_map::RandomState},
     hash::BuildHasher,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -133,6 +133,128 @@ impl Live {
 }
 
 type Shared = std::sync::Arc<std::sync::Mutex<Live>>;
+
+/// Parse a status file, treating a missing or malformed one as absent.
+fn read_json(path: &Path) -> Result<serde_json::Value> {
+    if !path.is_file() {
+        return Ok(serde_json::Value::Null);
+    }
+    Ok(serde_json::from_str(&std::fs::read_to_string(path)?).unwrap_or(serde_json::Value::Null))
+}
+
+fn text(value: &serde_json::Value, key: &str) -> String {
+    value
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn number(value: &serde_json::Value, key: &str) -> usize {
+    value.get(key).and_then(|v| v.as_u64()).unwrap_or(0) as usize
+}
+
+/// Live status of the served directory: the run it holds, or the aggregate of a
+/// matrix session.
+fn live_state(root: &Path) -> Result<String> {
+    if let Some(aggregate) = matrix_state(root)? {
+        return Ok(aggregate);
+    }
+    if root.join("status-final.json").is_file() {
+        return Ok(std::fs::read_to_string(root.join("status-final.json"))?);
+    }
+    if root.join("progress.json").is_file() {
+        return Ok(std::fs::read_to_string(root.join("progress.json"))?);
+    }
+    Ok(serde_json::json!({"state": if root.is_dir() {"idle"} else {"preparing"}}).to_string())
+}
+
+/// One cell of a matrix session as the interface sees it.
+struct Cell {
+    label: String,
+    progress: serde_json::Value,
+    /// `state` of the cell's `status-final.json`, absent while it is unfinished.
+    finished: Option<String>,
+}
+
+/// Aggregate progress of a matrix session: `matrix.json` names the combinations
+/// and `<root>/<index>/` holds one run each. Cell runners already write their own
+/// progress, so the interface reads what is on disk instead of the coordinator
+/// publishing a second progress file beside the measured path.
+///
+/// Cells share one plan and differ only in worker arguments, so the process count
+/// per cell is constant and `cells × that count` is the session total.
+fn matrix_state(root: &Path) -> Result<Option<String>> {
+    let manifest = root.join("matrix.json");
+    if !manifest.is_file() {
+        return Ok(None);
+    }
+    let combinations: Vec<BTreeMap<String, String>> =
+        serde_json::from_str(&std::fs::read_to_string(&manifest)?)?;
+    let cells = combinations
+        .iter()
+        .enumerate()
+        .map(|(index, combination)| -> Result<Cell> {
+            let cell = root.join(index.to_string());
+            let final_state = text(&read_json(&cell.join("status-final.json"))?, "state");
+            Ok(Cell {
+                label: combination
+                    .iter()
+                    .map(|(flag, value)| format!("{flag} {value}"))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                progress: read_json(&cell.join("progress.json"))?,
+                finished: (!final_state.is_empty()).then_some(final_state),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let per_cell = cells
+        .iter()
+        .map(|cell| number(&cell.progress, "total"))
+        .max()
+        .unwrap_or(0);
+    let mut completed = 0;
+    let mut running = None;
+    let mut finished = 0;
+    let mut interrupted = None;
+    for cell in &cells {
+        completed += number(&cell.progress, "completed");
+        match &cell.finished {
+            Some(state) => {
+                finished += 1;
+                if state != "complete" {
+                    interrupted = Some(state.clone());
+                }
+            }
+            None if cell.progress.is_object() && running.is_none() => running = Some(cell),
+            None => (),
+        }
+    }
+    let state = match &interrupted {
+        Some(state) => state.clone(),
+        None if running.is_some() => "running".to_string(),
+        None if finished == cells.len() => "complete".to_string(),
+        None => "preparing".to_string(),
+    };
+    let variant = running.map_or(String::new(), |cell| {
+        let inner = text(&cell.progress, "variant");
+        if inner.is_empty() {
+            cell.label.clone()
+        } else {
+            format!("{} · {}", cell.label, inner)
+        }
+    });
+    Ok(Some(
+        serde_json::json!({
+            "state": state,
+            "completed": completed,
+            "total": per_cell * cells.len(),
+            "variant": variant,
+        })
+        .to_string(),
+    ))
+}
+
 fn render(root: &Path, store: &Path, query: &str) -> Result<(String, String)> {
     let mut id = None;
     let mut baseline = None;
@@ -149,10 +271,15 @@ fn render(root: &Path, store: &Path, query: &str) -> Result<(String, String)> {
             _ => return Err(error("unknown parameter")),
         }
     }
-    if root.join("progress.json").is_file() && !root.join("status-final.json").is_file() {
-        return Err(error(
-            "Benchmark is running; report becomes available after completion",
-        ));
+    if root.join("matrix.json").is_file() || root.join("progress.json").is_file() {
+        let state = live_state(root)?;
+        let value: serde_json::Value =
+            serde_json::from_str(&state).unwrap_or(serde_json::Value::Null);
+        if matches!(text(&value, "state").as_str(), "running" | "preparing") {
+            return Err(error(
+                "Benchmark is running; report becomes available after completion",
+            ));
+        }
     }
     let runs = experiment_report::files(root)?;
     let source = match id {
@@ -195,29 +322,14 @@ fn route(root: &Path, store: &Path, live: &Shared, path: &str) -> Result<(String
     match path {
         "" | "index.html" => Ok(("text/html".into(), include_str!("web-ui.html").into())),
         "api/live" | "api/live-charts" => {
-            let state = if root.join("status-final.json").is_file() {
-                std::fs::read_to_string(root.join("status-final.json"))?
-            } else if root.join("progress.json").is_file() {
-                std::fs::read_to_string(root.join("progress.json"))?
-            } else {
-                serde_json::json!({"state": if root.is_dir() {"idle"} else {"preparing"}})
-                    .to_string()
-            };
+            let state = live_state(root)?;
             let value: serde_json::Value =
                 serde_json::from_str(&state).unwrap_or(serde_json::Value::Null);
-            let text = |key: &str| {
-                value
-                    .get(key)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string()
-            };
-            let number = |key: &str| value.get(key).and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             live.lock().expect("live state lock").observe(
-                &text("state"),
-                &text("variant"),
-                number("completed"),
-                number("total"),
+                &text(&value, "state"),
+                &text(&value, "variant"),
+                number(&value, "completed"),
+                number(&value, "total"),
             );
             if path == "api/live" {
                 return Ok(("application/json".into(), state));
@@ -270,6 +382,9 @@ pub fn start_live(root: &Path, store: &Path) -> Result<String> {
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
     let token = token();
     let url = format!("http://{}/{token}/", listener.local_addr()?);
+    // Before the thread starts: the listener is already bound, so a reader that finds the URL
+    // early is queued rather than refused, while the reverse order loses the URL entirely.
+    record_url(root, &url)?;
     let root = root.to_path_buf();
     let store = store.to_path_buf();
     let live = shared();
@@ -277,6 +392,29 @@ pub fn start_live(root: &Path, store: &Path) -> Result<String> {
         let _ = connections(listener, &root, &store, &token, &live);
     });
     Ok(url)
+}
+
+/// Leave the URL where a later process can find it, next to rather than inside the run.
+///
+/// `runner::run` refuses a non-empty output directory and starts only after this returns, so a
+/// file in `root` would abort the run it describes. A caller that outlived the terminal — an
+/// agent handing the link over twice, a cron step — otherwise has no way back to the port and
+/// token, which are random per start.
+fn record_url(root: &Path, url: &str) -> Result<()> {
+    let path = format!("{}.live.json", root.display());
+    if let Some(parent) = Path::new(&path)
+        .parent()
+        .and_then(|p| (!p.as_os_str().is_empty()).then_some(p))
+    {
+        use std::fs;
+        fs::create_dir_all(parent)?;
+    }
+    let body = serde_json::to_string_pretty(&serde_json::json!({
+        "url": url,
+        "pid": std::process::id(),
+    }))?;
+    std::fs::write(&path, body)?;
+    Ok(())
 }
 fn token() -> String {
     format!(
@@ -393,6 +531,124 @@ mod tests {
         assert!(charts.contains("of 4 done"));
     }
 
+    /// A matrix session: one axis, and per cell its combination value, progress
+    /// snapshot and final state.
+    type Cell<'a> = (&'a str, Option<(&'a str, usize, usize)>, Option<&'a str>);
+
+    fn matrix(dir: &Path, cells: &[Cell]) {
+        let combinations: Vec<BTreeMap<String, String>> = cells
+            .iter()
+            .map(|(value, _, _)| BTreeMap::from([("--cpu".to_string(), value.to_string())]))
+            .collect();
+        std::fs::write(
+            dir.join("matrix.json"),
+            serde_json::to_vec(&combinations).unwrap(),
+        )
+        .unwrap();
+        for (index, (_, progress, final_state)) in cells.iter().enumerate() {
+            let cell = dir.join(index.to_string());
+            std::fs::create_dir_all(&cell).unwrap();
+            if let Some((variant, completed, total)) = progress {
+                std::fs::write(
+                    cell.join("progress.json"),
+                    serde_json::json!({
+                        "state": "running",
+                        "completed": completed,
+                        "total": total,
+                        "variant": variant,
+                    })
+                    .to_string(),
+                )
+                .unwrap();
+            }
+            if let Some(state) = final_state {
+                std::fs::write(
+                    cell.join("status-final.json"),
+                    serde_json::json!({"state": state}).to_string(),
+                )
+                .unwrap();
+            }
+        }
+    }
+
+    fn live_json(dir: &Path) -> serde_json::Value {
+        let (_, body) = route(dir, dir, &shared(), "api/live").unwrap();
+        serde_json::from_str(&body).unwrap()
+    }
+
+    #[test]
+    fn matrix_root_aggregates_its_cells_into_one_progress() {
+        let dir = tempfile::tempdir().unwrap();
+        matrix(
+            dir.path(),
+            &[
+                ("1", Some(("candidate", 4, 4)), Some("complete")),
+                ("2", Some(("baseline", 2, 4)), None),
+                ("4", None, None),
+            ],
+        );
+        let state = live_json(dir.path());
+        assert_eq!(state["state"], "running");
+        // One shared plan means a constant process count per cell.
+        assert_eq!(state["completed"], 6);
+        assert_eq!(state["total"], 12);
+        assert_eq!(state["variant"], "--cpu 2 · baseline");
+    }
+
+    #[test]
+    fn matrix_aggregate_finishes_and_starts_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        matrix(
+            dir.path(),
+            &[
+                ("1", Some(("candidate", 4, 4)), Some("complete")),
+                ("2", Some(("candidate", 4, 4)), Some("complete")),
+                ("4", Some(("candidate", 4, 4)), Some("complete")),
+            ],
+        );
+        let state = live_json(dir.path());
+        assert_eq!(state["state"], "complete");
+        assert_eq!(state["completed"], 12);
+        assert_eq!(state["total"], 12);
+
+        let fresh = tempfile::tempdir().unwrap();
+        matrix(fresh.path(), &[("1", None, None), ("2", None, None)]);
+        let state = live_json(fresh.path());
+        assert_eq!(state["state"], "preparing");
+        assert_eq!(state["total"], 0);
+    }
+
+    #[test]
+    fn matrix_aggregate_surfaces_a_failed_cell() {
+        let dir = tempfile::tempdir().unwrap();
+        matrix(
+            dir.path(),
+            &[
+                ("1", Some(("baseline", 4, 4)), Some("complete")),
+                ("2", Some(("candidate", 1, 4)), Some("failed")),
+            ],
+        );
+        let state = live_json(dir.path());
+        assert_eq!(state["state"], "failed");
+        assert_eq!(state["completed"], 5);
+    }
+
+    #[test]
+    fn matrix_report_stays_closed_while_a_cell_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        matrix(
+            dir.path(),
+            &[
+                ("1", Some(("candidate", 4, 4)), Some("complete")),
+                ("2", Some(("baseline", 2, 4)), None),
+            ],
+        );
+        assert!(
+            render(dir.path(), dir.path(), "").is_err(),
+            "a running matrix must not serve a partial report"
+        );
+    }
+
     #[test]
     fn live_samples_merge_unchanged_polls() {
         let mut live = Live::default();
@@ -403,5 +659,23 @@ mod tests {
         assert_eq!(live.samples.len(), 1);
         live.observe("running", "candidate", 2, 3);
         assert_eq!(live.samples.len(), 2);
+    }
+
+    #[test]
+    fn a_live_server_records_its_url_beside_the_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("run");
+        std::fs::create_dir(&out).unwrap();
+        let url = start_live(&out, &out).unwrap();
+        let recorded: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("run.live.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(recorded["url"], serde_json::Value::from(url.as_str()));
+        assert_eq!(
+            recorded["pid"].as_u64(),
+            Some(u64::from(std::process::id()))
+        );
+        assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
     }
 }

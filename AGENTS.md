@@ -8,18 +8,20 @@ without a TTY, so the interface does **not** start by default — ask for it:
 ```sh
 cargo airbug-bench run --program ./target/release/mybench \
   --output .airbug-bench/session --ui --no-open
+cargo airbug-bench matrix --plan matrix.json \
+  --output .airbug-bench/matrix --ui --no-open
 ```
 
 - `--ui` forces the server; `--no-open` prints the URL instead of launching a browser.
 - Run it in the background. After results are finalized the process keeps the server
   alive until SIGINT and never exits on its own
-  (`bench/cli/src/cmd.rs:534`), so a foreground call hangs until timeout.
+  (`bench/cli/src/cmd.rs:565`), so a foreground call hangs until timeout.
 - Capture the line `Live benchmark: http://127.0.0.1:<port>/<key>/` from stdout and
   give it to the user as soon as it appears, before reading any results.
 - Port and key are fresh per start. Never reuse a link from an earlier run; never
   guess one.
 - The page refills itself every 1.5 s from `<output>/progress.json`
-  (`bench/cli/src/web_ui.rs:197`); `<output>/status-final.json` plus
+  (`bench/cli/src/web-ui.html:558`); `<output>/status-final.json` plus
   `report.html` / `report.json` / `report.md` land after completion. Reading
   `progress.json` directly is fine for reporting progress in chat.
 - Send SIGINT only after the user is done looking; artifacts are already on disk.
@@ -29,9 +31,17 @@ Exceptions worth stating out loud rather than silently skipping the link:
 - `--no-ui` for strict/timing-sensitive measurements — the browser and server perturb
   the host. Say that you chose accuracy over the dashboard.
 - `--dry-run` starts no server and writes nothing.
-- `matrix`, `git-compare` and `sessions`-driven runs call the runner repeatedly with no
-  live UI attached (`bench/cli/src/cmd.rs:510` is the only caller). Offer
-  `cargo airbug-bench serve <dir> --port 8787` afterwards instead of promising a link.
+- `matrix --ui` serves one page for the whole session (`bench/cli/src/cmd.rs:68`). It
+  aggregates the per-cell `<output>/<n>/progress.json` files on the server
+  (`bench/cli/src/web_ui.rs:187`), so the counter is processes over every combination
+  and each lane is labelled with its axis values (`--cpu 2 · candidate`). The report
+  stays closed until all cells finish, and a failed or interrupted cell surfaces as the
+  aggregate state. Cells hold `run.json` only — no per-cell reports; `report` on the
+  matrix directory afterwards collects the cells.
+- `bench` (one run per registered target), `git-compare` and `sessions`-driven runs
+  call the runner with no live UI attached; only `run` and `matrix` start a server.
+  Offer `cargo airbug-bench serve <dir> --port 8787` afterwards instead of promising a
+  link.
 
 ## Traces, metrics, logs, errors: one hub, fixed address
 
