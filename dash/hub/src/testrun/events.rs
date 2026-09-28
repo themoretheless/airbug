@@ -243,7 +243,9 @@ mod tests {
     #[test]
     fn steps_nest_per_process_and_attach_to_their_test() {
         let mut c = Collector::new(Report::default());
-        c.list_line("     Running tests/reporting.rs (target/debug/deps/reporting-0123456789abcdef)");
+        c.list_line(
+            "     Running tests/reporting.rs (target/debug/deps/reporting-0123456789abcdef)",
+        );
         c.list_line("checkout: test");
         c.list_line("other: test");
         let events = r#"
@@ -259,7 +261,9 @@ mod tests {
 not json
 "#;
         fold_text(&mut c, events);
-        let checkout = &c.report.tests[c.find_test("reporting (tests/reporting.rs)", "checkout").unwrap()];
+        let checkout = &c.report.tests[c
+            .find_test("reporting (tests/reporting.rs)", "checkout")
+            .unwrap()];
         assert_eq!(checkout.steps.len(), 1);
         let root = &checkout.steps[0];
         assert_eq!(root.name, "Checkout");
@@ -269,9 +273,14 @@ not json
         assert_eq!(root.children[0].comparisons[0].actual, "2");
         assert_eq!(root.children[0].attachments[0].file, "attachment-7-3.bin");
         assert_eq!(checkout.flaky, vec!["network".to_string()]);
-        assert!(checkout.attachments.is_empty(), "path-like names are dropped");
+        assert!(
+            checkout.attachments.is_empty(),
+            "path-like names are dropped"
+        );
 
-        let other = &c.report.tests[c.find_test("reporting (tests/reporting.rs)", "other").unwrap()];
+        let other = &c.report.tests[c
+            .find_test("reporting (tests/reporting.rs)", "other")
+            .unwrap()];
         assert_eq!(other.steps[0].name, "Other");
         assert!(other.steps[0].children.is_empty(), "same id, other pid");
 

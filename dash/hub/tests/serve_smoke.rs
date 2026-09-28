@@ -528,7 +528,10 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
         stderr.contains("failed — 4 passed, 1 failed, 1 ignored"),
         "{stderr}"
     );
-    assert!(stderr.contains("FAILED demo (src/lib.rs) › tests::fails"), "{stderr}");
+    assert!(
+        stderr.contains("FAILED demo (src/lib.rs) › tests::fails"),
+        "{stderr}"
+    );
 
     let (port, _hub) = start_hub(&root);
     let (st, body) = http(port, "GET", "/api/v1/runs?kind=test", None);
@@ -558,23 +561,37 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
     let failed = find("tests::fails");
     assert_eq!(failed["status"], "failed");
     assert!(
-        failed["output"].as_str().unwrap().contains("math is broken"),
+        failed["output"]
+            .as_str()
+            .unwrap()
+            .contains("math is broken"),
         "{body}"
     );
-    assert_eq!(find("src/lib.rs - add (line 2)")["status"], "passed", "{body}");
+    assert_eq!(
+        find("src/lib.rs - add (line 2)")["status"],
+        "passed",
+        "{body}"
+    );
     let reported = find("tests::reported");
     assert_eq!(reported["steps"][0]["name"], "Outer", "{body}");
-    assert_eq!(reported["steps"][0]["children"][0]["name"], "Inner", "{body}");
     assert_eq!(
-        reported["steps"][0]["children"][0]["comparisons"][0]["name"],
-        "sum",
+        reported["steps"][0]["children"][0]["name"], "Inner",
+        "{body}"
+    );
+    assert_eq!(
+        reported["steps"][0]["children"][0]["comparisons"][0]["name"], "sum",
         "{body}"
     );
 
     let (st, body) = http(port, "GET", &format!("/runs/{run_id}/index.html"), None);
     assert_eq!(st, 200);
     assert!(body.contains("AirbugTestRun"), "standalone report");
-    let (st, _) = http(port, "GET", &format!("/runs/{run_id}/../manifest.json"), None);
+    let (st, _) = http(
+        port,
+        "GET",
+        &format!("/runs/{run_id}/../manifest.json"),
+        None,
+    );
     assert_eq!(st, 404);
     let (st, body) = http(port, "GET", "/static/testrun.js", None);
     assert_eq!(st, 200);

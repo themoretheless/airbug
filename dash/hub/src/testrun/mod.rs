@@ -307,7 +307,11 @@ fn run(options: Options) -> io::Result<i32> {
     collector.report.exit_code = exit_code;
     store.write(&mut collector, true);
     fs::write(dir.join("index.html"), html::render(&collector.report))?;
-    print_summary(&collector.report, &dir, in_store.then_some(live_url.as_str()));
+    print_summary(
+        &collector.report,
+        &dir,
+        in_store.then_some(live_url.as_str()),
+    );
     if in_store {
         prune(&root.join(RUNS_DIR), options.keep, &run_id);
     }
@@ -476,9 +480,16 @@ fn spawn(
 /// Lines worth echoing during the listing pass (build progress, errors — not test names).
 fn is_build_line(line: &str) -> bool {
     let trimmed = line.trim_start();
-    ["Compiling", "Finished", "error", "warning", "Blocking", "Updating"]
-        .iter()
-        .any(|p| trimmed.starts_with(p))
+    [
+        "Compiling",
+        "Finished",
+        "error",
+        "warning",
+        "Blocking",
+        "Updating",
+    ]
+    .iter()
+    .any(|p| trimmed.starts_with(p))
 }
 
 fn tail_of(path: &Path, lines: usize) -> String {

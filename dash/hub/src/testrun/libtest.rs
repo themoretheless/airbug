@@ -314,7 +314,13 @@ impl Collector {
 
     fn note_activity(&mut self, line: &str) {
         let trimmed = line.trim();
-        for prefix in ["Compiling ", "Checking ", "Building ", "Finished ", "Fresh "] {
+        for prefix in [
+            "Compiling ",
+            "Checking ",
+            "Building ",
+            "Finished ",
+            "Fresh ",
+        ] {
             if trimmed.starts_with(prefix) {
                 self.activity = trimmed.to_string();
                 return;
@@ -375,9 +381,7 @@ fn parse_suite_header(line: &str) -> Option<SuiteHeader> {
 /// `mock-1a2b3c4d5e6f7a8b` → `mock`.
 fn strip_hash(binary: &str) -> &str {
     match binary.rsplit_once('-') {
-        Some((name, hash))
-            if hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit()) =>
-        {
+        Some((name, hash)) if hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit()) => {
             name
         }
         _ => binary,
@@ -529,7 +533,10 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
         let failed = &c.report.tests[c.find_test(lib, "tests::fails").unwrap()];
         let output = failed.output.as_deref().unwrap();
-        assert!(output.starts_with("thread 'tests::fails' panicked"), "{output}");
+        assert!(
+            output.starts_with("thread 'tests::fails' panicked"),
+            "{output}"
+        );
         assert!(output.contains("right: 5"), "{output}");
         assert!(!output.contains("failures:"), "{output}");
 

@@ -204,9 +204,11 @@ pub fn timeline(root: &Path, registry: &RunStore, kind: Option<&str>, limit: usi
         let live = |r: &RunItem| {
             !r.stale && matches!(r.state.as_str(), "building" | "running" | "registered")
         };
-        live(b)
-            .cmp(&live(a))
-            .then_with(|| b.started_at_ms.max(b.updated_at_ms).cmp(&a.started_at_ms.max(a.updated_at_ms)))
+        live(b).cmp(&live(a)).then_with(|| {
+            b.started_at_ms
+                .max(b.updated_at_ms)
+                .cmp(&a.started_at_ms.max(a.updated_at_ms))
+        })
     });
     runs.truncate(limit);
     let live = runs
@@ -408,7 +410,13 @@ mod tests {
     use super::*;
     use crate::testrun::model::{REPORT_SCHEMA, Report, TestCase};
 
-    fn write_run(root: &Path, id: &str, started: u64, state: RunState, tests: &[(&str, TestStatus)]) {
+    fn write_run(
+        root: &Path,
+        id: &str,
+        started: u64,
+        state: RunState,
+        tests: &[(&str, TestStatus)],
+    ) {
         let dir = runs_dir(root).join(id);
         fs::create_dir_all(&dir).unwrap();
         let manifest = Manifest {
@@ -419,7 +427,11 @@ mod tests {
             started_at_ms: started,
             ..Manifest::default()
         };
-        fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        fs::write(
+            dir.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
         let mut report = Report {
             schema: REPORT_SCHEMA.into(),
             run_id: id.into(),
@@ -437,7 +449,11 @@ mod tests {
             ..Report::default()
         };
         report.recount();
-        fs::write(dir.join("report.json"), serde_json::to_vec(&report).unwrap()).unwrap();
+        fs::write(
+            dir.join("report.json"),
+            serde_json::to_vec(&report).unwrap(),
+        )
+        .unwrap();
         let progress = Progress {
             run_id: id.into(),
             kind: "test".into(),
@@ -446,7 +462,11 @@ mod tests {
             updated_at_ms: now_ms(),
             ..Progress::default()
         };
-        fs::write(dir.join("progress.json"), serde_json::to_vec(&progress).unwrap()).unwrap();
+        fs::write(
+            dir.join("progress.json"),
+            serde_json::to_vec(&progress).unwrap(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -457,9 +477,27 @@ mod tests {
         let b = "00000000-0000-4000-8000-000000000002";
         let c = "00000000-0000-4000-8000-000000000003";
         use TestStatus::{Failed, Passed};
-        write_run(&root, a, 1, RunState::Failed, &[("x", Failed), ("y", Passed), ("gone", Passed)]);
-        write_run(&root, b, 2, RunState::Passed, &[("x", Passed), ("y", Passed), ("gone", Passed)]);
-        write_run(&root, c, 3, RunState::Failed, &[("x", Passed), ("y", Failed), ("new", Passed)]);
+        write_run(
+            &root,
+            a,
+            1,
+            RunState::Failed,
+            &[("x", Failed), ("y", Passed), ("gone", Passed)],
+        );
+        write_run(
+            &root,
+            b,
+            2,
+            RunState::Passed,
+            &[("x", Passed), ("y", Passed), ("gone", Passed)],
+        );
+        write_run(
+            &root,
+            c,
+            3,
+            RunState::Failed,
+            &[("x", Passed), ("y", Failed), ("new", Passed)],
+        );
 
         let detail = test_run_detail(&root, "latest", false).unwrap();
         assert_eq!(detail["run_id"], c);

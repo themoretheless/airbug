@@ -483,12 +483,10 @@ fn handle_issue_action(stream: &mut TcpStream, app: &HubApp, path: &str) -> std:
 
 /// `/runs/<id>/<file>` — files of a test run (`index.html`, `output.log`, `events/…`).
 fn serve_run_file(stream: &mut TcpStream, app: &HubApp, rest: &str) -> std::io::Result<()> {
-    let found = rest
-        .split_once('/')
-        .and_then(|(id, rel)| {
-            let rel = if rel.is_empty() { "index.html" } else { rel };
-            store::run_file(&app.paths.root, id, rel)
-        });
+    let found = rest.split_once('/').and_then(|(id, rel)| {
+        let rel = if rel.is_empty() { "index.html" } else { rel };
+        store::run_file(&app.paths.root, id, rel)
+    });
     match found {
         Some(path) => serve_file(stream, &path),
         None => http::respond(

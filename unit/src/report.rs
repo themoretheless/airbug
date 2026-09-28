@@ -308,7 +308,9 @@ mod tests {
         assert!(here.starts_with(&format!("\"pid\":{},", std::process::id())));
         // libtest names the test thread after the test.
         assert!(
-            here.ends_with("\"test\":\"report::tests::origin_names_the_process_and_the_test_thread\""),
+            here.ends_with(
+                "\"test\":\"report::tests::origin_names_the_process_and_the_test_thread\""
+            ),
             "{here}"
         );
         let helper = std::thread::spawn(origin).join().unwrap();
