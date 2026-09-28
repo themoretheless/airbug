@@ -8,36 +8,35 @@
       { id: "table", label: "Table" },
     ];
     const SEV_ORDER = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
-    const DOMAIN_ORDER = ["unit", "mon", "otel", "err", "collector"];
     const CATS = [
-      { id: "overview", label: "Overview" },
-      { id: "unit", label: "Unit" },
+      { id: "now", label: "Now" },
+      { id: "runs", label: "Runs" },
+      { id: "tests", label: "Tests" },
       { id: "bench", label: "Bench" },
-      { id: "mon", label: "Mon" },
-      { id: "otel", label: "Otel" },
-      { id: "err", label: "Err" },
-      { id: "collector", label: "Collector" },
       { id: "issues", label: "Issues" },
-      { id: "metrics", label: "Metrics" },
       { id: "logs", label: "Logs" },
-      { id: "apis", label: "APIs" },
+      { id: "metrics", label: "Metrics" },
+      { id: "system", label: "System" },
     ];
-    const CAT_LEDE = {
-      overview: "Status cards across unit, bench, mon, otel, err, and collector.",
-      unit: "Unit test helpers and airbug report artifacts.",
-      bench: "Live and finished bench runs (GUID sessions).",
-      mon: "Host monitor (airbug-mon).",
-      otel: "OpenTelemetry façade status.",
-      err: "Error/panic ingest surface.",
-      collector: "Local OTLP collector / Jaeger.",
-      issues: "Issue inbox from airbug-err events.",
-      metrics: "OTLP metrics visualizations.",
-      logs: "OTLP log tail and filters.",
-      apis: "Local API endpoints discovered on this hub.",
+    /** Old routes keep working: package tabs folded into System, overview became Now. */
+    const ALIASES = {
+      overview: "now", unit: "tests", mon: "system", otel: "system", err: "system",
+      collector: "system", apis: "system",
     };
+    const CAT_LEDE = {
+      now: "What is running, what just broke, and what changed since the last run.",
+      runs: "Every test and bench run, newest first — live ones on top.",
+      tests: "Per-test results from cargo airbug test: failures first, steps, diffs, history.",
+      bench: "Live and finished bench runs (GUID sessions).",
+      issues: "Issue inbox from airbug-err events.",
+      logs: "OTLP log tail and filters.",
+      metrics: "OTLP metrics visualizations.",
+      system: "Package status, collector, and the local API catalog.",
+    };
+    const START_TESTS = "cargo airbug test -- --workspace --exclude airbug-mon";
+    const START_BENCH = "AIRBUG_HUB=http://127.0.0.1:8790 cargo airbug-bench run -p airbug-bench --bench workloads";
 
     const domainsEl = document.getElementById("domains");
-    const domainOneEl = document.getElementById("domain-one");
     const catsEl = document.getElementById("cats");
     const ledeEl = document.getElementById("lede");
     const metaEl = document.getElementById("meta");
@@ -65,7 +64,7 @@
     let selectedIssueId = null;
     /** @type {Record<string, any>} */
     let lastDomains = {};
-    let currentCat = "overview";
+    let currentCat = "now";
     let currentRunId = null;
     let benchPollTimer = null;
     let lastHubId = "";
@@ -84,35 +83,25 @@
     function parseRoute() {
       const raw = (location.hash || "").replace(/^#\/?/, "").trim();
       const parts = raw.split("/").filter(Boolean);
-      const id = parts[0] || "overview";
-      const cat = CATS.some(c => c.id === id) ? id : "overview";
-      const runId = cat === "bench" && parts[1] ? parts[1] : null;
+      let id = parts[0] || "now";
+      if (ALIASES[id]) id = ALIASES[id];
+      const cat = CATS.some(c => c.id === id) ? id : "now";
+      const runId = (cat === "bench" || cat === "tests") && parts[1] ? decodeURIComponent(parts[1]) : null;
       return { cat, runId };
-    }
-
-    function panelFor(cat) {
-      if (DOMAIN_ORDER.includes(cat)) return "domain";
-      return cat;
     }
 
     function showRoute() {
       const { cat, runId } = parseRoute();
+      const changedRun = cat !== currentCat || runId !== currentRunId;
       currentCat = cat;
       currentRunId = runId;
-      ledeEl.textContent = CAT_LEDE[cat] || CAT_LEDE.overview;
+      ledeEl.textContent = CAT_LEDE[cat] || CAT_LEDE.now;
       catsEl.querySelectorAll("a").forEach(a => {
         a.classList.toggle("active", a.getAttribute("data-cat") === cat);
       });
-      const want = panelFor(cat);
       document.querySelectorAll(".panel").forEach(p => {
-        p.hidden = p.getAttribute("data-cat") !== want;
+        p.hidden = p.getAttribute("data-cat") !== cat;
       });
-      if (DOMAIN_ORDER.includes(cat) && lastDomains[cat]) {
-        domainOneEl.innerHTML = card(lastDomains[cat]);
-        domainOneEl.querySelectorAll("button[data-cmd]").forEach(btn => {
-          btn.addEventListener("click", () => copy(btn.getAttribute("data-cmd")));
-        });
-      }
       if (cat === "bench") {
         refreshBench().catch(err => {
           document.getElementById("bench-meta").textContent = String(err);
@@ -121,14 +110,258 @@
         clearInterval(benchPollTimer);
         benchPollTimer = null;
       }
+      if (cat === "tests") refreshTests(changedRun).catch(err => showTestsError(err));
+      if (cat === "now") refreshNow().catch(() => {});
+      if (cat === "runs") refreshRuns().catch(err => {
+        document.getElementById("runs-meta").textContent = String(err);
+      });
       document.title = "airbug hub · " + (CATS.find(c => c.id === cat)?.label || cat)
         + (runId ? " · " + runId.slice(0, 8) : "");
     }
 
     function renderCats() {
       catsEl.innerHTML = CATS.map(c =>
-        `<a href="#/${c.id}" data-cat="${c.id}">${escapeHtml(c.label)}</a>`
+        `<a href="#/${c.id}" data-cat="${c.id}">${escapeHtml(c.label)}<span class="cat-badge" data-badge="${c.id}" hidden></span></a>`
       ).join("");
+    }
+
+    function setBadge(cat, text) {
+      const el = catsEl.querySelector(`[data-badge="${cat}"]`);
+      if (!el) return;
+      el.hidden = !text;
+      el.textContent = text || "";
+    }
+
+    // ---- runs: one timeline for tests + bench ------------------------------------------
+
+    const TR = window.AirbugTestRun;
+    let runsKind = "";
+    let lastTimeline = null;
+
+    async function fetchTimeline(kind, limit) {
+      const q = new URLSearchParams({ limit: String(limit || 60) });
+      if (kind) q.set("kind", kind);
+      const res = await fetch("/api/v1/runs?" + q.toString(), { cache: "no-store" });
+      if (!res.ok) throw new Error("GET /api/v1/runs → " + res.status);
+      const data = await res.json();
+      if (!kind) {
+        lastTimeline = data;
+        setBadge("runs", data.live ? String(data.live) + " live" : "");
+      }
+      return data;
+    }
+
+    function isLive(r) {
+      return !r.stale && (r.state === "running" || r.state === "building");
+    }
+
+    function stateLabel(r) {
+      return r.stale ? "stale" : r.state;
+    }
+
+    function runSummary(r) {
+      if (r.kind === "test") {
+        const t = r.totals || {};
+        if (isLive(r)) {
+          return `${t.completed || 0}/${t.total || "?"} · ${t.failed || 0} failed` +
+            (r.activity ? ` · ${r.activity}` : "");
+        }
+        const parts = [`${t.passed || 0} passed`];
+        if (t.failed) parts.push(`${t.failed} failed`);
+        if (t.not_run) parts.push(`${t.not_run} not run`);
+        if (t.ignored) parts.push(`${t.ignored} ignored`);
+        return parts.join(" · ");
+      }
+      const p = r.progress || {};
+      if (p.total) return `${p.completed || 0}/${p.total} processes${p.variant ? " · " + p.variant : ""}`;
+      return r.href && r.href.startsWith("#") ? "bench session" : "bench artifacts";
+    }
+
+    function runLink(r, inner, cls) {
+      const external = r.href && !r.href.startsWith("#");
+      return `<a class="${cls || ""}" href="${escapeAttr(r.href || "#")}"${external ? ` target="_blank" rel="noopener"` : ""}>${inner}</a>`;
+    }
+
+    function runRow(r) {
+      const live = isLive(r);
+      const t = r.totals || {};
+      const bar = r.kind === "test" && live && TR ? TR.progressBar(t, true) : "";
+      const commit = r.git && r.git.short
+        ? `<code>${escapeHtml(r.git.short)}</code>${r.git.dirty ? "<em>+dirty</em>" : ""}` : "";
+      const when = TR ? TR.fmtAgo(r.started_at_ms || r.updated_at_ms) : "";
+      const dur = r.duration_s != null && TR ? TR.fmtDuration(r.duration_s) : "";
+      return runLink(r, `
+        <span class="run-kind ${escapeAttr(r.kind)}">${escapeHtml(r.kind)}</span>
+        <span class="atr-state ${escapeAttr(stateLabel(r))}">${escapeHtml(stateLabel(r))}</span>
+        <span class="run-main">
+          <strong>${escapeHtml(r.title || r.run_id)}</strong>
+          <span class="run-sub">${commit} ${escapeHtml(runSummary(r))}</span>
+          ${bar}
+        </span>
+        <span class="run-when">${escapeHtml(when)}${dur ? `<br/>${escapeHtml(dur)}` : ""}</span>`, "run-row" + (live ? " live" : ""));
+    }
+
+    async function refreshRuns() {
+      const kinds = [["", "all"], ["test", "tests"], ["bench", "bench"]];
+      const kindsEl = document.getElementById("runs-kinds");
+      kindsEl.innerHTML = kinds.map(([id, label]) =>
+        `<button type="button" class="${runsKind === id ? "on" : ""}" data-kind="${id}">${label}</button>`
+      ).join("");
+      kindsEl.querySelectorAll("button").forEach(btn => {
+        btn.onclick = () => { runsKind = btn.getAttribute("data-kind"); refreshRuns().catch(() => {}); };
+      });
+      const data = await fetchTimeline(runsKind, 100);
+      const runs = data.runs || [];
+      document.getElementById("runs-meta").textContent =
+        `${runs.length} run(s)` + (data.live ? ` · ${data.live} live` : "");
+      const listEl = document.getElementById("runs-list");
+      listEl.innerHTML = runs.length
+        ? runs.map(runRow).join("")
+        : emptyStart("No runs yet.");
+      bindCopy(listEl);
+    }
+
+    function emptyStart(title) {
+      return `<div class="now-empty">
+        <p>${escapeHtml(title)} Start one — it appears here while it runs:</p>
+        <ul class="actions">
+          <li><button type="button" data-cmd="${escapeAttr(START_TESTS)}">copy</button> <code>${escapeHtml(START_TESTS)}</code></li>
+          <li><button type="button" data-cmd="${escapeAttr(START_BENCH)}">copy</button> <code>${escapeHtml(START_BENCH)}</code></li>
+        </ul>
+      </div>`;
+    }
+
+    function bindCopy(el) {
+      el.querySelectorAll("button[data-cmd]").forEach(btn => {
+        btn.onclick = ev => { ev.preventDefault(); copy(btn.getAttribute("data-cmd")); };
+      });
+    }
+
+    // ---- tests ---------------------------------------------------------------------------
+
+    let testView = null;
+    let testViewRun = null;
+    let testsLive = false;
+
+    function showTestsError(err) {
+      document.getElementById("tests-view").innerHTML =
+        `<div class="now-empty"><p>${escapeHtml(String(err))}</p></div>`;
+    }
+
+    async function refreshTests(reset) {
+      const viewEl = document.getElementById("tests-view");
+      const id = currentRunId || "latest";
+      const [detailRes, list] = await Promise.all([
+        fetch("/api/v1/runs/" + encodeURIComponent(id), { cache: "no-store" }),
+        fetchTimeline("test", 15).catch(() => ({ runs: [] })),
+      ]);
+      renderTestsPicker(list.runs || []);
+      if (!detailRes.ok) {
+        testView = null;
+        testViewRun = null;
+        testsLive = false;
+        const body = await detailRes.json().catch(() => ({}));
+        viewEl.innerHTML = id === "latest"
+          ? emptyStart("No test runs yet.")
+          : `<div class="now-empty"><p>${escapeHtml(body.error || "run not found")}</p></div>`;
+        bindCopy(viewEl);
+        return;
+      }
+      const data = await detailRes.json();
+      if (reset || !testView || testViewRun !== data.run_id) {
+        viewEl.innerHTML = "";
+        const host = document.createElement("div");
+        viewEl.appendChild(host);
+        testView = TR.createView(host, {});
+        testViewRun = data.run_id;
+      }
+      testView.update(data);
+      const item = data.item || {};
+      testsLive = isLive(item);
+      document.title = "airbug hub · Tests · " + (item.state || "") + " · " + String(data.run_id).slice(0, 8);
+    }
+
+    function renderTestsPicker(runs) {
+      const el = document.getElementById("tests-picker");
+      if (!runs.length) {
+        el.innerHTML = "";
+        return;
+      }
+      const following = !currentRunId;
+      const chips = runs.map(r => {
+        const active = r.run_id === testViewRun && !following ? " on" : "";
+        const t = r.totals || {};
+        const label = (r.git && r.git.short) || r.run_id.slice(0, 8);
+        const count = isLive(r) ? `${t.completed || 0}/${t.total || "?"}` : (t.failed ? `${t.failed}✗` : `${t.passed || 0}✓`);
+        return `<a class="pick${active}" href="#/tests/${escapeAttr(r.run_id)}" title="${escapeAttr(r.title + " · " + (TR ? TR.fmtWhen(r.started_at_ms) : ""))}">
+          <span class="atr-dot ${escapeAttr(isLive(r) ? "running" : r.state === "passed" ? "passed" : r.state === "failed" || r.state === "error" ? "failed" : "not_run")}"></span>
+          ${escapeHtml(label)} <small>${escapeHtml(count)}</small></a>`;
+      }).join("");
+      el.innerHTML = `<a class="pick${following ? " on" : ""}" href="#/tests" title="always show the newest run">latest</a>${chips}`;
+    }
+
+    // ---- now -----------------------------------------------------------------------------
+
+    async function refreshNow() {
+      const [timeline, latest, issues] = await Promise.all([
+        fetchTimeline("", 40),
+        fetch("/api/v1/runs/latest?lite=1", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+        fetch("/api/v1/issues", { cache: "no-store" }).then(r => r.json()).catch(() => ({ issues: [] })),
+      ]);
+      const runs = timeline.runs || [];
+      const live = runs.filter(r => isLive(r) || (r.kind === "bench" && r.state === "running"));
+      const liveEl = document.getElementById("now-live");
+      liveEl.innerHTML = `<h2>Live</h2>` + (live.length
+        ? `<div class="runs-list">${live.map(runRow).join("")}</div>`
+        : (runs.length
+          ? `<p class="now-quiet">Nothing running. Start a run and it shows up here within a second.</p>`
+          : emptyStart("Nothing has run in this project yet.")));
+      bindCopy(liveEl);
+
+      const testsEl = document.getElementById("now-tests");
+      if (latest && latest.item) {
+        const item = latest.item;
+        const t = item.totals || {};
+        const c = latest.changes;
+        const lines = [];
+        if (c && c.new_failures_count) {
+          lines.push(`<p class="bad">${c.new_failures_count} new failure(s) since <code>${escapeHtml((c.previous_git && c.previous_git.short) || "previous run")}</code></p>`);
+          lines.push(`<ul class="now-list">${(c.new_failures || []).slice(0, 5).map(id =>
+            `<li><code>${escapeHtml(id.split("::").slice(1).join("::") || id)}</code></li>`).join("")}</ul>`);
+        } else if (c && c.fixed_count) {
+          lines.push(`<p class="good">${c.fixed_count} fixed since <code>${escapeHtml((c.previous_git && c.previous_git.short) || "previous run")}</code></p>`);
+        }
+        if ((latest.flaky || []).length) lines.push(`<p class="warn">${latest.flaky.length} flaky over the last runs</p>`);
+        testsEl.innerHTML = `<h2>Tests</h2>
+          <a class="now-headline" href="#/tests/${escapeAttr(item.run_id)}">
+            <span class="atr-state ${escapeAttr(stateLabel(item))}">${escapeHtml(stateLabel(item))}</span>
+            <span class="now-big">${t.failed ? `<b class="bad">${t.failed}</b> failed · ` : ""}${t.passed || 0} passed</span>
+          </a>
+          ${TR ? TR.progressBar(t, isLive(item)) : ""}
+          <p class="now-quiet">${escapeHtml(item.title)} · ${escapeHtml(item.git && item.git.short ? item.git.short : "")} · ${escapeHtml(TR ? TR.fmtAgo(item.started_at_ms) : "")}</p>
+          ${lines.join("")}`;
+      } else {
+        testsEl.innerHTML = `<h2>Tests</h2><p class="now-quiet">No test runs yet.</p>
+          <ul class="actions"><li><button type="button" data-cmd="${escapeAttr(START_TESTS)}">copy</button> <code>${escapeHtml(START_TESTS)}</code></li></ul>`;
+        bindCopy(testsEl);
+      }
+
+      const benchEl = document.getElementById("now-bench");
+      const bench = runs.filter(r => r.kind === "bench").slice(0, 4);
+      benchEl.innerHTML = `<h2>Bench</h2>` + (bench.length
+        ? `<div class="runs-list compact">${bench.map(runRow).join("")}</div>`
+        : `<p class="now-quiet">No bench runs yet.</p>
+           <ul class="actions"><li><button type="button" data-cmd="${escapeAttr(START_BENCH)}">copy</button> <code>${escapeHtml(START_BENCH)}</code></li></ul>`);
+      bindCopy(benchEl);
+
+      const issuesEl = document.getElementById("now-issues");
+      const open = (issues.issues || []).filter(i => (i.status || "unresolved") === "unresolved");
+      setBadge("issues", open.length ? String(open.length) : "");
+      issuesEl.innerHTML = `<h2>Issues</h2>` + (open.length
+        ? `<a class="now-headline" href="#/issues"><span class="now-big"><b class="bad">${open.length}</b> unresolved</span></a>
+           <ul class="now-list">${open.slice(0, 4).map(i =>
+             `<li>${escapeHtml(i.title || i.id)} <small>×${escapeHtml(String(i.count || 0))}</small></li>`).join("")}</ul>`
+        : `<p class="now-quiet">No unresolved issues.</p>`);
     }
 
     function median(nums) {
@@ -953,23 +1186,13 @@
       metaEl.innerHTML = `<span>hub <code>${escapeHtml(lastHubId)}</code></span><span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
       document.getElementById("reload").onclick = () => {
         refresh(); refreshLogs(); refreshMetrics(); refreshIssues();
-        if (currentCat === "bench") refreshBench().catch(() => {});
+        showRoute();
       };
       renderApis(data.apis);
       lastDomains = data.domains || {};
-      const overviewOrder = ["unit", "bench", "mon", "otel", "err", "collector"];
-      domainsEl.innerHTML = overviewOrder.map(k => card(lastDomains[k])).join("");
-      domainsEl.querySelectorAll("button[data-cmd]").forEach(btn => {
-        btn.addEventListener("click", () => copy(btn.getAttribute("data-cmd")));
-      });
-      domainsEl.querySelectorAll("article.domain").forEach(art => {
-        art.style.cursor = "pointer";
-        art.addEventListener("click", ev => {
-          if (ev.target.closest("button, a")) return;
-          location.hash = "#/" + art.getAttribute("data-id");
-        });
-      });
-      showRoute();
+      const order = ["unit", "bench", "mon", "otel", "err", "collector"];
+      domainsEl.innerHTML = order.filter(k => lastDomains[k]).map(k => card(lastDomains[k])).join("");
+      bindCopy(domainsEl);
     }
 
     renderCats();
@@ -978,8 +1201,24 @@
     logsFilterEl.addEventListener("input", () => paintLogs());
     logsServiceEl.addEventListener("change", () => paintLogs());
     window.addEventListener("hashchange", () => showRoute());
-    if (!location.hash) location.hash = "#/overview";
+    if (!location.hash) location.hash = "#/now";
     else showRoute();
+
+    // One clock for the run views: live tests refresh every 1.5 s, the rest every few ticks.
+    let tick = 0;
+    setInterval(() => {
+      tick++;
+      if (document.hidden) return;
+      if (currentCat === "tests" && (testsLive || tick % 4 === 0)) {
+        refreshTests(false).catch(() => {});
+      } else if (currentCat === "now" && tick % 2 === 0) {
+        refreshNow().catch(() => {});
+      } else if (currentCat === "runs" && tick % 2 === 0) {
+        refreshRuns().catch(() => {});
+      } else if (tick % 4 === 0 && currentCat !== "now" && currentCat !== "runs") {
+        fetchTimeline("", 40).catch(() => {});
+      }
+    }, 1500);
 
     refresh().catch(err => {
       metaEl.textContent = "failed to load /api/v1/status: " + err;

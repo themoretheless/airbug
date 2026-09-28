@@ -7,6 +7,7 @@ mod otel;
 mod unit;
 mod unit_report;
 
+pub(crate) use bench::list_runs as list_bench_dirs;
 pub use unit_report::UnitReportV1;
 
 use serde::Serialize;

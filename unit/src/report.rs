@@ -9,7 +9,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     path::PathBuf,
     sync::{
-        Mutex,
+        Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -38,6 +38,27 @@ fn parent() -> String {
             .map(u64::to_string)
             .unwrap_or_else(|| "null".into())
     })
+}
+/// Who wrote an event: `"pid":…,"bin":…,"test":…`.
+///
+/// Step ids are only unique inside one process, so the collector keys them by `pid`. `bin`
+/// is the test executable's file stem (`mock-1a2b…`), which cargo prints in its
+/// `Running … (target/debug/deps/mock-1a2b…)` line. libtest runs every test on a thread
+/// named after the test, so the thread name attributes the event to its test; `main` and
+/// unnamed threads (doctests, `harness = false`, helper threads) stay unattributed.
+fn origin() -> String {
+    static PROCESS: OnceLock<String> = OnceLock::new();
+    let process = PROCESS.get_or_init(|| {
+        let exe = std::env::current_exe().unwrap_or_default();
+        let bin = exe.file_stem().unwrap_or_default().to_string_lossy();
+        format!("\"pid\":{},\"bin\":{}", std::process::id(), quote(&bin))
+    });
+    let thread = std::thread::current();
+    let test = match thread.name() {
+        Some(name) if name != "main" => quote(clipped(name)),
+        _ => "null".into(),
+    };
+    format!("{process},\"test\":{test}")
 }
 fn clipped(value: &str) -> &str {
     let mut end = value.len().min(MAX_TEXT);
@@ -95,9 +116,10 @@ impl Step {
     fn new(name: &str) -> Self {
         let id = id();
         record(&format!(
-            "{{\"type\":\"step_start\",\"id\":{id},\"parent\":{},\"name\":{}}}",
+            "{{\"type\":\"step_start\",\"id\":{id},\"parent\":{},\"name\":{},{}}}",
             parent(),
-            quote(clipped(name))
+            quote(clipped(name)),
+            origin()
         ));
         PARENTS.with(|parents| parents.borrow_mut().push(id));
         Self {
@@ -110,10 +132,11 @@ impl Step {
             parents.borrow_mut().pop();
         });
         record(&format!(
-            "{{\"type\":\"step_end\",\"id\":{},\"status\":{},\"duration\":{}}}",
+            "{{\"type\":\"step_end\",\"id\":{},\"status\":{},\"duration\":{},{}}}",
             self.id,
             quote(status),
-            self.started.elapsed().as_secs_f64()
+            self.started.elapsed().as_secs_f64(),
+            origin()
         ));
     }
 }
@@ -189,12 +212,13 @@ pub fn attach_bytes(name: &str, media_type: &str, bytes: &[u8]) -> io::Result<()
     *total += bytes.len();
     drop(total);
     emit(&format!(
-        "{{\"type\":\"attachment\",\"parent\":{},\"name\":{},\"mediaType\":{},\"file\":{},\"size\":{}}}",
+        "{{\"type\":\"attachment\",\"parent\":{},\"name\":{},\"mediaType\":{},\"file\":{},\"size\":{},{}}}",
         parent(),
         quote(clipped(name)),
         quote(clipped(media_type)),
         quote(&file),
-        bytes.len()
+        bytes.len(),
+        origin()
     ))
 }
 
@@ -203,12 +227,13 @@ pub(crate) fn comparison(name: &str, expected: &str, actual: &str, passed: bool)
         return;
     }
     record(&format!(
-        "{{\"type\":\"comparison\",\"parent\":{},\"name\":{},\"expected\":{},\"actual\":{},\"passed\":{passed},\"truncated\":{}}}",
+        "{{\"type\":\"comparison\",\"parent\":{},\"name\":{},\"expected\":{},\"actual\":{},\"passed\":{passed},\"truncated\":{},{}}}",
         parent(),
         quote(clipped(name)),
         quote(clipped(expected)),
         quote(clipped(actual)),
-        expected.len() > MAX_TEXT || actual.len() > MAX_TEXT
+        expected.len() > MAX_TEXT || actual.len() > MAX_TEXT,
+        origin()
     ));
 }
 
@@ -246,9 +271,10 @@ pub fn flaky(reason: &str) {
         return;
     }
     record(&format!(
-        "{{\"type\":\"flaky\",\"parent\":{},\"reason\":{}}}",
+        "{{\"type\":\"flaky\",\"parent\":{},\"reason\":{},{}}}",
         parent(),
-        quote(clipped(reason))
+        quote(clipped(reason)),
+        origin()
     ));
 }
 
@@ -275,6 +301,18 @@ mod tests {
     #[test]
     fn json_strings_escape_controls_and_preserve_unicode() {
         assert_eq!(quote("\"\\\n\r\t\0雪"), "\"\\\"\\\\\\n\\r\\t\\u0000雪\"");
+    }
+    #[test]
+    fn origin_names_the_process_and_the_test_thread() {
+        let here = origin();
+        assert!(here.starts_with(&format!("\"pid\":{},", std::process::id())));
+        // libtest names the test thread after the test.
+        assert!(
+            here.ends_with("\"test\":\"report::tests::origin_names_the_process_and_the_test_thread\""),
+            "{here}"
+        );
+        let helper = std::thread::spawn(origin).join().unwrap();
+        assert!(helper.ends_with("\"test\":null"), "{helper}");
     }
     #[test]
     fn clipping_never_splits_utf8() {

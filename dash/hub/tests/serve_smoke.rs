@@ -441,3 +441,144 @@ fn serve_unified_event_archive_accepts_trace() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A throwaway crate with every outcome libtest can report, plus `airbug::report` steps.
+fn write_fixture(root: &Path) {
+    let unit = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../unit");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    // Start from the workspace lockfile so the fixture resolves the same versions offline-ish.
+    let _ = std::fs::copy(unit.join("../Cargo.lock"), root.join("Cargo.lock"));
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+             [dev-dependencies]\nairbug = {{ path = '{}' }}\n\n[workspace]\n",
+            unit.display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        r#"
+/// ```
+/// assert_eq!(demo::add(2, 2), 4);
+/// ```
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn adds() {
+        assert_eq!(super::add(2, 2), 4);
+    }
+
+    #[test]
+    fn fails() {
+        assert_eq!(super::add(2, 2), 5, "math is broken");
+    }
+
+    #[test]
+    #[ignore = "slow"]
+    fn skipped() {}
+
+    #[test]
+    #[should_panic]
+    fn panics() {
+        panic!("expected");
+    }
+
+    #[test]
+    fn reported() {
+        airbug::report::step("Outer", || {
+            airbug::report::step("Inner", || {
+                airbug::report::assert_equal("sum", &4, &super::add(2, 2));
+            });
+        });
+    }
+}
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_runner_writes_a_live_run_the_hub_serves() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-testrun-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    write_fixture(&root);
+
+    // Nobody listens on this port, so the runner must not wait for a hub.
+    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+        .args([
+            "test",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &free_port().to_string(),
+            "--quiet",
+        ])
+        .output()
+        .expect("run airbug-hub test");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(101), "{stderr}");
+    assert!(
+        stderr.contains("failed — 4 passed, 1 failed, 1 ignored"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("FAILED demo (src/lib.rs) › tests::fails"), "{stderr}");
+
+    let (port, _hub) = start_hub(&root);
+    let (st, body) = http(port, "GET", "/api/v1/runs?kind=test", None);
+    assert_eq!(st, 200, "{body}");
+    let runs: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = &runs["runs"][0];
+    assert_eq!(run["kind"], "test", "{body}");
+    assert_eq!(run["state"], "failed", "{body}");
+    assert_eq!(run["totals"]["total"], 6, "{body}");
+    let run_id = run["run_id"].as_str().unwrap().to_string();
+
+    let (st, body) = http(port, "GET", "/api/v1/runs/latest", None);
+    assert_eq!(st, 200, "{body}");
+    let detail: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(detail["run_id"], run_id.as_str());
+    let tests = detail["report"]["tests"].as_array().unwrap();
+    let find = |name: &str| {
+        tests
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} missing in {body}"))
+    };
+    assert_eq!(find("tests::adds")["status"], "passed");
+    assert_eq!(find("tests::panics")["status"], "passed");
+    assert_eq!(find("tests::skipped")["status"], "ignored");
+    assert_eq!(find("tests::skipped")["ignore_reason"], "slow");
+    let failed = find("tests::fails");
+    assert_eq!(failed["status"], "failed");
+    assert!(
+        failed["output"].as_str().unwrap().contains("math is broken"),
+        "{body}"
+    );
+    assert_eq!(find("src/lib.rs - add (line 2)")["status"], "passed", "{body}");
+    let reported = find("tests::reported");
+    assert_eq!(reported["steps"][0]["name"], "Outer", "{body}");
+    assert_eq!(reported["steps"][0]["children"][0]["name"], "Inner", "{body}");
+    assert_eq!(
+        reported["steps"][0]["children"][0]["comparisons"][0]["name"],
+        "sum",
+        "{body}"
+    );
+
+    let (st, body) = http(port, "GET", &format!("/runs/{run_id}/index.html"), None);
+    assert_eq!(st, 200);
+    assert!(body.contains("AirbugTestRun"), "standalone report");
+    let (st, _) = http(port, "GET", &format!("/runs/{run_id}/../manifest.json"), None);
+    assert_eq!(st, 404);
+    let (st, body) = http(port, "GET", "/static/testrun.js", None);
+    assert_eq!(st, 200);
+    assert!(body.contains("AirbugTestRun"));
+
+    let _ = std::fs::remove_dir_all(&root);
+}

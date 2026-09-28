@@ -178,6 +178,7 @@ pub fn mime_for_path(path: &Path) -> &'static str {
         Some("js") => "text/javascript; charset=utf-8",
         Some("html") | Some("htm") => "text/html; charset=utf-8",
         Some("svg") => "image/svg+xml",
+        Some("log") | Some("txt") | Some("md") => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
     }
 }
