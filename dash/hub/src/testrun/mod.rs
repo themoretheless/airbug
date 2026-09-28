@@ -620,7 +620,7 @@ fn prune(runs_dir: &Path, keep: usize, current: &str) {
                 .then_some((manifest.started_at_ms, path))
         })
         .collect();
-    finished.sort_by(|a, b| b.0.cmp(&a.0));
+    finished.sort_by_key(|a| std::cmp::Reverse(a.0));
     // `current` is one of the kept runs.
     for (_, path) in finished.into_iter().skip(keep.saturating_sub(1)) {
         let _ = fs::remove_dir_all(path);

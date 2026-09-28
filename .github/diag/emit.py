@@ -3,10 +3,13 @@ import re, sys
 path, title = sys.argv[1], sys.argv[2]
 text = open(path, errors="replace").read()
 text = re.sub(r"\x1b\[[0-9;]*m", "", text)
-lines = text.splitlines()
+lines = [
+    l for l in text.splitlines()
+    if not re.search(r"\.\.\. ok$|^\s*(Compiling|Checking|Documenting|Downloaded|Fresh) ", l)
+]
 keep = []
 for i, line in enumerate(lines):
-    if re.search(r"^(error|warning)|panicked|FAILED|failures:|assert|^---- |left:|right:|stderr|Error|thread '", line):
+    if re.search(r"^(error|warning)|panicked|FAILED|^failures:|^---- |test result|Running ", line):
         keep.extend(lines[max(0, i - 2): i + 14])
 body = "\n".join(dict.fromkeys(f"{n}\x00{l}" for n, l in enumerate(keep)).keys())
 body = "\n".join(l.split("\x00", 1)[1] for l in body.splitlines()) or text[-6000:]
