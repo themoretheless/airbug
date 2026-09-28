@@ -16,10 +16,49 @@ beside the run directory with `{"url": "...", "pid": 12345}` as soon as the port
 No wrapper is needed — start the run in the background, read `<output>.live.json`, and poll the
 server.
 
+## If `cargo airbug-bench` is missing
+
+This skill is global, but the bench lives in the airbug repo and `airbug-bench` is not on crates.io.
+In a project that does not depend on it, `cargo airbug-bench` fails with `no such command`, and no
+worker binary exists yet. Declare the bench in that project's `Cargo.toml`:
+
+```toml
+[[bench]]
+name = "bench"
+harness = false
+
+[dev-dependencies]
+airbug-bench = { git = "https://github.com/themoretheless/airbug", tag = "airbug-bench-v0.7.0" }
+
+[package.metadata.airbug_bench]
+targets = ["bench"]
+```
+
+Pin by `tag` or `rev`. `branch = "release"` moves: it carries 0.8.0 now, while the newest
+`airbug-bench-v*` tag names 0.7.0. `cargo airbug-bench init` produces the same three tables plus a
+starting `benches/bench.rs`, but points the dependency at a local path (the checkout the CLI was
+built from), so run it first and then replace that line with the pinned form above.
+
+The subcommand resolves from `PATH`, one time per machine:
+
+```sh
+cargo install --git https://github.com/themoretheless/airbug --branch main cargo-airbug-bench
+```
+
+Install the **runner** from `main`. The `release` branch and the `airbug-bench-v*` tags carry the
+library version, and the runner built from those refs predates `<output>.live.json` — from it you get
+the `Live benchmark:` line on stdout and nothing else. The package name goes **positionally**:
+`--bin cargo-airbug-bench` stops with `multiple packages with binaries found: airbug, airbug-hub,
+airbug-mon, bench-forma-example, cargo-airbug-bench`, and `--package` is not accepted as a flag for a
+git source. Inside the airbug repo itself the command is wired up by `.cargo/config.toml`, so neither
+step is needed there.
+
 ## Start a run and give the link
 
 ```sh
-cargo airbug-bench run --program ./target/release/mybench --repetitions 20 \
+EXE=$(cargo bench --no-run --message-format=json 2>/dev/null | jq -r \
+  'select(.reason=="compiler-artifact" and ((.target.kind|index("bench"))!=null) and (.executable!=null)) | .executable')
+cargo airbug-bench run --program "$EXE" --repetitions 20 \
   --output .airbug-bench/myrun --ui --no-open -- <worker args>
 ```
 
@@ -35,8 +74,13 @@ finalized, so a foreground call hangs until it is interrupted.
 - Port and token are fresh per start, and a stale `<output>.live.json` from an earlier run points
   at a dead port. Never reuse a link from an earlier run and never build one by hand; take it from
   the current run only.
-- The first start compiles, which can take minutes without printing a URL. Prefer a prebuilt
-  `./target/release/cargo-airbug-bench`.
+- The first start compiles, which can take minutes without printing a URL. An installed
+  `cargo-airbug-bench` (or a prebuilt `./target/release/cargo-airbug-bench` inside the airbug
+  checkout) removes that wait.
+- A worker binary is not at `target/release/<name>`. `cargo bench` puts it under
+  `target/release/build/<package>/<hash>/out/bench-<hash>`, so take the path from the build output as
+  above rather than assembling it. `cargo airbug-bench build` builds without printing a path, and
+  `bench` — the registered-target list — starts no live server at all; only `run` and `matrix` do.
 - With `--hub` the run registers with airbug-hub first and prints `airbug dash: <url>` too; the
   hub link is the run view, the `Live benchmark:` line is the live progress page.
 
