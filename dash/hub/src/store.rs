@@ -123,6 +123,7 @@ fn test_run_item(dir: &Path) -> Option<RunItem> {
         totals: progress.as_ref().map(|p| p.totals.clone()),
         duration_s: progress.as_ref().and_then(|p| p.duration_s),
         activity: progress.map(|p| p.activity).filter(|a| !a.is_empty()),
+        progress: None,
     })
 }
 
