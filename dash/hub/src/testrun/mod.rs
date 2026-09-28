@@ -129,10 +129,19 @@ pub fn main(args: Vec<String>) -> i32 {
     }
 }
 
+/// `canonicalize` on Windows returns `\\?\C:\…`; cargo, env vars and people want `C:\…`.
+fn plain_path(path: PathBuf) -> PathBuf {
+    match path.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path,
+    }
+}
+
 fn run(options: Options) -> io::Result<i32> {
     let root = options
         .root
         .canonicalize()
+        .map(plain_path)
         .unwrap_or_else(|_| options.root.clone());
     let run_id = uuid::Uuid::new_v4().to_string();
     let in_store = options.out.is_none();
@@ -142,7 +151,7 @@ fn run(options: Options) -> io::Result<i32> {
         None => root.join(RUNS_DIR).join(&run_id),
     };
     fs::create_dir_all(&dir)?;
-    let dir = dir.canonicalize().unwrap_or(dir);
+    let dir = dir.canonicalize().map(plain_path).unwrap_or(dir);
     let events_dir = dir.join("events");
     if events_dir.is_dir() {
         fs::remove_dir_all(&events_dir)?;

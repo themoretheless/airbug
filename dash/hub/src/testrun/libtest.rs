@@ -366,7 +366,8 @@ fn parse_suite_header(line: &str) -> Option<SuiteHeader> {
         None => (SuiteKind::Integration, rest),
     };
     let open = rest.rfind(" (")?;
-    let target = rest[..open].trim().to_string();
+    // Windows prints `src\lib.rs`; ids must not depend on the OS or history breaks.
+    let target = rest[..open].trim().replace('\\', "/");
     let path = rest[open + 2..].strip_suffix(')')?;
     let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
     let binary = file.strip_suffix(".exe").unwrap_or(file).to_string();
@@ -602,7 +603,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
         .unwrap();
         assert_eq!(a.binary, "smoke-0123456789abcdef");
         assert_eq!(a.name, "smoke");
-        assert_eq!(a.target, r"tests\smoke.rs");
+        assert_eq!(a.target, "tests/smoke.rs");
 
         let mut c = Collector::new(Report::default());
         c.list_line("     Running tests/smoke.rs (target/debug/deps/smoke-0123456789abcdef)");
