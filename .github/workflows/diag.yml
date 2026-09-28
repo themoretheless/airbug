@@ -34,3 +34,14 @@ jobs:
       - name: doc
         run: RUSTDOCFLAGS="-D warnings" cargo +stable doc --locked --workspace --all-features --no-deps --exclude airbug-mon > doc.log 2>&1 || true
       - run: python3 .github/diag/emit.py doc.log doc
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - name: tests
+        run: cargo +stable test --locked -p airbug-hub -p airbug --all-features --no-fail-fast > test.log 2>&1 || true
+      - run: python .github/diag/emit.py test.log wintest
