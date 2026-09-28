@@ -417,6 +417,24 @@ fn serve_unified_event_archive_accepts_trace() {
     assert_eq!(st, 202, "{body}");
     assert!(body.contains("\"trace\""), "{body}");
 
+    for (query, count) in [
+        ("service=checkout&environment=test&signal=trace", 1),
+        ("service=other", 0),
+        ("signal=error", 0),
+        ("tag_missing=value", 0),
+    ] {
+        let (status, body) = http(port, "GET", &format!("/api/v1/events?{query}"), None);
+        assert_eq!(status, 200, "{body}");
+        let result: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(result["count"], count, "{query}: {body}");
+        assert_eq!(result["items"].as_array().unwrap().len(), count as usize);
+    }
+    let (status, body) = http(port, "GET", "/api/v1/events?offset=1&limit=1", None);
+    assert_eq!(status, 200, "{body}");
+    let result: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(result["count"], 1);
+    assert!(result["items"].as_array().unwrap().is_empty());
+
     let archived = std::fs::read_to_string(root.join("dash/hub/data/events.jsonl")).unwrap();
     assert!(archived.contains("\"event_id\":\"trace-1\""), "{archived}");
     assert!(archived.contains("\"signal\":\"trace\""), "{archived}");
