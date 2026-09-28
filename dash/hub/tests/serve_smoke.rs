@@ -46,7 +46,13 @@ fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String
         .and_then(|l| l.split_whitespace().nth(1))
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    let body = text.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
+    // Only the first blank line ends the headers: a body checked out with CRLF (Windows)
+    // has its own `\r\n\r\n`.
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .unwrap_or("")
+        .to_string();
     (status, body)
 }
 
@@ -438,6 +444,310 @@ fn serve_unified_event_archive_accepts_trace() {
     let archived = std::fs::read_to_string(root.join("dash/hub/data/events.jsonl")).unwrap();
     assert!(archived.contains("\"event_id\":\"trace-1\""), "{archived}");
     assert!(archived.contains("\"signal\":\"trace\""), "{archived}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A throwaway crate with every outcome libtest can report, plus `airbug::report` steps.
+/// `POST /runs/<id>/rerun` starts a runner for just the failed test, linked to the original.
+fn rerun_failed_tests(port: u16, run_id: &str) {
+    let path = format!("/api/v1/runs/{run_id}/rerun");
+    let (st, body) = http(port, "POST", &path, None);
+    assert_eq!(st, 403, "only JSON posts may start processes: {body}");
+    let (st, body) = http(port, "POST", "/api/v1/runs/latest/rerun", Some("{"));
+    assert_eq!(st, 400, "{body}");
+    let (st, body) = http(port, "POST", &path, Some(r#"{"failed":true}"#));
+    assert_eq!(st, 202, "{body}");
+    let started: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(started["rerun_of"], run_id, "{body}");
+    assert_eq!(started["tests"], 1, "{body}");
+    let rerun_id = started["run_id"].as_str().unwrap().to_string();
+
+    let deadline = Instant::now() + Duration::from_secs(300);
+    let detail = loop {
+        let (st, body) = http(port, "GET", &format!("/api/v1/runs/{rerun_id}"), None);
+        if st == 200 {
+            let detail: serde_json::Value = serde_json::from_str(&body).unwrap();
+            let state = detail["item"]["state"].as_str().unwrap_or("").to_string();
+            if !matches!(state.as_str(), "building" | "running") {
+                break detail;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "rerun did not finish: {st} {body}"
+        );
+        thread::sleep(Duration::from_millis(300));
+    };
+    assert_eq!(detail["item"]["state"], "failed", "{detail}");
+    assert_eq!(detail["manifest"]["rerun_of"], run_id, "{detail}");
+    assert!(
+        detail["manifest"]["title"]
+            .as_str()
+            .unwrap()
+            .ends_with("rerun failed"),
+        "{detail}"
+    );
+    let tests = detail["report"]["tests"].as_array().unwrap();
+    assert_eq!(tests.len(), 1, "{detail}");
+    assert_eq!(tests[0]["name"], "tests::fails", "{detail}");
+    assert_eq!(tests[0]["status"], "failed", "{detail}");
+    eprintln!(
+        "rerun e2e: {} → {rerun_id}: {}",
+        run_id, detail["manifest"]["title"]
+    );
+}
+
+fn write_fixture(root: &Path) {
+    let unit = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../unit");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    // Start from the workspace lockfile so the fixture resolves the same versions offline-ish.
+    let _ = std::fs::copy(unit.join("../Cargo.lock"), root.join("Cargo.lock"));
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+             [dev-dependencies]\nairbug = {{ path = '{}' }}\n\n[workspace]\n",
+            unit.display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        r#"
+/// ```
+/// assert_eq!(demo::add(2, 2), 4);
+/// ```
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn adds() {
+        assert_eq!(super::add(2, 2), 4);
+    }
+
+    #[test]
+    fn fails() {
+        assert_eq!(super::add(2, 2), 5, "math is broken");
+    }
+
+    #[test]
+    #[ignore = "slow"]
+    fn skipped() {}
+
+    #[test]
+    #[should_panic]
+    fn panics() {
+        panic!("expected");
+    }
+
+    #[test]
+    fn reported() {
+        airbug::report::step("Outer", || {
+            airbug::report::step("Inner", || {
+                airbug::report::assert_equal("sum", &4, &super::add(2, 2));
+            });
+        });
+    }
+}
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_runner_writes_a_live_run_the_hub_serves() {
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-testrun-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    write_fixture(&root);
+
+    // Nobody listens on this port, so the runner must not wait for a hub.
+    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+        .args([
+            "test",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &free_port().to_string(),
+            "--quiet",
+        ])
+        .output()
+        .expect("run airbug-hub test");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(101), "{stderr}");
+    assert!(
+        stderr.contains("failed — 4 passed, 1 failed, 1 ignored"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("FAILED demo (src/lib.rs) › tests::fails"),
+        "{stderr}"
+    );
+
+    let (port, _hub) = start_hub(&root);
+    let (st, body) = http(port, "GET", "/api/v1/runs?kind=test", None);
+    assert_eq!(st, 200, "{body}");
+    let runs: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = &runs["runs"][0];
+    assert_eq!(run["kind"], "test", "{body}");
+    assert_eq!(run["state"], "failed", "{body}");
+    assert_eq!(run["totals"]["total"], 6, "{body}");
+    let run_id = run["run_id"].as_str().unwrap().to_string();
+
+    let (st, body) = http(port, "GET", "/api/v1/runs/latest", None);
+    assert_eq!(st, 200, "{body}");
+    let detail: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(detail["run_id"], run_id.as_str());
+    let tests = detail["report"]["tests"].as_array().unwrap();
+    let find = |name: &str| {
+        tests
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} missing in {body}"))
+    };
+    assert_eq!(find("tests::adds")["status"], "passed");
+    assert_eq!(find("tests::panics")["status"], "passed");
+    assert_eq!(find("tests::skipped")["status"], "ignored");
+    assert_eq!(find("tests::skipped")["ignore_reason"], "slow");
+    let failed = find("tests::fails");
+    assert_eq!(failed["status"], "failed");
+    assert!(
+        failed["output"]
+            .as_str()
+            .unwrap()
+            .contains("math is broken"),
+        "{body}"
+    );
+    // rustdoc names doctests after the file path, which uses `\` on Windows.
+    let doctest = tests
+        .iter()
+        .find(|t| {
+            t["name"]
+                .as_str()
+                .unwrap_or("")
+                .ends_with(" - add (line 2)")
+        })
+        .unwrap_or_else(|| panic!("doctest missing in {body}"));
+    assert_eq!(doctest["status"], "passed", "{body}");
+    let reported = find("tests::reported");
+    assert_eq!(reported["steps"][0]["name"], "Outer", "{body}");
+    assert_eq!(
+        reported["steps"][0]["children"][0]["name"], "Inner",
+        "{body}"
+    );
+    assert_eq!(
+        reported["steps"][0]["children"][0]["comparisons"][0]["name"], "sum",
+        "{body}"
+    );
+
+    assert_eq!(detail["rerun"]["supported"], true, "{body}");
+    assert_eq!(detail["rerun"]["failed"], 1, "{body}");
+    assert!(
+        detail["rerun"]["command_failed"]
+            .as_str()
+            .unwrap()
+            .contains("--exact tests::fails"),
+        "{body}"
+    );
+
+    let (st, body) = http(port, "GET", &format!("/runs/{run_id}/index.html"), None);
+    assert_eq!(st, 200);
+    assert!(body.contains("AirbugTestRun"), "standalone report");
+    let (st, _) = http(
+        port,
+        "GET",
+        &format!("/runs/{run_id}/../manifest.json"),
+        None,
+    );
+    assert_eq!(st, 404);
+    let (st, body) = http(port, "GET", "/static/testrun.js", None);
+    assert_eq!(st, 200);
+    assert!(body.contains("AirbugTestRun"));
+
+    rerun_failed_tests(port, &run_id);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn nextest_runner_reports_the_same_fixture() {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let installed = Command::new(&cargo)
+        .args(["nextest", "--version"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    if !installed {
+        eprintln!("skipping: cargo-nextest is not installed");
+        return;
+    }
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-nextest-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    write_fixture(&root);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+        .args([
+            "test",
+            "--nextest",
+            "--root",
+            root.to_str().unwrap(),
+            "--port",
+            &free_port().to_string(),
+            "--quiet",
+        ])
+        .output()
+        .expect("run airbug-hub test --nextest");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_ne!(output.status.code(), Some(0), "{stderr}");
+    assert!(
+        stderr.contains("failed — 3 passed, 1 failed, 1 ignored"),
+        "{stderr}"
+    );
+
+    let (port, _hub) = start_hub(&root);
+    let (st, body) = http(port, "GET", "/api/v1/runs/latest", None);
+    assert_eq!(st, 200, "{body}");
+    let detail: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(detail["manifest"]["runner"], "nextest", "{body}");
+    assert_eq!(detail["item"]["state"], "failed", "{body}");
+    let tests = detail["report"]["tests"].as_array().unwrap();
+    let find = |name: &str| {
+        tests
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} missing in {body}"))
+    };
+    assert_eq!(find("tests::adds")["status"], "passed");
+    assert_eq!(find("tests::adds")["suite"], "demo", "{body}");
+    assert_eq!(find("tests::panics")["status"], "passed");
+    assert_eq!(find("tests::skipped")["status"], "ignored");
+    let failed = find("tests::fails");
+    assert_eq!(failed["status"], "failed");
+    assert!(
+        failed["output"]
+            .as_str()
+            .unwrap_or("")
+            .contains("math is broken"),
+        "{body}"
+    );
+    let reported = find("tests::reported");
+    assert_eq!(reported["status"], "passed");
+    assert_eq!(reported["steps"][0]["name"], "Outer", "{body}");
+
+    assert_eq!(detail["rerun"]["nextest"], true, "{body}");
+    let command = detail["rerun"]["command_failed"].as_str().unwrap();
+    assert!(command.contains("--nextest"), "{command}");
+    assert!(command.contains("test(=tests::fails)"), "{command}");
+    eprintln!(
+        "nextest e2e: {} tests, rerun command: {command}",
+        tests.len()
+    );
 
     let _ = std::fs::remove_dir_all(&root);
 }

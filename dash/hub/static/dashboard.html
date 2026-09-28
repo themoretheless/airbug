@@ -4,10 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>airbug hub</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/dashboard.css" />
+  <link rel="stylesheet" href="/static/testrun.css" />
 </head>
 <body>
   <main class="shell">
@@ -18,12 +16,27 @@
     <p class="lede" id="lede">Local developer hub — pick a category.</p>
     <div class="meta" id="meta">loading…</div>
 
-    <section class="panel" data-cat="overview" id="panel-overview" hidden>
-      <section class="domains" id="domains" aria-live="polite"></section>
+    <section class="panel atr" data-cat="now" id="panel-now" hidden>
+      <div class="now-grid">
+        <article class="now-card now-wide" id="now-live" aria-live="polite"></article>
+        <article class="now-card" id="now-tests"></article>
+        <article class="now-card" id="now-bench"></article>
+        <article class="now-card" id="now-issues"></article>
+      </div>
     </section>
 
-    <section class="panel" data-cat="domain" id="panel-domain" hidden>
-      <section class="domains domains-one" id="domain-one" aria-live="polite"></section>
+    <section class="panel atr" data-cat="runs" id="panel-runs" hidden>
+      <div class="runs-head">
+        <h2>Runs</h2>
+        <div class="runs-kinds" id="runs-kinds" role="tablist" aria-label="Run kind"></div>
+        <div class="runs-meta" id="runs-meta">loading…</div>
+      </div>
+      <div class="runs-list" id="runs-list" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" data-cat="tests" id="panel-tests" hidden>
+      <div class="tests-picker atr" id="tests-picker"></div>
+      <div class="tests-view" id="tests-view"></div>
     </section>
 
     <section class="panel" data-cat="bench" id="panel-bench" hidden>
@@ -54,7 +67,8 @@
       </section>
     </section>
 
-    <section class="panel" data-cat="apis" id="panel-apis" hidden>
+    <section class="panel" data-cat="system" id="panel-system" hidden>
+      <section class="domains" id="domains" aria-live="polite"></section>
       <section class="apis" id="apis">
         <div class="apis-head">
           <h2>Local APIs</h2>
@@ -115,6 +129,7 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
+  <script src="/static/testrun.js"></script>
   <script src="/static/dashboard.js"></script>
 </body>
 </html>

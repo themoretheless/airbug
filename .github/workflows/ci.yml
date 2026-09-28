@@ -47,6 +47,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
       - run: cargo +stable test --locked -p airbug-err
+      # Lets the hub's `--nextest` integration test run instead of skipping.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - run: cargo +stable test --locked -p airbug-hub
 
   airbug-mon:
@@ -61,8 +65,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
-      - name: Generate web report
-        run: cargo +stable run --locked -p airbug --bin airbug_report -- --all-features --locked --doc-tests
+      - name: Generate web report (per-test run, same format the hub shows live)
+        run: cargo +stable run --locked -p airbug-hub -- test --title "CI tests" --out target/airbug-report -- --locked --workspace --all-features --exclude airbug-mon
       - uses: actions/upload-artifact@v4
         if: always()
         with:

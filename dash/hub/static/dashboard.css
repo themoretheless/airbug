@@ -743,3 +743,153 @@
       .domain { grid-template-columns: 1fr; gap: 0.6rem; }
       .log-row { grid-template-columns: 1fr; gap: 0.15rem; }
     }
+
+    /* ---- nav badges ------------------------------------------------------------------ */
+    .cat-badge {
+      margin-left: 0.4rem;
+      padding: 0.05rem 0.35rem;
+      font-size: 0.62rem;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: var(--deep);
+      background: var(--glow);
+    }
+    .cat-badge[hidden] { display: none; }
+    .cats a[data-cat="issues"] .cat-badge { color: #fff; background: var(--bad); }
+
+    /* ---- now ------------------------------------------------------------------------- */
+    .now-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      background: #0b3d2e22;
+      border: 1px solid #0b3d2e33;
+      animation: rise 700ms ease-out both;
+    }
+    .now-card {
+      min-width: 0;
+      padding: 1.1rem 1.2rem 1.25rem;
+      background: color-mix(in srgb, #f7fbf8 90%, transparent);
+    }
+    .now-wide { grid-column: 1 / -1; }
+    .now-card h2, .runs-head h2 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.6rem;
+      font-weight: 400;
+      margin: 0 0 0.6rem;
+      color: var(--deep);
+    }
+    .now-headline {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-bottom: 0.55rem;
+      color: inherit;
+      text-decoration: none;
+    }
+    .now-headline:hover .now-big { color: var(--leaf); }
+    .now-big { font-size: 1.05rem; }
+    .now-card .bad, .now-big .bad { color: var(--bad); }
+    .now-card .good { color: var(--leaf); }
+    .now-card .warn { color: var(--warn); }
+    .now-card p { margin: 0.45rem 0 0; font-size: 0.8rem; }
+    .now-quiet { color: var(--mute); }
+    .now-list { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.76rem; overflow-wrap: anywhere; }
+    .now-list small { color: var(--mute); }
+    .now-empty p { margin: 0 0 0.4rem; color: var(--mute); font-size: 0.85rem; }
+    .now-cmp { width: 100%; margin: 0.5rem 0 0.6rem; border-collapse: collapse; font-size: 0.74rem; }
+    .now-cmp td { padding: 0.25rem 0.35rem; border-top: 1px solid #0b3d2e18; overflow-wrap: anywhere; }
+    .now-cmp td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .now-cmp small { color: var(--mute); }
+    .now-cmp tr.bad td.num, .now-cmp tr.bad td:last-child { color: var(--bad); }
+    .now-cmp tr.good td.num, .now-cmp tr.good td:last-child { color: var(--leaf); }
+    .now-cmp tr.warn td:last-child { color: var(--warn); }
+    .now-empty code, .now-card .actions code { font-size: 0.74rem; }
+    @media (max-width: 760px) {
+      .now-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ---- runs ------------------------------------------------------------------------ */
+    .runs-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.75rem 1.25rem;
+      margin-bottom: 0.85rem;
+    }
+    .runs-head h2 { margin: 0; font-size: 2rem; }
+    .runs-kinds { display: flex; gap: 0.3rem; }
+    .runs-kinds button {
+      font: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.55rem;
+      color: var(--mute);
+      background: #ffffff66;
+      border: 1px solid #0b3d2e22;
+      cursor: pointer;
+    }
+    .runs-kinds button.on { color: var(--deep); background: #f7fbf8; border-color: var(--glow); }
+    .runs-meta { margin-left: auto; font-size: 0.75rem; color: var(--mute); }
+    .runs-list { display: grid; gap: 1px; background: #0b3d2e1a; border: 1px solid #0b3d2e26; }
+    #runs-list .now-empty { padding: 1rem 1.1rem; background: #f7fbf8; }
+    .run-row {
+      display: grid;
+      grid-template-columns: 3.4rem 6.2rem minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.65rem 0.85rem;
+      color: inherit;
+      text-decoration: none;
+      background: color-mix(in srgb, #f7fbf8 92%, transparent);
+      transition: background 150ms ease;
+    }
+    .run-row:hover { background: #fff; }
+    .run-row.live { box-shadow: inset 3px 0 0 var(--glow); }
+    .run-row .atr-state { justify-self: start; }
+    .run-kind {
+      font-size: 0.64rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--mute);
+    }
+    .run-kind.bench { color: #3d5c8a; }
+    .run-main { display: grid; gap: 0.2rem; min-width: 0; }
+    .run-main strong { font-weight: 500; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .run-sub { font-size: 0.72rem; color: var(--mute); overflow-wrap: anywhere; }
+    .run-sub code { color: var(--deep); }
+    .run-sub em { font-style: normal; color: var(--warn); margin-left: 0.15rem; }
+    .run-when { font-size: 0.7rem; color: var(--mute); text-align: right; white-space: nowrap; }
+    .runs-list.compact .run-row { grid-template-columns: 5.6rem minmax(0, 1fr) auto; }
+    .runs-list.compact .run-kind { display: none; }
+    @media (max-width: 640px) {
+      .run-row { grid-template-columns: 5.6rem minmax(0, 1fr); }
+      .run-kind, .run-when { display: none; }
+    }
+
+    /* ---- tests ----------------------------------------------------------------------- */
+    .tests-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-bottom: 0.85rem;
+    }
+    .tests-picker:empty { display: none; }
+    .tests-picker .pick {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.55rem;
+      font-size: 0.72rem;
+      color: var(--mute);
+      text-decoration: none;
+      background: #ffffff66;
+      border: 1px solid #0b3d2e1f;
+    }
+    .tests-picker .pick small { color: var(--mute); }
+    .tests-picker .pick:hover { color: var(--deep); }
+    .tests-picker .pick.on { color: var(--deep); background: #f7fbf8; border-color: var(--glow); }
+    .tests-picker .atr-dot { width: 0.55rem; height: 0.55rem; }
+    .tests-view .now-empty { padding: 1.1rem 1.2rem; background: #f7fbf8; border: 1px solid #0b3d2e22; }
