@@ -46,7 +46,13 @@ fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String
         .and_then(|l| l.split_whitespace().nth(1))
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    let body = text.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
+    // Only the first blank line ends the headers: a body checked out with CRLF (Windows)
+    // has its own `\r\n\r\n`.
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .unwrap_or("")
+        .to_string();
     (status, body)
 }
 
