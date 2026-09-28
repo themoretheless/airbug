@@ -9,7 +9,7 @@ lines = [
 ]
 picked = set()
 for i, line in enumerate(lines):
-    if re.search(r"^(error|warning)|panicked|FAILED|^failures:|^---- |test result|Running |skipping|^test ", line):
+    if re.search(r"^(error|warning)|panicked|FAILED|^failures:|^---- |test result|Running |skipping|e2e:|^test ", line):
         picked.update(range(max(0, i - 2), min(len(lines), i + 14)))
 body = "\n".join(lines[i] for i in sorted(picked)) or text[-6000:]
 chunks = [body[i:i + 3800] for i in range(0, len(body), 3800)][:30]

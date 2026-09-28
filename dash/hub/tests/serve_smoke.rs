@@ -492,6 +492,10 @@ fn rerun_failed_tests(port: u16, run_id: &str) {
     assert_eq!(tests.len(), 1, "{detail}");
     assert_eq!(tests[0]["name"], "tests::fails", "{detail}");
     assert_eq!(tests[0]["status"], "failed", "{detail}");
+    eprintln!(
+        "rerun e2e: {} → {rerun_id}: {}",
+        run_id, detail["manifest"]["title"]
+    );
 }
 
 fn write_fixture(root: &Path) {
@@ -740,6 +744,10 @@ fn nextest_runner_reports_the_same_fixture() {
     let command = detail["rerun"]["command_failed"].as_str().unwrap();
     assert!(command.contains("--nextest"), "{command}");
     assert!(command.contains("test(=tests::fails)"), "{command}");
+    eprintln!(
+        "nextest e2e: {} tests, rerun command: {command}",
+        tests.len()
+    );
 
     let _ = std::fs::remove_dir_all(&root);
 }
