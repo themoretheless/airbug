@@ -277,7 +277,7 @@
         `<li><button type="button" class="link" data-goto="${esc(id)}">${esc(testLabel(id))}</button></li>`
       ).join("");
       el.innerHTML = `<div class="atr-changes ${tone}">
-        vs ${prev} <span class="atr-count">(${esc(fmtAgo(c.previous_started_at_ms))})</span>:
+        vs ${prev}${c.previous_started_at_ms ? ` <span class="atr-count">(${esc(fmtAgo(c.previous_started_at_ms))})</span>` : ""}:
         ${bits.length ? bits.join(" · ") : "no status changes"}
         ${list ? `<ul>${list}</ul>` : ""}
       </div>`;

@@ -1,5 +1,7 @@
 # Unreleased
 
+- `airbug::report` events carry `pid`, `bin` and `test` (thread name) so a runner can
+  attribute steps, comparisons and attachments to the test that produced them.
 - Renamed the crates: `runit` is now `airbug`, `runit-macros` is now
   `airbug-macros`. Breaking for every user; update the dependency name and any
   `runit::` paths.

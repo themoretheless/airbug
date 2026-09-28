@@ -97,22 +97,27 @@ Checks, in order:
    started from a non-interactive shell inherits SIGINT as ignored — stop it with
    SIGTERM.
 
-## `airbug` (unit) has no live dashboard
+## Tests are live in the hub: `cargo airbug test`
 
-`airbug` is a test-support library. Its one binary, `airbug_report`, blocks on
-`cargo test --workspace` and writes the report only afterwards, so there is nothing to
-attach a URL to while tests run. Do not invent one.
+`cargo airbug test` (alias for `airbug-hub test`) wraps `cargo test`, lists tests first
+so progress has a denominator, and writes a run directory the hub reads while it runs.
 
 ```sh
-cargo run -p airbug --bin airbug_report -- --all-features --locked --doc-tests
+cargo airbug test -- --workspace --exclude airbug-mon   # anything after -- goes to cargo test
 ```
 
-- It writes `target/airbug-report/{report.json,index.html}` at the end
-  (`unit/src/bin/airbug_report.rs:85`); CI does exactly this and uploads the folder.
-- Hand over `http://127.0.0.1:8790/report/` — the hub serves that folder — and say it is
-  a snapshot that appears only when the run finishes, not a live view.
-- Per-test machine-readable events are written only when something exports
-  `AIRBUG_REPORT_DIR` (`unit/src/report.rs:28`); the report binary does not set it.
+- stderr prints `Live tests: http://127.0.0.1:8790/#/tests/<run_id>` when a hub for this
+  root is up (otherwise it says how to start one). Hand over that URL — it is live, per
+  test, and keeps working after the run finishes.
+- Files: `.airbug/runs/<run_id>/{manifest,progress,report}.json`, `output.log`, `events/`,
+  and a self-contained `index.html`. `report.json` is `airbug.test-report/1`.
+- The runner sets `AIRBUG_REPORT_DIR`, so `airbug::report` steps, comparisons and
+  attachments land on the right test (`unit/src/report.rs`).
+- Exit code: 0 all passed, cargo's code otherwise, 130 on Ctrl+C. `--out DIR` writes the
+  run somewhere else (CI uses `target/airbug-report`); `--quiet` hides cargo's output.
+- JSON for agents: `GET /api/v1/runs?kind=test` and `GET /api/v1/runs/latest` (per-test
+  status, failure output, steps, new failures vs the previous run, flaky tests).
+- `airbug_report` (the old end-of-run snapshot at `/report/`) still exists but is legacy.
 
 ## Deeper docs
 

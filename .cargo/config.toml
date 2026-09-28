@@ -1,2 +1,4 @@
 [alias]
+# Live per-test runs in the hub: `cargo airbug test -- --workspace`; `cargo airbug serve`.
+airbug = "run -q -p airbug-hub --"
 airbug-bench = "run --release -p cargo-airbug-bench --"
