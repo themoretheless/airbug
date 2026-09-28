@@ -157,12 +157,8 @@ impl Collector {
             };
             for (name, case) in cases {
                 let filter = case.get("filter-match");
-                let status = filter
-                    .and_then(|f| f.get("status"))
-                    .and_then(Value::as_str);
-                let reason = filter
-                    .and_then(|f| f.get("reason"))
-                    .and_then(Value::as_str);
+                let status = filter.and_then(|f| f.get("status")).and_then(Value::as_str);
+                let reason = filter.and_then(|f| f.get("reason")).and_then(Value::as_str);
                 match (status, reason) {
                     (Some("mismatch"), Some("ignored")) => {
                         let test = self.test_index(index, name);
@@ -242,12 +238,7 @@ impl Collector {
         let Some(outcome) = outcome else {
             return;
         };
-        let suite = match self
-            .report
-            .suites
-            .iter()
-            .position(|s| s.name == binary_id)
-        {
+        let suite = match self.report.suites.iter().position(|s| s.name == binary_id) {
             Some(index) => index,
             None => self.nextest_suite(binary_id, "", String::new()),
         };
@@ -268,10 +259,8 @@ impl Collector {
                 test.status = TestStatus::Passed;
                 if retried || self.nextest.failed_attempts.contains(&index) {
                     let attempt = status.attempt.map(|a| format!(" (attempt {a})"));
-                    test.flaky.push(format!(
-                        "passed on retry{}",
-                        attempt.unwrap_or_default()
-                    ));
+                    test.flaky
+                        .push(format!("passed on retry{}", attempt.unwrap_or_default()));
                 }
             }
             other => test.status = other,
@@ -364,7 +353,9 @@ fn parse_status(trimmed: &str) -> Option<StatusLine<'_>> {
     };
     if words.is_empty()
         || !words.iter().all(status_word)
-        || !words.iter().any(|w| w.chars().any(|c| c.is_ascii_uppercase()))
+        || !words
+            .iter()
+            .any(|w| w.chars().any(|c| c.is_ascii_uppercase()))
     {
         return None;
     }
@@ -471,7 +462,10 @@ error: test run failed";
         assert_eq!(c.report.suites[0].id, "demo");
         assert_eq!(c.report.suites[0].binary, "demo-0123456789abcdef");
         assert_eq!(c.suite_for_binary("it-fedcba9876543210"), Some("demo::it"));
-        assert_eq!(c.report.totals.total, 6, "filtered test is not part of the run");
+        assert_eq!(
+            c.report.totals.total, 6,
+            "filtered test is not part of the run"
+        );
         assert_eq!(status(&c, "demo", "tests::skipped"), TestStatus::Ignored);
         assert!(c.find_test("demo", "tests::filtered").is_none());
     }
@@ -500,12 +494,7 @@ error: test run failed";
         assert!(flaky.output.is_none());
         assert_eq!(c.report.totals.failed, 2);
         assert_eq!(c.report.totals.passed, 2);
-        assert!(
-            c.report
-                .suites
-                .iter()
-                .all(|s| s.state == SuiteState::Done)
-        );
+        assert!(c.report.suites.iter().all(|s| s.state == SuiteState::Done));
     }
 
     #[test]
@@ -546,16 +535,44 @@ thread 'tests::fails' panicked at 'boom'
 
     #[test]
     fn list_drops_run_only_options() {
-        let args: Vec<String> = ["--workspace", "--retries", "2", "--no-fail-fast", "-j=4", "-p", "x"]
-            .map(String::from)
-            .to_vec();
+        let args: Vec<String> = [
+            "--workspace",
+            "--retries",
+            "2",
+            "--no-fail-fast",
+            "-j=4",
+            "-p",
+            "x",
+        ]
+        .map(String::from)
+        .to_vec();
         assert_eq!(
             list_args(&args, &["foo".into()]),
-            ["nextest", "list", "--message-format", "json", "--workspace", "-p", "x", "--", "foo"]
+            [
+                "nextest",
+                "list",
+                "--message-format",
+                "json",
+                "--workspace",
+                "-p",
+                "x",
+                "--",
+                "foo"
+            ]
         );
         assert_eq!(
             run_args(&args, &[]),
-            ["nextest", "run", "--workspace", "--retries", "2", "--no-fail-fast", "-j=4", "-p", "x"]
+            [
+                "nextest",
+                "run",
+                "--workspace",
+                "--retries",
+                "2",
+                "--no-fail-fast",
+                "-j=4",
+                "-p",
+                "x"
+            ]
         );
     }
 }

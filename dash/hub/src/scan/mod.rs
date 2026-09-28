@@ -177,7 +177,8 @@ pub(crate) fn local_apis(root: &Path, port: u16, _domains: &Domains) -> Vec<ApiE
             name: "Rerun a test run",
             method: "POST",
             href: format!("{base}/api/v1/runs/<run_id>/rerun"),
-            detail: "JSON {\"failed\": true} reruns failed tests; false repeats the whole run".into(),
+            detail: "JSON {\"failed\": true} reruns failed tests; false repeats the whole run"
+                .into(),
             available: latest_test.is_some(),
         },
         ApiEndpoint {

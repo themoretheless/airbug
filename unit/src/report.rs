@@ -317,7 +317,10 @@ mod tests {
         let here = origin();
         if std::env::var_os("NEXTEST_TEST_NAME").is_some() {
             // nextest: the process is the test, whatever the thread.
-            assert!(here.contains("origin_names_the_process_and_the_test_thread"), "{here}");
+            assert!(
+                here.contains("origin_names_the_process_and_the_test_thread"),
+                "{here}"
+            );
             return;
         }
         assert!(here.starts_with(&format!("\"pid\":{},", std::process::id())));

@@ -184,9 +184,12 @@ fn handle_api(
                 }
             }
         }
-        ("POST", p) if p.starts_with("/runs/") && p.ends_with("/rerun") => {
-            handle_rerun(stream, app, req, &p["/runs/".len()..p.len() - "/rerun".len()])
-        }
+        ("POST", p) if p.starts_with("/runs/") && p.ends_with("/rerun") => handle_rerun(
+            stream,
+            app,
+            req,
+            &p["/runs/".len()..p.len() - "/rerun".len()],
+        ),
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
         ("GET", "/bench/compare") => {
             let run = http::query_str(&req.query, "run");

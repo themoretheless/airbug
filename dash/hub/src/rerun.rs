@@ -408,7 +408,10 @@ mod tests {
         let plan = plan_from(&manifest(RUNNER_CARGO_TEST), &report(), false).unwrap();
         assert_eq!(plan.test_args, manifest(RUNNER_CARGO_TEST).test_args);
         assert_eq!(plan.tests, 0);
-        assert!(plan_from(&manifest(""), &report(), false).is_err(), "old run");
+        assert!(
+            plan_from(&manifest(""), &report(), false).is_err(),
+            "old run"
+        );
         let green = LightReport {
             tests: vec![LightTest {
                 suite: "s".into(),

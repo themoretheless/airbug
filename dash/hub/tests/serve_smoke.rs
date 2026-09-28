@@ -473,7 +473,10 @@ fn rerun_failed_tests(port: u16, run_id: &str) {
                 break detail;
             }
         }
-        assert!(Instant::now() < deadline, "rerun did not finish: {st} {body}");
+        assert!(
+            Instant::now() < deadline,
+            "rerun did not finish: {st} {body}"
+        );
         thread::sleep(Duration::from_millis(300));
     };
     assert_eq!(detail["item"]["state"], "failed", "{detail}");

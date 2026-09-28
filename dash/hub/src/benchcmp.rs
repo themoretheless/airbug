@@ -126,7 +126,12 @@ fn decision_rank(d: &Decision) -> u8 {
     }
 }
 
-fn result(mode: &str, current: &Entry, previous: Option<&Entry>, mut rows: Vec<Comparison>) -> Value {
+fn result(
+    mode: &str,
+    current: &Entry,
+    previous: Option<&Entry>,
+    mut rows: Vec<Comparison>,
+) -> Value {
     let count = |d: Decision| rows.iter().filter(|r| r.decision == d).count();
     let summary = json!({
         "regression": count(Decision::Regression),
@@ -277,7 +282,9 @@ mod tests {
     #[test]
     fn latest_run_is_compared_with_the_previous_comparable_one() {
         let mut other_env = run("other", &[("candidate", &FAST)]);
-        other_env.environment.insert("host".into(), "elsewhere".into());
+        other_env
+            .environment
+            .insert("host".into(), "elsewhere".into());
         let entries = vec![
             entry("new", 3, run("new", &[("candidate", &SLOW)])),
             entry("other", 2, other_env),
@@ -286,7 +293,10 @@ mod tests {
         let value = compare_entries(&entries, None);
         assert_eq!(value["mode"], "previous", "{value}");
         assert_eq!(value["current"]["id"], "new");
-        assert_eq!(value["previous"]["id"], "old", "different environment skipped");
+        assert_eq!(
+            value["previous"]["id"], "old",
+            "different environment skipped"
+        );
         assert_eq!(value["summary"]["regression"], 1, "{value}");
         let change = value["rows"][0]["change_percent"].as_f64().unwrap();
         assert!((change - 100.0).abs() < 1.0, "{change}");
@@ -302,6 +312,9 @@ mod tests {
         let alone = compare_entries(&[entry("x", 1, run("x", &[("candidate", &FAST)]))], None);
         assert!(alone["mode"].is_null());
         assert_eq!(alone["note"], "no earlier finished run to compare with");
-        assert_eq!(compare_entries(&[], None)["note"], "no finished bench run yet");
+        assert_eq!(
+            compare_entries(&[], None)["note"],
+            "no finished bench run yet"
+        );
     }
 }

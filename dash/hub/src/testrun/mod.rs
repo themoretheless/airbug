@@ -794,7 +794,10 @@ mod tests {
                 "tests::fails"
             ]
         );
-        assert_eq!(run_command(&options, true)[..4], ["nextest", "list", "--message-format", "json"]);
+        assert_eq!(
+            run_command(&options, true)[..4],
+            ["nextest", "list", "--message-format", "json"]
+        );
         assert!(parse_args(["--run-id", "../x"]).is_err());
     }
 
