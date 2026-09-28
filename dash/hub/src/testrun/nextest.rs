@@ -63,7 +63,6 @@ pub struct State {
     capture: Option<(usize, String)>,
     /// Tests that failed an attempt earlier in this run (for flaky detection).
     failed_attempts: Vec<usize>,
-    listed: bool,
 }
 
 /// The listing pass: `cargo nextest list --message-format json [args] [-- filters]`.
@@ -171,7 +170,6 @@ impl Collector {
                 }
             }
         }
-        self.nextest.listed = true;
         self.report.recount();
     }
 
@@ -312,10 +310,6 @@ impl Collector {
             }
         }
         self.report.recount();
-    }
-
-    pub fn nextest_listed(&self) -> bool {
-        self.nextest.listed
     }
 
     fn nextest_activity(&mut self, trimmed: &str) {

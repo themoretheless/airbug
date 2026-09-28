@@ -7,12 +7,11 @@ lines = [
     l for l in text.splitlines()
     if not re.search(r"\.\.\. ok$|^\s*(Compiling|Checking|Documenting|Downloaded|Fresh) ", l)
 ]
-keep = []
+picked = set()
 for i, line in enumerate(lines):
-    if re.search(r"^(error|warning)|panicked|FAILED|^failures:|^---- |test result|Running ", line):
-        keep.extend(lines[max(0, i - 2): i + 14])
-body = "\n".join(dict.fromkeys(f"{n}\x00{l}" for n, l in enumerate(keep)).keys())
-body = "\n".join(l.split("\x00", 1)[1] for l in body.splitlines()) or text[-6000:]
+    if re.search(r"^(error|warning)|panicked|FAILED|^failures:|^---- |test result|Running |skipping|^test ", line):
+        picked.update(range(max(0, i - 2), min(len(lines), i + 14)))
+body = "\n".join(lines[i] for i in sorted(picked)) or text[-6000:]
 chunks = [body[i:i + 3800] for i in range(0, len(body), 3800)][:30]
 kinds = ["error"] * 10 + ["warning"] * 10 + ["notice"] * 10
 for n, (kind, chunk) in enumerate(zip(kinds, chunks)):

@@ -34,6 +34,9 @@ jobs:
       - name: tests
         run: cargo +stable test --locked -p airbug-hub -p airbug --all-features --no-fail-fast > test.log 2>&1 || true
       - run: python3 .github/diag/emit.py test.log test
+      - name: nextest e2e
+        run: cargo +stable test --locked -p airbug-hub --test serve_smoke -- --nocapture --test-threads 1 runner > e2e.log 2>&1 || true
+      - run: python3 .github/diag/emit.py e2e.log e2e
       - name: doc
         run: RUSTDOCFLAGS="-D warnings" cargo +stable doc --locked --workspace --all-features --no-deps --exclude airbug-mon > doc.log 2>&1 || true
       - run: python3 .github/diag/emit.py doc.log doc
