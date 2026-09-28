@@ -73,13 +73,18 @@ pub fn read_request(stream: &mut TcpStream) -> std::io::Result<Request> {
     })
 }
 
-pub fn query_usize(query: &str, key: &str, default: usize) -> usize {
+pub fn query_value(query: &str, key: &str) -> Option<String> {
     query
         .split('&')
-        .find_map(|pair| {
+        .filter_map(|pair| {
             let (k, v) = pair.split_once('=')?;
-            (k == key).then_some(v)
+            (k == key).then_some(v.to_string())
         })
+        .next()
+}
+
+pub fn query_usize(query: &str, key: &str, default: usize) -> usize {
+    query_value(query, key)
         .and_then(|v| v.parse().ok())
         .unwrap_or(default)
 }
