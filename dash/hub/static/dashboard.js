@@ -242,6 +242,13 @@
     let testView = null;
     let testViewRun = null;
     let testsLive = false;
+    // A rerun started from this page: its directory appears a moment after the POST returns.
+    let pendingRerun = null;
+
+    function onRerunStarted(started) {
+      pendingRerun = started.run_id;
+      location.hash = started.href || ("#/tests/" + started.run_id);
+    }
 
     function showTestsError(err) {
       document.getElementById("tests-view").innerHTML =
@@ -260,6 +267,11 @@
         testView = null;
         testViewRun = null;
         testsLive = false;
+        if (id === pendingRerun) {
+          testsLive = true;
+          viewEl.innerHTML = `<div class="now-empty"><p>Starting the rerun…</p></div>`;
+          return;
+        }
         const body = await detailRes.json().catch(() => ({}));
         viewEl.innerHTML = id === "latest"
           ? emptyStart("No test runs yet.")
@@ -272,9 +284,10 @@
         viewEl.innerHTML = "";
         const host = document.createElement("div");
         viewEl.appendChild(host);
-        testView = TR.createView(host, {});
+        testView = TR.createView(host, { rerun: onRerunStarted });
         testViewRun = data.run_id;
       }
+      if (data.run_id === pendingRerun) pendingRerun = null;
       testView.update(data);
       const item = data.item || {};
       testsLive = isLive(item);
@@ -303,10 +316,11 @@
     // ---- now -----------------------------------------------------------------------------
 
     async function refreshNow() {
-      const [timeline, latest, issues] = await Promise.all([
+      const [timeline, latest, issues, benchCmp] = await Promise.all([
         fetchTimeline("", 40),
         fetch("/api/v1/runs/latest?lite=1", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null),
         fetch("/api/v1/issues", { cache: "no-store" }).then(r => r.json()).catch(() => ({ issues: [] })),
+        fetch("/api/v1/bench/compare", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null),
       ]);
       const runs = timeline.runs || [];
       const live = runs.filter(r => isLive(r) || (r.kind === "bench" && r.state === "running"));
@@ -348,9 +362,9 @@
 
       const benchEl = document.getElementById("now-bench");
       const bench = runs.filter(r => r.kind === "bench").slice(0, 4);
-      benchEl.innerHTML = `<h2>Bench</h2>` + (bench.length
-        ? `<div class="runs-list compact">${bench.map(runRow).join("")}</div>`
-        : `<p class="now-quiet">No bench runs yet.</p>
+      benchEl.innerHTML = `<h2>Bench</h2>` + benchCompareHtml(benchCmp) + (bench.length
+        ? `<div class="runs-list compact">${bench.slice(0, benchCmp && benchCmp.mode ? 2 : 4).map(runRow).join("")}</div>`
+        : benchCmp && benchCmp.current ? "" : `<p class="now-quiet">No bench runs yet.</p>
            <ul class="actions"><li><button type="button" data-cmd="${escapeAttr(START_BENCH)}">copy</button> <code>${escapeHtml(START_BENCH)}</code></li></ul>`);
       bindCopy(benchEl);
 
@@ -362,6 +376,59 @@
            <ul class="now-list">${open.slice(0, 4).map(i =>
              `<li>${escapeHtml(i.title || i.id)} <small>×${escapeHtml(String(i.count || 0))}</small></li>`).join("")}</ul>`
         : `<p class="now-quiet">No unresolved issues.</p>`);
+    }
+
+    const DECISION = {
+      regression: ["slower", "bad"],
+      improvement: ["faster", "good"],
+      within_margin: ["same", ""],
+      inconclusive: ["unclear", "warn"],
+      unavailable: ["n/a", ""],
+      neutral: ["info", ""],
+    };
+
+    function fmtPct(v) {
+      if (v == null || !Number.isFinite(v)) return "—";
+      return (v > 0 ? "+" : "") + v.toFixed(Math.abs(v) >= 10 ? 0 : 1) + "%";
+    }
+
+    // Latest bench run vs the previous comparable one (`GET /api/v1/bench/compare`).
+    function benchCompareHtml(cmp) {
+      if (!cmp) return "";
+      if (!cmp.mode) {
+        return cmp.current && cmp.note ? `<p class="now-quiet">Latest run: ${escapeHtml(cmp.note)}.</p>` : "";
+      }
+      const s = cmp.summary || {};
+      const threshold = cmp.threshold != null ? cmp.threshold : 5;
+      const head = [];
+      if (s.regression) head.push(`<b class="bad">${s.regression}</b> slower`);
+      if (s.improvement) head.push(`<b class="good">${s.improvement}</b> faster`);
+      if (s.within_margin) head.push(`${s.within_margin} within ±${threshold}%`);
+      if (s.inconclusive) head.push(`<span class="warn">${s.inconclusive}</span> unclear`);
+      if (!head.length) head.push("nothing to compare");
+      const link = (x, label) => `<a href="${escapeAttr(x.href)}"${x.href.startsWith("#") ? "" : ` target="_blank" rel="noopener"`}>${escapeHtml(label)}</a>`;
+      const short = id => { const parts = String(id).split("/"); return parts[parts.length - 1].slice(0, 12); };
+      const cur = cmp.current;
+      const against = cmp.mode === "ab"
+        ? `baseline vs candidate in ${link(cur, short(cur.id))}`
+        : `${link(cur, short(cur.id))} vs previous ${link(cmp.previous, short(cmp.previous.id))}`;
+      const ago = TR && cur.when_ms ? ` · ${escapeHtml(TR.fmtAgo(cur.when_ms))}` : "";
+      const rows = (cmp.rows || [])
+        .filter(r => r.decision !== "neutral" && r.decision !== "unavailable")
+        .slice(0, 5)
+        .map(r => {
+          const [label, tone] = DECISION[r.decision] || [r.decision, ""];
+          const ci = r.interval_percent ? `${fmtPct(r.interval_percent[0])} … ${fmtPct(r.interval_percent[1])}` : "";
+          return `<tr class="${escapeAttr(tone)}" title="${escapeAttr((r.note || "") + (ci ? " · interval " + ci : ""))}">
+            <td><code>${escapeHtml(r.case)}</code> <small>${escapeHtml(r.metric)}</small></td>
+            <td class="num">${escapeHtml(fmtPct(r.change_percent))}</td>
+            <td>${escapeHtml(label)}</td></tr>`;
+        }).join("");
+      const more = (cmp.total || 0) > 5 ? `<p class="now-quiet">${cmp.total} comparisons in total.</p>` : "";
+      return `<a class="now-headline" href="${escapeAttr(cur.href)}"${cur.href.startsWith("#") ? "" : ` target="_blank" rel="noopener"`}>
+          <span class="now-big">${head.join(" · ")}</span></a>
+        <p class="now-quiet">${against}${ago}</p>
+        ${rows ? `<table class="now-cmp">${rows}</table>` : ""}${more}`;
     }
 
     function median(nums) {

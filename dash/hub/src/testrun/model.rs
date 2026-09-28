@@ -32,7 +32,23 @@ pub struct Manifest {
     pub host: String,
     #[serde(default)]
     pub started_at_ms: u64,
+    /// `cargo-test` or `nextest`; with the two argument lists it is enough to run the same
+    /// command again (the hub's "rerun" builds on it). Empty in runs from before 0.7.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub runner: String,
+    /// Arguments after the runner's `--` (to `cargo test` / `cargo nextest run`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cargo_args: Vec<String>,
+    /// Arguments after the second `--` (to the test binaries / nextest filters).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub test_args: Vec<String>,
+    /// The run this one re-ran (only its failures, or all of it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rerun_of: Option<String>,
 }
+
+pub const RUNNER_CARGO_TEST: &str = "cargo-test";
+pub const RUNNER_NEXTEST: &str = "nextest";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Git {

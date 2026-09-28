@@ -9,11 +9,12 @@ pub mod events;
 pub mod html;
 pub mod libtest;
 pub mod model;
+pub mod nextest;
 
 use libtest::Collector;
 use model::{
-    Git, MANIFEST_SCHEMA, Manifest, Progress, REPORT_SCHEMA, Report, RunState, SuiteState,
-    TestStatus, now_ms,
+    Git, MANIFEST_SCHEMA, Manifest, Progress, REPORT_SCHEMA, RUNNER_CARGO_TEST, RUNNER_NEXTEST,
+    Report, RunState, SuiteState, TestStatus, now_ms,
 };
 use std::{
     env, fs,
@@ -50,13 +51,19 @@ pub struct Options {
     pub keep: usize,
     pub cargo_args: Vec<String>,
     pub test_args: Vec<String>,
+    /// Run with `cargo nextest run` instead of `cargo test`.
+    pub nextest: bool,
+    /// Use this run id (the hub picks it when it starts a rerun, so it can link to it).
+    pub run_id: Option<String>,
+    pub rerun_of: Option<String>,
 }
 
 pub const USAGE: &str = "\
-airbug-hub test [--root PATH] [--out DIR] [--title TEXT] [--port N] [--no-list] [--quiet]
-                [--keep N] [-- <cargo test args> [-- <test binary args>]]
+airbug-hub test [--nextest] [--root PATH] [--out DIR] [--title TEXT] [--port N] [--no-list]
+                [--quiet] [--keep N] [-- <cargo test args> [-- <test binary args>]]
     # runs cargo test, writes .airbug/runs/<id>/ (or --out DIR), live in the hub at
     # http://127.0.0.1:<port>/#/tests/<id>; exit code follows the tests
+    # --nextest runs `cargo nextest run` (args after -- go to it; filters after the second --)
     # --no-list skips the listing pass (needed for harness = false test targets)";
 
 pub fn parse_args<I, S>(args: I) -> Result<Options, String>
@@ -74,6 +81,9 @@ where
         keep: DEFAULT_KEEP,
         cargo_args: Vec::new(),
         test_args: Vec::new(),
+        nextest: false,
+        run_id: None,
+        rerun_of: None,
     };
     let mut args = args.into_iter().map(Into::into);
     while let Some(arg) = args.next() {
@@ -93,6 +103,13 @@ where
                     .map_err(|_| "invalid --keep".to_string())?
             }
             "--no-list" => options.list = false,
+            "--nextest" => options.nextest = true,
+            "--run-id" => {
+                let id = value("--run-id")?;
+                uuid::Uuid::parse_str(&id).map_err(|_| "invalid --run-id".to_string())?;
+                options.run_id = Some(id);
+            }
+            "--rerun-of" => options.rerun_of = Some(value("--rerun-of")?),
             "--quiet" | "-q" => options.quiet = true,
             "--" => {
                 let rest: Vec<String> = args.by_ref().collect();
@@ -143,7 +160,10 @@ fn run(options: Options) -> io::Result<i32> {
         .canonicalize()
         .map(plain_path)
         .unwrap_or_else(|_| options.root.clone());
-    let run_id = uuid::Uuid::new_v4().to_string();
+    let run_id = options
+        .run_id
+        .clone()
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let in_store = options.out.is_none();
     let dir = match &options.out {
         Some(out) if out.is_absolute() => out.clone(),
@@ -161,7 +181,12 @@ fn run(options: Options) -> io::Result<i32> {
     let run_args = run_command(&options, false);
     let title = options.title.clone().unwrap_or_else(|| {
         let args = options.cargo_args.join(" ");
-        format!("cargo test {args}").trim().to_string()
+        let base = if options.nextest {
+            "cargo nextest run"
+        } else {
+            "cargo test"
+        };
+        format!("{base} {args}").trim().to_string()
     });
     let git = git_info(&root);
     let started_at_ms = now_ms();
@@ -179,6 +204,15 @@ fn run(options: Options) -> io::Result<i32> {
             .or_else(|_| env::var("COMPUTERNAME"))
             .unwrap_or_default(),
         started_at_ms,
+        runner: if options.nextest {
+            RUNNER_NEXTEST
+        } else {
+            RUNNER_CARGO_TEST
+        }
+        .into(),
+        cargo_args: options.cargo_args.clone(),
+        test_args: options.test_args.clone(),
+        rerun_of: options.rerun_of.clone(),
     };
     write_json(&dir.join("manifest.json"), &manifest, true)?;
     // A stale report from an earlier run in the same --out folder must not survive.
@@ -231,7 +265,7 @@ fn run(options: Options) -> io::Result<i32> {
         Ok(existing) if !existing.is_empty() => format!("{existing},{resource}"),
         _ => resource,
     };
-    let env_vars = [
+    let mut env_vars = vec![
         (
             "AIRBUG_REPORT_DIR".to_string(),
             events_dir.display().to_string(),
@@ -240,6 +274,13 @@ fn run(options: Options) -> io::Result<i32> {
         ("CARGO_TERM_COLOR".to_string(), "never".to_string()),
         ("OTEL_RESOURCE_ATTRIBUTES".to_string(), otel_resource),
     ];
+    if options.nextest {
+        env_vars.extend(
+            nextest::RUN_ENV
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string())),
+        );
+    }
 
     let mut exit_code = None;
     if options.list {
@@ -252,7 +293,13 @@ fn run(options: Options) -> io::Result<i32> {
                 return;
             };
             let _ = writeln!(log, "{line}");
-            collector.list_line(line);
+            if options.nextest {
+                if collector.nextest_list_line(line) {
+                    return;
+                }
+            } else {
+                collector.list_line(line);
+            }
             tail.push(line.to_string());
             if tail.len() > BUILD_LOG_LINES {
                 tail.remove(0);
@@ -261,7 +308,18 @@ fn run(options: Options) -> io::Result<i32> {
                 eprintln!("{line}");
             }
         })?;
-        if !status.success() {
+        let rejected = options.nextest && nextest::list_rejected_args(&tail.join("\n"));
+        if !status.success() && rejected && !INTERRUPTED.load(Ordering::SeqCst) {
+            collector.report.diagnostics.push(
+                "`cargo nextest list` rejected one of the arguments; ran without a known total"
+                    .into(),
+            );
+        } else if !status.success() {
+            if options.nextest && tail.iter().any(|l| l.contains("no such command")) {
+                collector.report.diagnostics.push(
+                    "cargo-nextest is not installed: `cargo install cargo-nextest --locked`".into(),
+                );
+            }
             collector.report.state = if INTERRUPTED.load(Ordering::SeqCst) {
                 RunState::Interrupted
             } else {
@@ -283,12 +341,21 @@ fn run(options: Options) -> io::Result<i32> {
                 return;
             };
             let _ = writeln!(log, "{line}");
-            collector.run_line(line, started.elapsed().as_secs_f64());
+            let now_s = started.elapsed().as_secs_f64();
+            if options.nextest {
+                collector.nextest_run_line(line, now_s);
+            } else {
+                collector.run_line(line, now_s);
+            }
             if !options.quiet {
                 println!("{line}");
             }
         })?;
-        collector.finish();
+        if options.nextest {
+            collector.nextest_finish();
+        } else {
+            collector.finish();
+        }
         events::fold(&mut collector, &events_dir);
         let crashed = collector
             .report
@@ -333,6 +400,13 @@ fn run(options: Options) -> io::Result<i32> {
 
 /// `cargo` arguments for the run (or the `--list` pass).
 pub fn run_command(options: &Options, list: bool) -> Vec<String> {
+    if options.nextest {
+        return if list {
+            nextest::list_args(&options.cargo_args, &options.test_args)
+        } else {
+            nextest::run_args(&options.cargo_args, &options.test_args)
+        };
+    }
     let mut args = vec!["test".to_string()];
     if !options.cargo_args.iter().any(|a| a == "--no-fail-fast") {
         args.push("--no-fail-fast".into());
@@ -689,6 +763,39 @@ mod tests {
             run_command(&options, false),
             ["test", "--no-fail-fast", "-p", "demo"]
         );
+    }
+
+    #[test]
+    fn nextest_and_rerun_options() {
+        let id = "00000000-0000-4000-8000-000000000001";
+        let options = parse_args([
+            "--nextest",
+            "--run-id",
+            id,
+            "--rerun-of",
+            "prev",
+            "--",
+            "--workspace",
+            "--",
+            "tests::fails",
+        ])
+        .unwrap();
+        assert!(options.nextest);
+        assert_eq!(options.run_id.as_deref(), Some(id));
+        assert_eq!(options.rerun_of.as_deref(), Some("prev"));
+        assert_eq!(
+            run_command(&options, false),
+            [
+                "nextest",
+                "run",
+                "--no-fail-fast",
+                "--workspace",
+                "--",
+                "tests::fails"
+            ]
+        );
+        assert_eq!(run_command(&options, true)[..4], ["nextest", "list", "--message-format", "json"]);
+        assert!(parse_args(["--run-id", "../x"]).is_err());
     }
 
     #[test]

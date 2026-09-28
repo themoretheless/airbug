@@ -223,6 +223,15 @@
       if (r.exit_code != null && r.exit_code !== 0) meta.push(`<span>exit ${esc(r.exit_code)}</span>`);
       if (files()) meta.push(`<a href="${esc(files())}output.log" target="_blank" rel="noopener">output.log</a>`);
       if (files() && opts.standaloneLink !== false) meta.push(`<a href="${esc(files())}index.html" target="_blank" rel="noopener">standalone report</a>`);
+      const manifest = state.data.manifest || {};
+      if (manifest.rerun_of) {
+        const short = String(manifest.rerun_of).slice(0, 8);
+        meta.push(opts.rerun
+          ? `<a href="#/tests/${esc(manifest.rerun_of)}">↻ rerun of ${esc(short)}</a>`
+          : `<span>↻ rerun of ${esc(short)}</span>`);
+      }
+      if (manifest.runner === "nextest") meta.push(`<span>nextest</span>`);
+      const actions = live ? "" : rerunActions();
       const activity = live && state.data.progress && state.data.progress.activity
         ? `<div class="atr-activity">${esc(state.data.progress.activity)}</div>` : "";
       const counter = t.total
@@ -249,8 +258,73 @@
         <div class="atr-meta">${meta.join("")}</div>
         ${progressBar(t, live)}
         ${activity}
+        ${actions}
         <div class="atr-chips">${chips}</div>
       </div>`;
+    }
+
+    // "Rerun failed" / "Run again": buttons only where the hub can start processes
+    // (`opts.rerun`), the equivalent command everywhere.
+    function rerunActions() {
+      const rr = state.data && state.data.rerun;
+      if (!rr) return "";
+      if (!rr.supported) {
+        return rr.reason ? `<div class="atr-actions"><span class="atr-rerun-msg">${esc(rr.reason)}</span></div>` : "";
+      }
+      const bits = [];
+      const busy = state.rerunBusy ? " disabled" : "";
+      if (opts.rerun) {
+        if (rr.failed) {
+          bits.push(`<button type="button" class="atr-btn primary" data-rerun="failed"${busy}
+            title="${esc(rr.truncated ? "only the first tests fit into one filter" : "run just these tests again")}">
+            Rerun failed <b>${esc(rr.failed)}${rr.truncated ? "+" : ""}</b></button>`);
+        }
+        bits.push(`<button type="button" class="atr-btn" data-rerun="all"${busy} title="same command, same filters">Run again</button>`);
+      }
+      const cmd = rr.failed && rr.command_failed ? rr.command_failed : rr.command_all;
+      if (cmd) {
+        bits.push(`<button type="button" class="atr-cmd" data-copy="${esc(cmd)}" title="copy to clipboard"><code>${esc(cmd)}</code></button>`);
+      }
+      if (state.rerunMsg) bits.push(`<span class="atr-rerun-msg">${esc(state.rerunMsg)}</span>`);
+      return bits.length ? `<div class="atr-actions">${bits.join("")}</div>` : "";
+    }
+
+    async function startRerun(failed) {
+      const id = state.data && state.data.run_id;
+      if (!id || state.rerunBusy) return;
+      state.rerunBusy = true;
+      state.rerunMsg = "starting…";
+      paintHead();
+      try {
+        const res = await fetch(`/api/v1/runs/${encodeURIComponent(id)}/rerun`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ failed }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        state.rerunMsg = "";
+        if (typeof opts.rerun === "function") opts.rerun(body);
+        else if (body.href) location.hash = body.href;
+      } catch (err) {
+        state.rerunMsg = `could not start: ${err.message || err}`;
+      } finally {
+        state.rerunBusy = false;
+        paintHead();
+      }
+    }
+
+    function copyCommand(el) {
+      const text = el.getAttribute("data-copy") || "";
+      const done = ok => {
+        state.rerunMsg = ok ? "command copied" : "copy failed — select the text instead";
+        paintHead();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+      } else {
+        done(false);
+      }
     }
 
     function testLabel(id) {
@@ -545,7 +619,11 @@
     root.addEventListener("click", ev => {
       const target = ev.target.closest("button, a");
       if (!target || !root.contains(target)) return;
-      if (target.hasAttribute("data-filter")) {
+      if (target.hasAttribute("data-rerun")) {
+        startRerun(target.getAttribute("data-rerun") === "failed");
+      } else if (target.hasAttribute("data-copy")) {
+        copyCommand(target);
+      } else if (target.hasAttribute("data-filter")) {
         state.filter = target.getAttribute("data-filter");
         state.filterTouched = true;
         paintHead();

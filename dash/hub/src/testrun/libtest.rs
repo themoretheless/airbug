@@ -32,6 +32,8 @@ pub struct Collector {
     recent: VecDeque<String>,
     /// Last line worth showing as activity (`Compiling …`, `Running …`).
     pub activity: String,
+    /// State of the `cargo nextest` parser (see `nextest.rs`).
+    pub(super) nextest: super::nextest::State,
 }
 
 impl Collector {
@@ -162,25 +164,14 @@ impl Collector {
         }
         let index = match self.by_binary.get(&header.binary) {
             Some(&index) => index,
-            None => {
-                let mut id = header.id();
-                let mut n = 2;
-                while self.report.suites.iter().any(|s| s.id == id) {
-                    id = format!("{} #{n}", header.id());
-                    n += 1;
-                }
-                self.report.suites.push(Suite {
-                    id,
-                    name: header.name.clone(),
-                    target: header.target.clone(),
-                    binary: header.binary.clone(),
-                    kind: header.kind,
-                    ..Suite::default()
-                });
-                let index = self.report.suites.len() - 1;
-                self.by_binary.insert(header.binary.clone(), index);
-                index
-            }
+            None => self.add_suite(Suite {
+                id: header.id(),
+                name: header.name.clone(),
+                target: header.target.clone(),
+                binary: header.binary.clone(),
+                kind: header.kind,
+                ..Suite::default()
+            }),
         };
         self.current = Some(index);
         self.recent.clear();
@@ -283,7 +274,26 @@ impl Collector {
         index
     }
 
-    fn test_index(&mut self, suite: usize, name: &str) -> usize {
+    /// Register a suite; a duplicate id gets ` #2`, ` #3`… (two binaries, same name).
+    pub(super) fn add_suite(&mut self, mut suite: Suite) -> usize {
+        let base = suite.id.clone();
+        let mut n = 2;
+        while self.report.suites.iter().any(|s| s.id == suite.id) {
+            suite.id = format!("{base} #{n}");
+            n += 1;
+        }
+        let key = if suite.binary.is_empty() {
+            suite.id.clone()
+        } else {
+            suite.binary.clone()
+        };
+        self.report.suites.push(suite);
+        let index = self.report.suites.len() - 1;
+        self.by_binary.insert(key, index);
+        index
+    }
+
+    pub(super) fn test_index(&mut self, suite: usize, name: &str) -> usize {
         let suite_id = self.report.suites[suite].id.clone();
         let id = format!("{suite_id}::{name}");
         if let Some(&index) = self.tests.get(&id) {

@@ -184,7 +184,18 @@ fn handle_api(
                 }
             }
         }
+        ("POST", p) if p.starts_with("/runs/") && p.ends_with("/rerun") => {
+            handle_rerun(stream, app, req, &p["/runs/".len()..p.len() - "/rerun".len()])
+        }
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
+        ("GET", "/bench/compare") => {
+            let run = http::query_str(&req.query, "run");
+            http::respond_json(
+                stream,
+                "200 OK",
+                &crate::benchcmp::compare(&app.paths.root, run.as_deref()),
+            )
+        }
         ("GET", "/bench") | ("GET", "/bench/runs") => match app.runs.list() {
             Ok(list) => http::respond_json(stream, "200 OK", &list),
             Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
@@ -214,6 +225,54 @@ fn handle_api(
             "text/plain; charset=utf-8",
             "not found",
         ),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct RerunRequest {
+    #[serde(default = "yes")]
+    failed: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// `POST /api/v1/runs/<id>/rerun` `{"failed": true}` — start `airbug-hub test` again.
+fn handle_rerun(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+    id: &str,
+) -> std::io::Result<()> {
+    if !req.same_origin_json() {
+        return http::respond_err(
+            stream,
+            "403 Forbidden",
+            &HubError::msg("send JSON (Content-Type: application/json) from the hub page"),
+        );
+    }
+    let body: RerunRequest = if req.body.is_empty() {
+        RerunRequest { failed: true }
+    } else {
+        match serde_json::from_slice(&req.body) {
+            Ok(v) => v,
+            Err(e) => return http::respond_err(stream, "400 Bad Request", &HubError::from(e)),
+        }
+    };
+    match crate::rerun::start(&app.paths.root, app.port, id, body.failed) {
+        Ok(started) => http::respond_json(stream, "202 Accepted", &started),
+        Err(e) => {
+            let text = e.to_string();
+            let status = if text.starts_with("busy") {
+                "409 Conflict"
+            } else if text.contains("not found") {
+                "404 Not Found"
+            } else {
+                "400 Bad Request"
+            };
+            http::respond_err(stream, status, &e)
+        }
     }
 }
 

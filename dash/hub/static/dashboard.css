@@ -798,6 +798,13 @@
     .now-list { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.76rem; overflow-wrap: anywhere; }
     .now-list small { color: var(--mute); }
     .now-empty p { margin: 0 0 0.4rem; color: var(--mute); font-size: 0.85rem; }
+    .now-cmp { width: 100%; margin: 0.5rem 0 0.6rem; border-collapse: collapse; font-size: 0.74rem; }
+    .now-cmp td { padding: 0.25rem 0.35rem; border-top: 1px solid #0b3d2e18; overflow-wrap: anywhere; }
+    .now-cmp td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .now-cmp small { color: var(--mute); }
+    .now-cmp tr.bad td.num, .now-cmp tr.bad td:last-child { color: var(--bad); }
+    .now-cmp tr.good td.num, .now-cmp tr.good td:last-child { color: var(--leaf); }
+    .now-cmp tr.warn td:last-child { color: var(--warn); }
     .now-empty code, .now-card .actions code { font-size: 0.74rem; }
     @media (max-width: 760px) {
       .now-grid { grid-template-columns: 1fr; }

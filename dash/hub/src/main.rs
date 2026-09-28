@@ -1,4 +1,5 @@
 mod app;
+mod benchcmp;
 mod collector;
 mod config;
 mod error;
@@ -6,6 +7,7 @@ mod event_model;
 mod http;
 mod issues;
 mod otlp;
+mod rerun;
 mod runs;
 mod scan;
 mod serve;

@@ -117,6 +117,13 @@ cargo airbug test -- --workspace --exclude airbug-mon   # anything after -- goes
   run somewhere else (CI uses `target/airbug-report`); `--quiet` hides cargo's output.
 - JSON for agents: `GET /api/v1/runs?kind=test` and `GET /api/v1/runs/latest` (per-test
   status, failure output, steps, new failures vs the previous run, flaky tests).
+- `--nextest` runs `cargo nextest run` instead (list via `nextest list --message-format
+  json`, per-test results parsed from its output, retries → `flaky`). Same files, same UI.
+- Rerun what failed: `POST /api/v1/runs/<id>/rerun` with JSON `{"failed": true}` (the
+  "Rerun failed" button); `false` repeats the whole run. The detail's `rerun.command_failed`
+  is the equivalent shell command — prefer running that yourself when you have a terminal.
+- Bench regressions at a glance: `GET /api/v1/bench/compare` compares the newest finished
+  bench run with the previous one that has the same cases and environment (Now page).
 - `airbug_report` (the old end-of-run snapshot at `/report/`) still exists but is legacy.
 
 ## Deeper docs

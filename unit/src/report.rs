@@ -46,13 +46,23 @@ fn parent() -> String {
 /// `Running … (target/debug/deps/mock-1a2b…)` line. libtest runs every test on a thread
 /// named after the test, so the thread name attributes the event to its test; `main` and
 /// unnamed threads (doctests, `harness = false`, helper threads) stay unattributed.
+/// Under cargo-nextest every test is its own process and `NEXTEST_TEST_NAME` names it, so
+/// helper threads count too.
 fn origin() -> String {
-    static PROCESS: OnceLock<String> = OnceLock::new();
-    let process = PROCESS.get_or_init(|| {
+    static PROCESS: OnceLock<(String, Option<String>)> = OnceLock::new();
+    let (process, nextest) = PROCESS.get_or_init(|| {
         let exe = std::env::current_exe().unwrap_or_default();
         let bin = exe.file_stem().unwrap_or_default().to_string_lossy();
-        format!("\"pid\":{},\"bin\":{}", std::process::id(), quote(&bin))
+        let process = format!("\"pid\":{},\"bin\":{}", std::process::id(), quote(&bin));
+        let nextest = std::env::var("NEXTEST_TEST_NAME")
+            .ok()
+            .filter(|name| !name.is_empty())
+            .map(|name| quote(clipped(&name)));
+        (process, nextest)
     });
+    if let Some(test) = nextest {
+        return format!("{process},\"test\":{test}");
+    }
     let thread = std::thread::current();
     let test = match thread.name() {
         Some(name) if name != "main" => quote(clipped(name)),
@@ -305,6 +315,11 @@ mod tests {
     #[test]
     fn origin_names_the_process_and_the_test_thread() {
         let here = origin();
+        if std::env::var_os("NEXTEST_TEST_NAME").is_some() {
+            // nextest: the process is the test, whatever the thread.
+            assert!(here.contains("origin_names_the_process_and_the_test_thread"), "{here}");
+            return;
+        }
         assert!(here.starts_with(&format!("\"pid\":{},", std::process::id())));
         // libtest names the test thread after the test.
         assert!(

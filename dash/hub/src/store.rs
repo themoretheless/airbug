@@ -373,6 +373,7 @@ pub fn test_run_detail(root: &Path, id: &str, lite: bool) -> Result<Value> {
         })
         .collect();
 
+    let rerun = crate::rerun::describe(&manifest, &report);
     let (report, strips) = if lite {
         (Value::Null, serde_json::Map::new())
     } else {
@@ -387,6 +388,7 @@ pub fn test_run_detail(root: &Path, id: &str, lite: bool) -> Result<Value> {
         "changes": changes,
         "history": { "runs": runs, "tests": strips },
         "flaky": flaky,
+        "rerun": rerun,
         "files": format!("/runs/{id}/"),
     }))
 }

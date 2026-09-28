@@ -69,6 +69,35 @@
 @keyframes atr-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 .atr-activity { color: var(--atr-mute); font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.atr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+.atr-btn {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--atr-deep);
+  background: #ffffffcc;
+  color: var(--atr-deep);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.atr-btn.primary { background: var(--atr-deep); color: #f3f7f2; }
+.atr-btn b { color: var(--atr-glow); font-weight: 600; }
+.atr-btn:not(.primary) b { color: var(--atr-fail); }
+.atr-btn:disabled { opacity: 0.5; cursor: progress; }
+.atr-cmd {
+  max-width: min(52rem, 100%);
+  padding: 0.25rem 0.5rem;
+  border: 1px dashed var(--atr-line);
+  background: transparent;
+  color: var(--atr-mute);
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: copy;
+}
+.atr-rerun-msg { color: var(--atr-mute); font-size: 0.72rem; }
 .atr-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .atr-chip {
   display: inline-flex;

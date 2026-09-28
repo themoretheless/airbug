@@ -36,6 +36,21 @@ Options: `--title`, `--out DIR`, `--port N` (hub to link), `--no-list`, `--quiet
 `--keep 50` (runs kept in `.airbug/runs`). Cargo args after `--`, test-binary args after
 a second `--`.
 
+`--nextest` switches to `cargo nextest run` (needs `cargo-nextest`): the list comes from
+`cargo nextest list --message-format json`, results from nextest's status lines, and a test
+that passes on retry is marked flaky. Suites are nextest binary ids (`demo`,
+`demo::integration`); doctests are not run, as with plain nextest.
+
+**Rerun failed** on a finished run starts `airbug-hub test` again with the failed and
+not-run tests only (libtest: `--exact` names; nextest: a `-E` filterset), linked back via
+`manifest.rerun_of`. **Run again** repeats the original command. Both are
+`POST /api/v1/runs/:id/rerun` and refuse while another test run is live (409). The
+equivalent shell command is shown for copying.
+
+The **Now** page compares the newest finished bench run with the previous one that has the
+same cases, contracts and environment (or baseline vs candidate inside one crossover run),
+using the same statistics as `cargo airbug-bench compare` (±5 % threshold).
+
 The dashboard: **Now** (live runs, latest test result, new failures, flaky, bench,
 issues) · **Runs** (tests + bench timeline) · **Tests** (per-test view: failures first,
 output, steps, diffs, attachments, history strip) · **Bench** · Issues · Logs · Metrics ·
@@ -113,8 +128,10 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/api/v1/logs?limit=&run_id=` | OTLP log tail (+ `by_severity`, `services`); filter by `airbug.run_id` |
 | GET | `/api/v1/metrics?limit=&run_id=` | OTLP metrics (`series`, `histogram`, `latest`); optional `run_id` filter |
 | GET | `/api/v1/runs?kind=&limit=` | Timeline of test + bench runs (`live` count; stale runs flagged) |
-| GET | `/api/v1/runs/:id\|latest?lite=` | Test run: report, `changes` vs previous run, `history`, `flaky` (`lite=1` drops per-test data) |
+| GET | `/api/v1/runs/:id\|latest?lite=` | Test run: report, `changes` vs previous run, `history`, `flaky`, `rerun` commands (`lite=1` drops per-test data) |
 | GET | `/runs/:id/*` | Files of a test run (`index.html`, `output.log`, `events/…`) |
+| POST | `/api/v1/runs/:id/rerun` | JSON `{"failed":true\|false}` → starts a rerun, `202 {run_id, href, command}`; 409 while a run is live |
+| GET | `/api/v1/bench/compare?run=` | Newest (or given) bench run vs previous comparable run: `summary`, `rows` (regressions first) |
 | POST | `/api/v1/bench/runs` | Register run → `{hub_id, run_id, out_dir, dash_url}` |
 | GET | `/api/v1/bench/runs` | List runs (running first, then recent done) |
 | GET | `/api/v1/bench/runs/:id` | Manifest + live `progress.json` / `status-final.json` |
