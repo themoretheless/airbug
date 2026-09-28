@@ -570,7 +570,12 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
     // rustdoc names doctests after the file path, which uses `\` on Windows.
     let doctest = tests
         .iter()
-        .find(|t| t["name"].as_str().unwrap_or("").ends_with(" - add (line 2)"))
+        .find(|t| {
+            t["name"]
+                .as_str()
+                .unwrap_or("")
+                .ends_with(" - add (line 2)")
+        })
         .unwrap_or_else(|| panic!("doctest missing in {body}"));
     assert_eq!(doctest["status"], "passed", "{body}");
     let reported = find("tests::reported");
