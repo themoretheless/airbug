@@ -106,7 +106,7 @@ Checks, in order:
 cargo run -p airbug --features json --bin airbug_report -- --all-features --locked --doc-tests
 ```
 
-The hub's `/#/runs` tab displays test and benchmark launch history, case progress,
+The hub's `/#/launches` tab displays test and benchmark launch history, case progress,
 output, steps, comparisons and attachments. Verify the hub's root before handing
 out its URL, as above. Test execution is sequential with one process per case;
 duration includes process startup. Doctests are an aggregate suite.
@@ -116,6 +116,35 @@ Direct `cargo bench` targets using `Suite::main()` write the same live history a
 case boundaries. `AIRBUG_DASHBOARD=0` disables those writes for strict measurements.
 `AIRBUG_DASHBOARD_ROOT` overrides workspace discovery. `--list` and `--dry-run`
 write no history. The separate process runner's live dashboard rules above still apply.
+
+## Tests are live in the hub: `cargo airbug test`
+
+`cargo airbug test` (alias for `airbug-hub test`) wraps `cargo test`, lists tests first
+so progress has a denominator, and writes a run directory the hub reads while it runs.
+
+```sh
+cargo airbug test -- --workspace --exclude airbug-mon   # anything after -- goes to cargo test
+```
+
+- stderr prints `Live tests: http://127.0.0.1:8790/#/tests/<run_id>` when a hub for this
+  root is up (otherwise it says how to start one). Hand over that URL — it is live, per
+  test, and keeps working after the run finishes.
+- Files: `.airbug/runs/<run_id>/{manifest,progress,report}.json`, `output.log`, `events/`,
+  and a self-contained `index.html`. `report.json` is `airbug.test-report/1`.
+- The runner sets `AIRBUG_REPORT_DIR`, so `airbug::report` steps, comparisons and
+  attachments land on the right test (`unit/src/report.rs`).
+- Exit code: 0 all passed, cargo's code otherwise, 130 on Ctrl+C. `--out DIR` writes the
+  run somewhere else (CI uses `target/airbug-report`); `--quiet` hides cargo's output.
+- JSON for agents: `GET /api/v1/runs?kind=test` and `GET /api/v1/runs/latest` (per-test
+  status, failure output, steps, new failures vs the previous run, flaky tests).
+- `--nextest` runs `cargo nextest run` instead (list via `nextest list --message-format
+  json`, per-test results parsed from its output, retries → `flaky`). Same files, same UI.
+- Rerun what failed: `POST /api/v1/runs/<id>/rerun` with JSON `{"failed": true}` (the
+  "Rerun failed" button); `false` repeats the whole run. The detail's `rerun.command_failed`
+  is the equivalent shell command — prefer running that yourself when you have a terminal.
+- Bench regressions at a glance: `GET /api/v1/bench/compare` compares the newest finished
+  bench run with the previous one that has the same cases and environment (Now page).
+- `airbug_report` also records live case history at `/#/launches` and final snapshots at `/report/`.
 
 ## Deeper docs
 

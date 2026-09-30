@@ -23,17 +23,17 @@
       `<tr class="${selectedCase === test.index ? 'selected' : ''}"><td><button data-case="${test.index}">${esc(test.name)}</button><small>${esc(test.suite)}</small></td><td>${badge(test.status)}</td><td>${caseDuration(test)}</td>${data.kind === 'bench' ? `<td>${test.ns_per_op == null ? '—' : Number(test.ns_per_op).toFixed(2)}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<p class="runs-empty">No cases match this filter.</p>';
     setHtml('runs-cases', caseHtml);
     $('runs-cases').querySelectorAll('[data-case]').forEach(button => button.onclick = () => {
-      selectedCase = Number(button.dataset.case); location.hash = '#/runs/' + activeId; selectionVersion++; renderCases(); refreshCase().catch(showError);
+      selectedCase = Number(button.dataset.case); location.hash = '#/launches/' + activeId; selectionVersion++; renderCases(); refreshCase().catch(showError);
     });
   }
   async function refreshCase() {
     if (selectedCase == null || !activeId) { setHtml('runs-case-detail', '<p>Select a case to inspect its output, steps and attachments.</p>'); return; }
     const id = activeId, index = selectedCase, version = selectionVersion;
-    const value = await get(`/api/v1/runs/${encodeURIComponent(id)}/cases/${index}`);
+    const value = await get(`/api/v1/launches/${encodeURIComponent(id)}/cases/${index}`);
     if (activeId !== id || selectedCase !== index || version !== selectionVersion) return;
     const test = value.case, events = value.events || [];
     const ends = new Map(events.filter(e => e.type === 'step_end').map(e => [e.id,e]));
-    const base = `/api/v1/runs/${encodeURIComponent(id)}/cases/${index}/attachments/`;
+    const base = `/api/v1/launches/${encodeURIComponent(id)}/cases/${index}/attachments/`;
     function eventHtml(event) {
       if (event.type === 'comparison') return `<div class="run-comparison">${badge(event.passed ? 'passed' : 'failed')} <strong>${esc(event.name)}</strong><div><section><small>Expected</small><pre>${esc(event.expected)}</pre></section><section><small>Actual</small><pre>${esc(event.actual)}</pre></section></div>${event.truncated ? '<small>Comparison truncated by reporter</small>' : ''}</div>`;
       if (event.type === 'attachment') return `<p><a download="${esc(event.name)}" href="${base}${encodeURIComponent(event.file)}">↓ ${esc(event.name)}</a> <small>${esc(event.mediaType)} · ${esc(event.size)} bytes</small></p>`;
@@ -58,20 +58,20 @@
   }
   function showError(error) { $('runs-connection').textContent = String(error); $('runs-connection').className = 'runs-error'; }
   async function refresh() {
-    if (route()[0] !== 'runs' || busy) return;
+    if (route()[0] !== 'launches' || busy) return;
     busy = true;
     try {
-      const history = await get('/api/v1/runs');
-      if (route()[0] !== 'runs') return;
+      const history = await get('/api/v1/launches');
+      if (route()[0] !== 'launches') return;
       const kind = $('runs-kind').value;
       const runs = history.runs.filter(run => !kind || run.kind === kind);
       const requested = route()[1];
       const id = requested || runs[0]?.id || null;
       if (id !== activeId) { activeId = id; selectedCase = null; data = null; selectionVersion++; }
-      $('runs-history').innerHTML = runs.length ? runs.map(run => `<a class="run-history-card ${run.id === id ? 'active' : ''}" href="#/runs/${encodeURIComponent(run.id)}"><small>${esc(run.kind)} · ${new Date(run.created_ms).toLocaleString()}</small><strong>${esc(run.title)}</strong>${badge(run.state)}<small>${Object.entries(run.counts || {}).map(([key,n]) => `${n} ${esc(key)}`).join(' · ') || 'Preparing'}</small></a>`).join('') : '<p class="runs-empty">No runs yet. Start airbug_report or an Airbug cargo bench target.</p>';
+      $('runs-history').innerHTML = runs.length ? runs.map(run => `<a class="run-history-card ${run.id === id ? 'active' : ''}" href="#/launches/${encodeURIComponent(run.id)}"><small>${esc(run.kind)} · ${new Date(run.created_ms).toLocaleString()}</small><strong>${esc(run.title)}</strong>${badge(run.state)}<small>${Object.entries(run.counts || {}).map(([key,n]) => `${n} ${esc(key)}`).join(' · ') || 'Preparing'}</small></a>`).join('') : '<p class="runs-empty">No runs yet. Start airbug_report or an Airbug cargo bench target.</p>';
       if (!id) { $('runs-summary').innerHTML = '<h3>Ready for your first run</h3><p>Launch tests with airbug_report. Airbug benchmarks record their progress automatically.</p>'; setHtml('runs-cases', ''); setHtml('runs-case-detail', ''); return; }
-      const loaded = await get(`/api/v1/runs/${encodeURIComponent(id)}`);
-      if (route()[0] !== 'runs' || (route()[1] && route()[1] !== id)) return;
+      const loaded = await get(`/api/v1/launches/${encodeURIComponent(id)}`);
+      if (route()[0] !== 'launches' || (route()[1] && route()[1] !== id)) return;
       data = loaded;
       const counts = {};
       data.tests.forEach(test => counts[test.status] = (counts[test.status] || 0) + 1);
@@ -86,7 +86,7 @@
   }
   $('runs-search').addEventListener('input', renderCases);
   $('runs-status').addEventListener('change', renderCases);
-  $('runs-kind').addEventListener('change', () => { location.hash = '#/runs'; refresh(); });
+  $('runs-kind').addEventListener('change', () => { location.hash = '#/launches'; refresh(); });
   window.addEventListener('hashchange', refresh);
   setInterval(refresh, 1000);
   refresh();

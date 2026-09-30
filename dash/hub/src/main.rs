@@ -1,4 +1,5 @@
 mod app;
+mod benchcmp;
 mod collector;
 mod config;
 mod error;
@@ -6,10 +7,14 @@ mod event_model;
 mod http;
 mod issues;
 mod otlp;
+mod rerun;
 mod runs;
 mod scan;
 mod serve;
 mod test_runs;
+
+mod store;
+mod testrun;
 
 use std::{env, path::PathBuf, process, sync::Arc};
 
@@ -27,6 +32,9 @@ fn main() {
     init_tracing();
     let mut args = env::args().skip(1).peekable();
     let command = args.next().unwrap_or_else(|| "serve".into());
+    if command == "test" {
+        process::exit(testrun::main(args.collect()));
+    }
     let mut root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut port = config::DEFAULT_PORT;
     let mut with_collector = false;
@@ -122,7 +130,9 @@ Usage:
       # dashboard :8790; --collector prefers Docker, else otelcol on PATH
       # --webhook / AIRBUG_ISSUES_WEBHOOK fires on new issues (http:// only)
   airbug-hub status [--root PATH]
-"
+  {}
+",
+        testrun::USAGE
     );
     process::exit(if message.is_empty() { 0 } else { 2 });
 }

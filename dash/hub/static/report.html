@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{AIRBUG_TITLE}} · airbug tests</title>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(160deg, #f3f7f2 0%, #dde9e1 60%, #c9dbd0 100%);
+      background-attachment: fixed;
+      min-height: 100vh;
+    }
+    .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .brand {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 2rem;
+      color: #0b3d2e;
+      margin: 0 0 1rem;
+      letter-spacing: -0.02em;
+    }
+    .brand em { color: #1f7a4c; }
+    .note { font: 0.72rem ui-monospace, monospace; color: #5a6b61; margin-top: 2rem; }
+/*{{AIRBUG_CSS}}*/
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1 class="brand">airbug <em>tests</em></h1>
+    <div id="run"></div>
+    <p class="note">Static snapshot written by <code>cargo airbug test</code>. Attachments open from the
+      <code>events/</code> folder beside this file; the live view with history lives in the hub
+      (<code>cargo airbug serve</code> → <code>#/tests</code>).</p>
+  </main>
+  <script type="application/json" id="airbug-data">{{AIRBUG_DATA}}</script>
+  <script>
+/*{{AIRBUG_JS}}*/
+  </script>
+  <script>
+    (function () {
+      var data = {};
+      try { data = JSON.parse(document.getElementById("airbug-data").textContent); } catch (e) {}
+      AirbugTestRun.createView(document.getElementById("run"), { files: "" }).update(data);
+    })();
+  </script>
+</body>
+</html>

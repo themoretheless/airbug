@@ -34,7 +34,8 @@ dash/hub/                  # package: airbug-hub (+ collector / logs / issues)
 ```text
 airbug-mon ──► airbug-otel ──► OTLP ──► dash/collector ──► files
 airbug-err ──► POST /api/v1/errors ──► airbug-hub (SQLite issues)
-unit / bench artifacts ──► airbug-hub status cards
+cargo airbug test ──► .airbug/runs ──► airbug-hub (live tests)
+bench artifacts ──► airbug-hub runs timeline
 ```
 
 Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. This is a developer monorepo tool, not a hosted SaaS. Details: [dash/README.md](dash/README.md).
@@ -65,6 +66,7 @@ cargo test -p airbug-otel
 cargo test -p airbug-err
 cargo test -p airbug-hub
 cargo run -p airbug-hub -- serve --root .
+cargo airbug test -- --workspace --exclude airbug-mon    # live per-test run → hub #/tests
 cargo run -p airbug-hub -- serve --root . --collector   # Docker or otelcol on PATH
 ./dash/scripts/smoke_local.sh                           # optional local smoke
 ```

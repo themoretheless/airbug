@@ -7,6 +7,7 @@ mod otel;
 mod unit;
 mod unit_report;
 
+pub(crate) use bench::list_runs as list_bench_dirs;
 pub use unit_report::UnitReportV1;
 
 use serde::Serialize;
@@ -111,6 +112,10 @@ pub(crate) fn local_apis(root: &Path, port: u16, _domains: &Domains) -> Vec<ApiE
     let probe = crate::collector::probe();
     let paths = crate::config::RootPaths::new(root);
     let report = paths.unit_report_index();
+    let latest_test = crate::store::test_runs(root, 1)
+        .into_iter()
+        .next()
+        .map(|run| run.run_id);
     vec![
         ApiEndpoint {
             name: "Hub status",
@@ -155,7 +160,46 @@ pub(crate) fn local_apis(root: &Path, port: u16, _domains: &Domains) -> Vec<ApiE
             available: true,
         },
         ApiEndpoint {
-            name: "Unit HTML report",
+            name: "Runs timeline",
+            method: "GET",
+            href: format!("{base}/api/v1/runs?limit=60"),
+            detail: "Test + bench runs, newest first (?kind=test|bench)".into(),
+            available: true,
+        },
+        ApiEndpoint {
+            name: "Test run",
+            method: "GET",
+            href: format!("{base}/api/v1/runs/latest"),
+            detail: "Per-test report, changes vs previous run, flaky tests (?lite=1)".into(),
+            available: latest_test.is_some(),
+        },
+        ApiEndpoint {
+            name: "Rerun a test run",
+            method: "POST",
+            href: format!("{base}/api/v1/runs/<run_id>/rerun"),
+            detail: "JSON {\"failed\": true} reruns failed tests; false repeats the whole run"
+                .into(),
+            available: latest_test.is_some(),
+        },
+        ApiEndpoint {
+            name: "Bench vs previous run",
+            method: "GET",
+            href: format!("{base}/api/v1/bench/compare"),
+            detail: "Latest bench run against the previous comparable one (?run=<id>)".into(),
+            available: true,
+        },
+        ApiEndpoint {
+            name: "Test run HTML",
+            method: "GET",
+            href: match &latest_test {
+                Some(id) => format!("{base}/runs/{id}/index.html"),
+                None => format!("{base}/runs/<run_id>/index.html"),
+            },
+            detail: "Self-contained report written by cargo airbug test".into(),
+            available: latest_test.is_some(),
+        },
+        ApiEndpoint {
+            name: "Legacy unit report",
             method: "GET",
             href: format!("{base}/report/index.html"),
             detail: "Served when target/airbug-report exists".into(),

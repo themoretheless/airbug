@@ -10,7 +10,36 @@ pub struct Request {
     pub method: String,
     pub path: String,
     pub query: String,
+    /// Header names lowercased.
+    pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+}
+
+impl Request {
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Guard for endpoints with side effects beyond the hub's own data (starting
+    /// processes): the request must be JSON — which a cross-site form or `no-cors` fetch
+    /// cannot send without a CORS preflight the hub never approves — and, when the browser
+    /// names an origin, it must be the page the request is addressed to.
+    pub fn same_origin_json(&self) -> bool {
+        let json = self
+            .header("content-type")
+            .is_some_and(|v| v.to_ascii_lowercase().starts_with("application/json"));
+        let origin_ok = match (self.header("origin"), self.header("host")) {
+            (None, _) => true,
+            (Some(origin), Some(host)) => origin
+                .split_once("://")
+                .is_some_and(|(_, rest)| rest.trim_end_matches('/') == host),
+            (Some(_), None) => false,
+        };
+        json && origin_ok
+    }
 }
 
 pub fn read_request(stream: &mut TcpStream) -> std::io::Result<Request> {
@@ -55,6 +84,15 @@ pub fn read_request(stream: &mut TcpStream) -> std::io::Result<Request> {
         .unwrap_or(0)
         .min(MAX_BODY_BYTES);
 
+    let headers = header
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let (k, v) = line.split_once(':')?;
+            Some((k.trim().to_ascii_lowercase(), v.trim().to_string()))
+        })
+        .collect();
+
     let mut body = buf[header_end.min(buf.len())..].to_vec();
     while body.len() < content_length {
         let n = stream.read(&mut chunk)?;
@@ -69,6 +107,7 @@ pub fn read_request(stream: &mut TcpStream) -> std::io::Result<Request> {
         method,
         path,
         query,
+        headers,
         body,
     })
 }
@@ -178,6 +217,7 @@ pub fn mime_for_path(path: &Path) -> &'static str {
         Some("js") => "text/javascript; charset=utf-8",
         Some("html") | Some("htm") => "text/html; charset=utf-8",
         Some("svg") => "image/svg+xml",
+        Some("log") | Some("txt") | Some("md") => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
     }
 }

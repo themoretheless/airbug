@@ -3,6 +3,7 @@
 .cargo-home/
 .DS_Store
 .airbug-bench/
+.airbug/
 bench/research/private/
 bench/research/focused/
 bench/research/sources/

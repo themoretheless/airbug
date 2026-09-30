@@ -5,7 +5,8 @@ use crate::{
     error::HubError,
     event_model::{EVENT_MODEL_VERSION, EventEnvelope, EventPayload},
     http::{self, Request},
-    issues, otlp, runs, scan,
+    issues, otlp, runs, scan, store,
+    testrun::html::{TESTRUN_CSS, TESTRUN_JS},
 };
 use std::{
     net::{TcpListener, TcpStream},
@@ -71,6 +72,17 @@ fn handle(stream: &mut TcpStream, app: &HubApp) -> std::io::Result<()> {
             "text/javascript; charset=utf-8",
             include_str!("../static/runs.js"),
         ),
+
+        ("GET", "/static/testrun.css") => {
+            http::respond(stream, "200 OK", "text/css; charset=utf-8", TESTRUN_CSS)
+        }
+        ("GET", "/static/testrun.js") => http::respond(
+            stream,
+            "200 OK",
+            "text/javascript; charset=utf-8",
+            TESTRUN_JS,
+        ),
+        ("GET", p) if p.starts_with("/runs/") => serve_run_file(stream, app, &p["/runs/".len()..]),
         (method, path) if api_path(path).is_some() => {
             let rest = api_path(path).unwrap_or("");
             handle_api(stream, app, method, rest, &req)
@@ -105,12 +117,12 @@ fn handle_api(
 ) -> std::io::Result<()> {
     let rest = if rest.is_empty() { "/" } else { rest };
     match (method, rest) {
-        ("GET", "/runs") => match crate::test_runs::list(&app.paths.root) {
+        ("GET", "/launches") => match crate::test_runs::list(&app.paths.root) {
             Ok(value) => http::respond_json(stream, "200 OK", &value),
             Err(error) => http::respond_err(stream, "500 Internal Server Error", &error.into()),
         },
-        ("GET", p) if p.starts_with("/runs/") => {
-            let parts: Vec<_> = p["/runs/".len()..].split('/').collect();
+        ("GET", p) if p.starts_with("/launches/") => {
+            let parts: Vec<_> = p["/launches/".len()..].split('/').collect();
             let result = match parts.as_slice() {
                 [id] => crate::test_runs::detail(&app.paths.root, id),
                 [id, "cases", index] => index
@@ -191,7 +203,45 @@ fn handle_api(
                 &app.issues.list_filtered(run_id.as_deref()),
             )
         }
+        ("GET", "/runs") => {
+            let limit = http::query_usize(&req.query, "limit", 60).clamp(1, 500);
+            let kind = http::query_str(&req.query, "kind");
+            http::respond_json(
+                stream,
+                "200 OK",
+                &store::timeline(&app.paths.root, &app.runs, kind.as_deref(), limit),
+            )
+        }
+        ("GET", p) if p.starts_with("/runs/") => {
+            let id = &p["/runs/".len()..];
+            let lite = http::query_value(&req.query, "lite").is_some_and(|v| v == "1");
+            match store::test_run_detail(&app.paths.root, id, lite) {
+                Ok(detail) => http::respond_json(stream, "200 OK", &detail),
+                Err(e) => {
+                    let status = if e.to_string().contains("not found") {
+                        "404 Not Found"
+                    } else {
+                        "400 Bad Request"
+                    };
+                    http::respond_err(stream, status, &e)
+                }
+            }
+        }
+        ("POST", p) if p.starts_with("/runs/") && p.ends_with("/rerun") => handle_rerun(
+            stream,
+            app,
+            req,
+            &p["/runs/".len()..p.len() - "/rerun".len()],
+        ),
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
+        ("GET", "/bench/compare") => {
+            let run = http::query_str(&req.query, "run");
+            http::respond_json(
+                stream,
+                "200 OK",
+                &crate::benchcmp::compare(&app.paths.root, run.as_deref()),
+            )
+        }
         ("GET", "/bench") | ("GET", "/bench/runs") => match app.runs.list() {
             Ok(list) => http::respond_json(stream, "200 OK", &list),
             Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
@@ -221,6 +271,54 @@ fn handle_api(
             "text/plain; charset=utf-8",
             "not found",
         ),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct RerunRequest {
+    #[serde(default = "yes")]
+    failed: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// `POST /api/v1/runs/<id>/rerun` `{"failed": true}` — start `airbug-hub test` again.
+fn handle_rerun(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+    id: &str,
+) -> std::io::Result<()> {
+    if !req.same_origin_json() {
+        return http::respond_err(
+            stream,
+            "403 Forbidden",
+            &HubError::msg("send JSON (Content-Type: application/json) from the hub page"),
+        );
+    }
+    let body: RerunRequest = if req.body.is_empty() {
+        RerunRequest { failed: true }
+    } else {
+        match serde_json::from_slice(&req.body) {
+            Ok(v) => v,
+            Err(e) => return http::respond_err(stream, "400 Bad Request", &HubError::from(e)),
+        }
+    };
+    match crate::rerun::start(&app.paths.root, app.port, id, body.failed) {
+        Ok(started) => http::respond_json(stream, "202 Accepted", &started),
+        Err(e) => {
+            let text = e.to_string();
+            let status = if text.starts_with("busy") {
+                "409 Conflict"
+            } else if text.contains("not found") {
+                "404 Not Found"
+            } else {
+                "400 Bad Request"
+            };
+            http::respond_err(stream, status, &e)
+        }
     }
 }
 
@@ -485,6 +583,23 @@ fn handle_issue_action(stream: &mut TcpStream, app: &HubApp, path: &str) -> std:
     match app.issues.set_status(id, status) {
         Ok(issue) => http::respond_json(stream, "200 OK", &issue),
         Err(e) => http::respond_err(stream, "404 Not Found", &e),
+    }
+}
+
+/// `/runs/<id>/<file>` — files of a test run (`index.html`, `output.log`, `events/…`).
+fn serve_run_file(stream: &mut TcpStream, app: &HubApp, rest: &str) -> std::io::Result<()> {
+    let found = rest.split_once('/').and_then(|(id, rel)| {
+        let rel = if rel.is_empty() { "index.html" } else { rel };
+        store::run_file(&app.paths.root, id, rel)
+    });
+    match found {
+        Some(path) => serve_file(stream, &path),
+        None => http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "missing",
+        ),
     }
 }
 

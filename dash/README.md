@@ -20,6 +20,42 @@ cargo run -p airbug-hub -- status --root .
 cargo test -p airbug-hub
 ```
 
+### Live test runs (`cargo airbug test`)
+
+```bash
+cargo airbug test -- --workspace --exclude airbug-mon   # = cargo run -p airbug-hub -- test -- …
+```
+
+The runner wraps `cargo test --no-fail-fast`, lists tests first (real progress bar), and
+writes `.airbug/runs/{run_id}/` as it goes: `manifest.json`, `progress.json`,
+`report.json` (`airbug.test-report/1`), `output.log`, `events/` (from `airbug::report`,
+via `AIRBUG_REPORT_DIR`) and a self-contained `index.html`. The hub only reads these
+files, so the run is live at `#/tests/{run_id}` whether the hub started first or not.
+
+Options: `--title`, `--out DIR`, `--port N` (hub to link), `--no-list`, `--quiet`,
+`--keep 50` (runs kept in `.airbug/runs`). Cargo args after `--`, test-binary args after
+a second `--`.
+
+`--nextest` switches to `cargo nextest run` (needs `cargo-nextest`): the list comes from
+`cargo nextest list --message-format json`, results from nextest's status lines, and a test
+that passes on retry is marked flaky. Suites are nextest binary ids (`demo`,
+`demo::integration`); doctests are not run, as with plain nextest.
+
+**Rerun failed** on a finished run starts `airbug-hub test` again with the failed and
+not-run tests only (libtest: `--exact` names; nextest: a `-E` filterset), linked back via
+`manifest.rerun_of`. **Run again** repeats the original command. Both are
+`POST /api/v1/runs/:id/rerun` and refuse while another test run is live (409). The
+equivalent shell command is shown for copying.
+
+The **Now** page compares the newest finished bench run with the previous one that has the
+same cases, contracts and environment (or baseline vs candidate inside one crossover run),
+using the same statistics as `cargo airbug-bench compare` (±5 % threshold).
+
+The dashboard: **Now** (live runs, latest test result, new failures, flaky, bench,
+issues) · **Runs** (tests + bench timeline) · **Tests** (per-test view: failures first,
+output, steps, diffs, attachments, history strip) · **Bench** · Issues · Logs · Metrics ·
+**System** (package cards, API catalog).
+
 Collector lives in `dash/collector/`. `--collector` tries, in order:
 
 1. **Docker Compose** — `otel-collector` + Jaeger UI (`docker-compose.yml` + `config.yaml`).
@@ -91,6 +127,11 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/api/v1` | API catalog only |
 | GET | `/api/v1/logs?limit=&run_id=` | OTLP log tail (+ `by_severity`, `services`); filter by `airbug.run_id` |
 | GET | `/api/v1/metrics?limit=&run_id=` | OTLP metrics (`series`, `histogram`, `latest`); optional `run_id` filter |
+| GET | `/api/v1/runs?kind=&limit=` | Timeline of test + bench runs (`live` count; stale runs flagged) |
+| GET | `/api/v1/runs/:id\|latest?lite=` | Test run: report, `changes` vs previous run, `history`, `flaky`, `rerun` commands (`lite=1` drops per-test data) |
+| GET | `/runs/:id/*` | Files of a test run (`index.html`, `output.log`, `events/…`) |
+| POST | `/api/v1/runs/:id/rerun` | JSON `{"failed":true\|false}` → starts a rerun, `202 {run_id, href, command}`; 409 while a run is live |
+| GET | `/api/v1/bench/compare?run=` | Newest (or given) bench run vs previous comparable run: `summary`, `rows` (regressions first) |
 | POST | `/api/v1/bench/runs` | Register run → `{hub_id, run_id, out_dir, dash_url}` |
 | GET | `/api/v1/bench/runs` | List runs (running first, then recent done) |
 | GET | `/api/v1/bench/runs/:id` | Manifest + live `progress.json` / `status-final.json` |
@@ -129,7 +170,7 @@ sharing the same correlation fields.
 
 | Domain | Sources |
 |--------|---------|
-| unit | `target/airbug-report/{report.json,index.html}` |
+| unit / tests | `.airbug/runs/*/{manifest,progress,report}.json` (legacy: `target/airbug-report/`) |
 | bench | `.airbug-bench/**/run.json` + GUID registry `dash/hub/data/runs.sqlite` |
 | mon | `~/.local/share/airbug-mon/airbug-mon.db` |
 | otel | `otel/` crate (`airbug-otel` OTLP) |

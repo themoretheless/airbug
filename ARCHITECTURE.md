@@ -35,6 +35,7 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. See [S
 .airbug-bench/                 # bench store (runs, baselines)
 dash/collector/data/           # OTLP file export
 dash/hub/data/issues.sqlite    # error issues
+.airbug/runs/<run_id>/         # test runs written by `airbug-hub test`, read by the hub
 ~/.local/share/airbug-mon/     # mon history (platform-specific)
 ```
 
