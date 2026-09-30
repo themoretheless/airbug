@@ -1,6 +1,14 @@
 //! Counter helpers usable directly in attribute expressions or `Suite::work_units`.
 //! Counts describe logical work per operation, not automatic memory allocation tracking.
 
+/// Convert byte counts to bits, rejecting overflow instead of wrapping.
+pub const fn bits_from_bytes(bytes: u64) -> u64 {
+    match bytes.checked_mul(8) {
+        Some(bits) => bits,
+        None => panic!("bit counter overflow"),
+    }
+}
+
 pub const fn bytes_of<T>() -> u64 {
     std::mem::size_of::<T>() as u64
 }

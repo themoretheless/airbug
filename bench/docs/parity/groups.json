@@ -1,0 +1,90 @@
+{
+  "status": "partial",
+  "upstream": {
+    "divan": "0.1.21 src/lib.rs bench_group options, lines 956-1329",
+    "criterion": "0.8.2 src/benchmark_group.rs public configuration methods, lines 96-232"
+  },
+  "required_mapping": [
+    {
+      "feature": "Group names and renamed dependency",
+      "status": "implemented",
+      "airbug": "name and crate attributes; imported __AIRBUG_GROUP_NAME"
+    },
+    {
+      "feature": "Sample count, operations, warmup, sample duration and sampling mode",
+      "status": "implemented_with_domain_audit_pending",
+      "airbug": "Sampling per-field inheritance, group_with_defaults; numeric caps tracked under samples"
+    },
+    {
+      "feature": "Thread count/list on a group",
+      "status": "partial",
+      "airbug": "Inline inheritance and runtime override implemented; imported parent thread defaults and sequential opt-in incomplete"
+    },
+    {
+      "feature": "Fixed throughput counters",
+      "status": "implemented",
+      "airbug": "bytes/items/chars/cycles/bits, inherited including zero values"
+    },
+    {
+      "feature": "Min/max time and external-time accounting",
+      "status": "implemented_with_domain_audit_pending",
+      "airbug": "Inherited min_time_ms/max_time_ms/exclude_external_time"
+    },
+    {
+      "feature": "Ignore with child override",
+      "status": "implemented",
+      "airbug": "ignore and include/only-ignored; imported defaults preserve false"
+    },
+    {
+      "feature": "Noise threshold and significance level",
+      "status": "implemented",
+      "airbug": "ComparisonOptions per-field inheritance and CLI overrides"
+    },
+    {
+      "feature": "Plot configuration for each group",
+      "status": "implemented",
+      "airbug": "summary scale/family defaults including imported groups; visual verification tracked under plots"
+    },
+    {
+      "feature": "Confidence level and absolute bootstrap resample count for each group",
+      "status": "partial",
+      "airbug": "Per-case bootstrap calculation and report metadata implemented. suite/group/bench resamples, confidence_level and analysis_seed inherit per field across inline/imported groups. Explicit CLI fields override registered defaults; attributes enable analysis without an extra flag. Baseline and relative comparisons resolve the same case config. Restoring effective settings when independently reanalyzing only run.json remains open."
+    }
+  ],
+  "additional_airbug_group_capabilities": {
+    "implemented": [
+      "Imported batch policy defaults",
+      "Imported output destruction defaults"
+    ],
+    "still_open": [
+      "Imported executor expression",
+      "Imported tracking allocator expression",
+      "Imported worker-local setup choice",
+      "Imported input-counter closures",
+      "Imported custom Measurement/ValueFormatter expressions"
+    ],
+    "classification": "These are not Divan bench_group options or Criterion BenchmarkGroup setters. They remain tracked as Airbug extensions; this classification does not assert their implementation."
+  },
+  "next_required_implementation": {
+    "feature": "Per-case/group absolute bootstrap configuration",
+    "requirements": [
+      "Sparse confidence/resamples/seed options with nearest explicit override and CLI precedence",
+      "Store effective configuration with each case in reports; never label mixed confidence levels with one global confidence value",
+      "Apply matching effective configuration to absolute estimates, retained distributions, regressions and baseline comparison plots",
+      "Preserve saved-run and formatter behavior",
+      "Verify two groups with distinct confidence/resample settings and CLI field overrides against independent bootstrap computations"
+    ]
+  },
+  "validation": {
+    "test": "bootstrap::tests::case_configs_control_estimates_draws_regressions_and_labels",
+    "checks": [
+      "Two cases match independent estimate and regression computations at 80%/99% confidence and 32/96 resamples",
+      "Retained absolute and slope draw counts match effective settings",
+      "HTML and comparison labels, JSON roundtrip, old reports and immutable raw run",
+      "Unknown case IDs and invalid per-case settings rejected"
+    ],
+    "run": ".airbug/runs/76c82e69-aa93-47b2-9530-4e6a125a11e1/index.html",
+    "attribute_test": "bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields",
+    "cargo_fixture": "bench/scripts/test-cargo-bench.py final standalone bootstrap-options fixture: auto-enabled estimates, imported group from another crate, 32/64 resamples, independent 0.99/0.9 confidence and 0/7 seeds. Passed after correcting --bench cases in fixture invocation; all preceding full-script checks passed."
+  }
+}

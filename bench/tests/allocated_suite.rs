@@ -1617,3 +1617,40 @@ fn compensated_worker_records_roundtrip_and_reject_inconsistent_aggregates() {
             .all(|w| w.adjusted_wall_ns.is_none())
     );
 }
+
+#[cfg(feature = "macros")]
+#[test]
+fn runtime_workers_update_sync_async_allocations_and_dynamic_input_totals() {
+    for asynchronous in [false, true] {
+        let mut suite = Suite::new("override-workers");
+        if asynchronous {
+            attributed_async_worker_allocations::__airbug_register_group(&mut suite);
+        } else {
+            attributed_worker_allocations::__airbug_register_group(&mut suite);
+        }
+        suite.thread_count(2).unwrap();
+        let run = suite.run("").unwrap();
+        run.validate().unwrap();
+        assert_eq!(run.cases.len(), 6);
+        // 65 iterations require two input waves for each of two workers.
+        assert_eq!(run.worker_allocations.len(), 6 * 2 * 2);
+        for case in &run.cases {
+            assert_eq!(case.contract["threads"], "2");
+            let observations: Vec<_> = run
+                .observations
+                .iter()
+                .filter(|o| o.case == case.id)
+                .collect();
+            assert!(observations.iter().all(|o| o.operations == 130));
+            let bytes = observations
+                .iter()
+                .find(|o| o.metric == "alloc.bytes")
+                .unwrap();
+            assert_eq!(bytes.value.as_deref(), Some("8320"));
+            if case.contract.contains_key("work.input.bytes") {
+                let wall = observations.iter().find(|o| o.metric == "wall").unwrap();
+                assert_eq!(wall.work_totals["bytes"], (130 * 128).to_string());
+            }
+        }
+    }
+}

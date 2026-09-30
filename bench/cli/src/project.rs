@@ -147,9 +147,21 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
             "init would replace existing bench files/target; nothing changed",
         ));
     }
+    // Honor renamed dependencies and explicitly enable attributes even when defaults are off.
+    let dependency = doc
+        .get("dev-dependencies")
+        .and_then(|t| t.as_table_like())
+        .and_then(|t| {
+            t.iter().find_map(|(name, value)| {
+                (name == "airbug-bench"
+                    || value.get("package").and_then(|v| v.as_str()) == Some("airbug-bench"))
+                .then(|| name.to_owned())
+            })
+        })
+        .unwrap_or_else(|| "airbug-bench".into());
     if doc
         .get("dev-dependencies")
-        .and_then(|t| t.get("airbug-bench").or_else(|| t.get("bench")))
+        .and_then(|t| t.get(&dependency))
         .is_none()
     {
         let path = library
@@ -166,7 +178,22 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
             "path",
             toml_edit::Value::from(path.to_string_lossy().as_ref()),
         );
-        doc["dev-dependencies"]["airbug-bench"] = toml_edit::value(dep);
+        doc["dev-dependencies"][&dependency] = toml_edit::value(dep);
+    }
+    let dep = &mut doc["dev-dependencies"][&dependency];
+    if let Some(version) = dep.as_str() {
+        let mut table = toml_edit::InlineTable::new();
+        table.insert("version", toml_edit::Value::from(version));
+        *dep = toml_edit::value(table);
+    }
+    if dep.get("features").is_none() {
+        dep["features"] = toml_edit::value(toml_edit::Array::new());
+    }
+    let features = dep["features"]
+        .as_array_mut()
+        .ok_or_else(|| error("benchmark dependency features must be an array"))?;
+    if !features.iter().any(|v| v.as_str() == Some("macros")) {
+        features.push("macros");
     }
     let mut bench = toml_edit::Table::new();
     bench["name"] = toml_edit::value("bench");
@@ -186,20 +213,15 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
         .ok_or_else(|| error("metadata.bench.targets must be an array"))?
         .push("bench");
     fs::create_dir_all(example.parent().unwrap())?;
-    let source = r#"use airbug_bench::{DropPolicy, Suite};
-fn main() -> airbug_bench::Result<()> {
-    let mut suite = Suite::new("example");
-    suite.matrix("sort", &[("elements", &["32", "128", "512"])], |suite, id, params| {
-        let size: u64 = params["elements"].parse().unwrap();
-        suite.bench_checked(id, move || (0..size).rev().collect::<Vec<_>>(),
-            |v| v.sort_unstable(),
-            |v, _| if v.windows(2).all(|w| w[0] <= w[1]) { Ok(()) }
-                else { Err(airbug_bench::error("sort produced unordered output")) },
-            DropPolicy::InsideTiming);
-    })?;
-    suite.main()
+    let source = r#"#[AIRBUG::suite]
+mod example {
+    #[bench(args = [32usize, 128, 512], setup = |n| (0..n).rev().collect::<Vec<_>>())]
+    fn sort(values: &mut [usize]) {
+        values.sort_unstable();
+    }
 }
-"#;
+"#
+    .replace("AIRBUG", &dependency.replace('-', "_"));
     fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -207,7 +229,7 @@ fn main() -> airbug_bench::Result<()> {
         .write_all(source.as_bytes())?;
     if let Err(e) = write_new(
         &config,
-        &serde_json::json!({"budgets":[{"case":"example/sort[elements=32]","metric":"wall","unit":"ns","max":1000000.0}]}),
+        &serde_json::json!({"budgets":[{"case":"example/sort/32","metric":"wall","unit":"ns","max":1000000.0}]}),
     ) {
         let _ = fs::remove_file(&example);
         return Err(e);
@@ -224,7 +246,7 @@ fn main() -> airbug_bench::Result<()> {
         return Err(e.into());
     }
     println!(
-        "Created benches/bench.rs and bench.json; registered Cargo target.\nRun: cargo airbug-bench bench --manifest-path {} -o .airbug-bench/first",
+        "Created benches/bench.rs and bench.json; registered Cargo target.\nRun: cargo bench --manifest-path \"{}\" --bench bench",
         manifest.display()
     );
     Ok(())

@@ -20,12 +20,15 @@ pub(crate) enum Action {
     /// Bootstrap analysis of a saved run, without executing workloads.
     Analyze {
         run: PathBuf,
-        #[arg(long, default_value_t = 10000)]
-        resamples: usize,
-        #[arg(long, default_value_t = 0.95)]
-        confidence_level: f64,
-        #[arg(long, default_value_t = 0)]
-        analysis_seed: u64,
+        /// Override the saved resample count (default for old runs: 10000).
+        #[arg(long)]
+        resamples: Option<usize>,
+        /// Override saved confidence levels (default for old runs: 0.95).
+        #[arg(long)]
+        confidence_level: Option<f64>,
+        /// Override saved seeds (default for old runs: 0).
+        #[arg(long)]
+        analysis_seed: Option<u64>,
         #[arg(long)]
         bootstrap_distributions: bool,
         /// Keep numerical estimates in HTML and skip SVG generation.
@@ -180,7 +183,7 @@ pub(crate) enum Action {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Export raw observations, descriptors and availability.
+    /// Export observations: csv/jsonl for raw data, formatted-csv for saved machine units.
     Export {
         run: PathBuf,
         #[arg(long)]

@@ -23,6 +23,7 @@ pub mod hypothesis_plot;
 pub mod image;
 pub mod scenario;
 pub use scenario::Recorder;
+mod console;
 pub mod density;
 pub mod measurement;
 pub mod model;
@@ -33,6 +34,7 @@ pub mod regression;
 pub mod relative;
 pub mod report;
 mod sampling;
+pub use console::{ConsoleColor, ConsoleFormat};
 mod suite;
 pub mod summary;
 pub mod violin;
@@ -40,7 +42,7 @@ pub use sampling::{Sampling, SamplingMode};
 mod suite_measure;
 pub mod viz;
 pub use model::*;
-pub use suite::{BatchPolicy, Config, DropPolicy, Suite};
+pub use suite::{BatchPolicy, Config, ConsoleOutput, DropPolicy, Suite};
 
 /// Standard best-effort optimization barrier for benchmark inputs and outputs.
 pub use std::hint::black_box;

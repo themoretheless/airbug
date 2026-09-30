@@ -27,9 +27,14 @@
         "bench/tests/attributes.rs::group_executor_defaults_are_lazy_async_only_and_locally_overridable",
         "bench/tests/attributes.rs::imported_groups_inherit_sampling_per_field_with_nearest_override",
         "bench/scripts/test-cargo-bench.py (imported sampling defaults and CLI precedence across crate boundary)",
-        "bench/tests/attributes.rs::imported_groups_preserve_false_zero_dynamic_counters_and_nearest_defaults"
+        "bench/tests/attributes.rs::imported_groups_preserve_false_zero_dynamic_counters_and_nearest_defaults",
+        "bench/macros/src/lib.rs::imported_default_tests::unsupported_imported_defaults_are_never_silently_discarded: validates all ten unsupported defaults and permits local/supported defaults; 175 library, macro and attribute tests passed",
+        "bench/tests/attributes.rs::imported_drop_defaults_reach_plain_and_async_cases_and_restore_parent",
+        "bench/tests/attributes.rs::imported_batch_defaults_bound_outputs_and_preserve_async_borrows_and_overrides",
+        "python3 bench/scripts/test-cargo-bench.py passed after batch inheritance; /tmp/airbug-imported-batch-recovered.log",
+        "bench/docs/parity/groups.json: source-level Divan/ Criterion group option audit"
       ],
-      "remaining": "Sampling, ignore and fixed counters propagate across imported groups. Imported threads, lifecycle/allocator/executor options and argument-dependent/input counter closures remain; full group option audit incomplete."
+      "remaining": "Imported group thread defaults remain incomplete. Per-group absolute bootstrap settings now work through attributes, imported groups and CLI; standalone saved-run reanalysis settings still need persistence. Numeric domains remain tracked under samples. Imported executor/allocator/input-counter/custom-measurement defaults remain Airbug extensions in groups.json."
     },
     {
       "id": "external_modules",
@@ -46,23 +51,36 @@
       "id": "args",
       "requirement": "Value/reference arguments, generated argument lists, tuple parameters",
       "upstream": "C:bench_with_input;D:bench(args)",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
-        "bench/tests/attributes.rs::external_generated_tuple_args_and_multiple_types_keep_distinct_cases"
+        "bench/tests/attributes.rs::external_generated_tuple_args_and_multiple_types_keep_distinct_cases",
+        "bench/tests/attributes.rs::generated_nonclone_arguments_live_across_samples_and_drop_with_suite",
+        "bench/tests/attributes.rs::shared_slices_supply_copy_values_to_sync_and_async_cases",
+        "bench/scripts/test-cargo-bench.py (shared argument slice and renamed dependency)",
+        "bench/tests/attributes.rs::display_only_argument_labels_work_without_renaming_debug_cases",
+        "bench/scripts/test-cargo-bench.py: full script passed with Display-only value args and generic T: ToString through renamed external dependency",
+        "bench/tests/attributes.rs::shared_slices_setup_accepts_owned_parameters_without_iterator_adapters: passed; lazy setup, fresh sync/async inputs and exact dynamic byte totals",
+        "bench/tests/attributes.rs::untyped_setup_infers_method_receiver_from_argument_values: passed; closure input inferred from direct argument values",
+        "bench/docs/parity/parameters.json",
+        "bench/tests/attributes.rs::upstream_type_examples_cover_lifetime_outputs_and_type_argument_product"
       ],
-      "remaining": "External/generated lists and owned/borrowed tuples tested; full argument lifecycle audit remains."
+      "remaining": "",
+      "comparison": "Source-level feature mapping in parameters.json covers runtime iterables, borrowed arguments, labels, setup, constrained type lists and type/argument products. Airbug-native APIs are intentional; inheritance and threaded options are tracked separately."
     },
     {
       "id": "types",
       "requirement": "Generic types, constraints, lifetime parameters, multiple type dimensions",
       "upstream": "D:bench(types)",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/tests/attributes.rs::external_generated_tuple_args_and_multiple_types_keep_distinct_cases",
         "bench/tests/attributes.rs::explicit_input_lifetimes_support_sync_async_and_type_bounds",
-        "bench/src/lib.rs (compile-fail lifetime extension validation)"
+        "bench/src/lib.rs (compile-fail lifetime extension validation)",
+        "bench/docs/parity/parameters.json",
+        "bench/tests/attributes.rs::upstream_type_examples_cover_lifetime_outputs_and_type_argument_product"
       ],
-      "remaining": "Multiple type rows, constraints and explicit input lifetimes implemented; complete upstream generic-option audit remains."
+      "remaining": "",
+      "comparison": "Source-level feature mapping in parameters.json covers runtime iterables, borrowed arguments, labels, setup, constrained type lists and type/argument products. Airbug-native APIs are intentional; inheritance and threaded options are tracked separately."
     },
     {
       "id": "consts",
@@ -138,7 +156,7 @@
       "id": "sorting",
       "requirement": "Registration/source location, lexical/natural/kind order, reverse order",
       "upstream": "D:cli sort,sortr",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/tests/contracts.rs::sorting_matches_listing_execution_and_preserves_registration_order",
         "bench/scripts/test-cargo-bench.py",
@@ -146,9 +164,17 @@
         "bench/tests/attributes.rs::attributes_sort_by_declaration_with_stable_parameter_order",
         "bench/tests/contracts.rs::source_sort_orders_files_lines_columns_and_unknown_locations",
         "bench/tests/contracts.rs::kind_order_keeps_case_labels_distinct_from_nested_groups",
-        "bench/tests/attributes.rs::kind_sort_treats_generic_families_as_parents_and_value_args_as_leaves"
+        "bench/tests/attributes.rs::kind_sort_treats_generic_families_as_parents_and_value_args_as_leaves",
+        "Divan 0.1.21 src/config/mod.rs::SortingAttr::cmp_bench_arg_names: integer/f64/natural fallback reviewed; infinities recognized through Rust f64 parsing",
+        "bench/src/ordering.rs::tests::infinities_sort_outside_finite_numbers_without_rounding: negative/positive infinity spellings, exact large integers and huge finite exponents",
+        "bench/tests/attributes.rs::numeric_argument_sort_places_infinities_at_the_boundaries: passed for natural/kind and reverse ordering",
+        "bench/tests/contracts.rs::name_sort_keeps_real_groups_contiguous_despite_slashes_in_leaf_labels: natural/lexical hierarchy, forward/reverse listing and execution",
+        "bench/tests/contracts.rs::source_sort_infers_implicit_groups_and_preserves_equal_location_order",
+        "bench/tests/attributes.rs::natural_sort_orders_signed_const_values_numerically",
+        "bench/src/ordering.rs::tests::mixed_paths_form_a_total_order (includes signed const labels)"
       ],
-      "remaining": "Explicit group and generic family kind ordering implemented; complete upstream tie-breaker and hierarchical name/location audit remains."
+      "remaining": "",
+      "comparison": "Divan 0.1.21 config/mod.rs SortingAttr and entry/tree.rs sort_by_attr, location, kind and cmp_display_name inspected. Airbug supports recursive natural/name, kind and source ordering, reverse, declared group coordinates and earliest descendant fallback for implicit groups. Signed const labels compare numerically. Listing and execution share ordering. Intentional deterministic differences: equal numeric spellings use lexical ties; equal source coordinates retain registration order instead of pointer addresses; entirely unknown locations sort after known locations; NaN stays text. Exact API/default compatibility is not required."
     },
     {
       "id": "local_closures",
@@ -311,7 +337,9 @@
         "bench/cli/tests/cli.rs::throughput_budget_selects_one_unit_and_rejects_missing_values",
         "bench/src/counters.rs::tests",
         "bench/tests/attributes.rs::zero_counters_are_reported_as_zero_throughput",
-        "bench/scripts/test-cargo-bench.py (empty and Unicode counters)"
+        "bench/scripts/test-cargo-bench.py (empty and Unicode counters)",
+        "attributes::bit_counters_inherit_override_and_record_actual_input_work: fixed/inherited bits, explicit zero, dynamic totals, checked conversion, displayed 1 Gbit/s and raw 1e9 bits/s preserved",
+        "report::bit_rate_tests::bit_display_prefixes_use_decimal_boundaries_and_one_series_scale: passed; decimal prefixes through Ebit/s and shared series scale. Criterion 0.8.2 DurationFormatter::bits_per_second inspected."
       ],
       "remaining": ""
     },
@@ -403,14 +431,21 @@
         "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock",
         "bench/scripts/test-cargo-bench.py (external custom measurement, baseline reload and normalized reports)"
       ],
-      "remaining": "Synchronous and async typed measurements support fresh borrowed/owned inputs and drop policies. Direct Cargo baseline roundtrip verified for simple synchronous case. Threaded boundaries, formatter API, saved-report formatting and broader compatibility validation remain; see measurement.json."
+      "remaining": "Typed sync/async and attribute registration, human/machine/text formatting, dynamic throughput, persisted snapshots and process-runner propagation implemented with focused evidence in measurement.json. Threaded combinations, full statistical graph formatter integration and complete upstream semantic audit remain."
     },
     {
       "id": "samples",
       "requirement": "Sample count and warmup/time configuration at all scopes",
       "upstream": "C:sample_size,warm_up_time;D:sample_count",
       "status": "partial",
-      "evidence": []
+      "evidence": [
+        "bench/src/sampling.rs::tests::linear_and_auto_schedules_use_cost_and_respect_caps",
+        "bench/src/sampling.rs::tests::budgets_distinguish_external_time_and_maximum_wins",
+        "bench/tests/attributes.rs::imported_groups_inherit_sampling_per_field_with_nearest_override",
+        "bench/src/sampling.rs::environment_tests::environment_sampling_precedence_and_errors",
+        "bench/scripts/test-cargo-bench.py (environment sampling and per-field CLI precedence)"
+      ],
+      "remaining": "Core schedules, budgets and inherited configuration implemented. Airbug currently caps samples at 100000, per-worker operations at 1048576 and individual sample/warmup times at 60s; upstream numeric-domain and threaded sample aggregation differences still require an explicit audit. Per-group absolute bootstrap settings now exist separately from hypothesis settings, with attributes and CLI precedence; independent saved-run restoration remains open (groups.json)."
     },
     {
       "id": "sample_size",
@@ -611,21 +646,45 @@
         "bench/src/report.rs::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches (unbalanced 5:1 process batches yield 55 ns/op, not pooled 10; unavailable process excluded)",
         "bench/docs/parity/plots.json (Plotter surface audit against local Criterion 0.8.2 sources)"
       ],
-      "remaining": "See plots.json: KDE PDF/overlays, regression geometry, absolute/relative bootstrap distributions, family line summaries, throughput curves, violin plots, group scale settings and report integration remain incomplete."
+      "remaining": "See plots.json: graph families and scale inheritance are implemented with focused evidence; full HTML visual inspection, navigation/thumbnail equivalents, resource limits, report-entrypoint audit and custom-formatter integration remain incomplete."
     },
     {
       "id": "output",
       "requirement": "Console verbosity/color, tree/table, machine and report formats",
       "upstream": "C:output CLI;D:tree output,color",
       "status": "partial",
-      "evidence": []
+      "evidence": [
+        "bench/src/suite.rs::ConsoleOutput and Suite::console_output",
+        "bench/scripts/test-cargo-bench.py (quiet/verbose CLI, JSON preservation, listing and conflicts)",
+        "bench/src/console.rs::tests::terminal_policy_and_styling_preserve_plain_text",
+        "bench/scripts/test-cargo-bench.py (forced/auto/never color and JSON/artifact isolation)",
+        "bench/src/console.rs::tree_tests (hierarchy/order/prefix cases, separate processes and unavailable values)",
+        "bench/scripts/test-cargo-bench.py (tree results/list, quiet tree, JSON)"
+      ],
+      "remaining": "Quiet/normal/verbose, stdout color and tree/table layouts implemented. Full upstream output-field mapping and visual terminal review remain incomplete."
     },
     {
       "id": "configuration",
       "requirement": "CLI and environment overrides with documented precedence",
       "upstream": "C:configure_from_args;D:config_with_args",
       "status": "partial",
-      "evidence": []
+      "evidence": [
+        "bench/src/sampling.rs::environment_args",
+        "bench/scripts/test-cargo-bench.py (environment sampling and per-field CLI precedence)",
+        "bench/src/sampling.rs::environment_tests::environment_timer_sort_direction_and_byte_format",
+        "bench/scripts/test-cargo-bench.py: full script passed; environment natural reverse ordering, 7/2 MiB rates and explicit CLI override of invalid timer/sort/reverse/bytes values verified",
+        "bench/src/suite.rs::counter_override_tests::runtime_counter_replaces_only_its_unit_in_fixed_and_dynamic_cases",
+        "bench/scripts/test-cargo-bench.py: full script passed; fixed runtime counters replace only the selected dynamic unit, preserve other totals and honor per-field CLI/environment precedence",
+        "bench/src/suite.rs::counter_override_tests::runtime_threads_change_execution_and_normalization: passed; invalid bounds, actual calls and normalized operation counts checked",
+        "bench/scripts/test-cargo-bench.py: full script passed with --threads and AIRBUG_BENCH_THREADS overrides, explicit CLI precedence and 130-iteration multi-wave normalization",
+        "bench/tests/allocated_suite.rs::runtime_workers_update_sync_async_allocations_and_dynamic_input_totals: passed for 12 sync/async cases across two waves with overridden workers, exact allocation bytes and dynamic input totals",
+        "bench/src/threads.rs::runtime_tests::runtime_lists_preserve_order_deduplicate_and_validate_every_count: passed",
+        "bench/tests/attributes.rs::registration_thread_matrix_replaces_defaults_with_truthful_names: passed; lazy registration, replacement rather than cross product, exact actual calls and operation totals",
+        "bench/scripts/test-cargo-bench.py: full script passed with comma-separated/repeated thread flags, environment lists, precedence, deduplication, truthful names and per-case normalized operation counts",
+        "bench/scripts/test-cargo-bench.py: full script passed; manual main rejects repeated distinct worker counts and mismatched registered matrices before execution, while single override remains valid",
+        "bench/scripts/test-cargo-bench.py: full script passed with --bits-count overriding dynamic bits and invalid env, plus AIRBUG_BENCH_BITS_COUNT=0 dry-run"
+      ],
+      "remaining": "Runtime thread lists, repeated flags, zero/automatic selection and matrix replacement are implemented for attributed concurrent cases via main_registered. Sequential-case opt-in and complete upstream option-domain mapping remain incomplete. Already-registered manual builder cases support a single worker override; arbitrary builder closures cannot yet be expanded into matrices."
     },
     {
       "id": "artifacts",

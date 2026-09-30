@@ -627,18 +627,14 @@ pub(crate) fn execute() -> Result<i32> {
             } else {
                 airbug_bench::viz::charts::AxisScale::Linear
             };
-            let config = airbug_bench::bootstrap::Config {
+            let overrides = airbug_bench::bootstrap::Options {
                 resamples,
                 confidence_level,
                 seed: analysis_seed,
             };
-            config.validate()?;
             let run = load(run)?;
-            let report = if bootstrap_distributions {
-                airbug_bench::bootstrap::analyze_with_distributions(&run, &config)?
-            } else {
-                airbug_bench::bootstrap::analyze(&run, &config)?
-            };
+            let report =
+                airbug_bench::bootstrap::analyze_saved(&run, overrides, bootstrap_distributions)?;
             let text = match format.as_str() {
                 "html" if no_plots => {
                     airbug_bench::report::html(&airbug_bench::bootstrap::markdown(&report))

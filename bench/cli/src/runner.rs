@@ -167,6 +167,7 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
     fs::create_dir(out.join("logs"))?;
     let mut result = Run::new();
     let mut presentation = airbug_bench::presentation::Consensus::default();
+    let mut formatting = airbug_bench::measurement::ProcessFormatting::default();
     if let Some(policy) = &privacy {
         let env: BTreeMap<_, _> = policy
             .environment()
@@ -431,6 +432,7 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                     }
                 }
                 presentation.observe(&worker)?;
+                formatting.observe(&worker, e.process, &e.variant)?;
                 if result.cases.is_empty() {
                     result.cases = worker.cases;
                 } else if result.cases != worker.cases {
@@ -519,7 +521,10 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
         Status::Failed
     };
     if execution.is_ok() {
-        if let Err(e) = result.validate() {
+        if let Err(e) = formatting
+            .save(&mut result)
+            .and_then(|()| result.validate())
+        {
             result.status = Status::Failed;
             execution = Err(e);
         }

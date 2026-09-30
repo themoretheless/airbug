@@ -156,7 +156,36 @@ impl BytesFormat {
 }
 /// Choose one prefix per series using its median rate, retaining every observation.
 pub fn throughput_with_format(run: &Run, format: BytesFormat) -> Result<Vec<ThroughputSeries>> {
-    throughput_impl(run, Some(format), None)
+    Ok(scale_bit_rates(throughput_impl(run, Some(format), None)?))
+}
+/// Human display rates with decimal bit prefixes. `throughput` retains fixed
+/// units for machine consumers and budget comparisons.
+pub fn throughput_display(run: &Run) -> Result<Vec<ThroughputSeries>> {
+    Ok(scale_bit_rates(throughput(run)?))
+}
+fn scale_bit_rates(mut series: Vec<ThroughputSeries>) -> Vec<ThroughputSeries> {
+    for row in &mut series {
+        if row.unit != "bits" {
+            continue;
+        }
+        let typical = if row.values.is_empty() {
+            0.0
+        } else {
+            median(&row.values)
+        };
+        let units = ["bits", "kbit", "Mbit", "Gbit", "Tbit", "Pbit", "Ebit"];
+        let mut scale = 1.0;
+        let mut index = 0;
+        while index + 1 < units.len() && typical >= scale * 1000.0 {
+            scale *= 1000.0;
+            index += 1;
+        }
+        for value in &mut row.values {
+            *value /= scale;
+        }
+        row.unit = units[index].into();
+    }
+    series
 }
 fn byte_scale(values: &[f64], format: BytesFormat) -> (f64, &'static str) {
     let (base, units) = match format {
@@ -239,7 +268,7 @@ fn markdown_impl(run: &Run, format: Option<BytesFormat>) -> Result<String> {
     let mut rates = String::new();
     for s in match format {
         Some(format) => throughput_with_format(run, format)?,
-        None => throughput(run)?,
+        None => throughput_display(run)?,
     } {
         rates.push_str(&format!(
             "| {} [{}] | {:.4} | {}/s |\n",
@@ -421,6 +450,13 @@ pub fn html_run_with_summary(run: &Run, summary: Option<SummaryPlot<'_>>) -> Res
     details.push_str("</section>");
     result = result.replace("<!--DETAILS-->", &details);
     let mut plots = raw_charts(run)?;
+    match crate::measurement::charts(run) {
+        Ok(formatted) => plots.push_str(&formatted),
+        Err(err) => plots.push_str(&format!(
+            "<p>Formatted plots unavailable: {}</p>",
+            escape(&err.to_string())
+        )),
+    }
     if let Some(summary) = summary {
         plots.push_str(&parameter_charts(run, &summary)?);
     }
@@ -1858,5 +1894,40 @@ mod summary_plot_tests {
                 .unwrap()
                 .contains("Input parameter summaries")
         );
+    }
+}
+
+#[cfg(test)]
+mod bit_rate_tests {
+    use super::*;
+    #[test]
+    fn bit_display_prefixes_use_decimal_boundaries_and_one_series_scale() {
+        for (rate, unit, expected) in [
+            (0.0, "bits", 0.0),
+            (999.0, "bits", 999.0),
+            (1e3, "kbit", 1.0),
+            (1e6, "Mbit", 1.0),
+            (1e9, "Gbit", 1.0),
+            (1e12, "Tbit", 1.0),
+            (1e15, "Pbit", 1.0),
+            (1e18, "Ebit", 1.0),
+        ] {
+            let scaled = scale_bit_rates(vec![ThroughputSeries {
+                case: "case".into(),
+                variant: "candidate".into(),
+                unit: "bits".into(),
+                values: vec![rate],
+            }]);
+            assert_eq!(scaled[0].unit, unit);
+            assert_eq!(scaled[0].values, [expected]);
+        }
+        let scaled = scale_bit_rates(vec![ThroughputSeries {
+            case: "case".into(),
+            variant: "candidate".into(),
+            unit: "bits".into(),
+            values: vec![1000.0, 3000.0],
+        }]);
+        assert_eq!(scaled[0].unit, "kbit");
+        assert_eq!(scaled[0].values, [1.0, 3.0]);
     }
 }

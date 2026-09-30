@@ -8,12 +8,10 @@
 
 ```sh
 cargo airbug-bench init --manifest-path /path/to/project/Cargo.toml
-cargo airbug-bench discover --manifest-path /path/to/project/Cargo.toml --offline
-cargo airbug-bench bench --manifest-path /path/to/project/Cargo.toml \
-  --offline --repetitions 12 -o .airbug-bench/first
+cargo bench --manifest-path /path/to/project/Cargo.toml --bench bench
 ```
 
-`init` добавляет dev-dependency на локальную библиотеку, `[[bench]]` с `harness=false`, регистрацию target, пример проверяемой сортировки с тремя размерами и `bench.json`. TOML-комментарии сохраняются. Существующие файлы не заменяются. Для virtual workspace нужно выбрать manifest одного package. Если исходники библиотеки перемещены, передайте `--library-path /path/to/airbug/bench`.
+`init` добавляет dev-dependency на локальную библиотеку, `[[bench]]` с `harness=false`, регистрацию target, короткий пример с `#[bench]`, подготовкой данных вне измерения и тремя размерами и `bench.json`. TOML-комментарии сохраняются. Существующие файлы не заменяются. Для virtual workspace нужно выбрать manifest одного package. Если исходники библиотеки перемещены, передайте `--library-path /path/to/airbug/bench`.
 
 `discover` показывает все Cargo bench targets workspace и их регистрацию. `airbug-bench` сначала собирает **все выбранные targets**, затем измеряет их последовательно. Для существующего bench target добавьте:
 

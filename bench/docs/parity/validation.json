@@ -1,0 +1,40 @@
+{
+  "scope": "Regression verification of the current worktree; not proof of full Criterion/Divan feature parity",
+  "packages": [
+    "airbug-bench",
+    "airbug-bench-macros",
+    "cargo-airbug-bench"
+  ],
+  "checks": [
+    {
+      "command": "cargo airbug test -- -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --offline",
+      "result": "390 passed; 3 local TCP listener tests failed with sandbox PermissionDenied",
+      "report": ".airbug/runs/34a640f7-b382-43d0-a6af-cd0e3f1bc68d/index.html"
+    },
+    {
+      "command": "cargo airbug test -- -p cargo-airbug-bench --bin cargo-airbug-bench --all-features --offline",
+      "environment": "approved execution with local TCP listeners allowed",
+      "result": "13 passed, including all 3 previously denied tests",
+      "report": ".airbug/runs/06f54ad9-f7d6-4b1e-896b-8317bcba5588/index.html"
+    },
+    {
+      "command": "cargo clippy -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features --offline -- -D warnings",
+      "result": "passed"
+    },
+    {
+      "command": "git -c core.fsmonitor=false diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "passed"
+    }
+  ],
+  "limits": [
+    "Current host only; cross-platform behavior remains unverified",
+    "Does not complete the requirement-by-requirement upstream audit",
+    "Full rendered HTML visual verification remains incomplete",
+    "Reports are local; port 8790 belongs to a different project"
+  ],
+  "verified_changes": "Current gate includes runtime counters, thread matrices and preflight, custom typed caller totals, shared-slice setup, imported-default diagnostics, console modes and infinity-aware ordering."
+}

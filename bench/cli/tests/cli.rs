@@ -481,6 +481,25 @@ fn init_discovery_preserves_manifest_and_refuses_overwrite() {
     let content = fs::read_to_string(&manifest).unwrap();
     assert!(content.contains("# keep this comment"));
     assert!(content.contains("harness = false"));
+    assert!(String::from_utf8_lossy(&o.stdout).contains("Run: cargo bench"));
+    let source = fs::read_to_string(dir.path().join("benches/bench.rs")).unwrap();
+    assert!(source.contains("#[airbug_bench::suite]"));
+    assert!(source.contains("#[bench(args"));
+    let check = std::process::Command::new("cargo")
+        .args(["check", "--offline", "--bench", "bench", "--manifest-path"])
+        .arg(&manifest)
+        .env(
+            "CARGO_TARGET_DIR",
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/init-smoke"),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+
     let o = cli(&[
         "discover",
         "--manifest-path",
@@ -1464,7 +1483,54 @@ fn protocol_preserves_worker_allocations_across_processes_and_variants() {
         ..Default::default()
     });
     suite.compensate_overhead(true);
-    let fixture = suite.run("").unwrap();
+    let mut fixture = suite.run("").unwrap();
+    fixture.cases[0]
+        .contract
+        .insert("work.input.items".into(), "batch_total".into());
+    for o in fixture
+        .observations
+        .iter_mut()
+        .filter(|o| o.metric == "wall")
+    {
+        o.work_totals.insert("items".into(), "42".into());
+    }
+    let metric = fixture.cases[0]
+        .metrics
+        .iter()
+        .find(|m| m.id == "wall")
+        .unwrap()
+        .clone();
+    let rows: Vec<_> = fixture
+        .observations
+        .iter()
+        .filter(|o| o.metric == "wall")
+        .map(|o| airbug_bench::measurement::FormattedObservation {
+            variant: o.variant.clone(),
+            process: o.process,
+            sequence: o.sequence,
+            value: o
+                .number()
+                .unwrap()
+                .map(|v| v / o.operations as f64 / 1000.0),
+            unit: "custom-us".into(),
+            unavailable_reason: None,
+            display: None,
+        })
+        .collect();
+    let snapshot = airbug_bench::measurement::FormattedMetric {
+        case: fixture.cases[0].id.clone(),
+        metric,
+        human: rows.clone(),
+        machine: rows.clone(),
+        throughput: std::collections::BTreeMap::from([(
+            "items".into(),
+            airbug_bench::measurement::FormattedThroughput {
+                work_per_operation: None,
+                observations: rows,
+            },
+        )]),
+    };
+    airbug_bench::measurement::save_formatted(&mut fixture, &[snapshot]).unwrap();
     let t = tempfile::tempdir().unwrap();
     let payload = t.path().join("payload.txt");
     fs::write(
@@ -1505,6 +1571,43 @@ fn protocol_preserves_worker_allocations_across_processes_and_variants() {
         airbug_bench::presentation::load_families(&run).unwrap()["worker-protocol/case"],
         "worker-protocol/workers"
     );
+    let formatted = airbug_bench::measurement::load_formatted(&run).unwrap();
+    assert_eq!(formatted.len(), 1);
+    assert_eq!(formatted[0].human.len(), 4);
+    assert_eq!(formatted[0].throughput["items"].observations.len(), 4);
+    for row in &formatted[0].human {
+        let raw = run
+            .observations
+            .iter()
+            .find(|o| {
+                o.metric == "wall"
+                    && o.process == row.process
+                    && o.variant == row.variant
+                    && o.sequence == row.sequence
+            })
+            .unwrap();
+        assert_eq!(
+            row.value,
+            raw.number()
+                .unwrap()
+                .map(|v| v / raw.operations as f64 / 1000.0)
+        );
+        assert_eq!(row.unit, "custom-us");
+    }
+    assert!(
+        airbug_bench::report::html_run(&run)
+            .unwrap()
+            .contains("custom-us")
+    );
+    let mut changed = run.clone();
+    changed
+        .observations
+        .iter_mut()
+        .find(|o| o.metric == "wall")
+        .unwrap()
+        .work_totals
+        .insert("items".into(), "43".into());
+    assert!(airbug_bench::measurement::load_formatted(&changed).is_err());
     assert_eq!(run.worker_allocations.len(), 8);
     let identities: std::collections::BTreeSet<_> = run
         .worker_allocations
@@ -2257,9 +2360,11 @@ fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
             value: o.number().unwrap().map(|v| v / 1000.0),
             unit: "custom-display".into(),
             unavailable_reason: None,
+            display: Some("custom text <script> | 1".into()),
         })
         .collect();
     let formatted = FormattedMetric {
+        throughput: Default::default(),
         case: case.id.clone(),
         metric,
         human: rows.clone(),
@@ -2269,6 +2374,23 @@ fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
     let source = t.path().join("formatted");
     run.save_new(&source).unwrap();
     let original = fs::read(source.join("run.json")).unwrap();
+    let csv = t.path().join("formatted.csv");
+    assert!(
+        cli(&[
+            "export",
+            source.to_str().unwrap(),
+            "--format",
+            "formatted-csv",
+            "-o",
+            csv.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    let csv_text = fs::read_to_string(csv).unwrap();
+    assert!(csv_text.contains("custom-display"));
+    assert!(csv_text.contains("normalized_per_operation"));
+    assert!(!csv_text.contains("custom text"));
     let html = t.path().join("formatted.html");
     let result = cli(&[
         "report",
@@ -2282,14 +2404,158 @@ fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    assert!(fs::read_to_string(html).unwrap().contains("custom-display"));
+    let table_html = fs::read_to_string(html).unwrap();
+    assert!(table_html.contains("custom-display"));
+    assert!(table_html.contains("custom text &lt;script&gt;"));
+    assert!(!table_html.contains("custom text <script>"));
+    assert!(!table_html.contains("<svg"));
+    let plotted = t.path().join("plotted.html");
+    assert!(
+        cli(&[
+            "report",
+            source.to_str().unwrap(),
+            "-o",
+            plotted.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    let plot_html = fs::read_to_string(plotted).unwrap();
+    assert!(plot_html.contains("formatted observations (custom-display)"));
+    assert!(plot_html.contains("Saved formatter output"));
     assert_eq!(original, fs::read(source.join("run.json")).unwrap());
     run.observations[0].value = Some("99999".into());
     let stale = t.path().join("stale");
     run.save_new(&stale).unwrap();
+    let stale_csv = t.path().join("stale.csv");
+    let rejected = cli(&[
+        "export",
+        stale.to_str().unwrap(),
+        "--format",
+        "formatted-csv",
+        "-o",
+        stale_csv.to_str().unwrap(),
+    ]);
+    assert!(!rejected.status.success());
+    assert!(!stale_csv.exists());
     let result = cli(&["report", stale.to_str().unwrap()]);
     assert!(result.status.success());
     let text = String::from_utf8(result.stdout).unwrap();
     assert!(text.contains("saved formatting is stale"));
     assert!(!text.contains("custom-display"));
+    let stale_html = t.path().join("stale.html");
+    assert!(
+        cli(&[
+            "report",
+            stale.to_str().unwrap(),
+            "-o",
+            stale_html.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    let stale_html = fs::read_to_string(stale_html).unwrap();
+    assert!(stale_html.contains("Formatted plots unavailable"));
+    assert!(!stale_html.contains("formatted observations (custom-display)"));
+}
+
+#[test]
+fn init_preserves_renamed_dependency_and_enables_attributes() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = dir.path().join("Cargo.toml");
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    fs::write(
+        &manifest,
+        format!(
+            r#"[package]
+name = "renamed-init"
+version = "0.1.0"
+[dev-dependencies]
+ab = {{ package = "airbug-bench", path = {:?}, default-features = false, features = ["memory"] }}
+"#,
+            library
+        ),
+    )
+    .unwrap();
+    let o = cli(&["init", "--manifest-path", manifest.to_str().unwrap()]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let doc = fs::read_to_string(&manifest)
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap();
+    assert!(doc["dev-dependencies"].get("airbug-bench").is_none());
+    assert_eq!(
+        doc["dev-dependencies"]["ab"]["default-features"].as_bool(),
+        Some(false)
+    );
+    let features = doc["dev-dependencies"]["ab"]["features"]
+        .as_array()
+        .unwrap();
+    assert!(features.iter().any(|v| v.as_str() == Some("memory")));
+    assert!(features.iter().any(|v| v.as_str() == Some("macros")));
+    assert!(
+        fs::read_to_string(dir.path().join("benches/bench.rs"))
+            .unwrap()
+            .contains("#[ab::suite]")
+    );
+}
+
+#[test]
+fn analyze_restores_saved_bootstrap_settings_and_overrides_one_field() {
+    use airbug_bench::bootstrap::{Config, save_settings};
+    let temp = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&temp.path().join("source"));
+    let original = run.observations[0].clone();
+    run.observations = (0..4)
+        .map(|sequence| {
+            let mut value = original.clone();
+            value.sequence = sequence;
+            value.value = Some((sequence + 1).to_string());
+            value
+        })
+        .collect();
+    let case = run.cases[0].id.clone();
+    save_settings(
+        &mut run,
+        &Config::default(),
+        &std::collections::BTreeMap::from([(
+            case.clone(),
+            Config {
+                resamples: 32,
+                confidence_level: 0.9,
+                seed: 7,
+            },
+        )]),
+    )
+    .unwrap();
+    let path = temp.path().join("saved");
+    run.save_new(&path).unwrap();
+    let bytes = fs::read(path.join("run.json")).unwrap();
+    for (extra, count) in [(vec![], 32), (vec!["--resamples", "64"], 64)] {
+        let mut args = vec![
+            "analyze",
+            path.to_str().unwrap(),
+            "--bootstrap-distributions",
+        ];
+        args.extend(extra);
+        let output = cli(&args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: airbug_bench::bootstrap::Report =
+            serde_json::from_slice(&output.stdout).unwrap();
+        let settings = report.config_for_case(&case);
+        assert_eq!(settings.resamples, count);
+        assert_eq!(settings.confidence_level, 0.9);
+        assert_eq!(settings.seed, 7);
+        assert_eq!(
+            report.rows[0].distributions.as_ref().unwrap().mean.len(),
+            count
+        );
+    }
+    assert_eq!(bytes, fs::read(path.join("run.json")).unwrap());
 }

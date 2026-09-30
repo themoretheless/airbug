@@ -1,0 +1,87 @@
+{
+  "upstream": {
+    "divan": "0.1.21 src/lib.rs args and types sections (337-449, 520-555)",
+    "criterion": "0.8.2 src/benchmark_group.rs bench_function and bench_with_input (249-275)"
+  },
+  "scope": "Runtime arguments and generic type parameterization; option inheritance, threading, counters and report formatting remain separately audited.",
+  "mapping": [
+    {
+      "feature": "Inline argument expressions and shared external iterables",
+      "airbug": "args accepts IntoIterator; Copy values borrowed from shared slices",
+      "evidence": [
+        "shared_slices_supply_copy_values_to_sync_and_async_cases",
+        "external_generated_tuple_args_and_multiple_types_keep_distinct_cases"
+      ]
+    },
+    {
+      "feature": "Non-Copy argument by reference and strings as str",
+      "airbug": "Persistent owned argument storage with borrowed invocation",
+      "evidence": [
+        "noncopy_arguments_can_be_borrowed_without_cloning",
+        "generated_nonclone_arguments_live_across_samples_and_drop_with_suite"
+      ]
+    },
+    {
+      "feature": "Debug or ToString argument labels",
+      "airbug": "Debug preferred, ToString fallback",
+      "evidence": [
+        "display_only_argument_labels_work_without_renaming_debug_cases"
+      ]
+    },
+    {
+      "feature": "Argument-dependent setup and throughput",
+      "airbug": "setup and counter expressions; typed closures or named functions for shared-slice owned parameters",
+      "evidence": [
+        "shared_slices_setup_accepts_owned_parameters_without_iterator_adapters",
+        "untyped_setup_infers_method_receiver_from_argument_values",
+        "generic_dimensions_and_parameters_form_independent_cases"
+      ]
+    },
+    {
+      "feature": "Generic type list, trait constraints and lifetime-dependent output",
+      "airbug": "types list and preserved function bounds",
+      "evidence": [
+        "upstream_type_examples_cover_lifetime_outputs_and_type_argument_product",
+        "explicit_input_lifetimes_support_sync_async_and_type_bounds"
+      ]
+    },
+    {
+      "feature": "Type by argument Cartesian product",
+      "airbug": "types + args; multiple type parameters supported through tuple rows",
+      "evidence": [
+        "upstream_type_examples_cover_lifetime_outputs_and_type_argument_product",
+        "external_generated_tuple_args_and_multiple_types_keep_distinct_cases"
+      ]
+    },
+    {
+      "feature": "Criterion parameter reference and caller-selected identity",
+      "airbug": "Suite closures capture parameter references and explicit case names; no Bencher source compatibility required",
+      "evidence": [
+        "bench/tests/local_closures.rs",
+        "bench/tests/attributes.rs::noncopy_arguments_can_be_borrowed_without_cloning"
+      ]
+    }
+  ],
+  "differences": [
+    "Airbug local arguments do not require Send/Sync; threaded registration enforces its own bounds.",
+    "Registration evaluates iterables to enumerate names, while setup and workloads remain lazy.",
+    "Airbug does not implement the upstream Bencher argument signature; setup/counters and Suite closures supply the capabilities."
+  ],
+  "validation": {
+    "attributes": {
+      "command": "cargo airbug test -- -p airbug-bench --test attributes --offline",
+      "passed": 52,
+      "failed": 0,
+      "report": ".airbug/runs/478a5bdf-6f19-429b-8089-b12487636cec/index.html"
+    },
+    "cargo_bench": {
+      "command": "python3 bench/scripts/test-cargo-bench.py",
+      "exit_code": 0,
+      "log": "/tmp/airbug-parity-current.log"
+    },
+    "clippy": {
+      "command": "cargo clippy -p airbug-bench --test attributes --offline -- -D warnings",
+      "exit_code": 0
+    }
+  }
+}

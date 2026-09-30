@@ -10,6 +10,32 @@ pub struct Config {
     pub confidence_level: f64,
     pub seed: u64,
 }
+/// Sparse group/case settings. Explicit fields override inherited fields independently.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct Options {
+    pub resamples: Option<usize>,
+    pub confidence_level: Option<f64>,
+    pub seed: Option<u64>,
+}
+impl Options {
+    pub fn inherit(&mut self, fallback: Self) {
+        self.resamples = self.resamples.or(fallback.resamples);
+        self.confidence_level = self.confidence_level.or(fallback.confidence_level);
+        self.seed = self.seed.or(fallback.seed);
+    }
+    pub fn is_empty(self) -> bool {
+        self.resamples.is_none() && self.confidence_level.is_none() && self.seed.is_none()
+    }
+    pub fn resolve(self, fallback: &Config) -> Result<Config> {
+        let config = Config {
+            resamples: self.resamples.unwrap_or(fallback.resamples),
+            confidence_level: self.confidence_level.unwrap_or(fallback.confidence_level),
+            seed: self.seed.unwrap_or(fallback.seed),
+        };
+        config.validate()?;
+        Ok(config)
+    }
+}
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -281,28 +307,120 @@ pub struct Row {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Report {
     pub config: Config,
+    /// Effective per-case settings, overriding the report-wide fallback.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub case_configs: BTreeMap<String, Config>,
     pub method: String,
     pub rows: Vec<Row>,
 }
+const SAVED_CONFIG: &str = "airbug.analysis.bootstrap.v1";
+
+#[derive(Serialize, Deserialize)]
+struct SavedConfig {
+    fallback: Config,
+    cases: BTreeMap<String, Config>,
+}
+
+/// Persist analysis settings independently of measurement contracts and observations.
+pub fn save_settings(
+    run: &mut Run,
+    fallback: &Config,
+    cases: &BTreeMap<String, Config>,
+) -> Result<()> {
+    fallback.validate()?;
+    for (id, config) in cases {
+        config.validate()?;
+        if !run.cases.iter().any(|case| case.id == *id) {
+            return Err(error(format!(
+                "bootstrap settings refer to unknown case: {id}"
+            )));
+        }
+    }
+    let encoded = serde_json::to_string(&SavedConfig {
+        fallback: fallback.clone(),
+        cases: cases.clone(),
+    })?;
+    run.provenance.insert(SAVED_CONFIG.into(), encoded);
+    Ok(())
+}
+
+/// Reanalyze a saved run, restoring its settings before applying explicit overrides.
+/// Runs without saved settings use the standard defaults. Case extraction may leave
+/// settings for omitted cases; those entries are validated but not analyzed.
+pub fn analyze_saved(run: &Run, overrides: Options, capture: bool) -> Result<Report> {
+    let saved = run
+        .provenance
+        .get(SAVED_CONFIG)
+        .map(|value| serde_json::from_str::<SavedConfig>(value))
+        .transpose()?;
+    let (fallback, mut cases) = match saved {
+        Some(saved) => {
+            saved.fallback.validate()?;
+            for config in saved.cases.values() {
+                config.validate()?;
+            }
+            (saved.fallback, saved.cases)
+        }
+        None => (Config::default(), BTreeMap::new()),
+    };
+    let fallback = overrides.resolve(&fallback)?;
+    cases.retain(|id, _| run.cases.iter().any(|case| case.id == *id));
+    for config in cases.values_mut() {
+        *config = overrides.resolve(config)?;
+    }
+    analyze_impl(run, &fallback, &cases, capture)
+}
+
 /// Multi-process data is reduced to one median per process before resampling.
 /// A single process uses normalized batches, explicitly without process-level claims.
 pub fn analyze(run: &Run, config: &Config) -> Result<Report> {
-    analyze_impl(run, config, false)
+    analyze_impl(run, config, &BTreeMap::new(), false)
 }
 
 /// Analyze the same statistical units as `analyze`, retaining absolute draws.
 pub fn analyze_with_distributions(run: &Run, config: &Config) -> Result<Report> {
-    analyze_impl(run, config, true)
+    analyze_impl(run, config, &BTreeMap::new(), true)
 }
 
-fn analyze_impl(run: &Run, config: &Config, capture: bool) -> Result<Report> {
+impl Report {
+    pub fn config_for_case(&self, case: &str) -> &Config {
+        self.case_configs.get(case).unwrap_or(&self.config)
+    }
+}
+
+/// Analyze cases with independently configured intervals and resample counts.
+/// Unknown case IDs are rejected so a misspelled override cannot silently disappear.
+pub fn analyze_with_case_configs(
+    run: &Run,
+    fallback: &Config,
+    overrides: &BTreeMap<String, Config>,
+    capture_distributions: bool,
+) -> Result<Report> {
+    analyze_impl(run, fallback, overrides, capture_distributions)
+}
+
+fn analyze_impl(
+    run: &Run,
+    config: &Config,
+    overrides: &BTreeMap<String, Config>,
+    capture: bool,
+) -> Result<Report> {
     run.validate()?;
     config.validate()?;
     if run.status != Status::Complete {
         return Err(error("bootstrap requires a complete run"));
     }
+    for (case, settings) in overrides {
+        if !run.cases.iter().any(|entry| entry.id == *case) {
+            return Err(error(format!(
+                "bootstrap settings refer to unknown case: {case}"
+            )));
+        }
+        settings.validate()?;
+    }
     let mut rows = Vec::new();
     for case in &run.cases {
+        let config = overrides.get(&case.id).unwrap_or(config);
         for metric in &case.metrics {
             let mut variants: BTreeMap<&str, BTreeMap<u32, Vec<f64>>> = BTreeMap::new();
             let mut batches: BTreeMap<&str, BTreeMap<u32, Vec<crate::regression::Sample>>> =
@@ -396,6 +514,7 @@ fn analyze_impl(run: &Run, config: &Config, capture: bool) -> Result<Report> {
         }
     }
     Ok(Report {
+        case_configs: overrides.clone(),
         config: config.clone(),
         method: "percentile_bootstrap_linear_quantiles".into(),
         rows,
@@ -410,9 +529,21 @@ pub fn markdown(report: &Report) -> String {
         report.config.resamples,
         report.config.seed
     );
+    if !report.case_configs.is_empty() {
+        output = output.replacen("Confidence:", "Default confidence (cases may override):", 1);
+    }
     let mut notes = String::new();
     for row in &report.rows {
         let label = escape(&format!("{} / {} / {}", row.case, row.metric, row.variant));
+        if !report.case_configs.is_empty() {
+            let config = report.config_for_case(&row.case);
+            notes.push_str(&format!(
+                "\n- {label}: confidence {:.2}%; resamples {}; seed {}.\n",
+                config.confidence_level * 100.0,
+                config.resamples,
+                config.seed
+            ));
+        }
         if let Some(estimates) = &row.estimates {
             for (name, estimate) in [
                 ("mean", &estimates.mean),
@@ -741,7 +872,7 @@ pub fn comparison_charts(baseline: &Report, candidate: &Report) -> String {
                 fit: &r.fit,
             })
             .collect();
-        output.push_str(&format!("<p>Per-process slope confidence levels: baseline {}, candidate {}. These intervals are not family-adjusted.</p>", baseline.config.confidence_level, candidate.config.confidence_level));
+        output.push_str(&format!("<p>Per-process slope confidence levels: baseline {}, candidate {}. These intervals are not family-adjusted.</p>", baseline.config_for_case(&row.case).confidence_level, candidate.config_for_case(&row.case).confidence_level));
         output.push_str(&crate::regression::comparison_figure(
             &series,
             &format!(
@@ -757,6 +888,128 @@ pub fn comparison_charts(baseline: &Report, candidate: &Report) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn case_configs_control_estimates_draws_regressions_and_labels() {
+        let mut recorder = crate::Recorder::new();
+        for id in ["first", "second"] {
+            recorder
+                .case(crate::Case {
+                    id: id.into(),
+                    contract: Default::default(),
+                    metrics: vec![crate::Metric::duration("wall", "process", "batch_total")],
+                })
+                .unwrap();
+            recorder.observe(id, "wall", 1).unwrap();
+        }
+        let mut run = recorder.finish().unwrap();
+        let originals = std::mem::take(&mut run.observations);
+        for original in originals {
+            for sequence in 0..5 {
+                let mut row = original.clone();
+                row.sequence = sequence;
+                row.operations = sequence + 1;
+                row.value = Some(((sequence + 1).pow(2)).to_string());
+                run.observations.push(row);
+            }
+        }
+        let before = serde_json::to_vec(&run).unwrap();
+        let fallback = Config {
+            resamples: 32,
+            confidence_level: 0.8,
+            seed: 1,
+        };
+        let overrides = BTreeMap::from([(
+            "second".into(),
+            Config {
+                resamples: 96,
+                confidence_level: 0.99,
+                seed: 7,
+            },
+        )]);
+        let report = analyze_with_case_configs(&run, &fallback, &overrides, true).unwrap();
+        for row in &report.rows {
+            let config = report.config_for_case(&row.case);
+            let independent = analyze_with_distributions(&run, config).unwrap();
+            let expected = independent
+                .rows
+                .iter()
+                .find(|other| other.case == row.case)
+                .unwrap();
+            assert_eq!(
+                serde_json::to_value(row).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+            assert_eq!(
+                row.distributions.as_ref().unwrap().mean.len(),
+                config.resamples
+            );
+            assert_eq!(
+                row.regressions[0]
+                    .slope_distribution
+                    .as_ref()
+                    .unwrap()
+                    .len(),
+                config.resamples
+            );
+        }
+        assert_eq!(before, serde_json::to_vec(&run).unwrap());
+        let page = html(&report);
+        assert!(page.contains("confidence 80.00%; resamples 32; seed 1"));
+        assert!(page.contains("confidence 99.00%; resamples 96; seed 7"));
+        let baseline = analyze_with_distributions(&run, &fallback).unwrap();
+        assert!(comparison_charts(&baseline, &report).contains("baseline 0.8, candidate 0.99"));
+        let restored: Report =
+            serde_json::from_slice(&serde_json::to_vec(&report).unwrap()).unwrap();
+        assert_eq!(restored.config_for_case("second").resamples, 96);
+        let legacy: Report =
+            serde_json::from_slice(&serde_json::to_vec(&baseline).unwrap()).unwrap();
+        assert!(legacy.case_configs.is_empty());
+        assert_eq!(legacy.config_for_case("second").resamples, 32);
+        save_settings(&mut run, &fallback, &overrides).unwrap();
+        let saved_bytes = serde_json::to_vec(&run).unwrap();
+        let saved = analyze_saved(&run, Options::default(), true).unwrap();
+        assert_eq!(
+            serde_json::to_value(&saved).unwrap(),
+            serde_json::to_value(&report).unwrap()
+        );
+        let changed = analyze_saved(
+            &run,
+            Options {
+                resamples: Some(48),
+                ..Default::default()
+            },
+            true,
+        )
+        .unwrap();
+        assert_eq!(changed.config_for_case("first").confidence_level, 0.8);
+        assert_eq!(changed.config_for_case("second").confidence_level, 0.99);
+        assert!(
+            changed
+                .rows
+                .iter()
+                .all(|row| row.distributions.as_ref().unwrap().mean.len() == 48)
+        );
+        assert_eq!(saved_bytes, serde_json::to_vec(&run).unwrap());
+        let one = crate::history::one_case(&run, "second");
+        assert_eq!(
+            analyze_saved(&one, Options::default(), false)
+                .unwrap()
+                .case_configs
+                .len(),
+            1
+        );
+        let mut invalid = overrides.clone();
+        invalid.insert("missing".into(), fallback.clone());
+        assert!(analyze_with_case_configs(&run, &fallback, &invalid, true).is_err());
+        invalid.remove("missing");
+        invalid.get_mut("second").unwrap().confidence_level = 1.0;
+        assert!(analyze_with_case_configs(&run, &fallback, &invalid, false).is_err());
+        assert!(save_settings(&mut run, &fallback, &invalid).is_err());
+        assert_eq!(saved_bytes, serde_json::to_vec(&run).unwrap());
+        run.provenance.insert(SAVED_CONFIG.into(), "{}".into());
+        assert!(analyze_saved(&run, Options::default(), false).is_err());
+    }
+
     #[test]
     fn report_capture_uses_process_units_and_reads_legacy_json() {
         let mut recorder = crate::Recorder::new();
@@ -900,6 +1153,7 @@ mod tests {
             note: String::new(),
         };
         let mut report = Report {
+            case_configs: BTreeMap::new(),
             config: Config::default(),
             method: "fixture".into(),
             rows: vec![row.clone(), row.clone()],
@@ -941,6 +1195,7 @@ mod tests {
     fn density_reports_preserve_population_labels_and_all_observations() {
         let values = [1., 2., 3., 4., 100.];
         let baseline = Report {
+            case_configs: BTreeMap::new(),
             config: Config::default(),
             method: "fixture".into(),
             rows: vec![Row {

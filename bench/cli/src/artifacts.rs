@@ -172,11 +172,18 @@ fn csv_cell(s: &str) -> String {
 }
 pub fn export(run: &Run, format: &str) -> Result<String> {
     run.validate()?;
+    if format == "formatted-csv" {
+        let formatted = airbug_bench::measurement::load_formatted(run)?;
+        if formatted.is_empty() {
+            return Err(error("run has no saved machine formatter output"));
+        }
+        return Ok(airbug_bench::measurement::report_csv(&formatted));
+    }
     let mut out = String::new();
     if format == "csv" {
         out.push_str("case,metric,variant,process,pair,sequence,value,operations,unit,scope,phase,statistic,availability\n");
     } else if format != "jsonl" {
-        return Err(error("format must be csv or jsonl"));
+        return Err(error("format must be csv, jsonl or formatted-csv"));
     }
     for o in &run.observations {
         let m = run

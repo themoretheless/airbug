@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise Cargo's real argument forwarding and the attribute-generated harness."""
 import json
+import csv
 import os
 import tempfile
 import pathlib
@@ -561,6 +562,31 @@ for case in ["sum", "sort_only/64", "owned_string", "async_sum/4", "async_sort/8
     assert len(fixed["observations"]) == 2, fixed
     assert all(o["operations"] == 130 * workers for o in fixed["observations"]), fixed
     assert fixed["cases"][0]["contract"]["sampling.iterations"] == "130", fixed
+for case in ["threaded_sort/8/threads=2", "contended/threads=2"]:
+    environment["AIRBUG_BENCH_THREADS"] = "invalid"
+    overridden = measured_run(f"collections/{case.replace('threads=2', 'threads=3')}", "--", "--exact", "--threads", "3",
+                              "--iterations", "130", "--samples", "1", "--warmup-ms", "0")
+    assert overridden["cases"][0]["contract"]["threads"] == "3", overridden
+    assert all(o["operations"] == 390 for o in overridden["observations"]), overridden
+    environment["AIRBUG_BENCH_THREADS"] = "4"
+    overridden = measured_run(f"collections/{case.replace('threads=2', 'threads=4')}", "--", "--exact",
+                              "--iterations", "3", "--samples", "1", "--warmup-ms", "0")
+    assert all(o["operations"] == 12 for o in overridden["observations"]), overridden
+    del environment["AIRBUG_BENCH_THREADS"]
+assert "workers must be 1..256" in run("--", "--threads", "257", "--list", success=False)
+automatic = run("collections/contended/", "--", "--threads", "0", "--dry-run")
+auto_case = json.JSONDecoder().raw_decode(automatic.lstrip())[0]["cases"][0]
+assert 1 <= int(auto_case["contract"]["threads"]) <= 256, auto_case
+matrix = measured_run("collections/contended/", "--", "--threads", "1,2", "--threads", "2,3", "--iterations", "3", "--samples", "1", "--warmup-ms", "0")
+assert [c["id"] for c in matrix["cases"]] == [f"collections/contended/threads={n}" for n in [1, 2, 3]], matrix
+assert [o["operations"] for o in matrix["observations"]] == [3, 6, 9], matrix
+environment["AIRBUG_BENCH_THREADS"] = "2,1,2"
+listed_matrix = run("collections/contended/", "--", "--list")
+assert [line for line in listed_matrix.splitlines() if line.startswith("collections/")] == ["collections/contended/threads=2", "collections/contended/threads=1"], listed_matrix
+del environment["AIRBUG_BENCH_THREADS"]
+for invalid_threads in ["", "1,", "1,-2", "1,257"]:
+    assert run("--", "--threads", invalid_threads, "--list", success=False)
+print("cargo bench: runtime worker overrides, wave normalization and CLI/environment precedence passed")
 for mode in ["linear", "auto"]:
     sampled = measured_run("collections/sum", "--", "--exact", "--samples", "4",
                            "--sample-ms", "1", "--warmup-ms", "0", "--sampling", mode)
@@ -797,11 +823,31 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
         '#[ab::suite] mod quick { #[bench(custom = true, quick = false)] fn exact(n: u64) -> std::time::Duration { '
         'assert!(std::env::var_os("QUICK_MUST_NOT_RUN").is_none()); std::time::Duration::from_nanos(n * 100) } }\n'
     )
-    def quick_run(*flags, lazy=False):
+    def quick_run(*flags, lazy=False, env_overrides=None):
         env = dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
+        env.update(env_overrides or {})
         if lazy:
             env["QUICK_MUST_NOT_RUN"] = "1"
         return subprocess.run(["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags], cwd=ROOT, capture_output=True, text=True, env=env)
+    preserved_source = (fixture / "benches/imported.rs").read_text()
+    for option in ["threads = 2", "executor = missing_executor()", "allocator = &MISSING_ALLOCATOR", 'setup_thread = "worker"', "input_bytes = |v| v.len() as u64", "input_items = |v| 1", "input_chars = |v| 1", "input_cycles = |v| 1"]:
+        (fixture / "benches/imported.rs").write_text(f'#[ab::suite(groups = [external_fixture::cases], {option})] mod rejected {{}}')
+        rejected = quick_run("--list")
+        assert rejected.returncode != 0, option
+        assert "defaults cannot yet cross imported groups" in rejected.stderr, rejected.stderr
+        assert "declare these options on the imported group" in rejected.stderr, rejected.stderr
+    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("manual"); suite.bench_threads("work", 2, || panic!("must not execute")); suite.main() }')
+    repeated = quick_run("--threads", "1", "--threads", "2", "--list")
+    assert repeated.returncode != 0 and "thread lists require main_registered" in repeated.stderr, repeated.stderr
+    single = quick_run("--threads", "3", "--dry-run")
+    assert single.returncode == 0, single.stderr
+    assert json.JSONDecoder().raw_decode(single.stdout.lstrip())[0]["cases"][0]["contract"]["threads"] == "3"
+    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("manual"); suite.registration_threads(&[1, 2])?; suite.main() }')
+    mismatch = quick_run("--threads", "4", "--list")
+    assert mismatch.returncode != 0 and "CLI thread matrix differs" in mismatch.stderr, mismatch.stderr
+    print("cargo bench: manual registration rejects unapplied thread matrices and retains single overrides")
+    (fixture / "benches/imported.rs").write_text(preserved_source)
+    print("cargo bench: unsupported imported defaults fail explicitly before benchmark execution")
     adaptive = quick_run("--quick", "--quick-min-ms", "0", "--quick-max-ms", "1000", "--json")
     assert adaptive.returncode == 0, adaptive.stdout + adaptive.stderr
     measured = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in adaptive.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
@@ -900,19 +946,214 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     assert loaded.returncode == 0, loaded.stdout + loaded.stderr
     assert json.loads((measurement_output / "run.json").read_text())["observations"] == first_run["observations"]
     formatted = json.loads((measurement_output / "formatted.json").read_text())
+    with (measurement_output / "formatted.csv").open(newline="") as csv_file:
+        csv_rows = list(csv.DictReader(csv_file))
+    assert len(csv_rows) == len(formatted[0]["machine"])
+    for csv_row, machine_row in zip(csv_rows, formatted[0]["machine"]):
+        assert csv_row["case"] == formatted[0]["case"] and csv_row["metric"] == "work_units"
+        assert float(csv_row["value"]) == machine_row["value"]
+        assert csv_row["unit"] == machine_row["unit"]
+        assert csv_row["normalized_per_operation"] == "true"
+        assert int(csv_row["sequence"]) == machine_row["sequence"]
+
     assert formatted[0]["human"][0]["value"] == 1 and formatted[0]["human"][0]["unit"] == "groups"
     assert formatted[0]["machine"][0]["value"] == 3 and formatted[0]["machine"][0]["unit"] == "units/op"
+    assert formatted[0]["throughput"]["items"]["work_per_operation"] == 6
+    assert formatted[0]["throughput"]["items"]["observations"][0]["value"] == 2
+    assert formatted[0]["throughput"]["items"]["observations"][0]["unit"] == "items/unit"
+    assert "Formatted throughput:" in (measurement_output / "report.html").read_text()
     assert json.loads(next(line.removeprefix("BENCH_FORMATTED=") for line in loaded.stdout.splitlines() if line.startswith("BENCH_FORMATTED="))) == formatted
     assert "Formatted metric:" in (measurement_output / "report.html").read_text()
+    assert "formatted comparison (groups)" in (measurement_output / "report.html").read_text()
+    assert "formatted throughput comparison: items (items/unit)" in (measurement_output / "report.html").read_text()
     comparison = json.loads((measurement_output / "comparison.json").read_text())
     assert any(row["metric"] == "work_units" for case in comparison["cases"] for row in case["comparisons"])
     estimates = json.loads((measurement_output / "estimates.json").read_text())
     counter_estimate = next(row for row in estimates["rows"] if row["metric"] == "work_units")
     assert counter_estimate["unit"] == "units"
     assert counter_estimate["estimates"]["mean"]["point"] == 3
+    display_estimates = json.loads((measurement_output / "formatted-estimates.json").read_text())
+    assert len(display_estimates["rows"]) == 1
+    assert display_estimates["rows"][0]["unit"] == "groups"
+    assert display_estimates["rows"][0]["estimates"]["mean"]["point"] == 1
+    assert "groups" in (measurement_output / "formatted-estimates.html").read_text()
+    report_html = (measurement_output / "report.html").read_text()
+    for artifact in ("estimates.html", "formatted-estimates.html", "regression-comparison.html", "formatted.csv", "run.json"):
+        assert f'href="{artifact}"' in report_html
+        assert (measurement_output / artifact).is_file()
+
+
     assert "work_units" in (measurement_output / "report.html").read_text()
     assert "work_units" in (measurement_output / "regression-comparison.html").read_text()
     print("cargo bench: custom measurement across crate boundary, baseline reload, normalized estimates and HTML passed")
+    attributed_source = measurement_source.split("fn main() -> Result<()>")[0] + r"""
+thread_local! { static TICKS: Rc<Cell<u64>> = Rc::new(Cell::new(0)); }
+fn shared_counter() -> Counter { TICKS.with(|c| Counter(c.clone())) }
+#[ab::suite]
+mod measured {
+    #[bench(measurement = super::shared_counter(), formatter = super::Groups, items = 6)]
+    fn work() { super::TICKS.with(|c| c.set(c.get() + 3)); }
+}
+"""
+    (fixture / "benches/imported.rs").write_text(attributed_source)
+    attributed = quick_run(*measurement_flags, "--no-history")
+    assert attributed.returncode == 0, attributed.stdout + attributed.stderr
+    attributed_format = json.loads(next(line.removeprefix("BENCH_FORMATTED=") for line in attributed.stdout.splitlines() if line.startswith("BENCH_FORMATTED=")))
+    assert attributed_format[0]["human"][0]["value"] == 1
+    assert attributed_format[0]["throughput"]["items"]["observations"][0]["value"] == 2
+    for replacement, diagnostic in [
+        ("threads = 2, measurement = super::shared_counter()", "measurement cannot yet combine"),
+        ("formatter = super::Groups", "formatter requires measurement"),
+    ]:
+        broken = attributed_source.replace("measurement = super::shared_counter(), formatter = super::Groups", replacement)
+        (fixture / "benches/imported.rs").write_text(broken)
+        rejected = quick_run("--list", lazy=True)
+        assert rejected.returncode != 0 and diagnostic in rejected.stderr, rejected.stdout + rejected.stderr
+    (fixture / "benches/imported.rs").write_text(attributed_source)
+    print("cargo bench: measurement/formatter attributes with renamed dependency and invalid combinations passed")
+    for async_keyword in ["", "async "]:
+        manual_source = attributed_source.replace("measurement = super::shared_counter(),", "custom = true, measurement = super::shared_counter(),").replace("fn work() { super::TICKS.with(|c| c.set(c.get() + 3)); }", async_keyword + "fn work(n: u64) -> u64 { n * 3 }")
+        (fixture / "benches/imported.rs").write_text(manual_source)
+        manual = quick_run("--iterations", "7", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
+        assert manual.returncode == 0, manual.stdout + manual.stderr
+        manual_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in manual.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+        assert next(o for o in manual_data["observations"] if o["metric"] == "work_units")["value"] == "21"
+        manual_format = json.loads(next(line.removeprefix("BENCH_FORMATTED=") for line in manual.stdout.splitlines() if line.startswith("BENCH_FORMATTED=")))
+        assert manual_format[0]["human"][0]["value"] == 1
+    (fixture / "benches/imported.rs").write_text(attributed_source)
+    print("cargo bench: sync/async caller-defined custom totals preserve formatter output")
+
+    sampling_env = {"AIRBUG_BENCH_SAMPLES": "2", "AIRBUG_BENCH_ITERATIONS": "3", "AIRBUG_BENCH_WARMUP_MS": "0", "AIRBUG_BENCH_SAMPLE_MS": "1", "AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME": "true"}
+    env_run = quick_run("--json", "--no-history", env_overrides=sampling_env)
+    assert env_run.returncode == 0, env_run.stdout + env_run.stderr
+    env_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in env_run.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    env_samples = [o for o in env_data["observations"] if o["metric"] == "work_units"]
+    assert len(env_samples) == 2 and all(o["operations"] == 3 and o["value"] == "9" for o in env_samples)
+    assert env_data["cases"][0]["contract"]["sampling.time_accounting"] == "measured"
+    cli_run = quick_run("--json", "--no-history", "--samples", "1", "--iterations", "7", "--include-external-time", env_overrides=dict(sampling_env, AIRBUG_BENCH_SAMPLES="invalid", AIRBUG_BENCH_ITERATIONS="invalid"))
+    assert cli_run.returncode == 0, cli_run.stdout + cli_run.stderr
+    cli_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in cli_run.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    cli_samples = [o for o in cli_data["observations"] if o["metric"] == "work_units"]
+    assert len(cli_samples) == 1 and cli_samples[0]["operations"] == 7 and cli_samples[0]["value"] == "21"
+    assert cli_data["cases"][0]["contract"]["sampling.time_accounting"] == "workload_wall"
+    invalid_env = quick_run("--list", env_overrides={"AIRBUG_BENCH_SAMPLES": "invalid"})
+    assert invalid_env.returncode != 0 and "AIRBUG_BENCH_SAMPLES" in invalid_env.stderr
+    print("cargo bench: environment sampling, per-field CLI precedence and named diagnostics passed")
+    console_flags = ["--iterations", "3", "--samples", "2", "--warmup-ms", "0", "--no-history"]
+    quiet = quick_run(*console_flags, "--quiet")
+    assert quiet.returncode == 0, quiet.stdout + quiet.stderr
+    assert "median 3 units/op" in quiet.stdout
+    assert "bench: " not in quiet.stderr and "Benchmark contract" not in quiet.stderr
+    assert "| Case" not in quiet.stdout and "Formatted metric:" not in quiet.stdout
+    verbose = quick_run(*console_flags, "--verbose")
+    assert verbose.returncode == 0, verbose.stdout + verbose.stderr
+    assert "Benchmark environment:" in verbose.stderr and "Benchmark contract measured/work:" in verbose.stderr
+    assert "Formatted metric:" in verbose.stdout
+    machine = quick_run(*console_flags, "--quiet", "--json")
+    assert machine.returncode == 0, machine.stdout + machine.stderr
+    assert "bench: " not in machine.stderr
+    assert "BENCH_RESULT=" in machine.stdout and "BENCH_FORMATTED=" in machine.stdout
+    assert quick_run("--quiet", "--verbose", "--list").returncode != 0
+    assert quick_run("-q", "--list").stdout.strip() == "measured/work"
+    print("cargo bench: quiet/verbose modes retain results and JSON, hide progress and reject conflicts")
+    color_output = fixture / "color-report"
+    colored = quick_run(*console_flags, "--color", "always", "--output", str(color_output), env_overrides={"NO_COLOR": "1"})
+    assert colored.returncode == 0, colored.stdout + colored.stderr
+    assert "\x1b[1;36m" in colored.stdout
+    assert "\x1b" not in (color_output / "report.html").read_text()
+    assert "\x1b" not in (color_output / "run.json").read_text()
+    for choice in ["auto", "never"]:
+        plain = quick_run(*console_flags, "--color", choice)
+        assert plain.returncode == 0 and "\x1b" not in plain.stdout, plain.stdout + plain.stderr
+    colored_json = quick_run(*console_flags, "--json", "--color", "always")
+    assert colored_json.returncode == 0 and "\x1b" not in colored_json.stdout
+    assert "BENCH_RESULT=" in colored_json.stdout
+    assert quick_run("--list", "--color", "always").stdout.strip() == "measured/work"
+    assert quick_run("--color", "sometimes", "--list").returncode != 0
+    assert quick_run("--color", "always", "--color", "never", "--list").returncode != 0
+    print("cargo bench: forced/plain/auto color, machine and artifact isolation, listing and invalid policies passed")
+    tree = quick_run(*console_flags, "--output-format", "tree")
+    assert tree.returncode == 0, tree.stdout + tree.stderr
+    assert "└── measured" in tree.stdout and "└── work" in tree.stdout
+    assert "work_units [candidate process 0]: median 3 units/op" in tree.stdout
+    assert "| Case" not in tree.stdout
+    tree_list = quick_run("--list", "--output-format", "tree")
+    assert tree_list.returncode == 0 and tree_list.stdout.strip() == "└── measured\n    └── work"
+    quiet_tree = quick_run(*console_flags, "--output-format", "tree", "--quiet")
+    assert quiet_tree.returncode == 0 and "└── measured" in quiet_tree.stdout and "bench: " not in quiet_tree.stderr
+    tree_json = quick_run(*console_flags, "--output-format", "tree", "--json")
+    assert tree_json.returncode == 0 and "BENCH_RESULT=" in tree_json.stdout and "└──" not in tree_json.stdout
+    assert quick_run("--list", "--output-format", "unknown").returncode != 0
+    print("cargo bench: hierarchical result/list output, quiet tree and unchanged JSON passed")
+    (fixture / "benches/imported.rs").write_text('const SHARED: &[u64] = &[2, 7]; #[ab::suite] mod slices { #[bench(args = super::SHARED, custom = true)] fn owned(n: u64, value: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * value) } }')
+    sliced = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
+    assert sliced.returncode == 0, sliced.stdout + sliced.stderr
+    slice_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in sliced.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    assert [o["value"] for o in slice_data["observations"]] == ["6", "21"]
+    print("cargo bench: shared argument slice supplies owned Copy values across crate boundary")
+    (fixture / "benches/imported.rs").write_text('const SHARED: &[usize] = &[2, 7]; #[ab::suite] mod slices { #[bench(args = super::SHARED, setup = |n: usize| vec![1u8; n], input_bytes = |v: &Vec<u8>| v.len() as u64)] fn prepared(v: &mut [u8]) { assert_eq!(v[0], 1); v[0] = 9; } }')
+    prepared = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
+    assert prepared.returncode == 0, prepared.stdout + prepared.stderr
+    prepared_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in prepared.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    assert [o["work_totals"]["bytes"] for o in prepared_data["observations"]] == ["6", "21"]
+    print("cargo bench: shared argument slice supports typed setup values and fresh inputs")
+
+    (fixture / "benches/imported.rs").write_text(r"""
+#[derive(Clone, Copy, Default)] struct Label(u64);
+impl std::fmt::Display for Label {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "len-{}", self.0) }
+}
+#[ab::suite] mod labels {
+    #[bench(args = [super::Label(2), super::Label(7)], custom = true)]
+    fn owned(n: u64, value: super::Label) -> std::time::Duration { std::time::Duration::from_nanos(n * value.0) }
+    #[bench(types = [super::Label], args = [T::default()], custom = true)]
+    fn generic<T: Copy + Default + ToString>(n: u64, _: T) -> std::time::Duration { std::time::Duration::from_nanos(n) }
+}
+""")
+    labelled = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
+    assert labelled.returncode == 0, labelled.stdout + labelled.stderr
+    labelled_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in labelled.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    assert [o["value"] for o in labelled_data["observations"]] == ["6", "21", "3"]
+    assert [c["contract"]["param.arg"] for c in labelled_data["cases"]] == ["len-2", "len-7", "len-0"]
+    print("cargo bench: Display-only value and generic ToString argument labels passed")
+    (fixture / "benches/imported.rs").write_text('#[ab::suite] mod runtime { #[bench(args = [2u64, 7], bytes = |n| n * 1048576, custom = true)] fn value(n: u64, _: u64) -> std::time::Duration { std::time::Duration::from_secs(n) } }')
+    runtime_env = {"AIRBUG_BENCH_TIMER": "os", "AIRBUG_BENCH_SORT": "natural", "AIRBUG_BENCH_REVERSE": "true", "AIRBUG_BENCH_BYTES_FORMAT": "binary"}
+    runtime_run = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history", env_overrides=runtime_env)
+    assert runtime_run.returncode == 0, runtime_run.stdout + runtime_run.stderr
+    runtime_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in runtime_run.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    assert [c["id"] for c in runtime_data["cases"]] == ["runtime/value/7", "runtime/value/2"]
+    runtime_rates = json.loads(next(line.removeprefix("BENCH_THROUGHPUT=") for line in runtime_run.stdout.splitlines() if line.startswith("BENCH_THROUGHPUT=")))
+    assert [r["unit"] for r in runtime_rates] == ["MiB", "MiB"]
+    assert [r["values"] for r in runtime_rates] == [[7.0], [2.0]]
+    overridden = quick_run("--list", "--timer", "os", "--sort", "registration", "--forward", "--bytes-format", "decimal", env_overrides={k: "invalid" for k in runtime_env})
+    assert overridden.returncode == 0, overridden.stdout + overridden.stderr
+    assert overridden.stdout.splitlines() == ["runtime/value/2", "runtime/value/7"]
+    print("cargo bench: environment timer/sort/direction/byte formatting and CLI overrides passed")
+    (fixture / "benches/imported.rs").write_text('#[ab::suite] mod counts { #[bench(args = [2usize, 7], setup = |n: usize| vec![1u8; n], input_bytes = |v: &Vec<u8>| v.len() as u64, input_items = |_: &Vec<u8>| 1, input_bits = |v: &Vec<u8>| ab::counters::bits_from_bytes(v.len() as u64))] fn work(v: &mut [u8]) { std::hint::black_box(v); } }')
+    counter_run = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history", "--bytes-count", "13", "--bits-count", "104", env_overrides={"AIRBUG_BENCH_BITS_COUNT": "invalid", "AIRBUG_BENCH_BYTES_COUNT": "invalid", "AIRBUG_BENCH_CHARS_COUNT": "0", "AIRBUG_BENCH_CYCLES_COUNT": "7"})
+    assert counter_run.returncode == 0, counter_run.stdout + counter_run.stderr
+    counter_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in counter_run.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    for case in counter_data["cases"]:
+        assert case["contract"]["work.counter.bytes"] == "13" and "work.input.bytes" not in case["contract"]
+        assert case["contract"]["work.counter.chars"] == "0" and case["contract"]["work.counter.cycles"] == "7"
+        assert case["contract"]["work.input.items"] == "batch_total"
+    assert all(c["contract"]["work.counter.bits"] == "104" and "work.input.bits" not in c["contract"] for c in counter_data["cases"])
+    for observation in counter_data["observations"]:
+        assert observation["work_totals"] == {"items": "3"}
+    env_bits = quick_run("--dry-run", env_overrides={"AIRBUG_BENCH_BITS_COUNT": "0"})
+    assert env_bits.returncode == 0, env_bits.stderr
+    assert all(c["contract"]["work.counter.bits"] == "0" for c in json.JSONDecoder().raw_decode(env_bits.stdout.lstrip())[0]["cases"])
+    assert quick_run("--bytes-count", "-1", "--list").returncode != 0
+    print("cargo bench: runtime counters override dynamic units, preserve others and honor CLI/environment precedence")
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1006,3 +1247,41 @@ for byte_format in ["decimal", "binary"]:
 assert "bytes format must be" in run("--", "--bytes-format", "invalid", "--list", success=False)
 print("cargo bench: decimal/binary byte formatting and throughput.json preserve zero and character rates")
 history.cleanup()
+
+
+# Per-case statistical settings survive imported groups and per-field CLI overrides.
+with tempfile.TemporaryDirectory(prefix="airbug-bootstrap-options-") as directory:
+    fixture = pathlib.Path(directory)
+    (fixture / "src").mkdir()
+    (fixture / "benches").mkdir()
+    (fixture / "Cargo.toml").write_text(
+        '[package]\nname = "bootstrap-options-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
+        '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ' }\n'
+        '[[bench]]\nname = "cases"\nharness = false\n'
+    )
+    (fixture / "src/lib.rs").write_text(
+        '#[airbug_bench::group(confidence_level = 0.9, analysis_seed = 7)] '
+        'pub mod imported { #[bench(custom = true)] fn work(n: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * 3) } }'
+    )
+    (fixture / "benches/cases.rs").write_text(
+        '#[airbug_bench::suite(groups = [bootstrap_options_fixture::imported], resamples = 32, confidence_level = 0.8, samples = 4, iterations = 3, warmup_ms = 0)] '
+        'mod cases { #[bench(custom = true, confidence_level = 0.99, analysis_seed = 0)] fn local(n: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * 5) } }'
+    )
+    for flags, count, capture in [([], 32, False), ([], 32, True), (["--resamples", "64"], 64, True)]:
+        completed = subprocess.run(
+            ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--no-history", "--json", *(["--bootstrap-distributions"] if capture else []), *flags],
+            cwd=ROOT, capture_output=True, text=True,
+            env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
+        )
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+        report = json.loads(next(line.removeprefix("BENCH_ESTIMATES=") for line in completed.stdout.splitlines() if line.startswith("BENCH_ESTIMATES=")))
+        saved_run = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in completed.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+        saved_settings = json.loads(saved_run["provenance"]["airbug.analysis.bootstrap.v1"])
+        assert saved_settings["cases"] == report["case_configs"]
+        assert report["case_configs"]["cases/local"] == {"resamples": count, "confidence_level": 0.99, "seed": 0}
+        assert report["case_configs"]["cases/imported/work"] == {"resamples": count, "confidence_level": 0.9, "seed": 7}
+        if capture:
+            assert all(len(row["distributions"]["mean"]) == count for row in report["rows"])
+        else:
+            assert all("distributions" not in row for row in report["rows"])
+    print("cargo bench: imported bootstrap defaults and per-field CLI overrides passed")

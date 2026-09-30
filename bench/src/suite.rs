@@ -85,10 +85,12 @@ struct Entry<'a> {
     work: Work<'a>,
     sampling: Sampling,
     comparison: crate::history::ComparisonOptions,
+    bootstrap: crate::bootstrap::Options,
     summary_scale: Option<crate::viz::charts::AxisScale>,
     summary_family: Option<String>,
     quick: Option<Option<crate::QuickConfig>>,
     operations_per_iteration: u64,
+    runtime_workers: Option<std::rc::Rc<std::cell::Cell<usize>>>,
     max_batch: u64,
     executed: bool,
     caller_timed: bool,
@@ -97,11 +99,20 @@ struct Entry<'a> {
     source: Option<(String, u32, u32)>,
     verify: Option<Box<dyn FnMut() -> Result<()> + 'a>>,
 }
+/// Human console detail. Structured output and persisted artifacts are unchanged.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ConsoleOutput {
+    Quiet,
+    #[default]
+    Normal,
+    Verbose,
+}
 /// Registration is lazy: `--list` never runs workloads.
 pub struct Suite<'a> {
     profiler: Option<Box<dyn crate::profiling::Profiler + 'a>>,
     name: String,
     entries: Vec<Entry<'a>>,
+    group_sources: BTreeMap<String, (String, u32, u32)>,
     config: Config,
     quick: Option<crate::QuickConfig>,
     quick_cli: bool,
@@ -112,6 +123,12 @@ pub struct Suite<'a> {
     comparison_config: crate::history::ComparisonConfig,
     summary_scale: crate::viz::charts::AxisScale,
     plots: bool,
+    registration_threads: Option<Vec<usize>>,
+    registration_drop: Option<DropPolicy>,
+    registration_batch: Option<BatchPolicy>,
+    console_output: ConsoleOutput,
+    console_color: crate::ConsoleColor,
+    console_format: crate::ConsoleFormat,
 }
 impl<'a> Suite<'a> {
     pub fn new(name: impl Into<String>) -> Self {
@@ -119,6 +136,7 @@ impl<'a> Suite<'a> {
             profiler: None,
             name: name.into(),
             entries: vec![],
+            group_sources: BTreeMap::new(),
             config: Config::default(),
             quick: None,
             quick_cli: false,
@@ -129,7 +147,109 @@ impl<'a> Suite<'a> {
             comparison_config: crate::history::ComparisonConfig::default(),
             summary_scale: Default::default(),
             plots: true,
+            registration_threads: None,
+            registration_drop: None,
+            registration_batch: None,
+            console_output: ConsoleOutput::Normal,
+            console_color: crate::ConsoleColor::Auto,
+            console_format: crate::ConsoleFormat::Table,
         }
+    }
+    #[doc(hidden)]
+    pub fn registration_batch_policy(&self) -> BatchPolicy {
+        self.registration_batch.unwrap_or(BatchPolicy::Iterations(
+            std::num::NonZeroU64::new(64).unwrap(),
+        ))
+    }
+    #[doc(hidden)]
+    pub fn has_registration_batch_policy(&self) -> bool {
+        self.registration_batch.is_some()
+    }
+    /// Apply a batch default while registering imported groups.
+    pub fn with_batch_defaults(
+        &mut self,
+        policy: BatchPolicy,
+        register: impl FnOnce(&mut Self),
+    ) -> &mut Self {
+        let previous = self.registration_batch.replace(policy);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| register(self)));
+        self.registration_batch = previous;
+        if let Err(payload) = result {
+            std::panic::resume_unwind(payload);
+        }
+        self
+    }
+    #[doc(hidden)]
+    pub fn registration_drop_policy(&self) -> DropPolicy {
+        self.registration_drop.unwrap_or(DropPolicy::InsideTiming)
+    }
+    #[doc(hidden)]
+    pub fn has_registration_drop_policy(&self) -> bool {
+        self.registration_drop.is_some()
+    }
+    /// Apply an output destruction default while registering imported groups.
+    pub fn with_drop_defaults(
+        &mut self,
+        policy: DropPolicy,
+        register: impl FnOnce(&mut Self),
+    ) -> &mut Self {
+        let previous = self.registration_drop.replace(policy);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| register(self)));
+        self.registration_drop = previous;
+        if let Err(payload) = result {
+            std::panic::resume_unwind(payload);
+        }
+        self
+    }
+    /// Set the worker matrix used by attribute registration. Call before registering
+    /// groups. Sequential cases retain their execution model.
+    pub fn registration_threads(&mut self, counts: &[usize]) -> Result<&mut Self> {
+        if counts.is_empty() || counts.iter().any(|n| *n > 256) {
+            return Err(error("thread matrix requires at least one count in 0..256"));
+        }
+        self.registration_threads = Some(crate::threads::counts(counts));
+        Ok(self)
+    }
+    #[doc(hidden)]
+    pub fn resolve_thread_counts<T: crate::threads::ThreadCounts<M>, M>(
+        &self,
+        counts: T,
+    ) -> Vec<usize> {
+        self.registration_threads
+            .clone()
+            .unwrap_or_else(|| crate::threads::counts(counts))
+    }
+    /// Configure runtime worker choices before registering attributed cases.
+    /// Generated `#[suite]` entrypoints use this so names match the actual matrix.
+    pub fn main_registered(mut self, register: impl FnOnce(&mut Self)) -> Result<()> {
+        let cli: Vec<String> = std::env::args().skip(1).collect();
+        let mut args = crate::sampling::environment_args(&cli, |name| match std::env::var(name) {
+            Ok(value) => Ok(Some(value)),
+            Err(std::env::VarError::NotPresent) => Ok(None),
+            Err(error) => Err(crate::error(error.to_string())),
+        })?;
+        args.extend(cli);
+        if let Some(counts) = crate::threads::from_args(&args)? {
+            self.registration_threads(&counts)?;
+        }
+        register(&mut self);
+        self.main()
+    }
+
+    /// Select table or hierarchical tree layout for human results and case lists.
+    pub fn console_format(&mut self, format: crate::ConsoleFormat) -> &mut Self {
+        self.console_format = format;
+        self
+    }
+    /// Terminal color policy. Auto respects stdout TTY detection and NO_COLOR.
+    pub fn console_color(&mut self, color: crate::ConsoleColor) -> &mut Self {
+        self.console_color = color;
+        self
+    }
+    /// Set console detail; --quiet/--verbose override this default in `main`.
+    pub fn console_output(&mut self, output: ConsoleOutput) -> &mut Self {
+        self.console_output = output;
+        self
     }
     /// Enable or disable charts produced by `main`, without changing measurements.
     /// This is a suite-wide presentation default; CLI --plots/--no-plots override it.
@@ -223,6 +343,42 @@ impl<'a> Suite<'a> {
     pub fn comparison_config(&mut self, config: crate::history::ComparisonConfig) -> &mut Self {
         self.comparison_config = config;
         self
+    }
+    pub fn bootstrap_case(&mut self, options: crate::bootstrap::Options) -> &mut Self {
+        if let Some(entry) = self.entries.last_mut() {
+            entry.bootstrap = options;
+        }
+        self
+    }
+    pub fn with_bootstrap_defaults(
+        &mut self,
+        options: crate::bootstrap::Options,
+        register: impl FnOnce(&mut Self),
+    ) -> &mut Self {
+        let first = self.entries.len();
+        register(self);
+        for entry in &mut self.entries[first..] {
+            entry.bootstrap.inherit(options);
+        }
+        self
+    }
+    /// Resolve selected analysis defaults with per-field CLI overrides before measurement.
+    pub fn bootstrap_settings(
+        &self,
+        selection: &crate::Selection,
+        fallback: &crate::bootstrap::Config,
+        overrides: crate::bootstrap::Options,
+    ) -> Result<BTreeMap<String, crate::bootstrap::Config>> {
+        selection.validate()?;
+        self.selected_indices(selection)
+            .into_iter()
+            .map(|index| {
+                let entry = &self.entries[index];
+                let mut options = overrides;
+                options.inherit(entry.bootstrap);
+                Ok((entry.case.id.clone(), options.resolve(fallback)?))
+            })
+            .collect()
     }
     pub fn comparison_case(&mut self, options: crate::history::ComparisonOptions) -> &mut Self {
         if let Some(entry) = self.entries.last_mut() {
@@ -1082,7 +1238,9 @@ impl<'a> Suite<'a> {
             ("completion".into(), "synchronous function return".into()),
         ]);
         self.entries.push(Entry {
+            runtime_workers: None,
             comparison: crate::history::ComparisonOptions::default(),
+            bootstrap: Default::default(),
             summary_scale: None,
             summary_family: None,
             ordering_group: self.name.clone(),
@@ -1123,6 +1281,13 @@ impl<'a> Suite<'a> {
         }
         self
     }
+    /// Set the source location of the current group. Attribute groups supply this
+    /// automatically; builders can call it inside `group` registration closures.
+    pub fn group_source_location(&mut self, file: &str, line: u32, column: u32) -> &mut Self {
+        self.group_sources
+            .insert(self.name.clone(), (file.into(), line, column));
+        self
+    }
     /// Set display ordering metadata for the last case. Attributes supply this automatically.
     /// Source locations do not enter measurement contracts or affect result compatibility.
     pub fn source_location(&mut self, file: &str, line: u32, column: u32) -> &mut Self {
@@ -1158,6 +1323,36 @@ impl<'a> Suite<'a> {
 
     /// Apply registered formatters without modifying raw data. Loaded runs must
     /// have the same complete metric contract as the registered formatter target.
+    /// Absolute bootstrap estimates in registered formatter units. Raw statistical
+    /// output remains separate; regression and outlier graphs keep their raw units.
+    pub fn formatted_bootstrap(
+        &self,
+        report: &crate::bootstrap::Report,
+    ) -> Result<crate::bootstrap::Report> {
+        let mut result = report.clone();
+        result.rows.clear();
+        for entry in &self.entries {
+            for (id, formatter) in &entry.formatters {
+                let metric = entry
+                    .case
+                    .metrics
+                    .iter()
+                    .find(|metric| metric.id == *id)
+                    .ok_or_else(|| error("formatted metric absent from registered case"))?;
+                result.rows.extend(
+                    crate::measurement::format_bootstrap_metric(
+                        report,
+                        &entry.case.id,
+                        metric,
+                        formatter.as_ref(),
+                    )?
+                    .rows,
+                );
+            }
+        }
+        Ok(result)
+    }
+
     pub fn formatted_metrics(&self, run: &Run) -> Result<Vec<crate::measurement::FormattedMetric>> {
         let mut result = Vec::new();
         for case in &run.cases {
@@ -1174,6 +1369,36 @@ impl<'a> Suite<'a> {
                     result.push(crate::measurement::FormattedMetric {
                         case: case.id.clone(),
                         metric: metric.clone(),
+                        throughput: crate::report::work_counters(case)?
+                            .into_iter()
+                            .map(|(unit, count)| {
+                                Ok((
+                                    unit.to_string(),
+                                    crate::measurement::FormattedThroughput {
+                                        work_per_operation: count,
+                                        observations: crate::measurement::format_observations(
+                                            run,
+                                            &case.id,
+                                            id,
+                                            formatter.as_ref(),
+                                            match count {
+                                                Some(count) => {
+                                                    crate::measurement::Format::Throughput {
+                                                        work: count as f64,
+                                                        unit,
+                                                    }
+                                                }
+                                                None => {
+                                                    crate::measurement::Format::InputThroughput {
+                                                        unit,
+                                                    }
+                                                }
+                                            },
+                                        )?,
+                                    },
+                                ))
+                            })
+                            .collect::<Result<_>>()?,
                         human: crate::measurement::format_observations(
                             run,
                             &case.id,
@@ -1432,6 +1657,94 @@ impl<'a> Suite<'a> {
         Ok(self)
     }
 
+    /// A caller-defined batch returning a typed custom total for exactly `n`
+    /// operations. Measurement start/end/zero/add are not invoked. Wall time is
+    /// measured independently for scheduling; conversion is outside that interval.
+    pub fn bench_measured_custom<M: crate::measurement::Measurement + 'a>(
+        &mut self,
+        name: &str,
+        measurement: M,
+        mut measure: impl FnMut(u64) -> M::Value + 'a,
+    ) -> Result<&mut Self> {
+        let metric = measurement.metric();
+        if metric.id.is_empty()
+            || metric.id == "wall"
+            || metric.id.starts_with("wall.")
+            || metric.id.starts_with("alloc.")
+            || metric.statistic != "batch_total"
+        {
+            return Err(error(
+                "custom measurement requires a distinct metric id and batch_total statistic",
+            ));
+        }
+        let sample = std::rc::Rc::new(std::cell::Cell::new(None));
+        let captured = sample.clone();
+        self.register(name, "caller-defined custom value; caller owns measurement boundaries; wall measures complete batch", 1_048_576,
+            Box::new(move |n, timer| {
+                captured.set(None);
+                let wall = timer.start();
+                let total = measure(n);
+                let elapsed = wall.measure(n)?;
+                let value = measurement.to_f64(&total)?;
+                if !value.is_finite() || value < 0.0 {
+                    return Err(error("custom measurement must convert to a finite nonnegative value"));
+                }
+                captured.set(Some(value));
+                Ok(elapsed)
+            }));
+        let entry = self.entries.last_mut().unwrap();
+        entry.measurement_sample = Some((metric.id.clone(), sample));
+        entry.case.metrics.push(metric);
+        entry
+            .case
+            .contract
+            .insert("measurement.type".into(), std::any::type_name::<M>().into());
+        entry
+            .case
+            .contract
+            .insert("measurement.batch_policy".into(), "caller".into());
+        Ok(self)
+    }
+
+    /// Async caller-defined custom total. Executor construction is lazy and
+    /// excluded from the independent batch timer; the future completes before conversion.
+    pub fn bench_async_measured_custom<M, E>(
+        &mut self,
+        name: &str,
+        measurement: M,
+        mut executor: impl FnMut() -> E + 'a,
+        mut measure: impl AsyncFnMut(u64) -> M::Value + 'a,
+    ) -> Result<&mut Self>
+    where
+        M: crate::measurement::Measurement + 'a,
+        E: crate::workloads::Executor + 'a,
+    {
+        let state = std::rc::Rc::new(std::cell::RefCell::new(None::<E>));
+        let execution = state.clone();
+        self.bench_measured_custom(name, measurement, move |n| {
+            execution
+                .borrow_mut()
+                .as_mut()
+                .expect("initialized executor")
+                .block_on(measure(n))
+        })?;
+        let entry = self.entries.last_mut().unwrap();
+        let mut measured = std::mem::replace(&mut entry.work, Box::new(|_, _| unreachable!()));
+        entry.work = Box::new(move |n, timer| {
+            state.borrow_mut().get_or_insert_with(&mut executor);
+            measured(n, timer)
+        });
+        entry
+            .case
+            .contract
+            .insert("async.executor".into(), std::any::type_name::<E>().into());
+        entry.case.contract.insert(
+            "async.scope".into(),
+            "lazy executor construction excluded; caller future completes before conversion".into(),
+        );
+        Ok(self)
+    }
+
     /// A caller-timed batch: execute exactly `n` operations and return their total duration.
     /// Setup, coordination and synchronization are the caller's responsibility.
     pub fn bench_custom(
@@ -1523,10 +1836,35 @@ impl<'a> Suite<'a> {
     pub fn bench_async_with_value<E, I, O>(
         &mut self,
         name: &str,
+        executor: impl FnMut() -> E + 'a,
+        input: I,
+        f: impl for<'i> AsyncFnMut(&'i I) -> O + 'a,
+        drop: DropPolicy,
+    ) -> &mut Self
+    where
+        E: crate::workloads::Executor + 'a,
+        I: 'a,
+        O: 'a,
+    {
+        self.bench_async_with_value_batched(
+            name,
+            executor,
+            input,
+            f,
+            drop,
+            BatchPolicy::Iterations(std::num::NonZeroU64::new(64).unwrap()),
+        )
+    }
+
+    /// Reuse an owned async argument with an explicit output batch policy.
+    pub fn bench_async_with_value_batched<E, I, O>(
+        &mut self,
+        name: &str,
         mut executor: impl FnMut() -> E + 'a,
         input: I,
         mut f: impl for<'i> AsyncFnMut(&'i I) -> O + 'a,
         drop: DropPolicy,
+        batch: BatchPolicy,
     ) -> &mut Self
     where
         E: crate::workloads::Executor + 'a,
@@ -1540,12 +1878,13 @@ impl<'a> Suite<'a> {
             1_048_576,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
-                input_batch(
+                crate::suite_measure::input_batch_sized(
                     timer,
                     n,
                     &mut || (),
                     &mut |_: &mut ()| executor.block_on(f(black_box(&input))),
                     drop,
+                    batch.size(n),
                 )
             }),
         );
@@ -1566,6 +1905,7 @@ impl<'a> Suite<'a> {
             "async.scope".into(),
             "lazy executor construction excluded; future creation + polling included".into(),
         );
+        self.batch_contract(drop, batch);
         self
     }
 
@@ -1620,11 +1960,14 @@ impl<'a> Suite<'a> {
         workers: usize,
         f: impl Fn() -> O + Sync + 'a,
     ) -> &mut Self {
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             "concurrent batch; spawn/join excluded; output drop included",
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 crate::suite_measure::parallel_batch(
                     timer,
                     workers,
@@ -1639,6 +1982,7 @@ impl<'a> Suite<'a> {
             }),
         );
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         self
     }
 
@@ -1652,11 +1996,14 @@ impl<'a> Suite<'a> {
         f: impl Fn(&mut I) -> O + Sync + 'a,
         drop: DropPolicy,
     ) -> &mut Self {
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 let mut remaining = n;
                 let mut total = Measured::default();
                 while remaining > 0 {
@@ -1692,6 +2039,7 @@ impl<'a> Suite<'a> {
             }),
         );
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
         contract.insert("threads.setup".into(), "worker".into());
         contract.insert("threads.scope".into(), "sum of synchronized wave intervals; <=64 operations per worker per wave; worker-local setup/drop and spawn/join excluded; values retained until all worker timers stop".into());
@@ -1717,11 +2065,14 @@ impl<'a> Suite<'a> {
         let worker_samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let captured_workers = worker_samples.clone();
         let case_id = format!("{}/{}", self.name, name);
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 captured.set(None);
                 captured_workers.borrow_mut().clear();
                 let mut wave_index = 0;
@@ -1818,6 +2169,7 @@ impl<'a> Suite<'a> {
             .contract
             .insert("alloc.worker_records".into(), "wave-v1".into());
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
         contract.insert("threads.setup".into(), "worker".into());
         contract.insert("threads.scope".into(), "sum of synchronized wave intervals; <=64 operations per worker per wave; worker-local setup/drop and spawn/join excluded; values retained until all worker timers stop".into());
@@ -1885,11 +2237,14 @@ impl<'a> Suite<'a> {
         let worker_samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let captured_workers = worker_samples.clone();
         let case_id = format!("{}/{}", self.name, name);
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 captured.set(None);
                 captured_workers.borrow_mut().clear();
                 let mut wave_index = 0;
@@ -1987,6 +2342,7 @@ impl<'a> Suite<'a> {
             .contract
             .insert("alloc.worker_records".into(), "wave-v1".into());
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
         contract.insert("async.executor".into(), std::any::type_name::<E>().into());
         contract.insert("async.scope".into(), "one executor per worker per wave; construction/drop excluded; sequential future creation/polling per worker included; workers concurrent".into());
@@ -2057,11 +2413,14 @@ impl<'a> Suite<'a> {
         let worker_samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let captured_workers = worker_samples.clone();
         let case_id = format!("{}/{}", self.name, name);
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 captured.set(None);
                 captured_workers.borrow_mut().clear();
                 let mut wave_index = 0;
@@ -2158,6 +2517,7 @@ impl<'a> Suite<'a> {
             .contract
             .insert("alloc.worker_records".into(), "wave-v1".into());
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
         contract.insert("threads.setup".into(), "coordinator".into());
         contract.insert("threads.scope".into(), "sum of synchronized wave intervals; <=64 operations per worker per wave; coordinator setup/drop and spawn/join excluded; values retained until all worker timers stop".into());
@@ -2242,11 +2602,14 @@ impl<'a> Suite<'a> {
     where
         E: crate::workloads::Executor + 'a,
     {
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 let mut remaining = n;
                 let mut total = Measured::default();
                 while remaining > 0 {
@@ -2282,6 +2645,7 @@ impl<'a> Suite<'a> {
             }),
         );
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
         contract.insert("threads.setup".into(), "worker".into());
         contract.insert("threads.scope".into(), "sum of synchronized wave intervals; <=64 operations per worker per wave; worker-local setup/drop and spawn/join excluded; values retained until all worker timers stop".into());
@@ -2351,11 +2715,14 @@ impl<'a> Suite<'a> {
         f: impl Fn(&mut I) -> O + Sync + 'a,
         drop: DropPolicy,
     ) -> &mut Self {
+        let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
+        let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             crate::suite_measure::input_lifecycle(drop),
             1_048_576,
             Box::new(move |n, timer| {
+                let workers = captured_count.get();
                 let mut remaining = n;
                 let mut total = Measured::default();
                 while remaining > 0 {
@@ -2391,12 +2758,38 @@ impl<'a> Suite<'a> {
             }),
         );
         self.thread_contract(workers);
+        self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         self.entries.last_mut().unwrap().case.contract.insert(
             "threads.scope".into(),
             "sum of synchronized wave intervals; <=64 operations per worker per wave; spawn/join and inter-wave setup/drop excluded; total operations across workers".into(),
         );
         self
     }
+    /// Override worker counts for registered concurrent cases. Sequential cases keep
+    /// their execution model; their closures need not be thread safe.
+    /// Zero selects available host parallelism, as in the `threads` attribute.
+    pub fn thread_count(&mut self, workers: usize) -> Result<&mut Self> {
+        let workers = if workers == 0 {
+            crate::threads::available()
+        } else {
+            workers
+        };
+        if !(1..=256).contains(&workers) {
+            return Err(error("workers must be 1..256"));
+        }
+        for entry in &mut self.entries {
+            if let Some(count) = &entry.runtime_workers {
+                count.set(workers);
+                entry.operations_per_iteration = workers as u64;
+                entry
+                    .case
+                    .contract
+                    .insert("threads".into(), workers.to_string());
+            }
+        }
+        Ok(self)
+    }
+
     fn thread_contract(&mut self, workers: usize) {
         let entry = self.entries.last_mut().unwrap();
         entry.operations_per_iteration = workers as u64;
@@ -2488,6 +2881,27 @@ impl<'a> Suite<'a> {
         }
         self
     }
+    /// Replace a counter across all registered cases, including dynamic declarations.
+    fn override_work_units(&mut self, unit: &str, count: u64) {
+        for entry in &mut self.entries {
+            entry.case.contract.remove(&format!("work.input.{unit}"));
+            entry
+                .case
+                .contract
+                .insert(format!("work.counter.{unit}"), count.to_string());
+            if entry
+                .case
+                .contract
+                .get("work.unit")
+                .is_some_and(|v| v == unit)
+            {
+                entry
+                    .case
+                    .contract
+                    .insert("work.count".into(), count.to_string());
+            }
+        }
+    }
     /// Attach actual work totals accumulated during input preparation. Dynamic
     /// totals replace fixed counters of the same unit in throughput reports.
     pub fn input_counters(&mut self, counters: crate::counters::InputCounters) -> &mut Self {
@@ -2558,6 +2972,60 @@ impl<'a> Suite<'a> {
             .filter(|(_, entry)| selection.matches(&entry.case))
             .map(|(i, _)| i)
             .collect();
+        // Each key follows actual group nodes, then the leaf. This keeps children
+        // together even when their functions live in different source files.
+        let source_keys: Vec<_> = if selection.sort == crate::SortOrder::Source {
+            let mut first_groups = BTreeMap::new();
+            let mut inferred_sources = BTreeMap::new();
+            for entry in &self.entries {
+                let mut source = entry.source.as_ref();
+                let mut path = entry.ordering_group.as_str();
+                while path != self.name {
+                    source = self.group_sources.get(path).or(source);
+                    if let Some(source) = source {
+                        inferred_sources
+                            .entry(path.to_owned())
+                            .and_modify(|previous: &mut &(String, u32, u32)| {
+                                if source < *previous {
+                                    *previous = source;
+                                }
+                            })
+                            .or_insert(source);
+                    }
+                    let Some((parent, _)) = path.rsplit_once('/') else {
+                        break;
+                    };
+                    path = parent;
+                }
+            }
+            self.entries
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| {
+                    let mut key = Vec::new();
+                    let mut path = self.name.clone();
+                    let relative = entry
+                        .ordering_group
+                        .strip_prefix(&self.name)
+                        .unwrap_or(&entry.ordering_group)
+                        .trim_start_matches('/');
+                    for segment in relative.split('/').filter(|s| !s.is_empty()) {
+                        path.push('/');
+                        path.push_str(segment);
+                        let source = self
+                            .group_sources
+                            .get(&path)
+                            .or_else(|| inferred_sources.get(&path).copied());
+                        let first = *first_groups.entry(path.clone()).or_insert(index);
+                        key.push((source.is_none(), source, first));
+                    }
+                    key.push((entry.source.is_none(), entry.source.as_ref(), index));
+                    key
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         indices.sort_by(|&a, &b| {
             if selection.sort == crate::SortOrder::Kind {
                 let a = &self.entries[a];
@@ -2571,11 +3039,28 @@ impl<'a> Suite<'a> {
                     &b.ordering_name,
                 );
             }
+            if matches!(
+                selection.sort,
+                crate::SortOrder::Natural | crate::SortOrder::Lexical
+            ) {
+                let a = &self.entries[a];
+                let b = &self.entries[b];
+                return crate::ordering::hierarchy_cmp(
+                    (
+                        &a.ordering_group,
+                        a.ordering_family.as_deref(),
+                        &a.ordering_name,
+                    ),
+                    (
+                        &b.ordering_group,
+                        b.ordering_family.as_deref(),
+                        &b.ordering_name,
+                    ),
+                    selection.sort,
+                );
+            }
             if selection.sort == crate::SortOrder::Source {
-                let a = &self.entries[a].source;
-                let b = &self.entries[b].source;
-                // Unknown locations follow known ones; stable ties retain registration order.
-                return (a.is_none(), a).cmp(&(b.is_none(), b));
+                return source_keys[a].cmp(&source_keys[b]);
             }
             selection
                 .sort
@@ -2685,7 +3170,9 @@ impl<'a> Suite<'a> {
                 if let Some(live) = live.as_deref_mut() {
                     live.start_case(position)?;
                 }
-                eprintln!("profile: {} — {} ms", entry.case.id, duration.as_millis());
+                if self.console_output != ConsoleOutput::Quiet {
+                    eprintln!("profile: {} — {} ms", entry.case.id, duration.as_millis());
+                }
                 let outcome = profiling::attempt(|| {
                     if let Some(check) = &mut entry.verify {
                         check()?;
@@ -3016,7 +3503,9 @@ impl<'a> Suite<'a> {
                 })
                 .to_string(),
             );
-            eprintln!("bench: {} — validating and calibrating", e.case.id);
+            if self.console_output != ConsoleOutput::Quiet {
+                eprintln!("bench: {} — validating and calibrating", e.case.id);
+            }
             if let Some(live) = live.as_deref_mut() {
                 live.start_case(live_index)?;
             }
@@ -3080,7 +3569,9 @@ impl<'a> Suite<'a> {
                     q.relative_deviation.to_string(),
                 );
             }
-            eprintln!("bench: {} — measuring {} samples", e.case.id, samples);
+            if self.console_output != ConsoleOutput::Quiet {
+                eprintln!("bench: {} — measuring {} samples", e.case.id, samples);
+            }
             run.cases.push(e.case.clone());
             let mut under_target = false;
             let mut collected = 0u32;
@@ -3137,7 +3628,13 @@ impl<'a> Suite<'a> {
                     work_totals: e
                         .input_counters
                         .as_ref()
-                        .map(|c| c.snapshot())
+                        .map(|c| -> Result<_> {
+                            let mut totals = c.snapshot()?;
+                            totals.retain(|unit, _| {
+                                e.case.contract.contains_key(&format!("work.input.{unit}"))
+                            });
+                            Ok(totals)
+                        })
                         .transpose()?
                         .unwrap_or_default(),
                     case: e.case.id.clone(),
@@ -3306,8 +3803,24 @@ impl<'a> Suite<'a> {
     /// Minimal executable harness: --list, --filter, --samples, --sample-ms,
     /// --warmup-ms, --json, --output. Errors propagate to the caller's main.
     pub fn main(mut self) -> Result<()> {
-        let mut args = std::env::args().skip(1);
         let all_args: Vec<_> = std::env::args().skip(1).collect();
+        let environment_args =
+            crate::sampling::environment_args(&all_args, |name| match std::env::var(name) {
+                Ok(value) => Ok(Some(value)),
+                Err(std::env::VarError::NotPresent) => Ok(None),
+                Err(error_value) => Err(error(format!("{name}: {error_value}"))),
+            })?;
+        let effective_args: Vec<_> = environment_args
+            .into_iter()
+            .chain(all_args.iter().cloned())
+            .collect();
+        if let Some(requested) = crate::threads::from_args(&effective_args)? {
+            crate::threads::validate_registered_request(
+                &requested,
+                self.registration_threads.as_deref(),
+            )?;
+        }
+        let mut args = effective_args.into_iter();
         let mut profile = None;
         for pair in all_args.windows(2) {
             if pair[0] == "--profile" {
@@ -3330,8 +3843,22 @@ impl<'a> Suite<'a> {
         let mut dry_run = false;
         let mut test_mode = false;
         let mut json = false;
+        let mut color = self.console_color;
+        let mut color_cli = false;
+        let mut format_cli = false;
+        macro_rules! println {
+            ($($arg:tt)*) => {{
+                use std::io::IsTerminal;
+                let text = format!($($arg)*);
+                let enabled = !json && !list && !dry_run && color.enabled(
+                    std::io::stdout().is_terminal(), std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()));
+                ::std::println!("{}", crate::console::render(&text, enabled));
+            }};
+        }
+
         let mut no_plots = !self.plots;
         let mut plots_cli = false;
+        let mut console_cli = false;
         let mut output = None;
         let mut summary_parameter = None;
         let mut summary_estimator = None;
@@ -3339,6 +3866,7 @@ impl<'a> Suite<'a> {
         let mut filter_set = false;
         let mut regex_filter = false;
         let mut bootstrap: Option<crate::bootstrap::Config> = None;
+        let mut bootstrap_cli = crate::bootstrap::Options::default();
         let mut bootstrap_distributions = false;
         let mut bytes_format = None;
         let mut comparison_config = self.comparison_config;
@@ -3364,6 +3892,41 @@ impl<'a> Suite<'a> {
                 // Cargo supplies this even for targets with harness = false.
                 "--bench" => {}
                 "--dry-run" => dry_run = true,
+                "--output-format" => {
+                    if format_cli {
+                        return Err(error("output format specified twice"));
+                    }
+                    format_cli = true;
+                    self.console_format = crate::ConsoleFormat::parse(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--output-format requires table or tree"))?,
+                    )?;
+                }
+                "--color" => {
+                    if color_cli {
+                        return Err(error("color specified twice"));
+                    }
+                    color_cli = true;
+                    color = crate::ConsoleColor::parse(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--color requires auto, always or never"))?,
+                    )?;
+                }
+                "--quiet" | "-q" | "--verbose" | "-v" => {
+                    if console_cli {
+                        return Err(error(
+                            "console output mode specified twice; choose --quiet or --verbose",
+                        ));
+                    }
+                    console_cli = true;
+                    self.console_output = if matches!(arg.as_str(), "--quiet" | "-q") {
+                        ConsoleOutput::Quiet
+                    } else {
+                        ConsoleOutput::Verbose
+                    };
+                }
                 "--no-history" => history_enabled = false,
                 "--plots" | "--no-plots" => {
                     if plots_cli {
@@ -3493,6 +4056,30 @@ impl<'a> Suite<'a> {
                 "--exact" => selection.exact = true,
                 "--glob" => selection.glob = true,
                 "--regex" => regex_filter = true,
+                "--threads" => {
+                    let counts = crate::threads::parse_list(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--threads requires a worker list"))?,
+                    )?;
+                    if self.registration_threads.is_none() {
+                        if counts.len() != 1 {
+                            return Err(error(
+                                "thread lists require main_registered so the matrix is configured before registration",
+                            ));
+                        }
+                        self.thread_count(counts[0])?;
+                    }
+                }
+                "--bytes-count" | "--items-count" | "--chars-count" | "--cycles-count"
+                | "--bits-count" => {
+                    let unit = arg.trim_start_matches("--").trim_end_matches("-count");
+                    let count = args
+                        .next()
+                        .ok_or_else(|| error(format!("{arg} requires an integer")))?
+                        .parse::<u64>()?;
+                    self.override_work_units(unit, count);
+                }
                 "--bytes-format" => {
                     bytes_format = Some(crate::report::BytesFormat::parse(
                         &args
@@ -3511,7 +4098,8 @@ impl<'a> Suite<'a> {
                     bootstrap.get_or_insert_default().resamples = args
                         .next()
                         .ok_or_else(|| error("--resamples requires a count"))?
-                        .parse()?
+                        .parse()?;
+                    bootstrap_cli.resamples = Some(bootstrap.as_ref().unwrap().resamples);
                 }
                 "--hypothesis-distribution" => comparison_config.capture_distribution = true,
                 "--hypothesis-resamples" => {
@@ -3558,13 +4146,16 @@ impl<'a> Suite<'a> {
                     bootstrap.get_or_insert_default().confidence_level = args
                         .next()
                         .ok_or_else(|| error("--confidence-level requires a fraction"))?
-                        .parse()?
+                        .parse()?;
+                    bootstrap_cli.confidence_level =
+                        Some(bootstrap.as_ref().unwrap().confidence_level);
                 }
                 "--analysis-seed" => {
                     bootstrap.get_or_insert_default().seed = args
                         .next()
                         .ok_or_else(|| error("--analysis-seed requires an integer"))?
-                        .parse()?
+                        .parse()?;
+                    bootstrap_cli.seed = Some(bootstrap.as_ref().unwrap().seed);
                 }
                 "--sort" => {
                     selection.sort = crate::SortOrder::parse(
@@ -3574,6 +4165,7 @@ impl<'a> Suite<'a> {
                     )?
                 }
                 "--reverse" => selection.reverse = true,
+                "--forward" => selection.reverse = false,
                 "--exclude-exact" => selection.exclude_exact.push(
                     args.next()
                         .ok_or_else(|| error("--exclude-exact requires a path"))?,
@@ -3722,9 +4314,21 @@ Start here:
   cargo bench -- --list             List cases without measuring
   cargo bench -- --profile quick    Short exploratory run
   cargo bench -- --discard          Measure without saving results
+  cargo bench -- --quiet            Results without progress or detailed tables
+  cargo bench -- --verbose          Include environment and case contracts
+  cargo bench -- --output-format tree  Hierarchical results and lists
+  cargo bench -- --color auto       Color: auto, always or never (auto respects NO_COLOR)
 
 Reports: target/airbug-bench/reports/<run-id>/report.html
 Use --output NEW_DIRECTORY to choose a destination.
+Sampling environment: AIRBUG_BENCH_SAMPLES, AIRBUG_BENCH_ITERATIONS, AIRBUG_BENCH_WARMUP_MS,
+AIRBUG_BENCH_SAMPLE_MS, AIRBUG_BENCH_SAMPLING, AIRBUG_BENCH_MIN_TIME_MS,
+AIRBUG_BENCH_MAX_TIME_MS, AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME.
+Also: AIRBUG_BENCH_TIMER, AIRBUG_BENCH_SORT, AIRBUG_BENCH_REVERSE, AIRBUG_BENCH_BYTES_FORMAT.
+CLI flags take precedence; --forward overrides reverse sorting from the environment.
+Concurrent cases: --threads N[,N...] (repeatable; 0 = available parallelism), AIRBUG_BENCH_THREADS.
+Counter overrides: --bytes-count N, --items-count N, --chars-count N, --cycles-count N, --bits-count N.
+Environment: AIRBUG_BENCH_BYTES_COUNT, AIRBUG_BENCH_ITEMS_COUNT, AIRBUG_BENCH_CHARS_COUNT, AIRBUG_BENCH_CYCLES_COUNT, AIRBUG_BENCH_BITS_COUNT.
 The first run establishes a baseline; insufficient evidence stays inconclusive.
 
 All options:"
@@ -3781,6 +4385,18 @@ All options:"
             selection = selection.with_regex(&pattern)?;
         }
         selection.validate()?;
+        if self
+            .selected_indices(&selection)
+            .iter()
+            .any(|&i| !self.entries[i].bootstrap.is_empty())
+        {
+            bootstrap.get_or_insert_default();
+        }
+        let bootstrap_overrides = if let Some(config) = &bootstrap {
+            self.bootstrap_settings(&selection, config, bootstrap_cli)?
+        } else {
+            BTreeMap::new()
+        };
         let mut comparison_overrides = std::collections::BTreeMap::new();
         for index in self.selected_indices(&selection) {
             let entry = &self.entries[index];
@@ -3951,8 +4567,13 @@ All options:"
             return Ok(());
         }
         if list {
-            for id in self.list_selected(&selection) {
-                println!("{id}");
+            let names = self.list_selected(&selection);
+            if self.console_format == crate::ConsoleFormat::Tree && !json {
+                println!("{}", crate::console::tree_names(names));
+            } else {
+                for id in names {
+                    println!("{id}");
+                }
             }
             return Ok(());
         }
@@ -3999,11 +4620,13 @@ All options:"
                 "bench",
                 &self.name,
             )?;
-            eprintln!(
-                "Airbug run: {} · history: {}",
-                live.id,
-                live.directory.display()
-            );
+            if self.console_output != ConsoleOutput::Quiet {
+                eprintln!(
+                    "Airbug run: {} · history: {}",
+                    live.id,
+                    live.directory.display()
+                );
+            }
             Some(live)
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
@@ -4070,6 +4693,16 @@ All options:"
                         }
                     })
                     .or(automatic_output);
+                if loaded_runs.is_none() {
+                    if let Some(config) = &bootstrap {
+                        let settings = bootstrap_overrides
+                            .iter()
+                            .filter(|(id, _)| run.cases.iter().any(|case| &case.id == *id))
+                            .map(|(id, value)| (id.clone(), value.clone()))
+                            .collect();
+                        crate::bootstrap::save_settings(&mut run, config, &settings)?;
+                    }
+                }
                 let summaries = crate::report::descriptive(&run)?;
                 let formatted = self.formatted_metrics(&run)?;
                 if !formatted.is_empty() {
@@ -4078,11 +4711,17 @@ All options:"
                 let estimates = bootstrap
                     .as_ref()
                     .map(|config| {
-                        if bootstrap_distributions {
-                            crate::bootstrap::analyze_with_distributions(&run, config)
-                        } else {
-                            crate::bootstrap::analyze(&run, config)
-                        }
+                        let overrides = bootstrap_overrides
+                            .iter()
+                            .filter(|(id, _)| run.cases.iter().any(|case| &case.id == *id))
+                            .map(|(id, config)| (id.clone(), config.clone()))
+                            .collect();
+                        crate::bootstrap::analyze_with_case_configs(
+                            &run,
+                            config,
+                            &overrides,
+                            bootstrap_distributions,
+                        )
                     })
                     .transpose()?;
                 let rates = bytes_format
@@ -4092,6 +4731,10 @@ All options:"
                     run.save_new(p)?;
                     if !formatted.is_empty() {
                         crate::model::write_new(&p.join("formatted.json"), &formatted)?;
+                        std::fs::write(
+                            p.join("formatted.csv"),
+                            crate::measurement::report_csv(&formatted),
+                        )?;
                     }
                     crate::model::write_new(
                         &std::path::Path::new(p).join("summary.json"),
@@ -4104,6 +4747,19 @@ All options:"
                         )?;
                     }
                     if let Some(report) = &estimates {
+                        let formatted_report = self.formatted_bootstrap(report)?;
+                        if !formatted_report.rows.is_empty() {
+                            crate::model::write_new(
+                                &p.join("formatted-estimates.json"),
+                                &formatted_report,
+                            )?;
+                            let html = if no_plots {
+                                crate::report::html(&crate::bootstrap::markdown(&formatted_report))
+                            } else {
+                                crate::bootstrap::html(&formatted_report)
+                            };
+                            std::fs::write(p.join("formatted-estimates.html"), html)?;
+                        }
                         crate::model::write_new(
                             &std::path::Path::new(p).join("estimates.json"),
                             report,
@@ -4145,6 +4801,8 @@ All options:"
                         for case in &report.cases {
                             if matches!(case.status, crate::history::PreviousStatus::Compared) {
                                 if let Some(baseline) = baseline_snapshot.get(&case.case) {
+                                    let config =
+                                        bootstrap_overrides.get(&case.case).unwrap_or(config);
                                     let relative = crate::relative::compare_runs(
                                         &crate::history::one_case(baseline, &case.case),
                                         &crate::history::one_case(&run, &case.case),
@@ -4250,6 +4908,23 @@ All options:"
                                             &crate::history::one_case(baseline, &case.case),
                                             &crate::history::one_case(&run, &case.case),
                                         )?);
+                                        if let Some(entry) =
+                                            self.entries.iter().find(|e| e.case.id == case.case)
+                                        {
+                                            for (metric, formatter) in &entry.formatters {
+                                                charts.push_str(
+                                                    &crate::measurement::comparison_chart(
+                                                        &crate::history::one_case(
+                                                            baseline, &case.case,
+                                                        ),
+                                                        &crate::history::one_case(&run, &case.case),
+                                                        &case.case,
+                                                        metric,
+                                                        formatter.as_ref(),
+                                                    )?,
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -4265,6 +4940,20 @@ All options:"
                             ),
                         );
                     }
+                    let mut navigation = String::from("<nav aria-label=\"Run results\">");
+                    for (file, label) in [
+                        ("estimates.html", "Statistical estimates"),
+                        ("formatted-estimates.html", "Custom metric estimates"),
+                        ("regression-comparison.html", "Regression comparison"),
+                        ("formatted.csv", "Download custom metrics (CSV)"),
+                        ("run.json", "Download raw data (JSON)"),
+                    ] {
+                        if path.join(file).is_file() {
+                            navigation.push_str(&format!("<a href=\"{file}\">{label}</a> "));
+                        }
+                    }
+                    navigation.push_str("</nav>");
+                    html = html.replacen("<main>", &format!("<main>{navigation}"), 1);
                     let mut file = std::fs::OpenOptions::new()
                         .write(true)
                         .create_new(true)
@@ -4320,16 +5009,64 @@ All options:"
                     if let Some(report) = &estimates {
                         println!("BENCH_ESTIMATES={}", serde_json::to_string(report)?);
                     }
+                } else if self.console_output == ConsoleOutput::Quiet
+                    && self.console_format != crate::ConsoleFormat::Tree
+                {
+                    for row in &summaries {
+                        let value = row
+                            .summary
+                            .as_ref()
+                            .map(|s| s.median.to_string())
+                            .unwrap_or_else(|| "unavailable".into());
+                        println!(
+                            "{} / {} [{} process {}]: median {} {}{}; missing {}",
+                            row.case,
+                            row.metric,
+                            row.variant,
+                            row.process,
+                            value,
+                            row.unit,
+                            if row.normalized_per_operation {
+                                "/op"
+                            } else {
+                                ""
+                            },
+                            row.unavailable
+                        );
+                    }
+                    if let Some(report) = &named_comparison {
+                        println!("{}", report.markdown());
+                    }
+                    if let Some(report) = &previous {
+                        println!("{}", report.markdown());
+                    }
                 } else {
-                    println!(
-                        "{}",
-                        match bytes_format {
-                            Some(format) =>
-                                crate::report::markdown_with_bytes_format(&run, format)?,
-                            None => crate::report::markdown(&run)?,
+                    if self.console_output == ConsoleOutput::Verbose {
+                        eprintln!(
+                            "Benchmark environment: {}",
+                            serde_json::to_string_pretty(&run.environment)?
+                        );
+                        for case in &run.cases {
+                            eprintln!(
+                                "Benchmark contract {}: {}",
+                                case.id,
+                                serde_json::to_string_pretty(&case.contract)?
+                            );
                         }
-                    );
-                    println!("{}", crate::report::descriptive_markdown(&summaries));
+                    }
+                    if self.console_format == crate::ConsoleFormat::Tree {
+                        println!("{}", crate::console::tree(&summaries));
+                    } else {
+                        println!(
+                            "{}",
+                            match bytes_format {
+                                Some(format) =>
+                                    crate::report::markdown_with_bytes_format(&run, format)?,
+                                None => crate::report::markdown(&run)?,
+                            }
+                        );
+                        println!("{}", crate::report::descriptive_markdown(&summaries));
+                    }
                     if let Some(saved) = &saved_baseline {
                         println!(
                             "{} baseline {:?}: {}",
@@ -4447,5 +5184,126 @@ mod comparison_scope_tests {
                 .iter()
                 .all(|config| config.significance_level == 0.02)
         );
+    }
+}
+
+#[cfg(test)]
+mod counter_override_tests {
+    use super::*;
+    #[test]
+    fn runtime_threads_change_execution_and_normalization() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let calls = AtomicUsize::new(0);
+        let mut suite = Suite::new("workers");
+        suite.bench_threads("parallel", 2, || {
+            calls.fetch_add(1, Ordering::SeqCst);
+        });
+        suite.sampling(Sampling {
+            iterations: Some(3),
+            ..Default::default()
+        });
+        suite.bench("sequential", || ());
+        suite.sampling(Sampling {
+            iterations: Some(3),
+            ..Default::default()
+        });
+        suite.thread_count(0).unwrap();
+        assert_eq!(
+            suite.entries[0].operations_per_iteration,
+            crate::threads::available() as u64
+        );
+        assert_eq!(
+            suite.entries[0].runtime_workers.as_ref().unwrap().get(),
+            crate::threads::available()
+        );
+        assert!(suite.thread_count(257).is_err());
+        suite.thread_count(4).unwrap();
+        suite.config(Config {
+            samples: 1,
+            warmup: Duration::ZERO,
+            sample_time: Duration::from_nanos(1),
+            max_iterations: 3,
+        });
+        let run = suite.run("").unwrap();
+        run.validate().unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 12);
+        assert_eq!(run.cases[0].contract["threads"], "4");
+        assert!(!run.cases[1].contract.contains_key("threads"));
+        assert_eq!(
+            run.observations
+                .iter()
+                .find(|o| o.case.ends_with("parallel"))
+                .unwrap()
+                .operations,
+            12
+        );
+        assert_eq!(
+            run.observations
+                .iter()
+                .find(|o| o.case.ends_with("sequential"))
+                .unwrap()
+                .operations,
+            3
+        );
+    }
+
+    #[test]
+    fn runtime_counter_replaces_only_its_unit_in_fixed_and_dynamic_cases() {
+        let counters = crate::counters::InputCounters::new(&["items", "bytes"]).unwrap();
+        let setup_counters = counters.clone();
+        let mut suite = Suite::new("override");
+        suite.bench_with_input(
+            "dynamic",
+            move || {
+                setup_counters.add("items", 2);
+                setup_counters.add("bytes", 4);
+            },
+            |_| (),
+            DropPolicy::InsideTiming,
+        );
+        suite.input_counters(counters);
+        suite.sampling(crate::Sampling {
+            iterations: Some(3),
+            ..Default::default()
+        });
+        suite.bench("fixed", || ());
+        suite.work_units("items", 1);
+        suite.work_units("bytes", 9);
+        suite.sampling(crate::Sampling {
+            iterations: Some(3),
+            ..Default::default()
+        });
+        suite.override_work_units("items", 7);
+        suite.override_work_units("chars", 0);
+        suite.config(Config {
+            samples: 1,
+            warmup: Duration::ZERO,
+            sample_time: Duration::from_nanos(1),
+            max_iterations: 3,
+        });
+        let run = suite.run("").unwrap();
+        run.validate().unwrap();
+        for case in &run.cases {
+            let counts = crate::report::work_counters(case).unwrap();
+            assert_eq!(counts["items"], Some(7));
+            assert_eq!(counts["chars"], Some(0));
+            assert_eq!(
+                counts["bytes"],
+                if case.id.ends_with("dynamic") {
+                    None
+                } else {
+                    Some(9)
+                }
+            );
+            assert!(!case.contract.contains_key("work.input.items"));
+        }
+        let dynamic = run
+            .observations
+            .iter()
+            .find(|o| o.case.ends_with("dynamic"))
+            .unwrap();
+        assert_eq!(dynamic.work_totals["bytes"], "12");
+        assert!(!dynamic.work_totals.contains_key("items"));
+        assert_eq!(run.cases[1].contract["work.count"], "9");
     }
 }

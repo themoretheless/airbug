@@ -10,6 +10,7 @@ fn main() -> airbug_bench::Result<()> {
     };
     let captured = bootstrap::estimate_with_distributions(&values, &config)?;
     let report = bootstrap::Report {
+        case_configs: Default::default(),
         config: config.clone(), method: "synthetic_example_percentile_bootstrap".into(),
         rows: vec![bootstrap::Row {
             metric_contract: None,

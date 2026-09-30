@@ -10,7 +10,7 @@ keywords = ["benchmark", "performance", "profiling", "statistics"]
 categories = ["development-tools::profiling", "development-tools::testing"]
 
 [features]
-default = []
+default = ["macros"]
 memory = ["dep:backtrace"]
 macros = ["dep:airbug-bench-macros"]
 async-tokio = ["dep:tokio"]

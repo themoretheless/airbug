@@ -16,6 +16,8 @@ struct Options {
     setup_thread: Option<syn::LitStr>,
     executor: Option<Expr>,
     allocator: Option<Expr>,
+    measurement: Option<Expr>,
+    formatter: Option<Expr>,
     timer: Option<syn::LitStr>,
     summary_scale: Option<syn::LitStr>,
     summary_family: Option<syn::LitStr>,
@@ -24,6 +26,9 @@ struct Options {
     noise_threshold_percent: Option<Expr>,
     hypothesis_resamples: Option<Expr>,
     hypothesis_seed: Option<Expr>,
+    resamples: Option<Expr>,
+    confidence_level: Option<Expr>,
+    analysis_seed: Option<Expr>,
     quick: Option<syn::LitBool>,
     quick_config: Option<Expr>,
     threads: Option<Expr>,
@@ -31,10 +36,12 @@ struct Options {
     items: Option<Expr>,
     chars: Option<Expr>,
     cycles: Option<Expr>,
+    bits: Option<Expr>,
     input_bytes: Option<Expr>,
     input_items: Option<Expr>,
     input_chars: Option<Expr>,
     input_cycles: Option<Expr>,
+    input_bits: Option<Expr>,
     ignore: Option<syn::LitBool>,
     samples: Option<Expr>,
     warmup_ms: Option<Expr>,
@@ -75,6 +82,9 @@ impl Parse for Options {
                 "noise_threshold_percent" => options.noise_threshold_percent = Some(input.parse()?),
                 "hypothesis_resamples" => options.hypothesis_resamples = Some(input.parse()?),
                 "hypothesis_seed" => options.hypothesis_seed = Some(input.parse()?),
+                "resamples" => options.resamples = Some(input.parse()?),
+                "confidence_level" => options.confidence_level = Some(input.parse()?),
+                "analysis_seed" => options.analysis_seed = Some(input.parse()?),
                 "overhead" => {
                     let value: syn::LitStr = input.parse()?;
                     if !matches!(value.value().as_str(), "raw" | "subtract") {
@@ -105,6 +115,8 @@ impl Parse for Options {
                 }
                 "quick" => options.quick = Some(input.parse()?),
                 "quick_config" => options.quick_config = Some(input.parse()?),
+                "measurement" => options.measurement = Some(input.parse()?),
+                "formatter" => options.formatter = Some(input.parse()?),
                 "allocator" => options.allocator = Some(input.parse()?),
                 "batch" => options.batch = Some(input.parse()?),
                 "crate" => options.crate_path = Some(input.parse()?),
@@ -163,10 +175,12 @@ impl Parse for Options {
                 "items" => options.items = Some(input.parse()?),
                 "chars" => options.chars = Some(input.parse()?),
                 "cycles" => options.cycles = Some(input.parse()?),
+                "bits" => options.bits = Some(input.parse()?),
                 "input_bytes" => options.input_bytes = Some(input.parse()?),
                 "input_items" => options.input_items = Some(input.parse()?),
                 "input_chars" => options.input_chars = Some(input.parse()?),
                 "input_cycles" => options.input_cycles = Some(input.parse()?),
+                "input_bits" => options.input_bits = Some(input.parse()?),
                 "ignore" => options.ignore = Some(input.parse()?),
                 "iterations" => options.iterations = Some(input.parse()?),
                 "min_time_ms" => options.min_time_ms = Some(input.parse()?),
@@ -235,6 +249,19 @@ impl syn::visit_mut::VisitMut for AliasLifetimes {
         _: &mut syn::ParenthesizedGenericArguments,
     ) {
     }
+}
+
+fn bootstrap_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTokens {
+    let optional = |value: &Option<Expr>| {
+        value
+            .as_ref()
+            .map(|v| quote!(Some(#v)))
+            .unwrap_or_else(|| quote!(None))
+    };
+    let resamples = optional(&options.resamples);
+    let confidence = optional(&options.confidence_level);
+    let seed = optional(&options.analysis_seed);
+    quote!(#runtime::bootstrap::Options { resamples: #resamples, confidence_level: #confidence, seed: #seed })
 }
 
 fn comparison_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTokens {
@@ -344,6 +371,30 @@ fn sampling_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTo
 }
 
 fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
+    if matches!(&options.threads, Some(Expr::Lit(expr)) if matches!(&expr.lit, syn::Lit::Bool(value) if !value.value))
+    {
+        options.threads = None;
+        options.setup_thread = None;
+    }
+    let original = registration_impl(f, options.clone())?;
+    if options.batch.is_some() {
+        return Ok(original);
+    }
+    if options.custom || options.threads.is_some() {
+        return syn::parse2(quote!({
+            assert!(!suite.has_registration_batch_policy(), "imported batch cannot combine with threads or custom timing");
+            #original
+        }));
+    }
+    let mut inherited = options;
+    inherited.batch = Some(syn::parse_quote!(suite.registration_batch_policy()));
+    let batched = registration_impl(f, inherited)?;
+    syn::parse2(quote!({
+        if suite.has_registration_batch_policy() { #batched } else { #original }
+    }))
+}
+
+fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
     let runtime = runtime_path(&options)?;
     if options.groups.is_some() {
         return Err(syn::Error::new_spanned(
@@ -383,6 +434,7 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         ("items", &options.input_items),
         ("chars", &options.input_chars),
         ("cycles", &options.input_cycles),
+        ("bits", &options.input_bits),
     ]
     .into_iter()
     .filter_map(|(unit, expr)| expr.as_ref().map(|expr| (unit, expr)))
@@ -492,7 +544,9 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         .drop_output
         .as_ref()
         .is_some_and(|v| v.value() == "outside");
-    let policy = if outside {
+    let policy = if options.drop_output.is_none() {
+        quote!(suite.registration_drop_policy())
+    } else if outside {
         quote!(#runtime::DropPolicy::OutsideTiming)
     } else {
         quote!(#runtime::DropPolicy::InsideTiming)
@@ -526,17 +580,112 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
             "allocator cannot yet combine with custom timing",
         ));
     }
-    let body = if let Some(allocator) = &options.allocator {
+    if options.formatter.is_some() && options.measurement.is_none() {
+        return Err(syn::Error::new_spanned(
+            &f.sig,
+            "formatter requires measurement",
+        ));
+    }
+    if options.measurement.is_some() && (options.allocator.is_some() || options.threads.is_some()) {
+        return Err(syn::Error::new_spanned(
+            &f.sig,
+            "measurement cannot yet combine with allocator or threads",
+        ));
+    }
+    let body = if let Some(measurement) = &options.measurement {
+        let batch = options.batch.as_ref().map(|b| quote!(#b)).unwrap_or_else(
+            || quote!(#runtime::BatchPolicy::Iterations(::std::num::NonZeroU64::new(64).unwrap())),
+        );
+        let setup_call = if let Some(setup) = &options.setup {
+            let call = if has_args {
+                if matches!(setup, Expr::Closure(closure) if closure.inputs.iter().any(|input| !matches!(input, syn::Pat::Type(_))))
+                {
+                    quote!({
+                        fn __airbug_setup<A, I>(setup: impl FnOnce(A) -> I, value: A) -> I { setup(value) }
+                        __airbug_setup(#setup, __airbug_arg)
+                    })
+                } else {
+                    quote!({
+                        fn __airbug_setup<A: Copy, V: ::std::borrow::Borrow<A>, I>(
+                            setup: impl FnOnce(A) -> I, value: &V,
+                        ) -> I { setup(*value.borrow()) }
+                        __airbug_setup(#setup, &__airbug_arg)
+                    })
+                }
+            } else {
+                quote!((#setup)())
+            };
+            let record = input_counts.iter().map(|(unit, _)| {
+                let name = format_ident!("__airbug_input_count_{unit}");
+                quote!(__airbug_setup_counters.add(#unit, #name(&__airbug_input));)
+            });
+            quote!({ let __airbug_input = #call; #(#record)* __airbug_input })
+        } else {
+            quote!(())
+        };
+        let call = if options.setup.is_some() {
+            quote!(#target(__airbug_input))
+        } else {
+            invocation.clone()
+        };
+        let method = format_ident!(
+            "bench_{}measured_with_{}input",
+            if is_async { "async_" } else { "" },
+            if owned_input { "owned_" } else { "" }
+        );
+        let register = if options.custom {
+            let call = if has_args {
+                quote!(#target(__airbug_iterations, ::std::hint::black_box(#arg)))
+            } else {
+                quote!(#target(__airbug_iterations))
+            };
+            if is_async {
+                quote!(suite.bench_async_measured_custom(&__airbug_name, __airbug_measurement,
+                    move || #executor, async move |__airbug_iterations| #call.await))
+            } else {
+                quote!(suite.bench_measured_custom(&__airbug_name, __airbug_measurement,
+                    move |__airbug_iterations| #call))
+            }
+        } else if is_async {
+            quote!(suite.#method(&__airbug_name, __airbug_measurement, #batch,
+                move || #executor, move || #setup_call, async move |__airbug_input| #call.await, #policy))
+        } else {
+            quote!(suite.#method(&__airbug_name, __airbug_measurement, #batch,
+                move || #setup_call, move |__airbug_input| #call, #policy))
+        };
+        let formatting = options.formatter.as_ref().map(|formatter|
+            quote!(suite.formatter(&__airbug_metric.id, #formatter).expect("valid benchmark formatter");));
+        quote! {
+            let __airbug_measurement = #measurement;
+            let __airbug_metric = #runtime::measurement::Measurement::metric(&__airbug_measurement);
+            #register.expect("valid benchmark measurement");
+            #formatting
+        }
+    } else if let Some(allocator) = &options.allocator {
         if options.setup.is_some()
             || options.batch.is_some()
             || outside
+            || options.drop_output.is_none()
             || options.threads.is_some()
         {
             let batch = options.batch.as_ref().map(|b| quote!(#b)).unwrap_or_else(||
                 quote!(#runtime::BatchPolicy::Iterations(::std::num::NonZeroU64::new(64).unwrap())));
             let setup_call = if let Some(setup) = &options.setup {
                 let call = if has_args {
-                    quote!((#setup)(__airbug_arg))
+                    if matches!(setup, Expr::Closure(closure) if closure.inputs.iter().any(|input| !matches!(input, syn::Pat::Type(_))))
+                    {
+                        quote!({
+                            fn __airbug_setup<A, I>(setup: impl FnOnce(A) -> I, value: A) -> I { setup(value) }
+                            __airbug_setup(#setup, __airbug_arg)
+                        })
+                    } else {
+                        quote!({
+                            fn __airbug_setup<A: Copy, V: ::std::borrow::Borrow<A>, I>(
+                                setup: impl FnOnce(A) -> I, value: &V,
+                            ) -> I { setup(*value.borrow()) }
+                            __airbug_setup(#setup, &__airbug_arg)
+                        })
+                    }
                 } else {
                     quote!((#setup)())
                 };
@@ -605,7 +754,20 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         }
     } else if let Some(setup) = &options.setup {
         let setup_call = if has_args {
-            quote!((#setup)(__airbug_arg))
+            if matches!(setup, Expr::Closure(closure) if closure.inputs.iter().any(|input| !matches!(input, syn::Pat::Type(_))))
+            {
+                quote!({
+                    fn __airbug_setup<A, I>(setup: impl FnOnce(A) -> I, value: A) -> I { setup(value) }
+                    __airbug_setup(#setup, __airbug_arg)
+                })
+            } else {
+                quote!({
+                    fn __airbug_setup<A: Copy, V: ::std::borrow::Borrow<A>, I>(
+                        setup: impl FnOnce(A) -> I, value: &V,
+                    ) -> I { setup(*value.borrow()) }
+                    __airbug_setup(#setup, &__airbug_arg)
+                })
+            }
         } else {
             quote!((#setup)())
         };
@@ -673,6 +835,12 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
             quote!(suite.bench_with_input(&__airbug_name, move || #setup_call,
                 |__airbug_input| #target(__airbug_input), #policy);)
         }
+    } else if is_async
+        && borrowed_arg
+        && let Some(batch) = &options.batch
+    {
+        quote!(suite.bench_async_with_value_batched(&__airbug_name, move || #executor, __airbug_arg,
+            async move |__airbug_input| #target(__airbug_input).await, #policy, #batch);)
     } else if let Some(batch) = &options.batch {
         if is_async {
             quote!(suite.bench_async_batched(&__airbug_name, move || #executor, || (),
@@ -690,15 +858,51 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
     } else if is_async {
         quote!(suite.bench_async_factory(&__airbug_name, move || #executor, move || #invocation, #policy);)
     } else if options.threads.is_some() {
-        if outside {
+        if outside || options.drop_output.is_none() {
             quote!(suite.bench_threads_with_input(&__airbug_name, __airbug_workers, || (), move |_: &mut ()| #invocation, #policy);)
         } else {
             quote!(suite.bench_threads(&__airbug_name, __airbug_workers, move || #invocation);)
         }
-    } else if outside {
+    } else if outside || options.drop_output.is_none() {
         quote!(suite.bench_with_input(&__airbug_name, || (), move |_: &mut ()| #invocation, #policy);)
     } else {
         quote!(suite.bench(&__airbug_name, move || #invocation);)
+    };
+    // Keep the original plain loop when no deferred destruction is requested.
+    let body = if options.drop_output.is_none()
+        && options.setup.is_none()
+        && options.batch.is_none()
+        && options.measurement.is_none()
+        && !options.custom
+    {
+        let plain = if let Some(allocator) = &options.allocator {
+            if options.threads.is_some() {
+                None
+            } else if is_async {
+                Some(
+                    quote!(suite.bench_async_allocated(&__airbug_name, #allocator, move || #executor, async move || #invocation.await);),
+                )
+            } else {
+                Some(
+                    quote!(suite.bench_allocated(&__airbug_name, #allocator, move || #invocation);),
+                )
+            }
+        } else if is_async {
+            None
+        } else if options.threads.is_some() {
+            Some(
+                quote!(suite.bench_threads(&__airbug_name, __airbug_workers, move || #invocation);),
+            )
+        } else {
+            Some(quote!(suite.bench(&__airbug_name, move || #invocation);))
+        };
+        if let Some(plain) = plain {
+            quote! { if matches!(#policy, #runtime::DropPolicy::InsideTiming) { #plain } else { #body } }
+        } else {
+            body
+        }
+    } else {
+        body
     };
     let mut counts = Vec::new();
     let mut counters = Vec::new();
@@ -707,6 +911,7 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         ("items", &options.items),
         ("chars", &options.chars),
         ("cycles", &options.cycles),
+        ("bits", &options.bits),
     ] {
         if let Some(count) = expression {
             let variable = format_ident!("__airbug_count_{}", unit);
@@ -724,6 +929,7 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         .as_ref()
         .map(|value| quote!(suite.ignore(#value);));
     let comparison = comparison_defaults(&options, &runtime);
+    let bootstrap = bootstrap_defaults(&options, &runtime);
     let sampling = sampling_defaults(&options, &runtime);
     let overhead = options.overhead.as_ref().map(|value| {
         let enabled = value.value() == "subtract";
@@ -742,7 +948,11 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         suite.source_location(file!(), line!(), column!());
     };
     let family = (!generic_names.is_empty()).then(|| quote!(suite.ordering_family(#name);));
+    let validate_drop = options.custom.then(|| quote! {
+        assert!(!suite.has_registration_drop_policy(), "custom timing owns output destruction; imported drop_output defaults cannot apply");
+    });
     let mut per_case = quote! {
+        #validate_drop
         #(#counts)*
         #input_counter_init
         #body
@@ -754,6 +964,7 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
         #family
         suite.sampling(#sampling);
         suite.comparison_case(#comparison);
+        suite.bootstrap_case(#bootstrap);
         #quick
         #timer
         #summary_scale
@@ -773,7 +984,7 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
             .then(|| quote!(let __airbug_arg = ::std::sync::Arc::clone(&__airbug_shared);));
         per_case = quote! {
             #share
-            for __airbug_workers in #runtime::threads::counts(#threads) {
+            for __airbug_workers in suite.resolve_thread_counts(#threads) {
                 #clone
                 let __airbug_name = ::std::format!("{}/threads={}", __airbug_name, __airbug_workers);
                 #per_case
@@ -796,15 +1007,35 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
     let core = if let Some(args) = &options.args {
         let copy = if borrowed_arg {
             quote!()
+        } else if options.setup.is_none()
+            && let Some(syn::FnArg::Typed(argument)) = f.sig.inputs.last()
+            && !matches!(&*argument.ty, Type::ImplTrait(_))
+        {
+            let ty = &argument.ty;
+            quote!(
+                fn __airbug_copy<T: Copy>(value: &T) -> T { *value }
+                let __airbug_arg: #ty = __airbug_copy(::std::borrow::Borrow::<#ty>::borrow(&__airbug_arg));
+            )
         } else {
             quote!(fn __airbug_copy<T: Copy>(value: T) -> T { value } let __airbug_arg = __airbug_copy(__airbug_arg);)
         };
         // Record args before body moves them into the workload closure.
         quote! {
             #generic_label
+            // Autoref selection keeps existing Debug labels, with ToString (including Display) as fallback.
+            struct __AirbugArgumentLabel<'a, T: ?Sized>(&'a T);
+            trait __AirbugLabel {
+                fn __airbug_label(self) -> ::std::string::String;
+            }
+            impl<T: ::std::fmt::Debug + ?Sized> __AirbugLabel for &&__AirbugArgumentLabel<'_, T> {
+                fn __airbug_label(self) -> ::std::string::String { ::std::format!("{:?}", self.0) }
+            }
+            impl<T: ::std::string::ToString + ?Sized> __AirbugLabel for &__AirbugArgumentLabel<'_, T> {
+                fn __airbug_label(self) -> ::std::string::String { ::std::string::ToString::to_string(self.0) }
+            }
             for __airbug_arg in #args {
                 #copy
-                let __airbug_label = ::std::format!("{:?}", __airbug_arg);
+                let __airbug_label = (&&__AirbugArgumentLabel(&__airbug_arg)).__airbug_label();
                 let __airbug_name = ::std::format!("{}/{}", __airbug_base, __airbug_label);
                 #per_case
             }
@@ -1024,6 +1255,8 @@ impl Options {
         inherit!(
             crate_path,
             allocator,
+            measurement,
+            formatter,
             timer,
             summary_scale,
             summary_family,
@@ -1032,6 +1265,9 @@ impl Options {
             noise_threshold_percent,
             hypothesis_resamples,
             hypothesis_seed,
+            resamples,
+            confidence_level,
+            analysis_seed,
             quick,
             quick_config,
             executor,
@@ -1041,10 +1277,12 @@ impl Options {
             items,
             chars,
             cycles,
+            bits,
             input_bytes,
             input_items,
             input_chars,
             input_cycles,
+            input_bits,
             samples,
             warmup_ms,
             sample_ms,
@@ -1058,6 +1296,36 @@ impl Options {
             ignore
         );
     }
+    fn validate_imported_defaults(&self, location: &syn::Ident) -> syn::Result<()> {
+        if self.groups.as_ref().is_none_or(|groups| groups.is_empty()) {
+            return Ok(());
+        }
+        let unsupported: Vec<_> = [
+            ("threads", self.threads.is_some()),
+            ("executor", self.executor.is_some()),
+            ("allocator", self.allocator.is_some()),
+            ("setup_thread", self.setup_thread.is_some()),
+            ("input_bytes", self.input_bytes.is_some()),
+            ("input_items", self.input_items.is_some()),
+            ("input_chars", self.input_chars.is_some()),
+            ("input_cycles", self.input_cycles.is_some()),
+            ("input_bits", self.input_bits.is_some()),
+        ]
+        .into_iter()
+        .filter_map(|(name, present)| present.then_some(name))
+        .collect();
+        if unsupported.is_empty() {
+            return Ok(());
+        }
+        Err(syn::Error::new_spanned(
+            location,
+            format!(
+                "defaults cannot yet cross imported groups: {}; declare these options on the imported group",
+                unsupported.join(", ")
+            ),
+        ))
+    }
+
     fn validate_group(&self) -> syn::Result<()> {
         if self.args.is_some()
             || self.setup.is_some()
@@ -1178,7 +1446,14 @@ fn register_module(module: &mut syn::ItemMod, inherited: &Options) -> syn::Resul
             _ => {}
         }
     }
+    inherited.validate_imported_defaults(&module.ident)?;
     if let Some(groups) = &inherited.groups {
+        if inherited.measurement.is_some() || inherited.formatter.is_some() {
+            return Err(syn::Error::new_spanned(
+                &module.ident,
+                "measurement/formatter defaults must be declared on the imported group",
+            ));
+        }
         let sampling = sampling_defaults(inherited, &runtime);
         let ignored = inherited
             .ignore
@@ -1191,6 +1466,7 @@ fn register_module(module: &mut syn::ItemMod, inherited: &Options) -> syn::Resul
             ("items", &inherited.items),
             ("chars", &inherited.chars),
             ("cycles", &inherited.cycles),
+            ("bits", &inherited.bits),
         ] {
             if let Some(value) = value {
                 if matches!(value, Expr::Closure(_)) {
@@ -1204,6 +1480,21 @@ fn register_module(module: &mut syn::ItemMod, inherited: &Options) -> syn::Resul
         }
         for path in groups {
             let registration = quote! { suite.group_with_defaults(#path::__AIRBUG_GROUP_NAME, #sampling, #ignored, &[#(#counters),*], #path::__airbug_register_group); };
+            let registration = if let Some(batch) = &inherited.batch {
+                quote! { suite.with_batch_defaults(#batch, |suite| { #registration }); }
+            } else {
+                registration
+            };
+            let registration = if let Some(drop) = &inherited.drop_output {
+                let policy = if drop.value() == "outside" {
+                    quote!(#runtime::DropPolicy::OutsideTiming)
+                } else {
+                    quote!(#runtime::DropPolicy::InsideTiming)
+                };
+                quote! { suite.with_drop_defaults(#policy, |suite| { #registration }); }
+            } else {
+                registration
+            };
             let registration = if let Some(name) = &inherited.summary_family {
                 quote! { suite.with_summary_family_defaults(#name, |suite| { #registration }); }
             } else {
@@ -1225,6 +1516,9 @@ fn register_module(module: &mut syn::ItemMod, inherited: &Options) -> syn::Resul
             } else {
                 registration
             };
+            let bootstrap = bootstrap_defaults(inherited, &runtime);
+            let registration =
+                quote! { suite.with_bootstrap_defaults(#bootstrap, |suite| { #registration }); };
             let comparison = comparison_defaults(inherited, &runtime);
             let registration =
                 quote! { suite.with_comparison_defaults(#comparison, |suite| { #registration }); };
@@ -1243,9 +1537,13 @@ fn register_module(module: &mut syn::ItemMod, inherited: &Options) -> syn::Resul
         #[doc(hidden)]
         pub const __AIRBUG_GROUP_NAME: &str = #group_name;
     });
+    let group_location = quote::quote_spanned! { module.ident.span() =>
+        suite.group_source_location(file!(), line!(), column!());
+    };
     items.push(syn::parse_quote! {
         #[doc(hidden)]
         pub fn __airbug_register_group(suite: &mut #runtime::Suite<'_>) {
+            #group_location
             #(#registrations)*
         }
     });
@@ -1274,9 +1572,8 @@ pub fn suite(args: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #module
         fn main() -> #runtime::Result<()> {
-            let mut suite = #runtime::Suite::new(#name);
-            #ident::__airbug_register_group(&mut suite);
-            suite.main()
+            let suite = #runtime::Suite::new(#name);
+            suite.main_registered(#ident::__airbug_register_group)
         }
     }
     .into()
@@ -1312,5 +1609,47 @@ mod summary_scale_tests {
         ] {
             assert!(syn::parse_str::<Options>(source).is_err(), "{source}");
         }
+    }
+}
+
+#[cfg(test)]
+mod imported_default_tests {
+    use super::Options;
+    #[test]
+    fn unsupported_imported_defaults_are_never_silently_discarded() {
+        for option in [
+            "threads = 2",
+            "executor = executor()",
+            "allocator = &ALLOCATOR",
+            "setup_thread = \"worker\"",
+            "input_bytes = |v| v.len() as u64",
+            "input_items = |v| 1",
+            "input_chars = |v| 1",
+            "input_cycles = |v| 1",
+            "input_bits = |v| 1",
+        ] {
+            let source = format!("groups = [external], {option}");
+            let options = syn::parse_str::<Options>(&source).unwrap();
+            let error = options
+                .validate_imported_defaults(&syn::parse_quote!(group))
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(option.split(" =").next().unwrap())
+            );
+            let local = syn::parse_str::<Options>(option).unwrap();
+            assert!(
+                local
+                    .validate_imported_defaults(&syn::parse_quote!(group))
+                    .is_ok()
+            );
+        }
+        let supported = syn::parse_str::<Options>("groups = [external], samples = 3, bytes = 0, ignore = false, summary_scale = \"linear\"").unwrap();
+        assert!(
+            supported
+                .validate_imported_defaults(&syn::parse_quote!(group))
+                .is_ok()
+        );
     }
 }

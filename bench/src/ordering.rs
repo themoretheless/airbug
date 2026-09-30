@@ -1,6 +1,36 @@
 //! Deterministic natural ordering for case paths and numeric argument labels.
 use std::cmp::Ordering;
 
+enum Number {
+    NegativeInfinity,
+    Finite(Decimal),
+    PositiveInfinity,
+}
+impl Number {
+    fn parse(text: &str) -> Option<Self> {
+        // Match Rust's floating-point infinity spellings without converting finite
+        // decimal labels to f64 (which would lose integer precision).
+        let unsigned = text.strip_prefix(['-', '+']).unwrap_or(text);
+        if unsigned.eq_ignore_ascii_case("inf") || unsigned.eq_ignore_ascii_case("infinity") {
+            return Some(if text.starts_with('-') {
+                Self::NegativeInfinity
+            } else {
+                Self::PositiveInfinity
+            });
+        }
+        Decimal::parse(text).map(Self::Finite)
+    }
+    fn compare(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::Finite(a), Self::Finite(b)) => a.compare(b),
+            (Self::NegativeInfinity, Self::NegativeInfinity)
+            | (Self::PositiveInfinity, Self::PositiveInfinity) => Ordering::Equal,
+            (Self::NegativeInfinity, _) | (_, Self::PositiveInfinity) => Ordering::Less,
+            (Self::PositiveInfinity, _) | (_, Self::NegativeInfinity) => Ordering::Greater,
+        }
+    }
+}
+
 struct Decimal {
     sign: i8,
     digits: Vec<u8>,
@@ -78,7 +108,18 @@ pub(crate) fn natural_path_cmp(a: &str, b: &str) -> Ordering {
     let mut right = b.split('/');
     loop {
         let order = match (left.next(), right.next()) {
-            (Some(x), Some(y)) => match (Decimal::parse(x), Decimal::parse(y)) {
+            (Some(x), Some(y)) => match (
+                Number::parse(if x.starts_with("const=") && y.starts_with("const=") {
+                    &x[6..]
+                } else {
+                    x
+                }),
+                Number::parse(if x.starts_with("const=") && y.starts_with("const=") {
+                    &y[6..]
+                } else {
+                    y
+                }),
+            ) {
                 (Some(xn), Some(yn)) => xn.compare(&yn).then_with(|| x.cmp(y)),
                 (Some(_), None) => Ordering::Less,
                 (None, Some(_)) => Ordering::Greater,
@@ -134,6 +175,16 @@ pub(crate) fn kind_cmp(
     bf: Option<&str>,
     bn: &str,
 ) -> Ordering {
+    hierarchy_cmp((ag, af, an), (bg, bf, bn), crate::SortOrder::Kind)
+}
+
+/// Sort actual group nodes before descending into them. A slash in a leaf's
+/// display label does not create another group.
+pub(crate) fn hierarchy_cmp(
+    (ag, af, an): (&str, Option<&str>, &str),
+    (bg, bf, bn): (&str, Option<&str>, &str),
+    order: crate::SortOrder,
+) -> Ordering {
     let mut a = ag
         .split('/')
         .map(|name| (1u8, name))
@@ -147,9 +198,18 @@ pub(crate) fn kind_cmp(
     loop {
         match (a.next(), b.next()) {
             (Some((ak, av)), Some((bk, bv))) => {
-                let order = ak.cmp(&bk).then_with(|| natural_path_cmp(av, bv));
-                if order != Ordering::Equal {
-                    return order;
+                let names = if order == crate::SortOrder::Lexical {
+                    av.cmp(bv)
+                } else {
+                    natural_path_cmp(av, bv)
+                };
+                let compared = if order == crate::SortOrder::Kind {
+                    ak.cmp(&bk).then(names)
+                } else {
+                    names.then_with(|| ak.cmp(&bk))
+                };
+                if compared != Ordering::Equal {
+                    return compared;
                 }
             }
             (None, None) => return Ordering::Equal,
@@ -162,6 +222,47 @@ pub(crate) fn kind_cmp(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn infinities_sort_outside_finite_numbers_without_rounding() {
+        let mut labels = vec![
+            "inf",
+            "-1e999",
+            "-inf",
+            "9007199254740993",
+            "1e999",
+            "9007199254740992",
+            "0",
+        ];
+        labels.sort_by(|a, b| natural_path_cmp(a, b));
+        assert_eq!(
+            labels,
+            [
+                "-inf",
+                "-1e999",
+                "0",
+                "9007199254740992",
+                "9007199254740993",
+                "1e999",
+                "inf"
+            ]
+        );
+        for spelling in ["inf", "+INF", "Infinity", "-infinity", "-Inf"] {
+            assert!(spelling.parse::<f64>().unwrap().is_infinite());
+            let number = Number::parse(spelling).unwrap();
+            assert_eq!(
+                number.compare(&Number::parse("0").unwrap()),
+                if spelling.starts_with('-') {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            );
+        }
+        assert!(Number::parse("NaN").is_none());
+        assert!(Number::parse("infinite").is_none());
+        assert_eq!(natural_path_cmp("case/-inf", "case/-10"), Ordering::Less);
+    }
+
     #[test]
     fn numeric_labels_compare_exactly_without_float_rounding() {
         let mut values = vec![
@@ -210,6 +311,14 @@ mod tests {
     #[test]
     fn mixed_paths_form_a_total_order() {
         let values = [
+            "s/const=-10",
+            "s/const=-2",
+            "s/const=0",
+            "s/const=2",
+            "s/const=10",
+            "s/const=NaN",
+            "s/const=a",
+            "s/const=/x",
             "s/-10",
             "s/-2",
             "s/0",
@@ -219,6 +328,10 @@ mod tests {
             "s/1",
             "s/1/x",
             "s/NaN",
+            "s/-inf",
+            "s/inf",
+            "s/+INFINITY",
+            "s/-Infinity",
             "s/.2",
             "s/2x",
             "s/10x",

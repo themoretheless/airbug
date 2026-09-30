@@ -173,13 +173,19 @@
     {
       "feature": "Linear/logarithmic summary axes",
       "status": "partial",
-      "implementation": "Domain::Log and charts::scatter_scaled, report::SummaryPlot, --summary-parameter/--summary-scale in Cargo and report CLI",
+      "implementation": "Linear/log scales reach parameter scatter and family line plots, throughput family lines and violin summaries. Suite/group/case attributes inherit with nearest explicit override; effective case scales persist in run.json and are restored by saved reports. Global CLI scale overrides persisted per-case settings. Nonpositive log populations are reported as unavailable without silently dropping values.",
       "evidence": [
         "viz::tests::log_ticks_and_mapping_span_decades",
         "viz::tests::log_ticks_cover_wide_narrow_and_subnormal_ranges",
-        "report::summary_plot_tests"
+        "report::summary_plot_tests",
+        "bench/src/report.rs::parameter_charts calls line_scaled/scatter_scaled with both configured axes and throughput_parameter_charts",
+        "bench/src/bootstrap.rs::tests::violin_grouping_separates_contracts_sampling_units_and_legacy_rows verifies per-case log rejection and global linear override",
+        "bench/tests/contracts.rs::summary_scales_inherit_lazily_with_nearest_and_explicit_linear_overrides",
+        "bench/tests/contracts.rs::suite_results_persist_resolved_summary_scales",
+        "bench/tests/attributes.rs::summary_scale_attributes_inherit_inline_and_imported_groups",
+        "bench/tests/attributes.rs::plot_suite_test::summary_scale_suite_attribute_preserves_case_override"
       ],
-      "remaining": "Apply to line and violin summaries; suite/group declarations and inheritance remain."
+      "remaining": "Full HTML visual inspection and the complete report-entrypoint scale matrix remain. Line/violin scale support and suite/group inheritance are implemented; they are no longer implementation gaps."
     },
     {
       "feature": "Disable plot generation",
@@ -196,8 +202,8 @@
       "remaining": "Full report visual audit remains tracked in the chart requirements; no remaining known enable/disable feature gap in the audited direct Cargo and saved-report entrypoints."
     }
   ],
-  "next_implementation": "Complete summary line and violin plots, then audit remaining configuration and artifact coverage.",
-  "completion": "Incomplete. Existing scatter, strip and interval plots do not prove density, violin or bootstrap-distribution features.",
+  "next_implementation": "Audit full HTML presentation, navigation/thumbnail equivalents and report resource limits; complete statistical custom-formatter integration and entrypoint coverage.",
+  "completion": "Incomplete. Density, regression, iteration overlays, absolute/relative distributions, family lines, throughput curves and violin summaries have implementations and focused evidence. Full HTML visual inspection, report-entrypoint/resource-policy audit and custom-formatter coverage remain.",
   "summary_estimator_audit": {
     "criterion_version": "0.8.2",
     "sources": [
@@ -210,6 +216,17 @@
       "bench/src/report.rs::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches (5:1 process batches: default 55 ns, mean 25 ns, mean throughput 80000000 items/s)",
       "bench/cli/tests/cli.rs::report_summary_parameter_and_scale_reach_html (mean CLI route and missing parameter rejection)",
       "bench/scripts/test-cargo-bench.py (cross-crate direct Cargo mean time and dynamic-byte throughput report captions, full script passed)"
+    ]
+  },
+  "current_validation": {
+    "commands": [
+      "cargo airbug test -- -p airbug-bench --offline summary_",
+      "cargo airbug test -- -p airbug-bench --lib --offline violin_grouping_separates_contracts_sampling_units_and_legacy_rows"
+    ],
+    "result": "10 summary-related tests and 1 violin test passed. These checks verify computations, persisted scale contracts and SVG structure; they do not establish full visual or report-entrypoint parity.",
+    "reports": [
+      ".airbug/runs/e5211b9b-ca38-44c5-be5b-f814efb384c7/index.html",
+      ".airbug/runs/941e4329-c7e7-4bff-8319-87ab54219f28/index.html"
     ]
   }
 }

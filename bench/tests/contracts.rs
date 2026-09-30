@@ -1828,3 +1828,145 @@ fn throughput_families_disconnect_zero_missing_and_unavailable_members() {
         assert!(!chart.contains("pathLength=\"100\""), "{mode}");
     }
 }
+
+#[test]
+fn name_sort_keeps_real_groups_contiguous_despite_slashes_in_leaf_labels() {
+    let mut suite = Suite::new("root");
+    suite.bench("a/0", || ());
+    suite.group("a", |suite| {
+        suite.bench("z/10", || ());
+        suite.bench("z/2", || ());
+    });
+    for (sort, expected) in [
+        (
+            SortOrder::Natural,
+            vec!["root/a/z/2", "root/a/z/10", "root/a/0"],
+        ),
+        (
+            SortOrder::Lexical,
+            vec!["root/a/z/10", "root/a/z/2", "root/a/0"],
+        ),
+    ] {
+        let mut selection = Selection {
+            sort,
+            ..Default::default()
+        };
+        assert_eq!(suite.list_selected(&selection), expected);
+        let run = suite.test_selected(&selection).unwrap();
+        assert_eq!(
+            run.cases
+                .iter()
+                .map(|case| case.id.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        selection.reverse = true;
+        assert_eq!(
+            suite.list_selected(&selection),
+            expected.into_iter().rev().collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn source_sort_uses_group_declarations_before_child_function_locations() {
+    let mut suite = Suite::new("root");
+    suite.group("late", |suite| {
+        suite.group_source_location("groups.rs", 20, 1);
+        suite
+            .bench("early_child", || ())
+            .source_location("a.rs", 1, 1);
+    });
+    suite
+        .bench("middle", || ())
+        .source_location("groups.rs", 15, 1);
+    suite.group("early", |suite| {
+        suite.group_source_location("groups.rs", 10, 1);
+        suite
+            .bench("late_child", || ())
+            .source_location("z.rs", 100, 1);
+        suite
+            .bench("first_child", || ())
+            .source_location("b.rs", 100, 1);
+    });
+    let mut selection = Selection {
+        sort: SortOrder::Source,
+        ..Default::default()
+    };
+    let expected = vec![
+        "root/early/first_child",
+        "root/early/late_child",
+        "root/middle",
+        "root/late/early_child",
+    ];
+    assert_eq!(suite.list_selected(&selection), expected);
+    assert_eq!(
+        suite
+            .test_selected(&selection)
+            .unwrap()
+            .cases
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    selection.reverse = true;
+    assert_eq!(
+        suite.list_selected(&selection),
+        expected.into_iter().rev().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn source_sort_infers_implicit_groups_and_preserves_equal_location_order() {
+    let mut suite = Suite::new("root");
+    suite.group("unknown", |suite| {
+        suite.bench("case", || ());
+    });
+    suite.group("implicit", |suite| {
+        suite.bench("late", || ()).source_location("b.rs", 10, 1);
+        suite.group("nested", |suite| {
+            suite.bench("first", || ()).source_location("a.rs", 1, 1);
+            suite.bench("second", || ()).source_location("a.rs", 1, 1);
+        });
+    });
+    suite.bench("middle", || ()).source_location("a.rs", 20, 1);
+    let mut selection = Selection {
+        sort: SortOrder::Source,
+        ..Default::default()
+    };
+    let expected = vec![
+        "root/implicit/nested/first",
+        "root/implicit/nested/second",
+        "root/implicit/late",
+        "root/middle",
+        "root/unknown/case",
+    ];
+    assert_eq!(suite.list_selected(&selection), expected);
+    assert_eq!(
+        suite
+            .test_selected(&selection)
+            .unwrap()
+            .cases
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    // Filtering must not relocate the group based on only its remaining children.
+    selection
+        .exclude_exact
+        .push("root/implicit/nested/first".into());
+    selection
+        .exclude_exact
+        .push("root/implicit/nested/second".into());
+    assert_eq!(
+        suite.list_selected(&selection),
+        ["root/implicit/late", "root/middle", "root/unknown/case"]
+    );
+    selection.reverse = true;
+    assert_eq!(
+        suite.list_selected(&selection),
+        ["root/unknown/case", "root/middle", "root/implicit/late"]
+    );
+}

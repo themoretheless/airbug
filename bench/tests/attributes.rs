@@ -1714,3 +1714,826 @@ fn summary_family_attributes_persist_inline_and_imported_identities() {
     assert!(chart.contains("Lines connect observed estimates"));
     assert!(!chart.contains("duplicate inputs"));
 }
+
+thread_local! { static MEASURED_TICKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) }; }
+struct AttributeMeasure;
+impl airbug_bench::measurement::Measurement for AttributeMeasure {
+    type Start = u64;
+    type Value = u64;
+    fn metric(&self) -> airbug_bench::Metric {
+        airbug_bench::Metric::duration("ticks", "attribute-fixture", "batch_total")
+    }
+    fn start(&mut self) -> airbug_bench::Result<u64> {
+        Ok(MEASURED_TICKS.get())
+    }
+    fn end(&mut self, start: u64) -> airbug_bench::Result<u64> {
+        Ok(MEASURED_TICKS.get() - start)
+    }
+    fn zero(&self) -> u64 {
+        0
+    }
+    fn add(&self, a: u64, b: u64) -> airbug_bench::Result<u64> {
+        Ok(a + b)
+    }
+    fn to_f64(&self, v: &u64) -> airbug_bench::Result<f64> {
+        Ok(*v as f64)
+    }
+}
+struct AttributeFormatter;
+impl airbug_bench::measurement::ValueFormatter for AttributeFormatter {
+    fn scale_values(
+        &self,
+        _: f64,
+        values: &[f64],
+    ) -> airbug_bench::Result<airbug_bench::measurement::FormattedValues> {
+        Ok(airbug_bench::measurement::FormattedValues {
+            values: values.iter().map(|v| v / 3.0).collect(),
+            unit: "triples".into(),
+        })
+    }
+    fn scale_for_machines(
+        &self,
+        values: &[f64],
+    ) -> airbug_bench::Result<airbug_bench::measurement::FormattedValues> {
+        self.scale_values(0.0, values)
+    }
+    fn scale_throughputs(
+        &self,
+        _: f64,
+        work: f64,
+        unit: &str,
+        values: &[f64],
+    ) -> airbug_bench::Result<airbug_bench::measurement::FormattedValues> {
+        Ok(airbug_bench::measurement::FormattedValues {
+            values: values.iter().map(|v| work / v).collect(),
+            unit: format!("{unit}/tick"),
+        })
+    }
+}
+fn measured_tick() {
+    MEASURED_TICKS.set(MEASURED_TICKS.get() + 3);
+}
+fn measured_setup() -> Vec<u8> {
+    MEASURED_TICKS.set(MEASURED_TICKS.get() + 100);
+    vec![1; 6]
+}
+
+#[airbug_bench::group(measurement = super::AttributeMeasure, formatter = super::AttributeFormatter, samples = 2, iterations = 5, warmup_ms = 0)]
+mod attributed_measurements {
+    #[bench]
+    fn plain() {
+        super::measured_tick();
+    }
+    #[bench(setup = super::measured_setup, input_items = |v: &Vec<u8>| v.len() as u64)]
+    fn borrowed(v: &mut [u8]) {
+        v[0] = 2;
+        super::measured_tick();
+    }
+    #[bench(setup = super::measured_setup, drop_output = "outside")]
+    fn owned(v: Vec<u8>) -> Vec<u8> {
+        super::measured_tick();
+        v
+    }
+    #[bench]
+    async fn future() {
+        super::measured_tick();
+    }
+    #[bench(setup = super::measured_setup)]
+    async fn future_borrowed(v: &mut [u8]) {
+        v[0] = 2;
+        super::measured_tick();
+    }
+    #[bench(setup = super::measured_setup, drop_output = "outside")]
+    async fn future_owned(v: Vec<u8>) -> Vec<u8> {
+        super::measured_tick();
+        v
+    }
+    #[bench(args = [2usize, 4])]
+    fn argument(n: usize) {
+        for _ in 0..n {
+            super::measured_tick();
+        }
+    }
+}
+
+#[test]
+fn measurement_attributes_cover_sync_async_inputs_and_formatter() {
+    let mut suite = Suite::new("attributes");
+    suite.group("measured", attributed_measurements::__airbug_register_group);
+    let before = MEASURED_TICKS.get();
+    assert_eq!(suite.list("").len(), 8);
+    assert_eq!(MEASURED_TICKS.get(), before);
+    let run = suite.run("").unwrap();
+    for o in run.observations.iter().filter(|o| o.metric == "ticks") {
+        let expected = if o.case.ends_with("argument/2") {
+            30.0
+        } else if o.case.ends_with("argument/4") {
+            60.0
+        } else {
+            15.0
+        };
+        assert_eq!(o.number().unwrap(), Some(expected), "{}", o.case);
+        assert_eq!(o.operations, 5);
+    }
+    let formatted = suite.formatted_metrics(&run).unwrap();
+    assert_eq!(formatted.len(), 8);
+    let borrowed = formatted
+        .iter()
+        .find(|m| m.case.ends_with("/borrowed"))
+        .unwrap();
+    assert_eq!(borrowed.human[0].value, Some(1.0));
+    assert_eq!(
+        borrowed.throughput["items"].observations[0].value,
+        Some(2.0)
+    );
+}
+
+static ARG_GENERATIONS: AtomicUsize = AtomicUsize::new(0);
+static ARG_DROPS: AtomicUsize = AtomicUsize::new(0);
+static ARG_CALLS: [AtomicUsize; 2] = [AtomicUsize::new(0), AtomicUsize::new(0)];
+static ARG_ADDRESSES: [AtomicUsize; 2] = [AtomicUsize::new(0), AtomicUsize::new(0)];
+#[derive(Debug)]
+struct PersistentArgument {
+    id: usize,
+}
+impl Drop for PersistentArgument {
+    fn drop(&mut self) {
+        ARG_DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+fn persistent_arguments() -> impl Iterator<Item = PersistentArgument> {
+    ARG_GENERATIONS.fetch_add(1, Ordering::SeqCst);
+    (0..2).map(|id| PersistentArgument { id })
+}
+fn inspect_persistent_argument(arg: &PersistentArgument) {
+    let pointer = arg as *const PersistentArgument as usize;
+    let previous = ARG_ADDRESSES[arg.id].swap(pointer, Ordering::SeqCst);
+    assert!(
+        previous == 0 || previous == pointer,
+        "argument moved between operations"
+    );
+    assert_eq!(ARG_DROPS.load(Ordering::SeqCst), 0);
+    ARG_CALLS[arg.id].fetch_add(1, Ordering::SeqCst);
+}
+#[airbug_bench::bench(args = persistent_arguments(), samples = 2, iterations = 3, warmup_ms = 0)]
+fn persistent_sync(arg: &PersistentArgument) {
+    inspect_persistent_argument(arg);
+}
+#[airbug_bench::bench(args = persistent_arguments(), samples = 2, iterations = 3, warmup_ms = 0)]
+async fn persistent_async(arg: &PersistentArgument) {
+    inspect_persistent_argument(arg);
+}
+
+#[test]
+fn generated_nonclone_arguments_live_across_samples_and_drop_with_suite() {
+    for asynchronous in [false, true] {
+        ARG_GENERATIONS.store(0, Ordering::SeqCst);
+        ARG_DROPS.store(0, Ordering::SeqCst);
+        for counter in ARG_CALLS.iter().chain(&ARG_ADDRESSES) {
+            counter.store(0, Ordering::SeqCst);
+        }
+        let mut suite = Suite::new("lifetime");
+        if asynchronous {
+            register_persistent_async(&mut suite);
+        } else {
+            register_persistent_sync(&mut suite);
+        }
+        assert_eq!(ARG_GENERATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(suite.list("").len(), 2);
+        assert_eq!(ARG_CALLS[0].load(Ordering::SeqCst), 0);
+        assert_eq!(ARG_CALLS[1].load(Ordering::SeqCst), 0);
+        assert_eq!(ARG_DROPS.load(Ordering::SeqCst), 0);
+        let run = suite.run("").unwrap();
+        assert_eq!(run.cases.len(), 2);
+        assert_eq!(ARG_GENERATIONS.load(Ordering::SeqCst), 1);
+        for calls in &ARG_CALLS {
+            assert_eq!(calls.load(Ordering::SeqCst), 6);
+        }
+        assert_eq!(ARG_DROPS.load(Ordering::SeqCst), 0);
+        drop(suite);
+        assert_eq!(ARG_DROPS.load(Ordering::SeqCst), 2);
+    }
+}
+
+const SHARED_ARGUMENTS: &[usize] = &[2, 7];
+#[airbug_bench::bench(args = SHARED_ARGUMENTS, custom = true, iterations = 3, samples = 1, warmup_ms = 0)]
+fn shared_slice_value(n: u64, value: usize) -> Duration {
+    Duration::from_nanos(n * value as u64)
+}
+#[airbug_bench::bench(args = SHARED_ARGUMENTS, custom = true, iterations = 3, samples = 1, warmup_ms = 0)]
+async fn shared_slice_async_value(n: u64, value: usize) -> Duration {
+    Duration::from_nanos(n * value as u64)
+}
+#[test]
+fn shared_slices_supply_copy_values_to_sync_and_async_cases() {
+    let mut suite = Suite::new("shared");
+    register_shared_slice_value(&mut suite);
+    register_shared_slice_async_value(&mut suite);
+    assert_eq!(suite.list("").len(), 4);
+    let run = suite.run("").unwrap();
+    assert_eq!(
+        run.observations
+            .iter()
+            .map(|o| o.number().unwrap().unwrap())
+            .collect::<Vec<_>>(),
+        [6.0, 21.0, 6.0, 21.0]
+    );
+    assert_eq!(SHARED_ARGUMENTS, &[2, 7]);
+}
+
+#[derive(Clone, Copy)]
+struct DisplayArgument(usize);
+impl std::fmt::Display for DisplayArgument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "size-{}", self.0)
+    }
+}
+#[airbug_bench::bench(args = [DisplayArgument(2), DisplayArgument(7)], custom = true, samples = 1, iterations = 3, warmup_ms = 0)]
+fn display_only_value(n: u64, arg: DisplayArgument) -> Duration {
+    Duration::from_nanos(n * arg.0 as u64)
+}
+struct BorrowedDisplayArgument(String);
+impl std::fmt::Display for BorrowedDisplayArgument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+#[airbug_bench::bench(args = [BorrowedDisplayArgument("borrowed-label".into())], custom = true, samples = 1, iterations = 3, warmup_ms = 0)]
+async fn display_only_borrowed(n: u64, arg: &BorrowedDisplayArgument) -> Duration {
+    Duration::from_nanos(n * arg.0.len() as u64)
+}
+#[derive(Clone, Copy, Debug)]
+struct BothArgument;
+impl std::fmt::Display for BothArgument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("display-must-not-rename-existing-case")
+    }
+}
+#[airbug_bench::bench(args = [BothArgument], custom = true, samples = 1, iterations = 3, warmup_ms = 0)]
+fn both_argument(n: u64, _: BothArgument) -> Duration {
+    Duration::from_nanos(n)
+}
+#[test]
+fn display_only_argument_labels_work_without_renaming_debug_cases() {
+    let mut suite = Suite::new("labels");
+    register_display_only_value(&mut suite);
+    register_display_only_borrowed(&mut suite);
+    register_both_argument(&mut suite);
+    assert_eq!(
+        suite.list(""),
+        [
+            "labels/display_only_value/size-2",
+            "labels/display_only_value/size-7",
+            "labels/display_only_borrowed/borrowed-label",
+            "labels/both_argument/BothArgument"
+        ]
+    );
+    let run = suite.run("").unwrap();
+    assert_eq!(
+        run.observations
+            .iter()
+            .map(|o| o.number().unwrap().unwrap())
+            .collect::<Vec<_>>(),
+        [6.0, 21.0, 42.0, 3.0]
+    );
+    assert_eq!(run.cases[0].contract["param.arg"], "size-2");
+}
+
+static SHARED_SETUP_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+fn shared_setup(size: usize) -> Vec<u8> {
+    SHARED_SETUP_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    vec![1; size]
+}
+#[airbug_bench::bench(args = SHARED_ARGUMENTS, setup = shared_setup, input_bytes = |v: &Vec<u8>| v.len() as u64, iterations = 3, samples = 1, warmup_ms = 0)]
+fn shared_slice_setup(data: &mut [u8]) {
+    assert!(matches!(data.len(), 2 | 7));
+    assert_eq!(data[0], 1);
+    data[0] = 9;
+}
+#[airbug_bench::bench(args = SHARED_ARGUMENTS, setup = |n: usize| shared_setup(n), input_bytes = |v: &Vec<u8>| v.len() as u64, iterations = 3, samples = 1, warmup_ms = 0)]
+async fn shared_slice_async_setup(data: Vec<u8>) {
+    assert!(matches!(data.len(), 2 | 7));
+    assert_eq!(data[0], 1);
+}
+#[test]
+fn shared_slices_setup_accepts_owned_parameters_without_iterator_adapters() {
+    use std::sync::atomic::Ordering;
+    SHARED_SETUP_CALLS.store(0, Ordering::SeqCst);
+    let mut suite = Suite::new("shared-setup");
+    register_shared_slice_setup(&mut suite);
+    register_shared_slice_async_setup(&mut suite);
+    assert_eq!(suite.list("").len(), 4);
+    assert_eq!(SHARED_SETUP_CALLS.load(Ordering::SeqCst), 0);
+    let run = suite.run("").unwrap();
+    run.validate().unwrap();
+    assert_eq!(SHARED_SETUP_CALLS.load(Ordering::SeqCst), 12);
+    for observation in &run.observations {
+        assert_eq!(observation.operations, 3);
+        let size = if observation.case.ends_with("/2") {
+            2
+        } else {
+            7
+        };
+        assert_eq!(observation.work_totals["bytes"], (3 * size).to_string());
+    }
+}
+
+#[airbug_bench::bench(args = ["ab", "abcdefg"], setup = |s| vec![0u8; s.len()])]
+fn inferred_string_setup(data: &mut [u8]) {
+    std::hint::black_box(data);
+}
+#[test]
+fn untyped_setup_infers_method_receiver_from_argument_values() {
+    let mut suite = Suite::new("inference");
+    register_inferred_string_setup(&mut suite);
+    assert_eq!(suite.list("").len(), 2);
+}
+
+static MATRIX_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+#[airbug_bench::bench(threads = [2, 3], iterations = 3, samples = 1, warmup_ms = 0)]
+fn replaceable_thread_matrix() {
+    MATRIX_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+#[test]
+fn registration_thread_matrix_replaces_defaults_with_truthful_names() {
+    use std::sync::atomic::Ordering;
+    MATRIX_CALLS.store(0, Ordering::SeqCst);
+    let mut suite = Suite::new("matrix");
+    suite.registration_threads(&[1, 4, 1]).unwrap();
+    register_replaceable_thread_matrix(&mut suite);
+    assert_eq!(
+        suite.list(""),
+        [
+            "matrix/replaceable_thread_matrix/threads=1",
+            "matrix/replaceable_thread_matrix/threads=4"
+        ]
+    );
+    assert_eq!(MATRIX_CALLS.load(Ordering::SeqCst), 0);
+    let run = suite.run("").unwrap();
+    run.validate().unwrap();
+    assert_eq!(MATRIX_CALLS.load(Ordering::SeqCst), 15);
+    assert_eq!(
+        run.observations
+            .iter()
+            .map(|o| o.operations)
+            .collect::<Vec<_>>(),
+        [3, 12]
+    );
+    assert!(suite.registration_threads(&[]).is_err());
+    assert!(suite.registration_threads(&[257]).is_err());
+}
+
+#[airbug_bench::bench(args = [f64::INFINITY, -10.0, f64::NEG_INFINITY, 0.0, 10.0])]
+fn special_float_arguments(value: f64) {
+    std::hint::black_box(value);
+}
+#[test]
+fn numeric_argument_sort_places_infinities_at_the_boundaries() {
+    let mut suite = Suite::new("numeric");
+    register_special_float_arguments(&mut suite);
+    let expected = ["-inf", "-10.0", "0.0", "10.0", "inf"]
+        .map(|label| format!("numeric/special_float_arguments/{label}"));
+    for sort in [
+        airbug_bench::SortOrder::Natural,
+        airbug_bench::SortOrder::Kind,
+    ] {
+        let mut selection = airbug_bench::Selection {
+            sort,
+            ..Default::default()
+        };
+        assert_eq!(suite.list_selected(&selection), expected);
+        selection.reverse = true;
+        assert_eq!(
+            suite.list_selected(&selection),
+            expected
+                .iter()
+                .rev()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[airbug_bench::group(bits = 8, samples = 1, iterations = 3, warmup_ms = 0)]
+mod bit_counters {
+    #[bench(custom = true, bits = 1_000_000_000)]
+    fn gigabit(n: u64) -> std::time::Duration {
+        std::time::Duration::from_secs(n)
+    }
+    #[bench(custom = true)]
+    fn fixed(n: u64) -> std::time::Duration {
+        std::time::Duration::from_secs(n)
+    }
+    #[bench(custom = true, bits = 0)]
+    fn empty(n: u64) -> std::time::Duration {
+        std::time::Duration::from_secs(n)
+    }
+    #[bench(args = [0usize, 2, 7], setup = |n| vec![0u8; n],
+        input_bits = |v: &Vec<u8>| airbug_bench::counters::bits_from_bytes(v.len() as u64))]
+    fn dynamic(data: &mut [u8]) {
+        std::hint::black_box(data);
+    }
+}
+#[test]
+fn bit_counters_inherit_override_and_record_actual_input_work() {
+    let mut suite = Suite::new("bits");
+    bit_counters::__airbug_register_group(&mut suite);
+    let run = suite.run("").unwrap();
+    run.validate().unwrap();
+    let rates = airbug_bench::report::throughput(&run).unwrap();
+    assert_eq!(
+        rates
+            .iter()
+            .find(|r| r.case.ends_with("/fixed"))
+            .unwrap()
+            .values,
+        [8.0]
+    );
+    assert_eq!(
+        rates
+            .iter()
+            .find(|r| r.case.ends_with("/empty"))
+            .unwrap()
+            .values,
+        [0.0]
+    );
+    assert!(rates.iter().all(|r| r.unit == "bits"));
+    assert_eq!(
+        rates
+            .iter()
+            .find(|r| r.case.ends_with("/gigabit"))
+            .unwrap()
+            .values,
+        [1e9]
+    );
+    let displayed = airbug_bench::report::throughput_display(&run).unwrap();
+    let gigabit = displayed
+        .iter()
+        .find(|r| r.case.ends_with("/gigabit"))
+        .unwrap();
+    assert_eq!(gigabit.unit, "Gbit");
+    assert_eq!(gigabit.values, [1.0]);
+    assert!(
+        airbug_bench::report::markdown(&run)
+            .unwrap()
+            .contains("Gbit/s")
+    );
+    let process = airbug_bench::report::throughput_process_medians(&run).unwrap();
+    let raw = process
+        .iter()
+        .find(|r| r.case.ends_with("/gigabit"))
+        .unwrap();
+    assert_eq!(raw.unit, "bits");
+    assert_eq!(raw.median, 1e9);
+
+    for observation in run
+        .observations
+        .iter()
+        .filter(|o| o.case.contains("/dynamic/"))
+    {
+        let size = observation
+            .case
+            .rsplit('/')
+            .next()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
+        assert_eq!(observation.work_totals["bits"], (size * 8 * 3).to_string());
+    }
+    assert_eq!(airbug_bench::counters::bits_from_bytes(0), 0);
+    assert_eq!(
+        airbug_bench::counters::bits_from_bytes(u64::MAX / 8),
+        u64::MAX - 7
+    );
+    assert!(
+        std::panic::catch_unwind(|| airbug_bench::counters::bits_from_bytes(u64::MAX / 8 + 1))
+            .is_err()
+    );
+}
+
+#[airbug_bench::group]
+mod source_first_group {
+    #[bench]
+    fn work() {}
+}
+#[airbug_bench::group]
+mod source_last_group {
+    #[bench]
+    fn work() {}
+}
+#[airbug_bench::group(groups = [crate::source_last_group, crate::source_first_group])]
+mod source_imports {}
+
+#[test]
+fn source_sort_imported_groups_uses_declaration_not_import_order() {
+    let mut suite = Suite::new("root");
+    source_imports::__airbug_register_group(&mut suite);
+    let selection = airbug_bench::Selection {
+        sort: airbug_bench::SortOrder::Source,
+        ..Default::default()
+    };
+    assert_eq!(
+        suite.list_selected(&selection),
+        [
+            "root/source_first_group/work",
+            "root/source_last_group/work",
+        ]
+    );
+}
+
+#[airbug_bench::group]
+mod upstream_type_examples {
+    use std::collections::{BTreeSet, HashSet};
+
+    #[bench(types = [&str, String])]
+    fn from_str<'a, T>() -> T
+    where
+        T: From<&'a str>,
+    {
+        std::hint::black_box("hello world").into()
+    }
+
+    #[bench(types = [Vec<i32>, BTreeSet<i32>, HashSet<i32>], args = [0, 2, 16])]
+    fn from_range<T>(n: i32) -> T
+    where
+        T: FromIterator<i32> + IntoIterator<Item = i32>,
+    {
+        let collection: T = (0..n).collect();
+        let mut values: Vec<_> = collection.into_iter().collect();
+        values.sort_unstable();
+        assert_eq!(values, (0..n).collect::<Vec<_>>());
+        values.into_iter().collect()
+    }
+}
+
+#[test]
+fn upstream_type_examples_cover_lifetime_outputs_and_type_argument_product() {
+    let mut suite = Suite::new("types");
+    upstream_type_examples::__airbug_register_group(&mut suite);
+    let listed = suite.list("");
+    assert_eq!(listed.len(), 11);
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|name| name.contains("from_range"))
+            .count(),
+        9
+    );
+    let run = suite.test_selected(&Default::default()).unwrap();
+    assert_eq!(run.cases.len(), 11);
+    assert!(
+        run.observations
+            .iter()
+            .all(|observation| observation.operations == 1)
+    );
+}
+
+#[airbug_bench::group]
+mod imported_drop_cases {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    pub static LIVE: AtomicUsize = AtomicUsize::new(0);
+    pub static PEAK: AtomicUsize = AtomicUsize::new(0);
+    struct Output;
+    impl Drop for Output {
+        fn drop(&mut self) {
+            LIVE.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+    #[bench]
+    fn inherited() -> Output {
+        let live = LIVE.fetch_add(1, Ordering::SeqCst) + 1;
+        PEAK.fetch_max(live, Ordering::SeqCst);
+        Output
+    }
+    #[bench(drop_output = "inside")]
+    fn explicit_inside() -> String {
+        String::from("output")
+    }
+    #[bench(setup = || vec![1u8])]
+    async fn fresh(values: Vec<u8>) -> Vec<u8> {
+        values
+    }
+}
+#[airbug_bench::group(groups = [crate::imported_drop_cases], drop_output = "outside", iterations = 3)]
+mod imported_drop_parent {}
+
+#[test]
+fn imported_drop_defaults_reach_plain_and_async_cases_and_restore_parent() {
+    let mut suite = Suite::new("drop");
+    imported_drop_parent::__airbug_register_group(&mut suite);
+    assert!(matches!(
+        suite.registration_drop_policy(),
+        airbug_bench::DropPolicy::InsideTiming
+    ));
+    suite.config(Config {
+        samples: 1,
+        warmup: Duration::ZERO,
+        sample_time: Duration::from_nanos(1),
+        max_iterations: 3,
+    });
+    let selection = airbug_bench::Selection::default();
+    // Fixed samples bypass calibration and retain three outputs until timing ends.
+    let run = suite.run_selected(&selection).unwrap();
+    assert_eq!(imported_drop_cases::LIVE.load(Ordering::SeqCst), 0);
+    assert!(imported_drop_cases::PEAK.load(Ordering::SeqCst) > 1);
+    for case in &run.cases {
+        let json = serde_json::to_string(&case.contract).unwrap();
+        if case.id.ends_with("explicit_inside") {
+            assert!(json.contains("output drop included"), "{json}");
+        } else if case.id.ends_with("fresh") {
+            assert_eq!(
+                case.contract.get("output.drop").map(String::as_str),
+                Some("outside")
+            );
+        } else {
+            assert!(json.contains("output drop excluded"), "{json}");
+        }
+    }
+    suite.with_drop_defaults(airbug_bench::DropPolicy::OutsideTiming, |suite| {
+        let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            suite.with_drop_defaults(airbug_bench::DropPolicy::InsideTiming, |suite| {
+                assert!(matches!(
+                    suite.registration_drop_policy(),
+                    airbug_bench::DropPolicy::InsideTiming
+                ));
+                panic!("registration failed");
+            });
+        }));
+        assert!(failed.is_err());
+        assert!(matches!(
+            suite.registration_drop_policy(),
+            airbug_bench::DropPolicy::OutsideTiming
+        ));
+    });
+    assert!(!suite.has_registration_drop_policy());
+}
+
+#[airbug_bench::bench(consts = [-2, -10, 0, 10, 2])]
+fn signed_const_sort<const N: i32>() -> i32 {
+    N
+}
+
+#[test]
+fn natural_sort_orders_signed_const_values_numerically() {
+    let mut suite = Suite::new("consts");
+    register_signed_const_sort(&mut suite);
+    for sort in [
+        airbug_bench::SortOrder::Natural,
+        airbug_bench::SortOrder::Kind,
+    ] {
+        let selection = airbug_bench::Selection {
+            sort,
+            ..Default::default()
+        };
+        assert_eq!(
+            suite.list_selected(&selection),
+            [-10, -2, 0, 2, 10].map(|n| format!("consts/signed_const_sort/const={n}"))
+        );
+    }
+}
+
+#[airbug_bench::group]
+mod imported_batch_cases {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    pub static LIVE: AtomicUsize = AtomicUsize::new(0);
+    pub static PEAK: AtomicUsize = AtomicUsize::new(0);
+    pub struct Token;
+    impl Drop for Token {
+        fn drop(&mut self) {
+            LIVE.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+    fn token() -> Token {
+        PEAK.fetch_max(LIVE.fetch_add(1, Ordering::SeqCst) + 1, Ordering::SeqCst);
+        Token
+    }
+    #[bench]
+    fn plain() -> Token {
+        token()
+    }
+    #[bench(setup = token)]
+    fn owned(input: Token) -> Token {
+        input
+    }
+    #[bench(args = [String::from("borrowed")])]
+    async fn borrowed(value: &str) -> Token {
+        assert_eq!(value, "borrowed");
+        token()
+    }
+    #[bench(batch = airbug_bench::BatchPolicy::Iterations(std::num::NonZeroU64::new(3).unwrap()))]
+    fn overridden() -> Token {
+        token()
+    }
+    #[bench(threads = false)]
+    fn sequential() -> Token {
+        token()
+    }
+}
+#[airbug_bench::group(groups = [crate::imported_batch_cases],
+    batch = airbug_bench::BatchPolicy::PerIteration, drop_output = "outside",
+    iterations = 5, samples = 1, warmup_ms = 0)]
+mod imported_batch_parent {}
+
+#[test]
+fn imported_batch_defaults_bound_outputs_and_preserve_async_borrows_and_overrides() {
+    let mut suite = Suite::new("batch");
+    imported_batch_parent::__airbug_register_group(&mut suite);
+    assert!(!suite.has_registration_batch_policy());
+    assert_eq!(imported_batch_cases::PEAK.load(Ordering::SeqCst), 0);
+    let ids: Vec<_> = suite.list("").into_iter().map(str::to_owned).collect();
+    assert_eq!(ids.len(), 5);
+    for id in ids {
+        imported_batch_cases::PEAK.store(0, Ordering::SeqCst);
+        let run = suite
+            .run_selected(&airbug_bench::Selection {
+                pattern: id.clone(),
+                exact: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(imported_batch_cases::LIVE.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            imported_batch_cases::PEAK.load(Ordering::SeqCst),
+            if id.ends_with("overridden") { 3 } else { 1 }
+        );
+        assert!(run.observations.iter().all(|o| o.operations == 5));
+    }
+    let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        suite.with_batch_defaults(airbug_bench::BatchPolicy::PerIteration, |_| {
+            panic!("registration")
+        });
+    }));
+    assert!(failed.is_err());
+    assert!(!suite.has_registration_batch_policy());
+}
+
+#[airbug_bench::group(confidence_level = 0.9, analysis_seed = 7)]
+mod bootstrap_import {
+    #[bench]
+    fn inherited() {}
+    #[bench(confidence_level = 0.99, analysis_seed = 0)]
+    fn overridden() {}
+}
+#[airbug_bench::group(groups = [crate::bootstrap_import], resamples = 64, confidence_level = 0.8)]
+mod bootstrap_parent {
+    #[bench]
+    fn local() {}
+    #[group(resamples = 96)]
+    mod nested {
+        #[bench]
+        fn child() {}
+    }
+}
+
+#[test]
+fn bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields() {
+    use airbug_bench::bootstrap::{Config, Options};
+    let mut suite = Suite::new("analysis");
+    bootstrap_parent::__airbug_register_group(&mut suite);
+    let fallback = Config::default();
+    let settings = suite
+        .bootstrap_settings(&Default::default(), &fallback, Options::default())
+        .unwrap();
+    assert_eq!(settings["analysis/local"].resamples, 64);
+    assert_eq!(settings["analysis/local"].confidence_level, 0.8);
+    assert_eq!(settings["analysis/nested/child"].resamples, 96);
+    assert_eq!(settings["analysis/nested/child"].confidence_level, 0.8);
+    assert_eq!(
+        settings["analysis/bootstrap_import/inherited"].resamples,
+        64
+    );
+    assert_eq!(
+        settings["analysis/bootstrap_import/inherited"].confidence_level,
+        0.9
+    );
+    assert_eq!(settings["analysis/bootstrap_import/inherited"].seed, 7);
+    assert_eq!(
+        settings["analysis/bootstrap_import/overridden"].confidence_level,
+        0.99
+    );
+    assert_eq!(settings["analysis/bootstrap_import/overridden"].seed, 0);
+    let cli = Options {
+        resamples: Some(32),
+        ..Default::default()
+    };
+    let overridden = suite
+        .bootstrap_settings(&Default::default(), &fallback, cli)
+        .unwrap();
+    for (id, config) in &overridden {
+        assert_eq!(config.resamples, 32);
+        assert_eq!(config.confidence_level, settings[id].confidence_level);
+        assert_eq!(config.seed, settings[id].seed);
+    }
+    assert!(
+        suite
+            .bootstrap_settings(
+                &Default::default(),
+                &fallback,
+                Options {
+                    confidence_level: Some(1.0),
+                    ..Default::default()
+                }
+            )
+            .is_err()
+    );
+}

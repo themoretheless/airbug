@@ -68,6 +68,7 @@ fn main() -> Result<()> {
     suite.bench_measured("work", measured, BatchPolicy::SmallInput, move || {
         counter.set(counter.get() + 3);
     })?;
+    suite.work_units("items", 6);
     suite.formatter("work_units", Groups)?;
     suite.main()
 }

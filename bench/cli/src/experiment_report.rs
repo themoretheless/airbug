@@ -615,6 +615,13 @@ impl Document {
                 ));
             }
             if let Some(r) = &e.run {
+                match airbug_bench::measurement::charts(r) {
+                    Ok(charts) => content.push_str(&charts),
+                    Err(err) => content.push_str(&format!(
+                        "<p>Formatted plots unavailable: {}</p>",
+                        esc(&err.to_string())
+                    )),
+                }
                 if let Some(summary) = summary_plot {
                     content.push_str(&report::parameter_charts(r, summary)?);
                 }

@@ -116,6 +116,83 @@ impl Sampling {
     }
 }
 
+/// Translate runtime environment defaults to the same parser path as CLI values.
+/// Explicit CLI flags (including profile fields) suppress the corresponding env value.
+pub(crate) fn environment_args(
+    cli: &[String],
+    mut lookup: impl FnMut(&str) -> Result<Option<String>>,
+) -> Result<Vec<String>> {
+    if cli.iter().any(|v| matches!(v.as_str(), "--help" | "-h")) {
+        return Ok(Vec::new());
+    }
+    let mut args = Vec::new();
+    let profile = cli.iter().any(|v| v == "--profile");
+    for (name, flag) in [
+        ("AIRBUG_BENCH_SAMPLES", "--samples"),
+        ("AIRBUG_BENCH_ITERATIONS", "--iterations"),
+        ("AIRBUG_BENCH_WARMUP_MS", "--warmup-ms"),
+        ("AIRBUG_BENCH_SAMPLE_MS", "--sample-ms"),
+        ("AIRBUG_BENCH_SAMPLING", "--sampling"),
+        ("AIRBUG_BENCH_MIN_TIME_MS", "--min-time-ms"),
+        ("AIRBUG_BENCH_MAX_TIME_MS", "--max-time-ms"),
+        ("AIRBUG_BENCH_TIMER", "--timer"),
+        ("AIRBUG_BENCH_SORT", "--sort"),
+        ("AIRBUG_BENCH_REVERSE", "--reverse"),
+        ("AIRBUG_BENCH_BYTES_FORMAT", "--bytes-format"),
+        ("AIRBUG_BENCH_THREADS", "--threads"),
+        ("AIRBUG_BENCH_BYTES_COUNT", "--bytes-count"),
+        ("AIRBUG_BENCH_ITEMS_COUNT", "--items-count"),
+        ("AIRBUG_BENCH_CHARS_COUNT", "--chars-count"),
+        ("AIRBUG_BENCH_CYCLES_COUNT", "--cycles-count"),
+        ("AIRBUG_BENCH_BITS_COUNT", "--bits-count"),
+        (
+            "AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME",
+            "--exclude-external-time",
+        ),
+    ] {
+        if cli.iter().any(|v| v == flag)
+            || (profile && matches!(flag, "--samples" | "--warmup-ms" | "--sample-ms"))
+            || (flag == "--exclude-external-time"
+                && cli.iter().any(|v| v == "--include-external-time"))
+            || (flag == "--reverse" && cli.iter().any(|v| v == "--forward"))
+        {
+            continue;
+        }
+        let Some(value) = lookup(name)? else {
+            continue;
+        };
+        if matches!(flag, "--exclude-external-time" | "--reverse") {
+            let enabled = match value.as_str() {
+                "true" | "1" => true,
+                "false" | "0" => false,
+                _ => return Err(error(format!("{name} must be true, false, 1 or 0"))),
+            };
+            let selected = match (flag, enabled) {
+                ("--reverse", true) => "--reverse",
+                ("--reverse", false) => "--forward",
+                (_, true) => "--exclude-external-time",
+                (_, false) => "--include-external-time",
+            };
+            args.push(selected.into());
+        } else {
+            let validation = match flag {
+                "--threads" => crate::threads::parse_list(&value).map(|_| ()),
+                "--sampling" => SamplingMode::parse(&value).map(|_| ()),
+                "--timer" => crate::timer::TimerKind::parse(&value).map(|_| ()),
+                "--sort" => crate::SortOrder::parse(&value).map(|_| ()),
+                "--bytes-format" => crate::report::BytesFormat::parse(&value).map(|_| ()),
+                _ => value
+                    .parse::<u64>()
+                    .map(|_| ())
+                    .map_err(|e| error(e.to_string())),
+            };
+            validation.map_err(|e| error(format!("{name}: {e}")))?;
+            args.extend([flag.into(), value]);
+        }
+    }
+    Ok(args)
+}
+
 pub(crate) struct Schedule {
     pub mode: SamplingMode,
     base: u64,
@@ -277,5 +354,128 @@ mod tests {
         assert!(measured.needs_samples(30, 30));
         measured.add(40, Duration::ZERO);
         assert!(measured.expired());
+    }
+}
+
+#[cfg(test)]
+mod environment_tests {
+    use super::*;
+    #[test]
+    fn environment_timer_sort_direction_and_byte_format() {
+        let vars = BTreeMap::from([
+            ("AIRBUG_BENCH_TIMER", "os"),
+            ("AIRBUG_BENCH_SORT", "natural"),
+            ("AIRBUG_BENCH_REVERSE", "true"),
+            ("AIRBUG_BENCH_BYTES_FORMAT", "binary"),
+        ]);
+        assert_eq!(
+            environment_args(&[], |k| Ok(vars.get(k).map(|v| v.to_string()))).unwrap(),
+            [
+                "--timer",
+                "os",
+                "--sort",
+                "natural",
+                "--reverse",
+                "--bytes-format",
+                "binary"
+            ]
+        );
+        let cli = [
+            "--timer",
+            "os",
+            "--sort",
+            "source",
+            "--forward",
+            "--bytes-format",
+            "decimal",
+        ]
+        .map(String::from);
+        assert!(
+            environment_args(&cli, |k| Ok(vars.contains_key(k).then(|| "invalid".into())))
+                .unwrap()
+                .is_empty()
+        );
+        for key in vars.keys() {
+            assert!(
+                environment_args(&[], |k| Ok((k == *key).then(|| "invalid".into())))
+                    .unwrap_err()
+                    .to_string()
+                    .contains(key)
+            );
+        }
+        assert_eq!(
+            environment_args(&[], |k| Ok(
+                (k == "AIRBUG_BENCH_REVERSE").then(|| "false".into())
+            ))
+            .unwrap(),
+            ["--forward"]
+        );
+    }
+    #[test]
+    fn environment_sampling_precedence_and_errors() {
+        let vars = BTreeMap::from([
+            ("AIRBUG_BENCH_SAMPLES", "7"),
+            ("AIRBUG_BENCH_ITERATIONS", "13"),
+            ("AIRBUG_BENCH_WARMUP_MS", "0"),
+            ("AIRBUG_BENCH_SAMPLE_MS", "2"),
+            ("AIRBUG_BENCH_SAMPLING", "flat"),
+            ("AIRBUG_BENCH_MIN_TIME_MS", "0"),
+            ("AIRBUG_BENCH_MAX_TIME_MS", "99"),
+            ("AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME", "false"),
+        ]);
+        let get = |key: &str| Ok(vars.get(key).map(|v| v.to_string()));
+        let args = environment_args(&[], get).unwrap();
+        assert_eq!(
+            args,
+            [
+                "--samples",
+                "7",
+                "--iterations",
+                "13",
+                "--warmup-ms",
+                "0",
+                "--sample-ms",
+                "2",
+                "--sampling",
+                "flat",
+                "--min-time-ms",
+                "0",
+                "--max-time-ms",
+                "99",
+                "--include-external-time"
+            ]
+        );
+        let cli = [
+            "--profile",
+            "quick",
+            "--iterations",
+            "3",
+            "--exclude-external-time",
+        ]
+        .map(String::from);
+        assert_eq!(
+            environment_args(&cli, get).unwrap(),
+            [
+                "--sampling",
+                "flat",
+                "--min-time-ms",
+                "0",
+                "--max-time-ms",
+                "99"
+            ]
+        );
+        for key in vars.keys() {
+            let error = environment_args(&[], |name| Ok((name == *key).then(|| "invalid".into())))
+                .unwrap_err();
+            assert!(error.to_string().contains(key));
+        }
+        let cli = ["--samples".into(), "2".into()];
+        assert!(
+            environment_args(&cli, |name| Ok(
+                (name == "AIRBUG_BENCH_SAMPLES").then(|| "invalid".into())
+            ))
+            .unwrap()
+            .is_empty()
+        );
     }
 }
