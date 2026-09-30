@@ -450,3 +450,38 @@ Structured diagnostics are opt-in via `airbug::report::step`, `try_step`,
 `attach_text`, `attach_bytes`, `assert_equal` and `assert_text_equal`.
 Equality failures from fluent assertions and `CheckReport` are recorded too.
 Step/comparison statuses remain distinct from the native test outcome.
+
+
+### Live test dashboard
+
+The existing `airbug_report` now records individual tests while they run, including
+queued/running/passed/failed/ignored states, process duration, captured output,
+steps, comparisons and attachments. Start the hub in the workspace you measure:
+
+```sh
+cargo run -p airbug-hub -- serve --root .
+cargo run -p airbug --features json --bin airbug_report -- --all-features --locked
+# Select a target and test name:
+cargo run -p airbug --features json --bin airbug_report -- --filter checkout -- -p airbug --test reporting
+```
+
+Open the hub's **Test & bench runs** tab (`/#/runs`). Every launch has its own
+`target/airbug-report/runs/<id>/run.json`; the hub polls it every second and keeps
+up to 100 recent launches visible. Existing `report.json` and `index.html` remain
+final snapshots for CI and `/report/`. An output directory outside the default
+is archived there but is not discovered by the hub.
+
+The reporter needs the optional `json` feature; the default library still has
+no external dependencies. It builds standard Rust test executables and runs each
+selected test in a fresh process, sequentially, setting `AIRBUG_REPORT_DIR` for
+that test. Duration includes process startup. Native `#[should_panic]` and
+`#[ignore]` semantics are preserved; failed diagnostic steps need not mean a
+failed test (for example an expected panic). `--ignored` and `--include-ignored`
+control ignored cases. `--timeout-seconds N` defaults to 300 per test process.
+Failures, timeouts and build errors return a nonzero exit code.
+
+`--root PATH` selects another workspace. Cargo target/build options go after
+`--`; use the reporter's `--filter TEXT` for case filtering. `--doc-tests` adds
+one aggregate documentation-test suite. Custom test harnesses are rejected.
+Output is bounded; a forcibly killed reporter can leave an incomplete running
+record, which the dashboard identifies as awaiting a result rather than passed.

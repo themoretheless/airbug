@@ -166,6 +166,7 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
     }
     fs::create_dir(out.join("logs"))?;
     let mut result = Run::new();
+    let mut presentation = airbug_bench::presentation::Consensus::default();
     if let Some(policy) = &privacy {
         let env: BTreeMap<_, _> = policy
             .environment()
@@ -429,10 +430,17 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                         ));
                     }
                 }
+                presentation.observe(&worker)?;
                 if result.cases.is_empty() {
                     result.cases = worker.cases;
                 } else if result.cases != worker.cases {
                     return Err(error("worker cases/contracts changed across processes"));
+                }
+                presentation.save(&mut result)?;
+                for mut w in worker.worker_allocations {
+                    w.process = e.process;
+                    w.variant = e.variant.clone();
+                    result.worker_allocations.push(w);
                 }
                 for mut o in worker.observations {
                     o.process = e.process;
@@ -468,6 +476,7 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                     });
                 }
                 result.observations.push(Observation {
+                    work_totals: Default::default(),
                     case: "process".into(),
                     metric: "wall".into(),
                     variant: e.variant.clone(),

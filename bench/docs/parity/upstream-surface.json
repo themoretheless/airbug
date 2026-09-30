@@ -1,0 +1,2501 @@
+{
+  "criterion": {
+    "version": "0.8.2",
+    "archive": "https://static.crates.io/crates/criterion/criterion-0.8.2.crate",
+    "sha256": "950046b2aa2492f9a536f5f4f9a3de7b9e2476e575e05bd6c333371add4d98f3",
+    "surface": [
+      {
+        "file": "src/async_executor.rs",
+        "line": 19,
+        "declaration": "pub trait AsyncExecutor {"
+      },
+      {
+        "file": "src/async_executor.rs",
+        "line": 26,
+        "declaration": "pub struct FuturesExecutor;"
+      },
+      {
+        "file": "src/async_executor.rs",
+        "line": 36,
+        "declaration": "pub struct SmolExecutor;"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 40,
+        "declaration": "pub struct Bencher<'a, M: Measurement = WallTime> {"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 83,
+        "declaration": "pub fn iter<O, R>(&mut self, mut routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 132,
+        "declaration": "pub fn iter_custom<R>(&mut self, mut routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 143,
+        "declaration": "pub fn iter_with_setup<I, O, S, R>(&mut self, setup: S, routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 185,
+        "declaration": "pub fn iter_with_large_drop<O, R>(&mut self, mut routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 234,
+        "declaration": "pub fn iter_batched<I, O, S, R>(&mut self, mut setup: S, mut routine: R, size: BatchSize)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 322,
+        "declaration": "pub fn iter_batched_ref<I, O, S, R>(&mut self, mut setup: S, mut routine: R, size: BatchSize)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 379,
+        "declaration": "pub fn to_async<'b, A: AsyncExecutor>(&'b mut self, runner: A) -> AsyncBencher<'a, 'b, A, M> {"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 386,
+        "declaration": "pub struct AsyncBencher<'a, 'b, A: AsyncExecutor, M: Measurement = WallTime> {"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 428,
+        "declaration": "pub fn iter<O, R, F>(&mut self, mut routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 484,
+        "declaration": "pub fn iter_custom<R, F>(&mut self, mut routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 499,
+        "declaration": "pub fn iter_with_setup<I, O, S, R, F>(&mut self, setup: S, routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 543,
+        "declaration": "pub fn iter_with_large_drop<O, R, F>(&mut self, mut routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 552,
+        "declaration": "pub fn iter_with_large_setup<I, O, S, R, F>(&mut self, setup: S, routine: R)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 604,
+        "declaration": "pub fn iter_batched<I, O, S, R, F>(&mut self, mut setup: S, mut routine: R, size: BatchSize)"
+      },
+      {
+        "file": "src/bencher.rs",
+        "line": 700,
+        "declaration": "pub fn iter_batched_ref<I, O, S, R, F>(&mut self, mut setup: S, mut routine: R, size: BatchSize)"
+      },
+      {
+        "file": "src/benchmark.rs",
+        "line": 7,
+        "declaration": "pub struct BenchmarkConfig {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 77,
+        "declaration": "pub struct BenchmarkGroup<'a, M: Measurement> {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 96,
+        "declaration": "pub fn sample_size(&mut self, n: usize) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 108,
+        "declaration": "pub fn warm_up_time(&mut self, dur: Duration) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 126,
+        "declaration": "pub fn measurement_time(&mut self, dur: Duration) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 144,
+        "declaration": "pub fn nresamples(&mut self, n: usize) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 166,
+        "declaration": "pub fn noise_threshold(&mut self, threshold: f64) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 181,
+        "declaration": "pub fn confidence_level(&mut self, cl: f64) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 211,
+        "declaration": "pub fn significance_level(&mut self, sl: f64) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 219,
+        "declaration": "pub fn plot_config(&mut self, new_config: PlotConfiguration) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 226,
+        "declaration": "pub fn throughput(&mut self, throughput: Throughput) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 232,
+        "declaration": "pub fn sampling_mode(&mut self, new_mode: SamplingMode) -> &mut Self {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 249,
+        "declaration": "pub fn bench_function<ID: IntoBenchmarkId, F>(&mut self, id: ID, mut f: F) -> &mut Self"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 258,
+        "declaration": "pub fn bench_with_input<ID: IntoBenchmarkId, F, I>("
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 364,
+        "declaration": "pub fn finish(self) {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 403,
+        "declaration": "pub struct BenchmarkId {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 437,
+        "declaration": "pub fn new<S: Into<String>, P: ::std::fmt::Display>("
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 449,
+        "declaration": "pub fn from_parameter<P: ::std::fmt::Display>(parameter: P) -> BenchmarkId {"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 472,
+        "declaration": "pub trait Sealed {}"
+      },
+      {
+        "file": "src/benchmark_group.rs",
+        "line": 478,
+        "declaration": "pub trait IntoBenchmarkId: private::Sealed {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 11,
+        "declaration": "pub enum MessageError {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 82,
+        "declaration": "pub fn new(mut socket: TcpStream) -> Result<Self, std::io::Error> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 121,
+        "declaration": "pub fn recv(&mut self) -> Result<IncomingMessage, MessageError> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 131,
+        "declaration": "pub fn send(&mut self, message: &OutgoingMessage) -> Result<(), MessageError> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 145,
+        "declaration": "pub struct Connection {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 149,
+        "declaration": "pub fn new(socket: TcpStream) -> Result<Self, std::io::Error> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 156,
+        "declaration": "pub fn recv(&self) -> Result<IncomingMessage, MessageError> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 160,
+        "declaration": "pub fn send(&self, message: &OutgoingMessage) -> Result<(), MessageError> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 164,
+        "declaration": "pub fn serve_value_formatter("
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 217,
+        "declaration": "pub enum IncomingMessage {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 245,
+        "declaration": "pub enum OutgoingMessage<'a> {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 291,
+        "declaration": "pub struct RawBenchmarkId {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 309,
+        "declaration": "pub enum AxisScale {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 323,
+        "declaration": "pub struct PlotConfiguration {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 349,
+        "declaration": "pub struct BenchmarkConfig {"
+      },
+      {
+        "file": "src/connection.rs",
+        "line": 374,
+        "declaration": "pub enum SamplingMethod {"
+      },
+      {
+        "file": "src/csv_report.rs",
+        "line": 70,
+        "declaration": "pub struct FileCsvReport;"
+      },
+      {
+        "file": "src/error.rs",
+        "line": 11,
+        "declaration": "pub enum Error {"
+      },
+      {
+        "file": "src/error.rs",
+        "line": 77,
+        "declaration": "pub type Result<T> = ::std::result::Result<T, Error>;"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 7,
+        "declaration": "pub enum Statistic {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 30,
+        "declaration": "pub struct ConfidenceInterval {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 37,
+        "declaration": "pub struct Estimate {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 46,
+        "declaration": "pub fn build_estimates("
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 74,
+        "declaration": "pub fn build_change_estimates("
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 99,
+        "declaration": "pub struct PointEstimates {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 107,
+        "declaration": "pub struct Estimates {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 115,
+        "declaration": "pub fn typical(&self) -> &Estimate {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 118,
+        "declaration": "pub fn get(&self, stat: Statistic) -> Option<&Estimate> {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 130,
+        "declaration": "pub struct Distributions {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 138,
+        "declaration": "pub fn typical(&self) -> &Distribution<f64> {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 141,
+        "declaration": "pub fn get(&self, stat: Statistic) -> Option<&Distribution<f64>> {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 153,
+        "declaration": "pub struct ChangePointEstimates {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 159,
+        "declaration": "pub struct ChangeEstimates {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 164,
+        "declaration": "pub fn get(&self, stat: Statistic) -> &Estimate {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 173,
+        "declaration": "pub struct ChangeDistributions {"
+      },
+      {
+        "file": "src/estimate.rs",
+        "line": 178,
+        "declaration": "pub fn get(&self, stat: Statistic) -> &Distribution<f64> {"
+      },
+      {
+        "file": "src/format.rs",
+        "line": 1,
+        "declaration": "pub fn change(pct: f64, signed: bool) -> String {"
+      },
+      {
+        "file": "src/format.rs",
+        "line": 9,
+        "declaration": "pub fn time(ns: f64) -> String {"
+      },
+      {
+        "file": "src/format.rs",
+        "line": 23,
+        "declaration": "pub fn short(n: f64) -> String {"
+      },
+      {
+        "file": "src/format.rs",
+        "line": 54,
+        "declaration": "pub fn iter_count(iterations: u64) -> String {"
+      },
+      {
+        "file": "src/format.rs",
+        "line": 103,
+        "declaration": "pub fn integer(n: f64) -> String {"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 11,
+        "declaration": "pub fn load<A, P>(path: &P) -> Result<A>"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 29,
+        "declaration": "pub fn is_dir<P>(path: &P) -> bool"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 37,
+        "declaration": "pub fn mkdirp<P>(path: &P) -> Result<()>"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 47,
+        "declaration": "pub fn cp(from: &Path, to: &Path) -> Result<()> {"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 56,
+        "declaration": "pub fn save<D, P>(data: &D, path: &P) -> Result<()>"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 68,
+        "declaration": "pub fn save_string<P>(data: &str, path: &P) -> Result<()>"
+      },
+      {
+        "file": "src/fs.rs",
+        "line": 84,
+        "declaration": "pub fn list_existing_benchmarks<P>(directory: &P) -> Result<Vec<BenchmarkId>>"
+      },
+      {
+        "file": "src/html/mod.rs",
+        "line": 272,
+        "declaration": "pub struct Html {"
+      },
+      {
+        "file": "src/kde.rs",
+        "line": 5,
+        "declaration": "pub fn sweep("
+      },
+      {
+        "file": "src/kde.rs",
+        "line": 14,
+        "declaration": "pub fn sweep_and_estimate("
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 42,
+        "declaration": "pub mod async_executor;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 54,
+        "declaration": "pub mod measurement;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 56,
+        "declaration": "pub mod profiler;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 91,
+        "declaration": "pub use crate::bencher::AsyncBencher;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 92,
+        "declaration": "pub use crate::{"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 165,
+        "declaration": "pub fn black_box<T>(dummy: T) -> T {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 191,
+        "declaration": "pub enum BatchSize {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 256,
+        "declaration": "pub enum Baseline {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 274,
+        "declaration": "pub enum PlottingBackend {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 310,
+        "declaration": "pub fn is_benchmark(&self) -> bool {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 314,
+        "declaration": "pub fn is_terse(&self) -> bool {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 332,
+        "declaration": "pub enum BenchmarkFilter {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 357,
+        "declaration": "pub struct Criterion<M: Measurement = WallTime> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 457,
+        "declaration": "pub fn with_measurement<M2: Measurement>(self, m: M2) -> Criterion<M2> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 479,
+        "declaration": "pub fn with_profiler<P: Profiler + 'static>(self, p: P) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 493,
+        "declaration": "pub fn plotting_backend(mut self, backend: PlottingBackend) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 518,
+        "declaration": "pub fn sample_size(mut self, n: usize) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 531,
+        "declaration": "pub fn warm_up_time(mut self, dur: Duration) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 549,
+        "declaration": "pub fn measurement_time(mut self, dur: Duration) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 568,
+        "declaration": "pub fn nresamples(mut self, n: usize) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 591,
+        "declaration": "pub fn noise_threshold(mut self, threshold: f64) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 607,
+        "declaration": "pub fn confidence_level(mut self, cl: f64) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 638,
+        "declaration": "pub fn significance_level(mut self, sl: f64) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 647,
+        "declaration": "pub fn with_plots(mut self) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 662,
+        "declaration": "pub fn without_plots(mut self) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 669,
+        "declaration": "pub fn save_baseline(mut self, baseline: String) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 677,
+        "declaration": "pub fn retain_baseline(mut self, baseline: String, strict: bool) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 692,
+        "declaration": "pub fn with_filter<S: Into<String>>(mut self, filter: S) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 708,
+        "declaration": "pub fn with_benchmark_filter(mut self, filter: BenchmarkFilter) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 717,
+        "declaration": "pub fn with_output_color(mut self, enabled: bool) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 725,
+        "declaration": "pub fn output_directory(mut self, path: &Path) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 734,
+        "declaration": "pub fn profile_time(mut self, profile_time: Option<Duration>) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 745,
+        "declaration": "pub fn final_summary(&self) {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 762,
+        "declaration": "pub fn configure_from_args(mut self) -> Criterion<M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1175,
+        "declaration": "pub fn benchmark_group<S: Into<String>>(&mut self, group_name: S) -> BenchmarkGroup<'_, M> {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1212,
+        "declaration": "pub fn bench_function<F>(&mut self, id: &str, f: F) -> &mut Criterion<M>"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1243,
+        "declaration": "pub fn bench_with_input<F, I>(&mut self, id: BenchmarkId, input: &I, f: F) -> &mut Criterion<M>"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1270,
+        "declaration": "pub enum Throughput {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1312,
+        "declaration": "pub enum AxisScale {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1337,
+        "declaration": "pub struct PlotConfiguration {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1350,
+        "declaration": "pub fn summary_scale(mut self, new_scale: AxisScale) -> PlotConfiguration {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1360,
+        "declaration": "pub enum SamplingMode {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1527,
+        "declaration": "pub fn runner(benches: &[&dyn Fn()]) {"
+      },
+      {
+        "file": "src/macros.rs",
+        "line": 65,
+        "declaration": "pub fn $name() {"
+      },
+      {
+        "file": "src/measurement.rs",
+        "line": 19,
+        "declaration": "pub trait ValueFormatter {"
+      },
+      {
+        "file": "src/measurement.rs",
+        "line": 73,
+        "declaration": "pub trait Measurement {"
+      },
+      {
+        "file": "src/measurement.rs",
+        "line": 239,
+        "declaration": "pub struct WallTime;"
+      },
+      {
+        "file": "src/plot/gnuplot_backend/summary.rs",
+        "line": 140,
+        "declaration": "pub fn violin("
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 38,
+        "declaration": "pub fn size(mut self, s: Option<criterion_plot::Size>) -> PlotContext<'a> {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 45,
+        "declaration": "pub fn thumbnail(mut self, value: bool) -> PlotContext<'a> {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 50,
+        "declaration": "pub fn line_comparison_path(&self) -> PathBuf {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 58,
+        "declaration": "pub fn line_throughput_comparison_path(&self) -> PathBuf {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 66,
+        "declaration": "pub fn violin_path(&self) -> PathBuf {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 83,
+        "declaration": "pub fn comparison(mut self, comp: &'a ComparisonData) -> PlotData<'a> {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 97,
+        "declaration": "pub fn time() -> Self {"
+      },
+      {
+        "file": "src/plot/mod.rs",
+        "line": 105,
+        "declaration": "pub fn throughput() -> Self {"
+      },
+      {
+        "file": "src/plot/plotters_backend/mod.rs",
+        "line": 34,
+        "declaration": "pub struct PlottersBackend;"
+      },
+      {
+        "file": "src/plot/plotters_backend/summary.rs",
+        "line": 171,
+        "declaration": "pub fn violin("
+      },
+      {
+        "file": "src/profiler.rs",
+        "line": 9,
+        "declaration": "pub trait Profiler {"
+      },
+      {
+        "file": "src/profiler.rs",
+        "line": 24,
+        "declaration": "pub struct ExternalProfiler;"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 48,
+        "declaration": "pub fn iter_counts(&self) -> &Sample<f64> {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 53,
+        "declaration": "pub fn sample_times(&self) -> &Sample<f64> {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 59,
+        "declaration": "pub enum ValueType {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 67,
+        "declaration": "pub struct BenchmarkId {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 85,
+        "declaration": "pub fn make_filename_safe(string: &str) -> String {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 114,
+        "declaration": "pub fn new("
+      },
+      {
+        "file": "src/report.rs",
+        "line": 164,
+        "declaration": "pub fn id(&self) -> &str {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 168,
+        "declaration": "pub fn as_title(&self) -> &str {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 172,
+        "declaration": "pub fn as_directory_name(&self) -> &str {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 176,
+        "declaration": "pub fn as_number(&self) -> Option<f64> {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 190,
+        "declaration": "pub fn value_type(&self) -> Option<ValueType> {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 208,
+        "declaration": "pub fn ensure_directory_name_unique(&mut self, existing_directories: &HashSet<String>) {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 224,
+        "declaration": "pub fn ensure_title_unique(&mut self, existing_titles: &HashSet<String>) {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 265,
+        "declaration": "pub struct ReportContext {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 270,
+        "declaration": "pub fn report_path<P: AsRef<Path> + ?Sized>(&self, id: &BenchmarkId, file_name: &P) -> PathBuf {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 393,
+        "declaration": "pub fn new("
+      },
+      {
+        "file": "src/report.rs",
+        "line": 458,
+        "declaration": "pub fn outliers(&self, sample: &LabeledSample<'_, f64>) {"
+      },
+      {
+        "file": "src/report.rs",
+        "line": 743,
+        "declaration": "pub struct BencherReport;"
+      },
+      {
+        "file": "src/routine.rs",
+        "line": 210,
+        "declaration": "pub struct Function<M: Measurement, F, T>"
+      },
+      {
+        "file": "src/routine.rs",
+        "line": 225,
+        "declaration": "pub fn new(f: F) -> Function<M, F, T> {"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 4,
+        "declaration": "pub mod regression;"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 20,
+        "declaration": "pub struct Data<'a, X, Y>(&'a [X], &'a [Y]);"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 33,
+        "declaration": "pub fn len(&self) -> usize {"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 38,
+        "declaration": "pub fn iter(&self) -> Pairs<'a, X, Y> {"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 52,
+        "declaration": "pub fn new(xs: &'a [X], ys: &'a [Y]) -> Data<'a, X, Y> {"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 69,
+        "declaration": "pub fn bootstrap<T, S>(&self, nresamples: usize, statistic: S) -> T::Distributions"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 114,
+        "declaration": "pub fn x(&self) -> &'a Sample<X> {"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 119,
+        "declaration": "pub fn y(&self) -> &'a Sample<Y> {"
+      },
+      {
+        "file": "src/stats/bivariate/mod.rs",
+        "line": 125,
+        "declaration": "pub struct Pairs<'a, X: 'a, Y: 'a> {"
+      },
+      {
+        "file": "src/stats/bivariate/regression.rs",
+        "line": 8,
+        "declaration": "pub struct Slope<A>(pub A)"
+      },
+      {
+        "file": "src/stats/bivariate/regression.rs",
+        "line": 20,
+        "declaration": "pub fn fit(data: &Data<'_, A, A>) -> Slope<A> {"
+      },
+      {
+        "file": "src/stats/bivariate/regression.rs",
+        "line": 33,
+        "declaration": "pub fn r_squared(&self, data: &Data<'_, A, A>) -> A {"
+      },
+      {
+        "file": "src/stats/bivariate/resamples.rs",
+        "line": 5,
+        "declaration": "pub struct Resamples<'a, X, Y>"
+      },
+      {
+        "file": "src/stats/bivariate/resamples.rs",
+        "line": 21,
+        "declaration": "pub fn new(data: Data<'a, X, Y>) -> Resamples<'a, X, Y> {"
+      },
+      {
+        "file": "src/stats/bivariate/resamples.rs",
+        "line": 29,
+        "declaration": "pub fn next(&mut self) -> Data<'_, X, Y> {"
+      },
+      {
+        "file": "src/stats/float.rs",
+        "line": 9,
+        "declaration": "pub trait Float:"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 11,
+        "declaration": "pub mod bivariate;"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 12,
+        "declaration": "pub mod tuple;"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 13,
+        "declaration": "pub mod univariate;"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 24,
+        "declaration": "pub struct Distribution<A>(Box<[A]>);"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 31,
+        "declaration": "pub fn from(values: Box<[A]>) -> Distribution<A> {"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 40,
+        "declaration": "pub fn confidence_interval(&self, confidence_level: A) -> (A, A)"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 61,
+        "declaration": "pub fn p_value(&self, t: A, tails: &Tails) -> A {"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 87,
+        "declaration": "pub enum Tails {"
+      },
+      {
+        "file": "src/stats/rand_util.rs",
+        "line": 5,
+        "declaration": "pub type Rng = Rand64;"
+      },
+      {
+        "file": "src/stats/rand_util.rs",
+        "line": 15,
+        "declaration": "pub fn new_rng() -> Rng {"
+      },
+      {
+        "file": "src/stats/test.rs",
+        "line": 4,
+        "declaration": "pub fn vec<T>(size: usize, start: usize) -> Option<Vec<T>>"
+      },
+      {
+        "file": "src/stats/tuple.rs",
+        "line": 6,
+        "declaration": "pub trait Tuple: Sized {"
+      },
+      {
+        "file": "src/stats/tuple.rs",
+        "line": 15,
+        "declaration": "pub trait TupledDistributions: Sized {"
+      },
+      {
+        "file": "src/stats/tuple.rs",
+        "line": 21,
+        "declaration": "pub trait TupledDistributionsBuilder: Sized {"
+      },
+      {
+        "file": "src/stats/univariate/kde/kernel.rs",
+        "line": 6,
+        "declaration": "pub trait Kernel<A>: Copy + Sync"
+      },
+      {
+        "file": "src/stats/univariate/kde/kernel.rs",
+        "line": 16,
+        "declaration": "pub struct Gaussian;"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 3,
+        "declaration": "pub mod kernel;"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 12,
+        "declaration": "pub struct Kde<'a, A, K>"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 29,
+        "declaration": "pub fn new(sample: &'a Sample<A>, kernel: K, bw: Bandwidth) -> Kde<'a, A, K> {"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 38,
+        "declaration": "pub fn bandwidth(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 45,
+        "declaration": "pub fn map(&self, xs: &[A]) -> Box<[A]> {"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 58,
+        "declaration": "pub fn estimate(&self, x: A) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/kde/mod.rs",
+        "line": 73,
+        "declaration": "pub enum Bandwidth {"
+      },
+      {
+        "file": "src/stats/univariate/mixed.rs",
+        "line": 11,
+        "declaration": "pub fn bootstrap<A, T, S>("
+      },
+      {
+        "file": "src/stats/univariate/mod.rs",
+        "line": 8,
+        "declaration": "pub mod kde;"
+      },
+      {
+        "file": "src/stats/univariate/mod.rs",
+        "line": 9,
+        "declaration": "pub mod mixed;"
+      },
+      {
+        "file": "src/stats/univariate/mod.rs",
+        "line": 10,
+        "declaration": "pub mod outliers;"
+      },
+      {
+        "file": "src/stats/univariate/mod.rs",
+        "line": 20,
+        "declaration": "pub use self::percentiles::Percentiles;"
+      },
+      {
+        "file": "src/stats/univariate/mod.rs",
+        "line": 21,
+        "declaration": "pub use self::sample::Sample;"
+      },
+      {
+        "file": "src/stats/univariate/mod.rs",
+        "line": 29,
+        "declaration": "pub fn bootstrap<A, B, T, S>("
+      },
+      {
+        "file": "src/stats/univariate/outliers/mod.rs",
+        "line": 7,
+        "declaration": "pub mod tukey;"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 57,
+        "declaration": "pub struct LabeledSample<'a, A>"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 73,
+        "declaration": "pub fn count(&self) -> (usize, usize, usize, usize, usize) {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 100,
+        "declaration": "pub fn fences(&self) -> (A, A, A, A) {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 105,
+        "declaration": "pub fn iter(&self) -> Iter<'a, A> {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 169,
+        "declaration": "pub struct Iter<'a, A>"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 210,
+        "declaration": "pub enum Label {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 225,
+        "declaration": "pub fn is_high(&self) -> bool {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 230,
+        "declaration": "pub fn is_mild(&self) -> bool {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 235,
+        "declaration": "pub fn is_low(&self) -> bool {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 240,
+        "declaration": "pub fn is_outlier(&self) -> bool {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 245,
+        "declaration": "pub fn is_severe(&self) -> bool {"
+      },
+      {
+        "file": "src/stats/univariate/outliers/tukey.rs",
+        "line": 253,
+        "declaration": "pub fn classify<A>(sample: &Sample<A>) -> LabeledSample<'_, A>"
+      },
+      {
+        "file": "src/stats/univariate/percentiles.rs",
+        "line": 5,
+        "declaration": "pub struct Percentiles<A>(Box<[A]>)"
+      },
+      {
+        "file": "src/stats/univariate/percentiles.rs",
+        "line": 45,
+        "declaration": "pub fn at(&self, p: A) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/percentiles.rs",
+        "line": 56,
+        "declaration": "pub fn iqr(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/percentiles.rs",
+        "line": 64,
+        "declaration": "pub fn median(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/percentiles.rs",
+        "line": 69,
+        "declaration": "pub fn quartiles(&self) -> (A, A, A) {"
+      },
+      {
+        "file": "src/stats/univariate/resamples.rs",
+        "line": 7,
+        "declaration": "pub struct Resamples<'a, A>"
+      },
+      {
+        "file": "src/stats/univariate/resamples.rs",
+        "line": 21,
+        "declaration": "pub fn new(sample: &'a Sample<A>) -> Resamples<'a, A> {"
+      },
+      {
+        "file": "src/stats/univariate/resamples.rs",
+        "line": 31,
+        "declaration": "pub fn next(&mut self) -> &Sample<A> {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 17,
+        "declaration": "pub struct Sample<A>([A]);"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 30,
+        "declaration": "pub fn new(slice: &[A]) -> &Sample<A> {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 39,
+        "declaration": "pub fn max(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 52,
+        "declaration": "pub fn mean(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 64,
+        "declaration": "pub fn median_abs_dev(&self, median: Option<A>) -> A"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 83,
+        "declaration": "pub fn median_abs_dev_pct(&self) -> A"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 97,
+        "declaration": "pub fn min(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 113,
+        "declaration": "pub fn percentiles(&self) -> Percentiles<A>"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 146,
+        "declaration": "pub fn std_dev(&self, mean: Option<A>) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 153,
+        "declaration": "pub fn std_dev_pct(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 164,
+        "declaration": "pub fn sum(&self) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 171,
+        "declaration": "pub fn t(&self, other: &Sample<A>) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 187,
+        "declaration": "pub fn var(&self, mean: Option<A>) -> A {"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 207,
+        "declaration": "pub fn bootstrap<T, S>(&self, nresamples: usize, statistic: S) -> T::Distributions"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 252,
+        "declaration": "pub fn iqr(&self) -> A"
+      },
+      {
+        "file": "src/stats/univariate/sample.rs",
+        "line": 260,
+        "declaration": "pub fn median(&self) -> A"
+      }
+    ]
+  },
+  "divan": {
+    "version": "0.1.21",
+    "archive": "https://static.crates.io/crates/divan/divan-0.1.21.crate",
+    "sha256": "a405457ec78b8fe08b0e32b4a3570ab5dff6dd16eb9e76a5ee0a9d9cbd898933",
+    "surface": [
+      {
+        "file": "src/alloc.rs",
+        "line": 124,
+        "declaration": "pub struct AllocProfiler<Alloc = System> {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 181,
+        "declaration": "pub const fn system() -> Self {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 189,
+        "declaration": "pub const fn new(alloc: A) -> Self {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 228,
+        "declaration": "pub const fn new() -> Self {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 244,
+        "declaration": "pub fn current() -> Option<NonNull<Self>> {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 291,
+        "declaration": "pub fn try_current() -> Option<NonNull<Self>> {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 315,
+        "declaration": "pub fn clear(&mut self) {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 321,
+        "declaration": "pub fn tally_alloc(&mut self, size: usize) {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 333,
+        "declaration": "pub fn tally_dealloc(&mut self, size: usize) {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 342,
+        "declaration": "pub fn tally_realloc(&mut self, old_size: usize, new_size: usize) {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 388,
+        "declaration": "pub fn is_zero(&self) -> bool {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 395,
+        "declaration": "pub fn as_array(&self) -> &[C; 2] {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 422,
+        "declaration": "pub fn realloc(shrink: bool) -> Self {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 432,
+        "declaration": "pub fn name(self) -> &'static str {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 442,
+        "declaration": "pub fn prefix(self) -> &'static str {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 470,
+        "declaration": "pub const fn new() -> Self {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 476,
+        "declaration": "pub fn is_empty(&self) -> bool {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 480,
+        "declaration": "pub fn add_to_total(&self, total: &mut TotalAllocTallyMap) {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 490,
+        "declaration": "pub fn from_fn<F>(f: F) -> Self"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 498,
+        "declaration": "pub const fn get(&self, op: AllocOp) -> &T {"
+      },
+      {
+        "file": "src/alloc.rs",
+        "line": 503,
+        "declaration": "pub fn get_mut(&mut self, op: AllocOp) -> &mut T {"
+      },
+      {
+        "file": "src/benchmark/args.rs",
+        "line": 17,
+        "declaration": "pub struct BenchArgs {"
+      },
+      {
+        "file": "src/benchmark/args.rs",
+        "line": 24,
+        "declaration": "pub struct BenchArgsRunner {"
+      },
+      {
+        "file": "src/benchmark/args.rs",
+        "line": 52,
+        "declaration": "pub const fn new() -> Self {"
+      },
+      {
+        "file": "src/benchmark/args.rs",
+        "line": 58,
+        "declaration": "pub fn runner<I, B>("
+      },
+      {
+        "file": "src/benchmark/defer.rs",
+        "line": 62,
+        "declaration": "pub fn prepare(&mut self, sample_size: usize) {"
+      },
+      {
+        "file": "src/benchmark/defer.rs",
+        "line": 94,
+        "declaration": "pub fn slots(&self) -> Result<&[DeferSlot<I, O>], &[DeferSlotItem<I>]> {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 34,
+        "declaration": "pub use self::{"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 60,
+        "declaration": "pub struct Bencher<'a, 'b, C = BencherConfig> {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 69,
+        "declaration": "pub struct BencherConfig<GenI = Unit> {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 103,
+        "declaration": "pub fn bench<O, B>(self, benched: B)"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 124,
+        "declaration": "pub fn bench_local<O, B>(self, mut benched: B)"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 157,
+        "declaration": "pub fn with_inputs<G>(self, gen_input: G) -> Bencher<'a, 'b, BencherConfig<G>> {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 193,
+        "declaration": "pub fn counter<C>(self, counter: C) -> Self"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 244,
+        "declaration": "pub fn input_counter<C, F>(self, make_counter: F) -> Self"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 281,
+        "declaration": "pub fn count_inputs_as<C>(self) -> Self"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 320,
+        "declaration": "pub fn bench_values<O, B>(self, benched: B)"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 362,
+        "declaration": "pub fn bench_local_values<O, B>(self, mut benched: B)"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 402,
+        "declaration": "pub fn bench_refs<O, B>(self, benched: B)"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 448,
+        "declaration": "pub fn bench_local_refs<O, B>(self, mut benched: B)"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 489,
+        "declaration": "pub fn is_test(self) -> bool {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 494,
+        "declaration": "pub fn is_tune(self) -> bool {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 499,
+        "declaration": "pub fn is_collect(self) -> bool {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 504,
+        "declaration": "pub fn sample_size(self) -> u32 {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 540,
+        "declaration": "pub fn new("
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 560,
+        "declaration": "pub fn bench_loop_local<I, O>("
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 1068,
+        "declaration": "pub fn compute_stats(&self) -> Stats {"
+      },
+      {
+        "file": "src/benchmark/mod.rs",
+        "line": 1283,
+        "declaration": "pub fn transpose(self) -> AllocTally<StatsSet<T>> {"
+      },
+      {
+        "file": "src/benchmark/options.rs",
+        "line": 11,
+        "declaration": "pub struct BenchOptions<'a> {"
+      },
+      {
+        "file": "src/config/filter.rs",
+        "line": 36,
+        "declaration": "pub fn reserve_exact(&mut self, additional: usize) {"
+      },
+      {
+        "file": "src/config/filter.rs",
+        "line": 41,
+        "declaration": "pub fn include(&mut self, filter: Filter) {"
+      },
+      {
+        "file": "src/config/filter.rs",
+        "line": 46,
+        "declaration": "pub fn exclude(&mut self, filter: Filter) {"
+      },
+      {
+        "file": "src/config/filter.rs",
+        "line": 58,
+        "declaration": "pub fn is_match(&self, entry_path: &str) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 5,
+        "declaration": "pub mod filter;"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 41,
+        "declaration": "pub fn is_bench(&self) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 46,
+        "declaration": "pub fn is_test(&self) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 51,
+        "declaration": "pub fn is_list(&self) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 56,
+        "declaration": "pub fn is_list_terse(&self) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 76,
+        "declaration": "pub fn run_ignored(self) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 80,
+        "declaration": "pub fn run_non_ignored(self) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 84,
+        "declaration": "pub fn should_run(self, ignored: bool) -> bool {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 110,
+        "declaration": "pub fn with_tie_breakers(self) -> [Self; 3] {"
+      },
+      {
+        "file": "src/config/mod.rs",
+        "line": 124,
+        "declaration": "pub fn cmp_bench_arg_names(self, a: &&str, b: &&str) -> Ordering {"
+      },
+      {
+        "file": "src/counter/any_counter.rs",
+        "line": 101,
+        "declaration": "pub fn of<C: IntoCounter>() -> Self {"
+      },
+      {
+        "file": "src/counter/collection.rs",
+        "line": 113,
+        "declaration": "pub struct CounterSet {"
+      },
+      {
+        "file": "src/counter/collection.rs",
+        "line": 118,
+        "declaration": "pub fn with(mut self, counter: impl IntoCounter) -> Self {"
+      },
+      {
+        "file": "src/counter/collection.rs",
+        "line": 123,
+        "declaration": "pub fn insert(&mut self, counter: impl IntoCounter) -> &mut Self {"
+      },
+      {
+        "file": "src/counter/into_counter.rs",
+        "line": 23,
+        "declaration": "pub trait IntoCounter {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 42,
+        "declaration": "pub use into_counter::IntoCounter;"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 53,
+        "declaration": "pub trait Counter: Sized + Any + Sealed {}"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 57,
+        "declaration": "pub struct BytesCount {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 67,
+        "declaration": "pub struct CharsCount {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 77,
+        "declaration": "pub struct CyclesCount {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 83,
+        "declaration": "pub struct ItemsCount {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 128,
+        "declaration": "pub fn new<N: CountUInt>(count: N) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 135,
+        "declaration": "pub const fn of<T>() -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 142,
+        "declaration": "pub const fn of_many<T>(n: usize) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 152,
+        "declaration": "pub fn of_val<T: ?Sized>(val: &T) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 159,
+        "declaration": "pub fn of_iter<T, I>(iter: I) -> Self"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 174,
+        "declaration": "pub fn of_str<S: ?Sized + AsRef<str>>(s: &S) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 184,
+        "declaration": "pub fn of_slice<T, S: ?Sized + AsRef<[T]>>(s: &S) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 194,
+        "declaration": "pub const fn $ty(n: usize) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 222,
+        "declaration": "pub fn new<N: CountUInt>(count: N) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 228,
+        "declaration": "pub fn of_str<S: ?Sized + AsRef<str>>(s: &S) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 236,
+        "declaration": "pub fn new<N: CountUInt>(count: N) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 244,
+        "declaration": "pub fn new<N: CountUInt>(count: N) -> Self {"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 250,
+        "declaration": "pub fn of_iter<T, I>(iter: I) -> Self"
+      },
+      {
+        "file": "src/counter/mod.rs",
+        "line": 263,
+        "declaration": "pub enum BytesFormat {"
+      },
+      {
+        "file": "src/counter/sealed.rs",
+        "line": 5,
+        "declaration": "pub trait Sealed {}"
+      },
+      {
+        "file": "src/counter/uint.rs",
+        "line": 9,
+        "declaration": "pub type MaxCountUInt = condtype::num::Usize64;"
+      },
+      {
+        "file": "src/counter/uint.rs",
+        "line": 18,
+        "declaration": "pub trait CountUInt: Copy + Any {"
+      },
+      {
+        "file": "src/counter/uint.rs",
+        "line": 23,
+        "declaration": "pub trait AsCountUInt {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 28,
+        "declaration": "pub struct Divan {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 59,
+        "declaration": "pub fn main(&self) {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 64,
+        "declaration": "pub fn run_benches(&self) {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 72,
+        "declaration": "pub fn test_benches(&self) {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 77,
+        "declaration": "pub fn list_benches(&self) {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 394,
+        "declaration": "pub fn from_args() -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 402,
+        "declaration": "pub fn config_with_args(mut self) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 550,
+        "declaration": "pub fn color(mut self, yes: impl Into<Option<bool>>) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 563,
+        "declaration": "pub fn run_ignored(mut self) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 572,
+        "declaration": "pub fn run_only_ignored(mut self) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 614,
+        "declaration": "pub fn skip_regex(mut self, filter: impl IntoRegex) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 642,
+        "declaration": "pub fn skip_exact(mut self, filter: impl Into<String>) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 656,
+        "declaration": "pub fn sample_count(mut self, count: u32) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 665,
+        "declaration": "pub fn sample_size(mut self, count: u32) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 679,
+        "declaration": "pub fn threads<T>(mut self, threads: T) -> Self"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 696,
+        "declaration": "pub fn min_time(mut self, time: Duration) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 705,
+        "declaration": "pub fn max_time(mut self, time: Duration) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 715,
+        "declaration": "pub fn skip_ext_time(mut self, skip: bool) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 732,
+        "declaration": "pub fn counter<C: IntoCounter>(mut self, counter: C) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 742,
+        "declaration": "pub fn items_count<C: Into<ItemsCount>>(self, count: C) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 751,
+        "declaration": "pub fn bytes_count<C: Into<BytesCount>>(self, count: C) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 760,
+        "declaration": "pub fn bytes_format(mut self, format: BytesFormat) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 770,
+        "declaration": "pub fn chars_count<C: Into<CharsCount>>(self, count: C) -> Self {"
+      },
+      {
+        "file": "src/divan.rs",
+        "line": 779,
+        "declaration": "pub fn cycles_count<C: Into<CyclesCount>>(self, count: C) -> Self {"
+      },
+      {
+        "file": "src/entry/generic.rs",
+        "line": 22,
+        "declaration": "pub struct GenericBenchEntry {"
+      },
+      {
+        "file": "src/entry/generic.rs",
+        "line": 77,
+        "declaration": "pub struct EntryType {"
+      },
+      {
+        "file": "src/entry/generic.rs",
+        "line": 88,
+        "declaration": "pub const fn new<T: Any>() -> Self {"
+      },
+      {
+        "file": "src/entry/generic.rs",
+        "line": 113,
+        "declaration": "pub struct EntryConst {"
+      },
+      {
+        "file": "src/entry/generic.rs",
+        "line": 133,
+        "declaration": "pub const fn new<T>(value: &'static T) -> Self"
+      },
+      {
+        "file": "src/entry/list.rs",
+        "line": 10,
+        "declaration": "pub struct EntryList<T: 'static> {"
+      },
+      {
+        "file": "src/entry/list.rs",
+        "line": 33,
+        "declaration": "pub const fn new(entry: &'static T) -> Self {"
+      },
+      {
+        "file": "src/entry/list.rs",
+        "line": 39,
+        "declaration": "pub fn iter(&self) -> impl Iterator<Item = &T> {"
+      },
+      {
+        "file": "src/entry/list.rs",
+        "line": 55,
+        "declaration": "pub fn push(&'static self, other: &'static Self) {"
+      },
+      {
+        "file": "src/entry/meta.rs",
+        "line": 6,
+        "declaration": "pub struct EntryMeta {"
+      },
+      {
+        "file": "src/entry/meta.rs",
+        "line": 28,
+        "declaration": "pub struct EntryLocation {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 10,
+        "declaration": "pub use self::{"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 28,
+        "declaration": "pub enum BenchEntryRunner {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 37,
+        "declaration": "pub struct BenchEntry {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 47,
+        "declaration": "pub struct GroupEntry {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 75,
+        "declaration": "pub fn entry_addr(self) -> NonNull<()> {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 84,
+        "declaration": "pub fn bench_runner(self) -> &'a BenchEntryRunner {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 93,
+        "declaration": "pub fn arg_names(self) -> Option<&'static [&'static str]> {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 104,
+        "declaration": "pub fn meta(self) -> &'a EntryMeta {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 112,
+        "declaration": "pub fn raw_name(self) -> &'a str {"
+      },
+      {
+        "file": "src/entry/mod.rs",
+        "line": 120,
+        "declaration": "pub fn display_name(self) -> &'a str {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 30,
+        "declaration": "pub fn from_benches<I>(benches: I) -> Vec<Self>"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 58,
+        "declaration": "pub fn max_name_span(tree: &[Self], depth: usize) -> usize {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 94,
+        "declaration": "pub fn common_column_width(tree: &[Self], column: TreeColumn) -> usize {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 128,
+        "declaration": "pub fn insert_group(mut tree: &mut [Self], group: &'a GroupEntry) {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 161,
+        "declaration": "pub fn retain(tree: &mut Vec<Self>, mut filter: impl FnMut(&str) -> bool) {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 199,
+        "declaration": "pub fn sort_by_attr(tree: &mut [Self], attr: SortingAttr, reverse: bool) {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 313,
+        "declaration": "pub fn kind(&self) -> i32 {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 322,
+        "declaration": "pub fn entry_addr(&self) -> Option<NonNull<()>> {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 331,
+        "declaration": "pub fn meta(&self) -> Option<&'a EntryMeta> {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 338,
+        "declaration": "pub fn bench_options(&self) -> Option<&'a BenchOptions> {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 342,
+        "declaration": "pub fn raw_name(&self) -> &'a str {"
+      },
+      {
+        "file": "src/entry/tree.rs",
+        "line": 350,
+        "declaration": "pub fn display_name(&self) -> &'a str {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 19,
+        "declaration": "pub mod __private;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 36,
+        "declaration": "pub mod counter;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 39,
+        "declaration": "pub mod prelude {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 41,
+        "declaration": "pub use crate::{bench, bench_group, black_box, black_box_drop, AllocProfiler, Bencher, Divan};"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 133,
+        "declaration": "pub use std::hint::black_box;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 136,
+        "declaration": "pub use crate::{alloc::AllocProfiler, benchmark::Bencher, divan::Divan};"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 156,
+        "declaration": "pub fn main() {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 183,
+        "declaration": "pub fn black_box_drop<T>(dummy: T) {"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 877,
+        "declaration": "pub use divan_macros::bench;"
+      },
+      {
+        "file": "src/lib.rs",
+        "line": 1329,
+        "declaration": "pub use divan_macros::bench_group;"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 6,
+        "declaration": "pub use crate::{"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 21,
+        "declaration": "pub struct ToStringHelper<'a, T: 'static>(pub &'a T);"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 34,
+        "declaration": "pub fn to_string(&self) -> String {"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 40,
+        "declaration": "pub trait Arg<T> {"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 117,
+        "declaration": "pub trait IntoThreads<const IMP: u32> {"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 164,
+        "declaration": "pub fn new_counter_set() -> crate::counter::CounterSet {"
+      },
+      {
+        "file": "src/private.rs",
+        "line": 169,
+        "declaration": "pub const fn shrink_array<T, const IN: usize, const OUT: usize>("
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 37,
+        "declaration": "pub fn get_counts(&self, counter_kind: KnownCounterKind) -> Option<&StatsSet<MaxCountUInt>> {"
+      },
+      {
+        "file": "src/stats/mod.rs",
+        "line": 58,
+        "declaration": "pub fn is_zero(&self) -> bool {"
+      },
+      {
+        "file": "src/stats/sample.rs",
+        "line": 33,
+        "declaration": "pub fn duration(&self) -> FineDuration {"
+      },
+      {
+        "file": "src/stats/sample.rs",
+        "line": 54,
+        "declaration": "pub fn clear(&mut self) {"
+      },
+      {
+        "file": "src/stats/sample.rs",
+        "line": 63,
+        "declaration": "pub fn iter_count(&self) -> u64 {"
+      },
+      {
+        "file": "src/stats/sample.rs",
+        "line": 69,
+        "declaration": "pub fn total_duration(&self) -> FineDuration {"
+      },
+      {
+        "file": "src/stats/sample.rs",
+        "line": 75,
+        "declaration": "pub fn sorted_samples(&self) -> Vec<&TimeSample> {"
+      },
+      {
+        "file": "src/thread_pool.rs",
+        "line": 51,
+        "declaration": "pub fn par_extend<T, F>(&self, vec: &mut Vec<Option<T>>, aux_threads: usize, task: F)"
+      },
+      {
+        "file": "src/thread_pool.rs",
+        "line": 79,
+        "declaration": "pub fn broadcast<F>(&self, aux_threads: usize, task: F)"
+      },
+      {
+        "file": "src/thread_pool.rs",
+        "line": 127,
+        "declaration": "pub fn drop_threads(&self) {"
+      },
+      {
+        "file": "src/time/fence.rs",
+        "line": 5,
+        "declaration": "pub fn full_fence() {"
+      },
+      {
+        "file": "src/time/fence.rs",
+        "line": 12,
+        "declaration": "pub fn compiler_fence() {"
+      },
+      {
+        "file": "src/time/fine_duration.rs",
+        "line": 113,
+        "declaration": "pub fn is_zero(&self) -> bool {"
+      },
+      {
+        "file": "src/time/fine_duration.rs",
+        "line": 119,
+        "declaration": "pub fn clamp_to(self, other: Self) -> Self {"
+      },
+      {
+        "file": "src/time/fine_duration.rs",
+        "line": 129,
+        "declaration": "pub fn clamp_to_min(self, other: Self) -> Self {"
+      },
+      {
+        "file": "src/time/mod.rs",
+        "line": 3,
+        "declaration": "pub mod fence;"
+      },
+      {
+        "file": "src/time/mod.rs",
+        "line": 14,
+        "declaration": "pub trait IntoDuration {"
+      },
+      {
+        "file": "src/time/timer.rs",
+        "line": 28,
+        "declaration": "pub fn available() -> Vec<Self> {"
+      },
+      {
+        "file": "src/time/timer.rs",
+        "line": 40,
+        "declaration": "pub fn get_tsc() -> Result<Self, TscUnavailable> {"
+      },
+      {
+        "file": "src/time/timer.rs",
+        "line": 45,
+        "declaration": "pub fn kind(self) -> TimerKind {"
+      },
+      {
+        "file": "src/time/timer.rs",
+        "line": 55,
+        "declaration": "pub fn precision(self) -> FineDuration {"
+      },
+      {
+        "file": "src/time/timer.rs",
+        "line": 138,
+        "declaration": "pub fn bench_overheads(self) -> &'static TimedOverhead {"
+      },
+      {
+        "file": "src/time/timer.rs",
+        "line": 312,
+        "declaration": "pub fn total_overhead(&self, sample_size: u32, alloc_info: &ThreadAllocInfo) -> FineDuration {"
+      },
+      {
+        "file": "src/time/timestamp/mod.rs",
+        "line": 21,
+        "declaration": "pub fn start(timer_kind: TimerKind) -> Self {"
+      },
+      {
+        "file": "src/time/timestamp/mod.rs",
+        "line": 31,
+        "declaration": "pub fn duration_since(self, earlier: Self, timer: Timer) -> FineDuration {"
+      },
+      {
+        "file": "src/time/timestamp/mod.rs",
+        "line": 60,
+        "declaration": "pub fn start(timer_kind: TimerKind) -> Self {"
+      },
+      {
+        "file": "src/time/timestamp/mod.rs",
+        "line": 71,
+        "declaration": "pub fn end(timer_kind: TimerKind) -> Self {"
+      },
+      {
+        "file": "src/time/timestamp/mod.rs",
+        "line": 82,
+        "declaration": "pub unsafe fn into_timestamp(self, timer_kind: TimerKind) -> Timestamp {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/mod.rs",
+        "line": 27,
+        "declaration": "pub fn frequency() -> Result<NonZeroU64, TscUnavailable> {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/mod.rs",
+        "line": 40,
+        "declaration": "pub fn start() -> Self {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/mod.rs",
+        "line": 55,
+        "declaration": "pub fn end() -> Self {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/mod.rs",
+        "line": 68,
+        "declaration": "pub fn duration_since(self, earlier: Self, frequency: NonZeroU64) -> FineDuration {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 100,
+        "declaration": "pub fn rdtsc() -> u64 {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 111,
+        "declaration": "pub fn rdtscp() -> u64 {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 122,
+        "declaration": "pub fn lfence() {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 149,
+        "declaration": "pub fn tsc_is_available() -> bool {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 161,
+        "declaration": "pub fn tsc_is_invariant() -> bool {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 172,
+        "declaration": "pub fn cpu_name() -> Option<[u8; 48]> {"
+      },
+      {
+        "file": "src/time/timestamp/tsc/x86.rs",
+        "line": 193,
+        "declaration": "pub fn measure_frequency() -> f64 {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 34,
+        "declaration": "pub fn new(max_name_span: usize, column_widths: [usize; TreeColumn::COUNT]) -> Self {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 47,
+        "declaration": "pub fn start_parent(&mut self, name: &str, is_last: bool) {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 96,
+        "declaration": "pub fn finish_parent(&mut self) {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 116,
+        "declaration": "pub fn ignore_leaf(&mut self, name: &str, is_last: bool) {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 137,
+        "declaration": "pub fn start_leaf(&mut self, name: &str, is_last: bool) {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 163,
+        "declaration": "pub fn finish_empty_leaf(&mut self) {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 168,
+        "declaration": "pub fn finish_leaf(&mut self, is_last: bool, stats: &Stats, bytes_format: BytesFormat) {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 395,
+        "declaration": "pub fn time_stats() -> impl Iterator<Item = Self> {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 401,
+        "declaration": "pub fn is_first(self) -> bool {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 407,
+        "declaration": "pub fn is_last(self) -> bool {"
+      },
+      {
+        "file": "src/tree_painter.rs",
+        "line": 424,
+        "declaration": "pub fn is_time_stat(self) -> bool {"
+      },
+      {
+        "file": "src/util/fmt.rs",
+        "line": 138,
+        "declaration": "pub fn bytes_format(self) -> BytesFormat {"
+      },
+      {
+        "file": "src/util/fmt.rs",
+        "line": 167,
+        "declaration": "pub fn suffix(self, format: ScaleFormat) -> &'static str {"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 12,
+        "declaration": "pub mod fmt;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 13,
+        "declaration": "pub mod sort;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 14,
+        "declaration": "pub mod split_vec;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 15,
+        "declaration": "pub mod sync;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 16,
+        "declaration": "pub mod thread;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 17,
+        "declaration": "pub mod ty;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 24,
+        "declaration": "pub struct Unit;"
+      },
+      {
+        "file": "src/util/mod.rs",
+        "line": 28,
+        "declaration": "pub trait IntoRegex {"
+      },
+      {
+        "file": "src/util/sort.rs",
+        "line": 4,
+        "declaration": "pub fn natural_cmp(a: &str, b: &str) -> Ordering {"
+      },
+      {
+        "file": "src/util/split_vec.rs",
+        "line": 20,
+        "declaration": "pub fn insert(&mut self, value: T, after_split: bool) {"
+      },
+      {
+        "file": "src/util/split_vec.rs",
+        "line": 49,
+        "declaration": "pub fn reserve_exact(&mut self, additional: usize) {"
+      },
+      {
+        "file": "src/util/split_vec.rs",
+        "line": 55,
+        "declaration": "pub fn all(&self) -> &[T] {"
+      },
+      {
+        "file": "src/util/split_vec.rs",
+        "line": 62,
+        "declaration": "pub fn split(&self) -> (&[T], &[T]) {"
+      },
+      {
+        "file": "src/util/split_vec.rs",
+        "line": 68,
+        "declaration": "pub fn split_index(&self) -> usize {"
+      },
+      {
+        "file": "src/util/split_vec.rs",
+        "line": 80,
+        "declaration": "pub unsafe fn set_split_index(&mut self, new_index: usize) {"
+      },
+      {
+        "file": "src/util/sync.rs",
+        "line": 11,
+        "declaration": "pub struct SyncWrap<T> {"
+      },
+      {
+        "file": "src/util/sync.rs",
+        "line": 35,
+        "declaration": "pub const unsafe fn new(value: T) -> Self {"
+      },
+      {
+        "file": "src/util/sync.rs",
+        "line": 45,
+        "declaration": "pub const fn new(value: bool) -> Self {"
+      },
+      {
+        "file": "src/util/sync.rs",
+        "line": 50,
+        "declaration": "pub fn get(&self) -> bool {"
+      },
+      {
+        "file": "src/util/sync.rs",
+        "line": 55,
+        "declaration": "pub fn set(&self, value: bool) {"
+      },
+      {
+        "file": "src/util/thread.rs",
+        "line": 22,
+        "declaration": "pub const fn new() -> Self {"
+      },
+      {
+        "file": "src/util/thread.rs",
+        "line": 27,
+        "declaration": "pub fn get(&self) -> Option<NonNull<T>> {"
+      },
+      {
+        "file": "src/util/thread.rs",
+        "line": 53,
+        "declaration": "pub fn set<D>(&self, ptr: *const T, _: D) -> bool"
+      },
+      {
+        "file": "src/util/thread.rs",
+        "line": 121,
+        "declaration": "pub fn get_static_thread_local<T>() -> *const T {"
+      },
+      {
+        "file": "src/util/thread.rs",
+        "line": 140,
+        "declaration": "pub unsafe fn set_static_thread_local<T>(ptr: *const T) {"
+      },
+      {
+        "file": "src/util/thread.rs",
+        "line": 166,
+        "declaration": "pub unsafe fn get_thread_local(key: usize) -> *mut libc::c_void {"
+      }
+    ]
+  }
+}

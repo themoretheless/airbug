@@ -13,12 +13,20 @@ categories = ["development-tools::profiling", "development-tools::testing"]
 default = []
 memory = ["dep:backtrace"]
 macros = ["dep:airbug-bench-macros"]
+async-tokio = ["dep:tokio"]
+async-futures = ["dep:futures-executor"]
+async-smol = ["dep:smol"]
 
 [dependencies]
+airbug = { path = "../unit", version = "0.6.2", default-features = false }
 backtrace = { version = "=0.3.76", optional = true }
 airbug-bench-macros = { workspace = true, optional = true }
+regex-automata = "0.4.18"
+tokio = { workspace = true, optional = true, features = ["time", "net"] }
+futures-executor = { version = "0.3", optional = true }
+smol = { version = "2.0", optional = true, default-features = false }
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 sha2.workspace = true
 thiserror.workspace = true
 

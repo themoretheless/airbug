@@ -294,6 +294,7 @@ pub fn import(path: &Path) -> Result<Run> {
                 direction,
             });
             run.observations.push(Observation {
+                work_totals: Default::default(),
                 case: id.clone(),
                 metric: metric.into(),
                 variant: variant.into(),

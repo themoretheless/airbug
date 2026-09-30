@@ -28,6 +28,10 @@ serde_json = { workspace = true, optional = true }
 [dev-dependencies]
 airbug-checkout-domain = { path = "checkout-domain" }
 
+[[bin]]
+name = "airbug_report"
+required-features = ["json"]
+
 [[example]]
 name = "native_service"
 required-features = ["macros"]

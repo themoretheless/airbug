@@ -42,6 +42,8 @@
 
 ## Unreleased
 
+- Extend `airbug_report` with live per-test history, native outcomes, process durations, isolated diagnostics, bounded output and timeouts. The binary requires the existing `json` feature; the default library remains dependency-free. Failed runs now return a nonzero exit status.
+
 - Add synchronous nested report steps, text/binary attachments, and structured expected/actual diffs; preserve native assertions and panic outcomes.
 
 - Add an execution timeline with measured start/end offsets, zoom, filters and build/discovery phases.

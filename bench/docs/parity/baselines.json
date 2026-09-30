@@ -1,0 +1,56 @@
+{
+  "upstream": {
+    "criterion": "0.8.2",
+    "sources": [
+      "src/lib.rs:Baseline",
+      "src/lib.rs:Criterion::save_baseline",
+      "src/lib.rs:Criterion::retain_baseline",
+      "src/lib.rs:load-baseline CLI",
+      "src/analysis/mod.rs:common",
+      "src/lib.rs:Criterion::should_save_baseline"
+    ]
+  },
+  "scope": "Baseline lifecycle capabilities; API spelling and on-disk compatibility are not required.",
+  "mapping": [
+    {
+      "feature": "Named save and replacement",
+      "airbug": "--save-baseline NAME creates; --replace-baseline NAME upserts measured cases. Combine --baseline-lenient NAME --replace-baseline NAME to compare to the named baseline and then update it.",
+      "evidence": "test-cargo-bench.py: named baseline save, comparison before replacement, partial update and workload/output failures"
+    },
+    {
+      "feature": "Retain existing baseline for strict/lenient comparison",
+      "airbug": "--baseline NAME and --baseline-lenient NAME leave all references unchanged. Criterion retain_baseline maps to these comparison flags, not to Airbug --retain-baseline (an additional fill-missing-cases operation).",
+      "evidence": "test-cargo-bench.py: missing selected case before setup, missing name, unchanged pointer and corruption rejection"
+    },
+    {
+      "feature": "Load saved samples instead of measuring",
+      "airbug": "--load-baseline NAME, optionally --baseline OTHER; preserves observed values and source metadata; reanalyzes each source independently.",
+      "evidence": "test-cargo-bench.py: setup/workload guards, equal original observations, mixed-source export; baseline::tests::reanalysis_groups_by_artifact_and_preserves_identity_collisions"
+    },
+    {
+      "feature": "Discard result persistence",
+      "airbug": "--discard suppresses artifact/history/dashboard writes while measurements and console summaries run.",
+      "evidence": "test-cargo-bench.py: empty output root with both histories enabled; preflight rejects persistence conflicts"
+    },
+    {
+      "feature": "Per-benchmark lifecycle under filtering",
+      "airbug": "Atomic case manifests preserve unselected references, run identity and environment; concurrent updates use OS locks.",
+      "evidence": "baseline::tests::case_updates_preserve_other_runs_provenance_and_concurrent_changes; test-cargo-bench.py: save two, replace one, reload both"
+    },
+    {
+      "feature": "Reference integrity and recovery (Airbug extension)",
+      "airbug": "Hash-checked snapshots; explicit replacement can repair selected sources; retained corrupt sources prevent publication.",
+      "evidence": "baseline::tests; test-cargo-bench.py: selective corrupt-source repair"
+    },
+    {
+      "feature": "Runner interoperability (Airbug extension)",
+      "airbug": "report aliases compare stable case IDs; baseline save updates existing case manifests; retention protects sources and shares publication lock. Legacy whole-run references remain supported.",
+      "evidence": "cli.rs: case_alias_reports_preserve_updates_and_match_cases_across_runs, runner_save_updates_cargo_case_baseline_without_shadow_reference, retention_protects_case_baseline_artifacts_and_checks_hashes"
+    }
+  ],
+  "limitations": [
+    "Single-run runner operations do not pool multi-source baselines; use report or direct load-baseline for those.",
+    "Statistics, report formatting and platform support have separate parity requirements.",
+    "Snapshots may remain unreferenced if publication fails; no old artifact is overwritten."
+  ]
+}

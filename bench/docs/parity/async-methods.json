@@ -1,0 +1,68 @@
+{
+  "upstream": "Criterion 0.8.2 src/bencher.rs AsyncBencher",
+  "scope": "Duration measurements; arbitrary Measurement::Value is tracked separately",
+  "methods": [
+    {
+      "upstream": "iter",
+      "airbug": "Suite::bench_async_factory, DropPolicy::InsideTiming",
+      "evidence": [
+        "bench/tests/contracts.rs::async_wakeup_and_cold_first_invocation",
+        "bench/tests/zero_sized_outputs.rs"
+      ]
+    },
+    {
+      "upstream": "iter_custom",
+      "airbug": "Suite::bench_async_custom",
+      "evidence": [
+        "bench/tests/custom_timing.rs",
+        "bench/tests/attributes.rs::async_custom_timing_is_lazy_borrows_arguments_and_awaits_completion"
+      ]
+    },
+    {
+      "upstream": "iter_with_setup",
+      "airbug": "Suite::bench_async_batched, BatchPolicy::PerIteration, DropPolicy::OutsideTiming",
+      "evidence": [
+        "bench/tests/attributes.rs::attributed_async_batch_policies_register_both_input_modes",
+        "bench/src/suite_measure.rs::batch_tests",
+        "bench/tests/batch_policies.rs"
+      ]
+    },
+    {
+      "upstream": "iter_with_large_setup",
+      "airbug": "Suite::bench_async_batched, BatchPolicy::Batches(1), DropPolicy::OutsideTiming",
+      "evidence": [
+        "bench/src/suite.rs::bench_async_batched",
+        "bench/src/suite_measure.rs::batch_tests",
+        "bench/tests/batch_policies.rs"
+      ]
+    },
+    {
+      "upstream": "iter_with_large_drop",
+      "airbug": "Suite::bench_async_batched with unit setup, BatchPolicy::SmallInput, DropPolicy::OutsideTiming",
+      "evidence": [
+        "bench/tests/attributes.rs::output_batches::plain_outputs_follow_explicit_batch_lifetimes_in_sync_and_async",
+        "bench/tests/zero_sized_outputs.rs",
+        "bench/tests/batch_policies.rs"
+      ]
+    },
+    {
+      "upstream": "iter_batched",
+      "airbug": "Suite::bench_async_batched",
+      "evidence": [
+        "bench/tests/attributes.rs::async_batches_wait_and_drop_before_preparing_next_batch",
+        "bench/tests/async_cleanup.rs",
+        "bench/tests/batch_policies.rs"
+      ]
+    },
+    {
+      "upstream": "iter_batched_ref",
+      "airbug": "Suite::bench_async_batched_ref",
+      "evidence": [
+        "bench/tests/attributes.rs::async_batches_wait_and_drop_before_preparing_next_batch",
+        "bench/tests/fresh_inputs.rs",
+        "bench/tests/async_cleanup.rs",
+        "bench/tests/batch_policies.rs"
+      ]
+    }
+  ]
+}

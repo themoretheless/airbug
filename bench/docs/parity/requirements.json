@@ -1,0 +1,674 @@
+{
+  "objective": "покрыты все фичи Criterion/Divan",
+  "versions": {
+    "criterion": "0.8.2",
+    "divan": "0.1.21"
+  },
+  "requirements": [
+    {
+      "id": "registration",
+      "requirement": "Function registration, Cargo harness and named cases",
+      "upstream": "C:Criterion::bench_function;D:bench",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/registration.rs",
+        "bench/scripts/test-cargo-bench.py (real Cargo harness, attribute suite, standalone registration, imported library groups and duplicate dry-run rejection)"
+      ],
+      "comparison": "Criterion bench_function and Divan bench registration map to Suite::bench and attribute registration in harness=false Cargo targets. Tests cover standalone and grouped registration, renamed dependencies, external crates, named cases, duplicate failure before execution and group unwind restoration. Group inheritance and sorting remain separate requirements."
+    },
+    {
+      "id": "groups",
+      "requirement": "Nested modules, groups, inherited defaults, group names",
+      "upstream": "C:BenchmarkGroup;D:bench_group",
+      "status": "partial",
+      "evidence": [
+        "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
+        "bench/scripts/test-cargo-bench.py",
+        "bench/tests/attributes.rs::group_executor_defaults_are_lazy_async_only_and_locally_overridable",
+        "bench/tests/attributes.rs::imported_groups_inherit_sampling_per_field_with_nearest_override",
+        "bench/scripts/test-cargo-bench.py (imported sampling defaults and CLI precedence across crate boundary)",
+        "bench/tests/attributes.rs::imported_groups_preserve_false_zero_dynamic_counters_and_nearest_defaults"
+      ],
+      "remaining": "Sampling, ignore and fixed counters propagate across imported groups. Imported threads, lifecycle/allocator/executor options and argument-dependent/input counter closures remain; full group option audit incomplete."
+    },
+    {
+      "id": "external_modules",
+      "requirement": "Registration across source modules/files",
+      "upstream": "D:bench,bench_group",
+      "status": "verified",
+      "evidence": [
+        "bench/benches/support/external.rs",
+        "bench/tests/attributes.rs::external_groups_register_recursively_without_a_generated_main",
+        "bench/scripts/test-cargo-bench.py (separate file and library crate boundary)"
+      ]
+    },
+    {
+      "id": "args",
+      "requirement": "Value/reference arguments, generated argument lists, tuple parameters",
+      "upstream": "C:bench_with_input;D:bench(args)",
+      "status": "partial",
+      "evidence": [
+        "bench/tests/attributes.rs::external_generated_tuple_args_and_multiple_types_keep_distinct_cases"
+      ],
+      "remaining": "External/generated lists and owned/borrowed tuples tested; full argument lifecycle audit remains."
+    },
+    {
+      "id": "types",
+      "requirement": "Generic types, constraints, lifetime parameters, multiple type dimensions",
+      "upstream": "D:bench(types)",
+      "status": "partial",
+      "evidence": [
+        "bench/tests/attributes.rs::external_generated_tuple_args_and_multiple_types_keep_distinct_cases",
+        "bench/tests/attributes.rs::explicit_input_lifetimes_support_sync_async_and_type_bounds",
+        "bench/src/lib.rs (compile-fail lifetime extension validation)"
+      ],
+      "remaining": "Multiple type rows, constraints and explicit input lifetimes implemented; complete upstream generic-option audit remains."
+    },
+    {
+      "id": "consts",
+      "requirement": "Const parameters including expressions and external lists",
+      "upstream": "D:bench(consts)",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::const_tuple_rows_preserve_types_expressions_and_parameter_order",
+        "bench/tests/attributes.rs::external_const_arrays_and_slices_register_only_real_entries",
+        "bench/tests/attributes.rs::unused_external_const_slots_do_not_generate_arguments",
+        "bench/src/lib.rs (compile-fail external const list validation)"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "renaming",
+      "requirement": "Custom names and renamed library dependency",
+      "upstream": "D:bench(name,crate)",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::attributes_preserve_lazy_registration_fresh_inputs_and_contracts",
+        "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
+        "bench/scripts/test-cargo-bench.py (renamed dependency and explicit crate paths)"
+      ]
+    },
+    {
+      "id": "ignored",
+      "requirement": "Ignored cases, include-ignored, only-ignored",
+      "upstream": "D:Divan::run_ignored,run_only_ignored",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
+        "bench/scripts/test-cargo-bench.py"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "selection",
+      "requirement": "Substring, exact, regex, exclusions and group selection",
+      "upstream": "C:BenchmarkFilter;D:skip_regex,skip_exact",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/contracts.rs::selection_exact_glob_tags_and_exclusions",
+        "bench/tests/contracts.rs::regex_selection_and_exact_exclusions_are_lazy_and_unicode_aware",
+        "bench/scripts/test-cargo-bench.py"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "listing",
+      "requirement": "Lazy list and dry-run",
+      "upstream": "C:list;D:list_benches",
+      "status": "verified",
+      "evidence": [
+        "bench/scripts/test-cargo-bench.py (full list/dry-run with setup, workload and executor guards; no artifacts or history)",
+        "bench/tests/profiling.rs",
+        "bench/tests/local_closures.rs"
+      ],
+      "comparison": "Cargo listing and Airbug dry-run return before workloads, input setup, executor creation, profiler hooks and history/artifact writes. Runtime argument expressions and registration still execute to enumerate case names, as documented. Output format variants are tracked separately under output."
+    },
+    {
+      "id": "test_mode",
+      "requirement": "Execute each case once without benchmarking",
+      "upstream": "C:test;D:test_benches",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::smoke_mode_executes_each_case_once_and_preserves_correctness_checks",
+        "bench/scripts/test-cargo-bench.py"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "sorting",
+      "requirement": "Registration/source location, lexical/natural/kind order, reverse order",
+      "upstream": "D:cli sort,sortr",
+      "status": "partial",
+      "evidence": [
+        "bench/tests/contracts.rs::sorting_matches_listing_execution_and_preserves_registration_order",
+        "bench/scripts/test-cargo-bench.py",
+        "bench/src/ordering.rs::tests",
+        "bench/tests/attributes.rs::attributes_sort_by_declaration_with_stable_parameter_order",
+        "bench/tests/contracts.rs::source_sort_orders_files_lines_columns_and_unknown_locations",
+        "bench/tests/contracts.rs::kind_order_keeps_case_labels_distinct_from_nested_groups",
+        "bench/tests/attributes.rs::kind_sort_treats_generic_families_as_parents_and_value_args_as_leaves"
+      ],
+      "remaining": "Explicit group and generic family kind ordering implemented; complete upstream tie-breaker and hierarchical name/location audit remains."
+    },
+    {
+      "id": "local_closures",
+      "requirement": "Stateful local closures and non-Send values",
+      "upstream": "C:Bencher::iter;D:bench_local",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/local_closures.rs::local_closure_borrows_mutable_stack_state_and_preserves_it_across_runs",
+        "bench/tests/local_closures.rs::local_setup_and_operations_borrow_separate_mutable_state_with_non_send_inputs"
+      ],
+      "comparison": "Divan 0.1.21 benchmark/mod.rs bench_local, bench_local_values and bench_local_refs accept FnMut with no Send requirement. Suite bench/bench_with_owned_input/bench_with_input accept borrowed FnMut closures and non-Send inputs/outputs; tests verify repeated runs, samples, batches, lazy registration and mutable stack borrows. Criterion iter/iter_batched/iter_batched_ref have the same local closure capability. Drop policy is independently selectable."
+    },
+    {
+      "id": "fresh_refs",
+      "requirement": "Fresh mutable input, setup and input destruction excluded",
+      "upstream": "C:iter_batched_ref;D:bench_refs",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/fresh_inputs.rs::fresh_borrowed_input_setup_and_drop_are_excluded_in_all_execution_modes",
+        "bench/src/suite_measure.rs::batch_tests::policies_preserve_remainders_and_lifetimes",
+        "bench/tests/local_closures.rs::local_setup_and_operations_borrow_separate_mutable_state_with_non_send_inputs"
+      ],
+      "comparison": "Criterion 0.8.2 iter_batched_ref constructs inputs before timer and drops them after timer; Divan 0.1.21 bench_refs/bench_local_refs borrow generated inputs and destroy after outputs. Airbug tests freshness, mutation, exact setup/drop counts, work interval inclusion and setup/drop exclusion across sync, async, coordinator workers, local workers and async workers, with multiple samples and batch remainders."
+    },
+    {
+      "id": "fresh_values",
+      "requirement": "Fresh input moved into operation, setup excluded",
+      "upstream": "C:iter_batched;D:bench_values",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::nonclone_owned_inputs_are_consumed_once_in_sync_async_and_threads",
+        "bench/scripts/test-cargo-bench.py"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "batch_policy",
+      "requirement": "Per-iteration, fixed batch, number of batches and memory policies",
+      "upstream": "C:BatchSize",
+      "status": "verified",
+      "evidence": [
+        "bench/src/suite_measure.rs::batch_tests::policies_preserve_remainders_and_lifetimes",
+        "bench/tests/attributes.rs::attributed_batch_policies_record_measurement_contracts",
+        "bench/tests/attributes.rs::async_batches_wait_and_drop_before_preparing_next_batch",
+        "bench/tests/attributes.rs::attributed_async_batch_policies_register_both_input_modes",
+        "bench/tests/batch_policies.rs::every_policy_bounds_live_inputs_and_outputs_in_sync_and_async_batches",
+        "bench/tests/fresh_inputs.rs",
+        "bench/tests/zero_sized_outputs.rs"
+      ],
+      "comparison": "Criterion 0.8.2 BatchSize has SmallInput ceil(n/10), LargeInput ceil(n/1000), PerIteration=1, NumBatches ceil(n/k), NumIterations=k. Airbug maps these to SmallInput/LargeInput/PerIteration/Batches/Iterations with nonzero counts. The integration matrix verifies peak live input/output counts, leftovers and drop across samples for all sync/async owned/borrowed combinations. These limit object counts, not heap bytes; threaded custom batch policy is an Airbug extension gap, not a Criterion BatchSize feature."
+    },
+    {
+      "id": "output_drop",
+      "requirement": "Deferred output destruction including large outputs",
+      "upstream": "C:iter_with_large_drop;D:bench return values",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::output_batches::plain_outputs_follow_explicit_batch_lifetimes_in_sync_and_async",
+        "bench/src/suite_measure.rs::batch_tests::policies_preserve_remainders_and_lifetimes",
+        "bench/src/suite_measure.rs::batch_tests::output_destructor_intervals_are_inside_or_outside_the_reported_duration",
+        "bench/src/suite_measure.rs::batch_tests::panic_drops_retained_outputs_and_every_prepared_input_once",
+        "bench/tests/zero_sized_outputs.rs::zero_sized_results_are_destroyed_once_across_samples_and_worker_waves",
+        "bench/tests/zero_sized_outputs.rs::async_output_drop_respects_the_reported_timer_boundary",
+        "bench/tests/zero_sized_outputs.rs::threaded_destructor_intervals_respect_the_shared_timer_boundary"
+      ],
+      "comparison": "Criterion 0.8.2 Bencher/AsyncBencher::iter_with_large_drop delegates to batched unit input with SmallInput. Airbug supports the same batching choice and explicit outside drop for plain/setup sync/async work. Divan 0.1.21 lib.rs Drop documentation and benchmark/mod.rs defer output destruction, including zero-sized outputs, until after synchronized timers stop. Airbug verifies this for coordinator/local/async workers; it defaults to inside drop, offers bounded waves, and cleans retained values on unwind. API/default compatibility is not required."
+    },
+    {
+      "id": "context_fixture",
+      "requirement": "Reusable setup context outside measured iterations",
+      "upstream": "D:Bencher;C:bench_function closures",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/local_closures.rs::shared_fixture_setup_is_untimed_and_context_lives_until_last_owner",
+        "bench/tests/contracts.rs::shared_fixture_is_lazy_and_initialized_once_across_cases",
+        "bench/tests/local_closures.rs::local_closure_borrows_mutable_stack_state_and_preserves_it_across_runs"
+      ],
+      "comparison": "Reusable state captured outside Criterion iteration loops or Divan Bencher sample loops maps to Suite local closures and Fixture. The fixture test proves one lazy initialization outside measurement, shared mutation across cases/samples, and destruction once after the final owner. Local closure tests cover non-static stack-borrowed contexts."
+    },
+    {
+      "id": "custom_time",
+      "requirement": "User-controlled measurement boundaries and duration",
+      "upstream": "C:iter_custom",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::async_custom_timing_is_lazy_borrows_arguments_and_awaits_completion",
+        "bench/tests/custom_timing.rs::custom_batches_preserve_zero_and_wide_durations_without_wall_time_substitution",
+        "bench/tests/contracts.rs::time_budget_distinguishes_reported_intervals_from_full_workload_calls"
+      ],
+      "comparison": "Criterion 0.8.2 sync/async iter_custom forwards iteration count and records caller return separately from elapsed wall time. Airbug duration path preserves that distinction, completes pending futures, and roundtrips exact u128 nanoseconds. General non-duration M::Value support belongs to the separate measurement requirement, which remains partial."
+    },
+    {
+      "id": "async",
+      "requirement": "Async plain, borrowed, owned, batched and custom timing",
+      "upstream": "C:AsyncBencher",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::async_custom_timing_is_lazy_borrows_arguments_and_awaits_completion",
+        "bench/docs/parity/async-methods.json",
+        "bench/tests/async_cleanup.rs::async_batch_panic_cleans_inputs_and_retained_outputs_after_pending",
+        "bench/tests/attributes.rs::async_batches_wait_and_drop_before_preparing_next_batch",
+        "bench/tests/fresh_inputs.rs",
+        "bench/tests/zero_sized_outputs.rs"
+      ],
+      "comparison": "All seven AsyncBencher iteration methods mapped, including hidden setup aliases. Duration timing, borrowed/owned batches, deferred destruction, pending futures and panic cleanup covered; non-duration Measurement::Value remains in the separate measurement requirement."
+    },
+    {
+      "id": "async_runtime",
+      "requirement": "Runtime adapters for supported runtime use cases",
+      "upstream": "C:async_executor",
+      "status": "verified",
+      "evidence": [
+        "bench/src/executors.rs",
+        "bench/tests/executors.rs (owned/borrowed runtimes, handles, non-Send futures, timers, spawn and Unix I/O)",
+        "bench/benches/attributed.rs::tokio_timer"
+      ]
+    },
+    {
+      "id": "threads",
+      "requirement": "Concurrent workers, local mode, automatic and selected counts",
+      "upstream": "D:threads",
+      "status": "verified",
+      "evidence": [
+        "bench/src/threads.rs::tests",
+        "bench/tests/attributes.rs::automatic_scalar_slice_range_and_local_override_are_lazy",
+        "bench/tests/attributes.rs::concurrent_case_normalizes_by_all_workers",
+        "bench/tests/attributes.rs::workers_join_on_failure_and_invalid_counts_do_not_execute"
+      ]
+    },
+    {
+      "id": "thread_local_setup",
+      "requirement": "Generate/measure input and counters on worker thread",
+      "upstream": "D:with_inputs,input_counter",
+      "status": "verified",
+      "evidence": [
+        "bench/src/suite_measure.rs::local_worker_tests",
+        "bench/tests/attributes.rs::worker_local_attributes_accept_non_send_inputs_and_outputs_across_waves",
+        "bench/tests/attributes.rs::dynamic_worker_counts_sum_actual_inputs_before_mutation"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "async_threads",
+      "requirement": "Compose async workloads with concurrent workers",
+      "upstream": "Airbug accepted requirement",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::threaded_async_keeps_executors_and_non_send_values_on_each_worker",
+        "bench/tests/contracts.rs::async_workers_poll_concurrently_and_release_after_future_panic",
+        "bench/benches/attributed.rs::async_workers"
+      ]
+    },
+    {
+      "id": "counters",
+      "requirement": "Simultaneous bytes/items/chars/cycles and replacement by unit",
+      "upstream": "D:counter",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/attributes.rs::simultaneous_counters_and_unit_replacement_preserve_rates",
+        "bench/cli/tests/cli.rs::throughput_budget_selects_one_unit_and_rejects_missing_values",
+        "bench/src/counters.rs::tests",
+        "bench/tests/attributes.rs::zero_counters_are_reported_as_zero_throughput",
+        "bench/scripts/test-cargo-bench.py (empty and Unicode counters)"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "input_counters",
+      "requirement": "Per-input dynamic counters excluding counter overhead",
+      "upstream": "D:input_counter,count_inputs_as",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/contracts.rs::dynamic_work_totals_exclude_pilot_and_warmup_and_drive_throughput",
+        "bench/tests/attributes.rs::dynamic_worker_counts_sum_actual_inputs_before_mutation",
+        "bench/tests/attributes.rs::attributed_async_batch_policies_register_both_input_modes",
+        "bench/scripts/test-cargo-bench.py (dynamic totals in worker cases)"
+      ]
+    },
+    {
+      "id": "byte_units",
+      "requirement": "Decimal/binary throughput formatting and scaling",
+      "upstream": "C:Throughput;D:BytesFormat",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/contracts.rs::byte_format_scaling_is_display_only_and_keeps_custom_units",
+        "bench/scripts/test-cargo-bench.py (decimal/binary throughput output)",
+        "bench/cli/tests/cli.rs::throughput_budget_selects_one_unit_and_rejects_missing_values"
+      ]
+    },
+    {
+      "id": "allocations",
+      "requirement": "Counts/bytes alloc,dealloc,grow,shrink,peak per benchmark/thread",
+      "upstream": "D:AllocProfiler",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/contracts.rs::allocation_phases_distinguish_growth_shrink_and_freed_bytes",
+        "bench/tests/contracts.rs::allocator_failed_realloc_preserves_live_allocation",
+        "bench/tests/contracts.rs::phase_peak_realloc_and_cross_thread_free",
+        "bench/tests/thread_allocations.rs",
+        "bench/tests/allocated_suite.rs::suite_records_allocation_metrics_for_each_measured_sample_only",
+        "bench/tests/allocated_suite.rs::async_allocations_exclude_executor_setup_and_complete_non_send_futures",
+        "bench/tests/allocated_suite.rs::attributed_allocator_defaults_register_sync_and_async_parameter_cases",
+        "bench/tests/allocated_suite.rs::allocated_batches_exclude_setup_and_apply_input_and_output_drop_policies",
+        "bench/tests/allocated_suite.rs::async_allocated_batches_exclude_setup_and_apply_input_and_output_drop_policies",
+        "bench/tests/allocated_suite.rs::attributed_allocated_batches_support_all_local_lifecycles",
+        "bench/tests/allocated_suite.rs::allocated_workers_exclude_local_setup_and_sum_all_workers_across_waves",
+        "bench/tests/allocated_suite.rs::allocated_worker_panics_release_peers_and_allow_subsequent_measurement",
+        "bench/tests/allocated_suite.rs::attributed_worker_allocations_cover_plain_borrowed_owned_and_drop_policies",
+        "bench/tests/allocated_suite.rs::allocated_coordinator_setup_accepts_local_state_and_preserves_drop_threads",
+        "bench/tests/allocated_suite.rs::allocator_attributes_preserve_default_and_explicit_coordinator_setup",
+        "bench/tests/allocated_suite.rs::attributed_async_worker_allocations_cover_plain_borrowed_owned_and_drop_policies",
+        "bench/tests/allocated_suite.rs::async_allocated_worker_panics_release_peers_and_allow_subsequent_measurement",
+        "bench/docs/parity/allocations.json",
+        "bench/tests/allocated_suite.rs::worker_allocation_reports_pair_metrics_by_worker_time"
+      ],
+      "comparison": "Divan AllocProfiler event tallies, signed balances, count/byte peaks and timing-associated normalized summaries mapped in allocations.json. Local sync/async and worker/coordinator input lifecycles tested; worker records retain individual statistics plus aggregate upper-bound peaks. Installation is explicit; API compatibility is not required. Timer calibration/overhead compensation remains in the separate timer audit."
+    },
+    {
+      "id": "timer",
+      "requirement": "OS and supported CPU timestamp counters with calibration",
+      "upstream": "D:timer",
+      "status": "verified",
+      "evidence": [
+        "bench/src/timer.rs::tests",
+        "cargo check -p airbug-bench --lib --target x86_64-pc-windows-msvc --offline",
+        "bench/src/suite_timer_tests.rs (36 lifecycle registrations, both drop policies, repeated clock selection, worker error cleanup)",
+        "bench/tests/timers.rs (ARM64 CPU runtime and switch back to OS)",
+        "bench/scripts/test-cargo-bench.py (OS/CPU CLI selection, lazy list/dry-run, invalid and duplicate timer arguments)",
+        "bench/tests/timers.rs::attributes_inherit_clocks_across_inline_and_imported_groups",
+        "bench/scripts/test-cargo-bench.py (cross-crate timer inheritance, lazy CPU preview, CLI precedence, invalid attribute)",
+        "bench/docs/parity/timers.json",
+        "bench/src/suite_timer_tests.rs::calibration_reports_fractional_loop_cost_without_changing_samples",
+        "bench/src/timer.rs::tests::resolution_probe_handles_coarse_stalled_and_failed_clocks",
+        "bench/src/timer.rs::tests::zero_clock_keeps_zero_overhead_and_reports_unknown_resolution",
+        "bench/src/alloc/overhead.rs::tests",
+        "bench/src/timing.rs::tests",
+        "bench/tests/allocated_suite.rs::compensated_worker_records_roundtrip_and_reject_inconsistent_aggregates",
+        "bench/cli/tests/cli.rs::protocol_preserves_worker_allocations_across_processes_and_variants",
+        "bench/tests/timers.rs::overhead_attributes_preserve_explicit_raw_and_nearest_imported_defaults",
+        "bench/src/timer.rs::tests::cpu_frequency_matches_os_bracketed_intervals",
+        "bench/scripts/test-cargo-bench.py (imported compensation defaults, CLI overrides, lazy previews, profile preflight and invalid attributes)"
+      ],
+      "comparison": "Divan OS/TSC selection, lazy frequency discovery, resolution probing and loop/allocation overhead estimation mapped in timers.json. Airbug preserves raw intervals and offers compensated metrics across local/async/batched/worker modes; attributes and CLI precedence verified. ARM64 native and x86_64 Rosetta runtime checks passed; native platform coverage is tracked separately under platforms."
+    },
+    {
+      "id": "measurement",
+      "requirement": "Pluggable measurement values, aggregation and formatters",
+      "upstream": "C:Measurement,ValueFormatter",
+      "status": "partial",
+      "evidence": [
+        "bench/docs/parity/measurement.json (method-level audit against Criterion 0.8.2 measurement.rs and current Suite/timing/report code)",
+        "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock",
+        "bench/scripts/test-cargo-bench.py (external custom measurement, baseline reload and normalized reports)"
+      ],
+      "remaining": "Synchronous and async typed measurements support fresh borrowed/owned inputs and drop policies. Direct Cargo baseline roundtrip verified for simple synchronous case. Threaded boundaries, formatter API, saved-report formatting and broader compatibility validation remain; see measurement.json."
+    },
+    {
+      "id": "samples",
+      "requirement": "Sample count and warmup/time configuration at all scopes",
+      "upstream": "C:sample_size,warm_up_time;D:sample_count",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "sample_size",
+      "requirement": "Explicit iterations per sample",
+      "upstream": "D:sample_size",
+      "status": "verified",
+      "evidence": [
+        "bench/src/sampling.rs::tests",
+        "bench/tests/attributes.rs::fixed_sampling_inherits_options_and_obeys_measured_time_limits",
+        "bench/scripts/test-cargo-bench.py",
+        "bench/tests/attributes.rs::threaded_fixed_sample_spans_waves_without_losing_inputs",
+        "bench/tests/attributes.rs::attributed_linear_sampling_preserves_per_operation_cost"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "sampling_mode",
+      "requirement": "Flat/linear/automatic sampling schedules",
+      "upstream": "C:SamplingMode",
+      "status": "verified",
+      "evidence": [
+        "bench/src/sampling.rs::tests",
+        "bench/tests/attributes.rs::fixed_sampling_inherits_options_and_obeys_measured_time_limits",
+        "bench/scripts/test-cargo-bench.py",
+        "bench/tests/attributes.rs::threaded_fixed_sample_spans_waves_without_losing_inputs",
+        "bench/tests/attributes.rs::attributed_linear_sampling_preserves_per_operation_cost"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "time_limits",
+      "requirement": "Minimum/maximum time and external-time accounting",
+      "upstream": "D:min_time,max_time,skip_ext_time;C:measurement_time",
+      "status": "verified",
+      "evidence": [
+        "bench/src/sampling.rs::tests",
+        "bench/tests/attributes.rs::fixed_sampling_inherits_options_and_obeys_measured_time_limits",
+        "bench/scripts/test-cargo-bench.py",
+        "bench/tests/contracts.rs::time_budget_distinguishes_reported_intervals_from_full_workload_calls",
+        "bench/tests/contracts.rs::calibration_and_warmup_consume_the_time_budget"
+      ],
+      "remaining": ""
+    },
+    {
+      "id": "quick_mode",
+      "requirement": "Adaptive shortened measurement mode",
+      "upstream": "C:quick",
+      "status": "verified",
+      "evidence": [
+        "bench/src/quick.rs::tests::residual_stop_obeys_minimum_deadline_zero_and_iteration_cap",
+        "bench/tests/quick.rs",
+        "bench/scripts/test-cargo-bench.py (adaptive quick CLI, lazy modes, conflicts and smoke precedence)",
+        "bench/tests/quick.rs::quick_attributes_inherit_into_inline_and_imported_groups_and_allow_disable",
+        "bench/tests/quick.rs::quick_conflicts_in_later_cases_are_rejected_before_any_work",
+        "bench/docs/parity/quick-mode.json",
+        "bench/tests/allocated_suite.rs::adaptive_quick_preserves_worker_allocations_and_resets_between_runs"
+      ],
+      "comparison": "Criterion quick adjacent-batch residual stopping mapped to adaptive measured batches; added iteration/sample caps and retained real observations. Verified attributes/CLI, lazy preview, conflict preflight, repeated runs, worker accounting and minimum/maximum budget precedence."
+    },
+    {
+      "id": "descriptive_stats",
+      "requirement": "Min/max/mean/median/deviation and sample diagnostics",
+      "upstream": "C:analysis;D:stats",
+      "status": "verified",
+      "evidence": [
+        "bench/src/bootstrap.rs::estimate",
+        "bench/src/bootstrap.rs::tests::constant_samples_and_seeded_reproducibility",
+        "bench/src/bootstrap.rs::tests::descriptive_summary_handles_even_skewed_single_and_invalid_samples",
+        "bench/tests/contracts.rs::descriptive_rows_separate_processes_and_do_not_hide_missing_observations",
+        "bench/scripts/test-cargo-bench.py (default table, BENCH_SUMMARY, summary.json, single sample)",
+        "bench/tests/contracts.rs::descriptive_operation_mean_weights_unequal_batches_and_survives_large_totals",
+        "bench/tests/contracts.rs::associated_work_counts_follow_timing_order_not_counter_order",
+        "bench/tests/allocated_suite.rs::allocation_summaries_pair_by_sequence_and_preserve_peak_units"
+      ],
+      "comparison": "Criterion mean/median/sample deviation/scaled MAD plus Divan fastest/slowest/median/iteration mean represented. Per-process descriptive JSON/text includes sample and operation-weighted means, counters and allocation metrics paired to time-ranked samples. Tests cover known formulas, one sample, missing data, unequal batches, peak units and reordered sample records. Availability of allocation collection modes is tracked separately under allocations."
+    },
+    {
+      "id": "bootstrap",
+      "requirement": "Resampling count and confidence intervals",
+      "upstream": "C:nresamples,confidence_level",
+      "status": "verified",
+      "evidence": [
+        "bench/src/bootstrap.rs::tests",
+        "bench/tests/contracts.rs::bootstrap_uses_process_units_and_normalizes_batch_totals",
+        "bench/scripts/test-cargo-bench.py (bootstrap CLI and estimates.json)"
+      ]
+    },
+    {
+      "id": "regression_analysis",
+      "requirement": "Slope estimates and linear sample analysis",
+      "upstream": "C:analysis",
+      "status": "verified",
+      "evidence": [
+        "bench/src/regression.rs::tests",
+        "bench/tests/contracts.rs::linear_sampling_report_fits_totals_per_process",
+        "bench/scripts/test-cargo-bench.py (linear regression estimates)"
+      ]
+    },
+    {
+      "id": "significance",
+      "requirement": "Hypothesis tests, significance and noise threshold",
+      "upstream": "C:significance_level,noise_threshold",
+      "status": "verified",
+      "evidence": [
+        "bench/src/history.rs::tests::comparison_configuration_changes_decisions_and_rejects_invalid_values",
+        "bench/scripts/test-cargo-bench.py (named comparison configuration metadata, invalid values and duplicate flags before setup)",
+        "bench/src/hypothesis.rs::tests (known Welch statistic, exhaustive pooled-null oracle, reproducibility and unavailable cases)",
+        "bench/tests/hypothesis.rs (independent process units, normalized batches, family alpha, JSON/text output, paired isolation)",
+        "bench/scripts/test-cargo-bench.py (hypothesis resamples/seed forwarding, independent-process fixture reanalysis reproducibility, invalid flags preflight)",
+        "bench/src/suite.rs::comparison_scope_tests::nested_defaults_preserve_nearest_fields_explicit_zero_and_siblings",
+        "bench/src/history.rs::tests::case_overrides_are_recorded_and_invalid_options_do_not_publish",
+        "bench/tests/hypothesis.rs::analysis_attributes_inherit_per_field_across_imported_groups",
+        "bench/scripts/test-cargo-bench.py (cross-crate suite/group comparison attributes and CLI per-field precedence)",
+        "bench/docs/parity/significance.json"
+      ],
+      "comparison": "Criterion Welch pooled-bootstrap p-value, significance and practical margin capabilities mapped in significance.json. Independent processes remain the inference units; method differences are explicit. Suite/group/case attributes and cross-crate/CLI precedence verified, including margins >=100%."
+    },
+    {
+      "id": "outliers",
+      "requirement": "Outlier classification and visualization",
+      "upstream": "C:analysis",
+      "status": "verified",
+      "evidence": [
+        "bench/src/outliers.rs::tests",
+        "bench/tests/contracts.rs::outlier_reporting_preserves_extreme_observations_in_estimates",
+        "bench/scripts/test-cargo-bench.py (estimates.html and classification artifact)",
+        "bench/examples/outlier_report.rs (rendered and inspected in browser)"
+      ]
+    },
+    {
+      "id": "baseline",
+      "requirement": "Save/replace/retain/load/strict/lenient/discard baseline",
+      "upstream": "C:baseline options",
+      "status": "verified",
+      "evidence": [
+        "bench/src/baseline.rs::tests (create/replace/retain, corruption, smoke rejection, concurrent publication)",
+        "bench/cli/src/args.rs (baseline save --replace/--retain)",
+        "bench/cli/tests/cli.rs::baseline_save_modes_resolve_only_needed_sources (real CLI retain/replace, alias resolution, conflicting flags and corruption recovery)",
+        "bench/src/baseline.rs::tests::strict_and_lenient_preflight_return_verified_snapshots_without_writes",
+        "bench/scripts/test-cargo-bench.py (named strict/lenient comparison, missing selected cases before setup, immutable pointer and corruption rejection)",
+        "bench/scripts/test-cargo-bench.py (discard measures with no artifact/dashboard/history writes despite enabled environment; conflicts rejected before setup)",
+        "bench/src/baseline.rs::tests::owned_snapshots_are_immutable_and_do_not_trust_run_ids",
+        "bench/scripts/test-cargo-bench.py (direct save/replace/retain, comparison before replacement, failed workload/output protection and preview/conflict validation)",
+        "bench/scripts/test-cargo-bench.py (load-baseline reanalysis with setup/workload guards, identical saved observations, explicit export, missing case and conflicts)",
+        "bench/src/baseline.rs::tests::case_updates_preserve_other_runs_provenance_and_concurrent_changes",
+        "bench/src/history.rs::tests::case_baselines_compare_each_original_environment_and_run_identity",
+        "bench/src/baseline.rs::tests::reanalysis_groups_by_artifact_and_preserves_identity_collisions",
+        "bench/scripts/test-cargo-bench.py (save two cases, replace one, preserve unselected source bytes and reload both; direct saving now uses case manifests)",
+        "bench/cli/tests/cli.rs::retention_protects_case_baseline_artifacts_and_checks_hashes (quarantines unreferenced run, preserves referenced source, refuses hash mismatch)",
+        "bench/cli/tests/cli.rs::case_alias_reports_preserve_updates_and_match_cases_across_runs",
+        "bench/cli/tests/cli.rs::runner_save_updates_cargo_case_baseline_without_shadow_reference",
+        "bench/docs/parity/baselines.json",
+        "bench/scripts/test-cargo-bench.py (explicit repair of selected corrupt case, retained corrupt case blocks publication)"
+      ],
+      "comparison": "Criterion named save, strict/lenient retain, load-without-measurement and discard mapped in baselines.json. Per-case filtered updates, original source provenance, atomic publication and failure behavior verified. Airbug-specific single-run runner commands reject multi-source aliases rather than pool them."
+    },
+    {
+      "id": "direct_comparison",
+      "requirement": "Automatic prior-run comparison in cargo bench",
+      "upstream": "C:Criterion analysis/comparison workflow",
+      "status": "verified",
+      "evidence": [
+        "bench/src/history.rs::tests",
+        "bench/scripts/test-cargo-bench.py (automatic comparison, per-case filtered history, failed/smoke/preview exclusions)",
+        "bench/docs/parity/direct-comparison.json"
+      ],
+      "comparison": "Criterion automatic comparison to persisted prior results is available in Suite::main through immutable per-suite history and BENCH_COMPARISON/text output. Latest prior result is selected independently per case; environment/workload incompatibilities are explicit. Existing independent-process analysis is reused; further hypothesis-test options and named baseline lifecycle remain separate requirements."
+    },
+    {
+      "id": "profiler",
+      "requirement": "Timed profile mode and in-process start/stop hooks",
+      "upstream": "C:Profiler,profile_time",
+      "status": "verified",
+      "evidence": [
+        "bench/src/profiling.rs (wall-clock sessions and start/stop hooks)",
+        "bench/tests/profiling.rs (selection, artifacts, repeated sessions, cleanup on errors/panics and ordinary-run isolation)",
+        "bench/scripts/test-cargo-bench.py (timed CLI, worker counts, lazy modes, output conflicts and dashboard history)"
+      ],
+      "comparison": "Criterion 0.8.2 src/profiler.rs and Routine::profile: per-case start/stop, artifact directory, external default, timed execution without statistical analysis. Airbug uses adaptive wall-clock batches with cooperative stopping."
+    },
+    {
+      "id": "plots",
+      "requirement": "Enable/disable plots, linear/log scales, grouped comparisons",
+      "upstream": "C:PlotConfiguration,AxisScale,plotting options",
+      "status": "partial",
+      "evidence": [
+        "bench/src/hypothesis.rs::tests::histogram_conserves_draws_and_exact_tail_counts_at_extreme_ranges",
+        "bench/src/hypothesis_plot.rs::tests::escaped_accessible_svg_handles_available_and_unavailable_distributions",
+        "bench/src/hypothesis_plot.rs::tests::document_distinguishes_uncaptured_paired_and_retained_rows",
+        "bench/src/history.rs::tests::html_export_failure_preserves_history_and_existing_artifact",
+        "bench/cli/tests/cli.rs::compare_exports_seeded_null_draws_and_portable_html",
+        "bench/src/viz.rs::tests::log_ticks_and_mapping_span_decades (log coordinates, exact endpoints, decade spacing, nonpositive rejection, vertical orientation, full finite positive range)",
+        "bench/src/viz.rs::tests::log_ticks_cover_wide_narrow_and_subnormal_ranges (bounded ticks span full domain instead of truncating first 24; subnormal and narrow ranges)",
+        "bench/src/viz.rs::tests::scaled_scatter_filters_pairs_before_fitting_and_thinning (independent linear/log axis settings; shared bounds; invalid pair exclusion and diagnostics)",
+        "bench/src/report.rs::summary_plot_tests::numeric_contract_summary_keeps_metric_scopes_separate (standard HTML summary integration, explicit numeric parameter, independent metric contracts, escaping, opt-in)",
+        "bench/cli/tests/cli.rs::report_summary_parameter_and_scale_reach_html (report --summary-parameter/--summary-scale, HTML integration and invalid combinations)",
+        "bench/scripts/test-cargo-bench.py (direct Cargo loaded-baseline report.html with numeric parameter and logarithmic summary; invalid option preflight)",
+        "bench/src/report.rs::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches (unbalanced 5:1 process batches yield 55 ns/op, not pooled 10; unavailable process excluded)",
+        "bench/docs/parity/plots.json (Plotter surface audit against local Criterion 0.8.2 sources)"
+      ],
+      "remaining": "See plots.json: KDE PDF/overlays, regression geometry, absolute/relative bootstrap distributions, family line summaries, throughput curves, violin plots, group scale settings and report integration remain incomplete."
+    },
+    {
+      "id": "output",
+      "requirement": "Console verbosity/color, tree/table, machine and report formats",
+      "upstream": "C:output CLI;D:tree output,color",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "configuration",
+      "requirement": "CLI and environment overrides with documented precedence",
+      "upstream": "C:configure_from_args;D:config_with_args",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "artifacts",
+      "requirement": "Output directory, raw data and final summary",
+      "upstream": "C:output_directory,final_summary",
+      "status": "partial",
+      "evidence": [
+        "bench/src/hypothesis.rs::tests::exported_distribution_reconstructs_probability_and_preserves_infinities",
+        "bench/tests/hypothesis.rs (summary/export equivalence and exact JSON distribution roundtrip)",
+        "bench/scripts/test-cargo-bench.py (hypothesis-distribution console/file equality and reconstructing exported p-value)",
+        "bench/src/history.rs::tests::comparison_export_failure_does_not_advance_history",
+        "bench/cli/tests/cli.rs::compare_exports_seeded_null_draws_and_portable_html"
+      ],
+      "remaining": "Library, direct Cargo and runner compare export raw hypothesis distributions. Complete Criterion report artifact mapping remains."
+    },
+    {
+      "id": "black_box",
+      "requirement": "Optimization barrier including intentional drop",
+      "upstream": "C:black_box;D:black_box,black_box_drop",
+      "status": "verified",
+      "evidence": [
+        "bench/src/lib.rs::black_box",
+        "bench/src/lib.rs::black_box_drop",
+        "bench/tests/contracts.rs::black_box_drop_consumes_lazy_noncopy_outputs_once"
+      ]
+    },
+    {
+      "id": "platforms",
+      "requirement": "Supported platforms/toolchains and runtime failure behavior",
+      "upstream": "C/D:package features and cfg",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "audit",
+      "requirement": "All upstream exports, CLI options, feature flags mapped and verified",
+      "upstream": "Full objective",
+      "status": "partial",
+      "evidence": [
+        "bench/docs/parity/upstream-surface.json",
+        "bench/scripts/audit-upstream-surface.py"
+      ],
+      "remaining": "Versioned public declarations captured; detailed mapping of each API, CLI flag, feature flag and report remains incomplete."
+    }
+  ]
+}

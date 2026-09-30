@@ -1,0 +1,78 @@
+{
+  "upstream": {
+    "criterion": "0.8.2",
+    "source": "criterion/src/measurement.rs",
+    "inspected_methods": [
+      "Measurement::start",
+      "Measurement::end",
+      "Measurement::add",
+      "Measurement::zero",
+      "Measurement::to_f64",
+      "Measurement::formatter",
+      "ValueFormatter::format_value",
+      "ValueFormatter::format_throughput",
+      "ValueFormatter::scale_values",
+      "ValueFormatter::scale_throughputs",
+      "ValueFormatter::scale_for_machines"
+    ]
+  },
+  "status": "partial",
+  "findings": [
+    {
+      "requirement": "User-defined start/end state and measured value type",
+      "status": "partial",
+      "evidence": "bench/src/suite.rs Work returns timing::Measured; bench_custom returns Duration; timer::Clock is a closed OS/CPU enum. Initial synchronous bench_measured integration now exists; see progress and evidence."
+    },
+    {
+      "requirement": "User-defined zero and aggregation across measured batches",
+      "status": "partial",
+      "evidence": "bench/src/timing.rs Measured::add uses checked u128 nanosecond addition and max; no measurement-specific accumulator. Initial synchronous bench_measured integration now exists; see progress and evidence."
+    },
+    {
+      "requirement": "Convert custom measured values to numeric observations with correct metric identity",
+      "status": "partial",
+      "evidence": "model::Observation supports numeric data and arbitrary metric contracts; suite run_selected_live unconditionally emits wall from measured.raw_ns. Initial synchronous bench_measured integration now exists; see progress and evidence."
+    },
+    {
+      "requirement": "Separate measurement magnitude from wall-clock scheduling budgets",
+      "status": "partial",
+      "evidence": "suite run_selected_live uses measured.raw_ns for budget.add, sample under-target checks and emitted wall. Non-time counts cannot be substituted without corrupting calibration and time limits. Initial synchronous bench_measured integration now exists; see progress and evidence."
+    },
+    {
+      "requirement": "User-defined human formatting and consistent shared-axis scaling",
+      "status": "partial",
+      "evidence": "No ValueFormatter or equivalent registration in bench/src; plotting/report functions receive metric units but no user scaling callback. ValueFormatter and formatted-observation report API now exist; automatic Suite and saved-report integration remain."
+    },
+    {
+      "requirement": "User-defined throughput conversion and machine-output scaling",
+      "status": "partial",
+      "evidence": "report throughput is tied to wall nanoseconds and fixed work-counter conversion; no user conversion hook. ValueFormatter and formatted-observation report API now exist; automatic Suite and saved-report integration remain."
+    }
+  ],
+  "required_validation": [
+    "Custom non-Duration value with independent start state and nontrivial accumulator",
+    "Exact custom values across multiple waves, fresh-input setup and output-drop policies",
+    "Wall-clock calibration/time budget remain in time units while observations use custom metric units",
+    "Missing and invalid conversions are explicit; no silent replacement with wall time",
+    "Human and machine formatting conversions with fixed typical-value scale shared by baseline/candidate",
+    "Direct Cargo registration, saved-run reports and regression comparison retain custom metric identity",
+    "Test generic sync/async and threaded boundaries or explicitly implement unsupported combinations before claiming parity"
+  ],
+  "next_implementation": "Integrate throughput formatter registration and shared graph scaling; audit snapshot propagation in process runner and threaded measurement boundaries.",
+  "progress": "Added measurement::Measurement typed Start/Value lifecycle, zero/add accumulator and to_f64 conversion. Suite::bench_measured registers a distinct batch-total metric and executes synchronous operations in BatchPolicy waves. A separate timer supplies wall observations and scheduling; custom numeric totals cannot replace elapsed time. Invalid finite/nonnegative conversion fails explicitly. Suite::bench_measured_with_input now prepares fresh inputs and deferred-output buffers before both clocks, excludes input destruction, and follows DropPolicy for outputs. Plain bench_measured shares this implementation via unit input. bench_measured_with_owned_input moves each fresh input exactly once using the same wave engine; consumed input destruction is included, while returned inputs follow output-drop policy. Ownership and lifecycle contracts distinguish this from borrowed inputs. bench_async_measured_with_input runs borrowing futures sequentially on a lazily initialized executor created before the custom wave timer. Future construction, polling and completion are included; outputs follow DropPolicy. Added bench_async_measured and bench_async_measured_with_owned_input using the shared async borrowed-input engine. Plain operations include output destruction; owned futures distinguish consumed input destruction from returned input deferred destruction. Added ValueFormatter with human/shared-scale, throughput and machine conversions. format_observations normalizes batches, uses one population-wide typical maximum, preserves missing rows, validates converted values/count/unit and leaves Run unchanged. Formatted rows serialize to JSON and render to Markdown/HTML tables. Suite::formatter registers presentation per case/metric; formatted_metrics checks the full metric contract on loaded runs. main emits human tables to console/HTML and human+machine formatted.json/BENCH_FORMATTED, retaining raw Run and comparison data. Loaded baselines are formatted with currently registered callbacks only when metric contracts agree. Suite main persists formatted snapshots in versioned provenance. Each snapshot hashes its metric contract and raw observations. report Markdown/HTML restores it without custom code; missing selected metrics are ignored and changed source values produce an explicit stale-formatting diagnostic. Snapshot writes validate before mutating the run.",
+  "evidence": [
+    "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock: Vec accumulator, 130 operations in 64/64/2 waves, 390 total and 3 per operation, separate wall observations, lazy listing, JSON roundtrip and NaN rejection",
+    "bench/tests/measurements.rs::measured_fresh_inputs_exclude_setup_and_input_drop_and_control_output_drop: 130 operations across 64/64/2 waves, setup +10000 and input drop +1000 excluded; output +7 included/excluded yields 10/3 per operation; all 260 inputs fresh and all drops accounted",
+    "bench/tests/measurements.rs::owned_measured_inputs_distinguish_consumed_and_returned_destruction: both drop policies, consumed and returned inputs, non-divisible waves, setup excluded and total destruction accounted",
+    "bench/tests/measurements.rs::async_measurement_excludes_executor_creation_and_includes_future_completion: lazy list, single executor creation with +1000000 excluded, Pending then Ready both counted, 8 per operation, deferred +7 output destruction excluded and accounted",
+    "measurements::async_owned_measurements_preserve_destruction_boundaries: consumed/returned inputs under both policies, non-divisible waves, all destructions counted",
+    "measurements::plain_async_measurement_includes_output_drop: 3 work + 7 destruction per operation, per-iteration waves",
+    "bench/scripts/test-cargo-bench.py: external crate custom_measurement example saves named baseline, reloads exact observations, compares work_units, computes normalized mean=3 and renders metric in primary/statistical HTML; full script passed",
+    "measurements::custom_formatters_share_scale_preserve_missing_rows_and_raw_data: normalized 1000/2000 -> 1/2, shared scale across variants, work/value throughput, raw machine units, missing rows, invalid count rejection, escaped units and byte-identical Run",
+    "measurements::custom_formatters_share_scale_preserve_missing_rows_and_raw_data: Suite registration validation and loaded metric-scope mismatch rejection",
+    "bench/scripts/test-cargo-bench.py: external formatter registration, baseline reload, raw 390 preserved, human=1 group and machine=3 units/op in matching JSON stdout/file plus formatted HTML section; full script passed",
+    "measurements::custom_formatters_share_scale_preserve_missing_rows_and_raw_data: snapshot serde roundtrip, stale observation rejection and filtered metric exclusion",
+    "cli::saved_report_restores_formatter_snapshot_and_rejects_stale_values: standalone table HTML, preserved source bytes and explicit stale diagnostic after edit",
+    "bench/scripts/test-cargo-bench.py: complete script passed after snapshot persistence integration"
+  ]
+}

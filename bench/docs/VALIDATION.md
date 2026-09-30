@@ -54,7 +54,14 @@ Forma: медиана наблюдений CPU submit 41 µs, completed 1.302521
 
 У A/A интервалы изменения: stable [-7.290%, 2.927%], unstable [-5.710%, 2.681%]. При пороге 5% этих данных недостаточно для заявления об эквивалентности. Один A/A прогон не измеряет общую частоту ложных срабатываний.
 
-## Границы текущей версии
+## Исторические границы первоначального прототипа
+
+Этот раздел фиксирует состояние первой итерации 2026-09-07, а не текущие
+ограничения. Macro DSL, GPU timestamps и window lifecycle были добавлены позже
+(см. Final twenty ниже); история запусков теперь доступна в hub. Текущий API
+атрибутов, включая параметры и setup, описан в [README](../README.md).
+Сравнительные проверки overhead и устойчивости статистики остаются отдельной задачей.
+
 
 - Native window/present lifecycle, GPU timestamp adapter, async/browser drivers и macro DSL ещё не реализованы. Golden comparison реализован для отдельных checkpoints; полная последовательность кадров не проверяется.
 - Allocator считает Rust process scope; нет OS RSS/CPU provider, thread-local allocator scope и отдельного phase peak. Lifetime peak явно отличается от phase peak.

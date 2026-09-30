@@ -1,0 +1,215 @@
+{
+  "versions": {
+    "criterion": "0.8.2",
+    "divan": "0.1.21"
+  },
+  "scope": "Criterion Plotter surface and public summary-scale configuration. Visual behavior is required; identical filenames and renderer dependencies are not.",
+  "upstream_sources": [
+    "criterion/src/plot/mod.rs:Plotter,LinePlotConfig",
+    "criterion/src/plot/plotters_backend/mod.rs:Plotter implementation",
+    "criterion/src/kde.rs:sweep_and_estimate",
+    "criterion/src/lib.rs:AxisScale,PlotConfiguration"
+  ],
+  "mapping": [
+    {
+      "feature": "Measurement probability density, outliers, baseline overlay",
+      "status": "partial",
+      "implementation": "density::gaussian computes Gaussian KDE with unbiased sample sigma and Silverman bandwidth in original units. Empty/constant samples have explicit variants; unrepresentable grids fail explicitly. Existing outlier, strip and ECDF charts remain. density::figure overlays KDE series on shared axes, reports sample counts/bandwidths, and marks constant populations as explicit point masses. bootstrap::html renders the complete classified population with resampling-unit labels. bootstrap::comparison_charts overlays baseline/candidate densities even without regression fits; all existing callers receive these overlays. Bootstrap reports use a Tukey-classified observation rug; each marker retains series/index/class in tooltip and all values remain in KDE.",
+      "remaining": "Full HTML visual inspection remains; static density SVG was visually inspected.",
+      "evidence": [
+        "density::tests::gaussian_normalizes_and_scales_density_inversely",
+        "density::tests::degenerate_and_invalid_samples_are_explicit",
+        "density::tests::overlay_preserves_constant_empty_and_escaped_series",
+        "bootstrap::tests::density_reports_preserve_population_labels_and_all_observations",
+        "density::tests::outlier_rug_preserves_density_and_labels_extreme_observations",
+        "bench/examples/density_report.rs: baseline/candidate curves, severe outlier and point mass SVG raster visually inspected",
+        "cli::html_compare_overlays_independent_process_regressions: density curves, point masses, population rug and incompatible-contract suppression in compare/report HTML",
+        "bench/scripts/test-cargo-bench.py: deterministic loaded-baseline Gaussian density export and live sample KDE/point-mass HTML assertions"
+      ]
+    },
+    {
+      "feature": "Regression plot with slope confidence interval and baseline overlay",
+      "status": "partial",
+      "implementation": "ProcessRegression retains original paired batches with serde-default legacy support. bootstrap::html renders per-process scatter, through-origin fit and slope confidence wedge. regression::comparison_figure overlays independently fitted series on shared axes with distinct labels and confidence wedges. compare --html analyzes compatible saved runs and overlays each process with a baseline/candidate label. Regression points, lines and wedges carry escaped series labels in SVG tooltips. Unified report --baseline retains the validated baseline snapshot for HTML regression overlays. Direct Cargo --baseline --resamples --output exports regression-comparison.html before baseline promotion.",
+      "remaining": "Full HTML visual inspection remains. Colors repeat after six series in static print; SVG tooltips retain series identity.",
+      "evidence": [
+        "regression::tests::chart_and_paired_samples_roundtrip_with_legacy_fallback",
+        "bench/scripts/test-cargo-bench.py: exact retained pairs matched against run.json and estimates.html confidence geometry",
+        "bench/examples/regression_report.rs: deterministic noisy fixture, SVG raster inspected with macOS Quick Look",
+        "regression::tests::overlay_shares_axes_and_keeps_each_fit_in_its_observed_range",
+        "bench/cli/tests/cli.rs::html_compare_overlays_independent_process_regressions",
+        "bench/examples/regression_report.rs: deterministic four-process baseline/candidate SVG raster visually inspected; legend, points and wedges readable",
+        "viz::tests::wrapped_legend_preserves_plot_height_and_complete_unicode_labels",
+        "bench/examples/regression_report.rs: eight-process wrapped legend SVG visually inspected",
+        "cli::html_compare_overlays_independent_process_regressions: unified report overlay plus incompatible metric rejection",
+        "bench/scripts/test-cargo-bench.py: loaded named baselines with two processes each export four regression polygons"
+      ]
+    },
+    {
+      "feature": "Iteration-time plot",
+      "status": "partial",
+      "implementation": "raw_charts shows normalized observations per process. iteration_comparison validates run compatibility and overlays baseline/candidate/process series on shared axes, normalizes batch totals by operations, preserves recorded sequence indices, retains all available points and counts unavailable observations. Integrated into compare --html and unified report --baseline. Direct Cargo named-baseline comparisons include the overlay in main report.html without requiring bootstrap options. Per-case snapshots use the same contract normalization as history comparisons; only Compared cases are overlaid.",
+      "remaining": "Thumbnail/navigation behavior, large-report resource policy and full visual inspection remain.",
+      "upstream_audit": "Criterion 0.8.2 plotters_backend/iteration_times.rs renders average time per batch against ordinal sample index, shared baseline/candidate scale and legends. There are no confidence bands in this plot. Thumbnail variants omit title/legend and use a smaller canvas.",
+      "evidence": [
+        "report::summary_plot_tests::iteration_overlay_normalizes_batches_and_preserves_missing_sequences: exact normalized 10/20 values, preserved sequence 7, missing sequence 8 counted, incompatible units rejected",
+        "cli::html_compare_overlays_independent_process_regressions: unified iteration overlay alongside regression, relative, Welch and density charts",
+        "bench/scripts/test-cargo-bench.py: loaded named baselines render iteration overlay in main report.html both with statistical options and without --resamples; no estimates.json in plain mode; full script passed"
+      ]
+    },
+    {
+      "feature": "Absolute bootstrap distributions",
+      "status": "partial",
+      "implementation": "bootstrap::estimate_with_distributions retains original-unit mean, median, standard deviation and MAD draws in generation order with shared resample indices; ordinary estimate results are unchanged. analyze_with_distributions retains draws per report row without changing process/batch statistical units. Row.distributions is optional and old JSON deserializes without it. Direct Cargo --bootstrap-distributions exports row arrays in estimates.json and BENCH_ESTIMATES; requires an export destination and rejects smoke/profile modes. bootstrap::html renders all four retained distributions with density::estimate_figure: reported confidence band and original point estimate, independent of KDE smoothing. regression::fit_with_distribution retains paired-bootstrap slope draws in original units and generation order. ProcessRegression optionally serializes slope_distribution; --bootstrap-distributions captures it and estimates.html renders per-process slope density/interval charts in metric units per operation. Runner analyze exports saved-run bootstrap reports with configurable confidence, resamples, seed, optional distributions and JSON/HTML/Markdown formats.",
+      "remaining": "Full HTML visual inspection remains; captured mean plot SVG was inspected. Relative distributions are tracked separately.",
+      "evidence": [
+        "bootstrap::tests::retained_draws_preserve_estimates_joint_samples_and_json_precision",
+        "bootstrap::tests::report_capture_uses_process_units_and_reads_legacy_json",
+        "bench/scripts/test-cargo-bench.py: 200 draws per statistic, exported percentile interval reconstruction and invalid-option preflight",
+        "density::tests::estimate_overlay_keeps_external_point_and_degenerate_intervals",
+        "bootstrap::tests::report_capture_uses_process_units_and_reads_legacy_json (four HTML interval charts)",
+        "bench/scripts/test-cargo-bench.py: four bootstrap interval/point charts in exported estimates.html",
+        "bench/examples/outlier_report.rs: captured mean bootstrap SVG with interval shading and point line visually inspected",
+        "regression::tests::retained_slope_draws_match_paired_oracle_and_existing_fit",
+        "bootstrap::tests::report_capture_uses_process_units_and_reads_legacy_json: exact-line slope draws, JSON roundtrip, disabled capture",
+        "bench/scripts/test-cargo-bench.py: 200 slope draws and fifth interval chart in estimates.html",
+        "cli::analyze_saved_run_exports_distributions_without_mutating_source"
+      ]
+    },
+    {
+      "feature": "Relative bootstrap distributions",
+      "status": "partial",
+      "implementation": "relative::bootstrap independently resamples baseline/candidate populations and retains relative mean/median percentage changes. Undefined ratios remain null; any undefined draw suppresses a conditional-on-finite interval. relative::compare_runs shares existing run compatibility checks, uses normalized per-process medians and marks missing/insufficient independent units unavailable. Runner compare --json --relative-distributions exports a comparisons/relative envelope with seeded draws and per-statistic confidence levels; ordinary JSON and --check decisions remain unchanged. relative::charts and density::relative_figure render mean/median densities, bootstrap intervals, original point estimates, zero lines and symmetric practical noise regions. compare --html includes these for independent runs. Undefined ratios suppress the whole density rather than silently plotting finite subsets; constants remain point masses. Unified report --baseline renders relative charts from validated run snapshots. Direct Cargo named-baseline bootstrap exports per-case charts and relative-distributions.json before baseline promotion, with identical case-contract normalization to history comparison.",
+      "remaining": "Full HTML visual inspection; audit group bootstrap configuration and complete report artifact mapping.",
+      "evidence": [
+        "relative::tests::independent_resamples_match_two_point_oracle_and_scale",
+        "relative::tests::undefined_ratios_are_preserved_without_biased_intervals",
+        "relative::tests::saved_runs_use_equal_process_weights_and_reject_incompatible_data",
+        "cli::compare_relative_export_preserves_process_units_and_check_decisions: unequal batch counts, exact numeric reference, deterministic JSON, source preservation, CLI preflight and unchanged check decisions",
+        "relative::tests::relative_charts_preserve_noise_bounds_and_undefined_populations",
+        "cli::html_compare_overlays_independent_process_regressions: relative mean/median and noise regions in compare HTML",
+        "bench/examples/relative_report.rs: seeded synthetic relative mean SVG raster visually inspected",
+        "cli::html_compare_overlays_independent_process_regressions: relative charts in unified report and rejection of incompatible contracts",
+        "bench/scripts/test-cargo-bench.py: loaded named baselines, independent process counts, 128 retained draws, numeric mean-change oracle and HTML overlays; complete script passed"
+      ]
+    },
+    {
+      "feature": "Time-vs-input line comparison",
+      "status": "partial",
+      "implementation": "parameter_charts provides numeric-contract scatter, median of process medians, shared axes and separate metric contracts; direct Cargo and report CLI integration charts::line_scaled provides explicitly declared family line rendering on shared linear/log axes, sorts numeric inputs, preserves individual estimates, rejects duplicate inputs and invalid axis values, and labels lines as connections rather than fitted models. Suite::summary_family assigns group-scoped presentation identities persisted in run provenance. parameter_charts restores families and connects numeric input estimates within each metric contract and variant, leaving unassigned cases as separate points and rejecting duplicate inputs explicitly. Process-runner consensus now carries family identities across independent worker processes. Conflicts or legacy omissions suppress only automatic family joining, remain sticky, and add one note without rejecting measurements. summary_family attributes on bench/group/suite inherit through inline and imported groups with explicit child precedence and group-scoped identities. Scalar args use existing param.arg numeric labels for line inputs. Numeric time summaries now use complete per-case/metric/variant populations; unavailable observations invalidate the estimate. A missing input or unavailable member breaks automatic family joining, preserving remaining points without connecting across the gap.",
+      "remaining": "Per-point case tooltips, group scale configuration and mean/median estimator parity; full HTML visual inspection.",
+      "evidence": [
+        "viz::tests::numeric_family_lines_sort_and_reject_ambiguous_or_invalid_inputs",
+        "contracts::declared_summary_families_persist_and_connect_only_related_inputs: scoped identities, JSON restoration, line export and duplicate-input refusal",
+        "presentation::tests::family_consensus_preserves_agreement_and_refuses_conflicting_lines",
+        "cli::protocol_preserves_worker_allocations_across_processes_and_variants: family identity preserved across repeated baseline/candidate processes",
+        "attributes::summary_family_attributes_persist_inline_and_imported_identities: argument families, persisted metadata, explicit child override and report lines",
+        "bench/examples/input_summary.rs: deterministic two-family log time and byte-throughput SVGs raster inspected; ordered points, readable legends and constant rates verified",
+        "bench/scripts/test-cargo-bench.py: cross-crate inherited family attribute, argument-dependent bytes, exact saved durations, two line summaries and persisted family identities; complete script passed",
+        "report::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches: unavailable process suppresses estimate instead of finite-only reduction",
+        "contracts::declared_summary_families_persist_and_connect_only_related_inputs: unavailable middle case preserves three valid points with no connecting line",
+        "summary::tests::arithmetic_mean_uses_normalized_batches_and_preserves_missing_populations: [2,4,12] mean 6, distinct from median and operation-weighted ratio"
+      ]
+    },
+    {
+      "feature": "Throughput-vs-input line comparison",
+      "status": "partial",
+      "implementation": "throughput_process_medians reuses batch-rate calculation per independent process with fixed units. throughput_parameter_charts plots the median of process median rates against numeric input, groups declared families by variant and complete wall metric contract, and separates counter units. Existing parameter summary exports include throughput charts. Incomplete/nonpositive wall populations and ambiguous inputs do not produce misleading lines. Family membership is checked before joining throughput points, including cases producing no rates at all. Missing, unavailable, zero-duration and nonnumeric-input members retain valid points but suppress connecting family lines with an explicit note.",
+      "remaining": "Estimator parity with upstream summary semantics, per-point case tooltips and group scale configuration; full HTML visual inspection.",
+      "evidence": [
+        "contracts::throughput_input_lines_use_equal_process_weights_and_separate_units: 5:1 batch imbalance, numeric process medians, separate items/chars curves and zero-duration suppression",
+        "report::summary_plot_tests: existing numeric parameter and metric scope regressions pass",
+        "bench/examples/input_summary.rs: deterministic two-family log time and byte-throughput SVGs raster inspected; ordered points, readable legends and constant rates verified",
+        "bench/scripts/test-cargo-bench.py: cross-crate inherited family attribute, argument-dependent bytes, exact saved durations, two line summaries and persisted family identities; complete script passed",
+        "contracts::throughput_families_disconnect_zero_missing_and_unavailable_members: four gap modes retain two circles and no data-line path",
+        "cli::report_restores_families_and_plots_dynamic_throughput_with_gaps: real report command, per-batch bytes/items totals, 5:1 process batch imbalance, fixed MiB conversion, preserved source bytes and missing-middle-input line suppression",
+        "summary::tests::arithmetic_mean_uses_normalized_batches_and_preserves_missing_populations: fixed and varying work ratio-of-means oracles, MiB conversion, zero counters, zero duration and missing observations"
+      ]
+    },
+    {
+      "feature": "Violin summary",
+      "status": "partial",
+      "implementation": "violin::figure renders independent peak-normalized mirrored Gaussian densities on shared linear/log axes. Constants use point-mass marks, empty populations retain labelled lanes, and nonpositive log populations are explicitly unavailable without subset filtering. Kernel tails alone are clipped on log axes. Bootstrap HTML integrates violin summaries grouped by full metric contract and resampling unit; old JSON defaults to isolated rows. analyze --format html supports --summary-scale linear/logarithmic. Direct Cargo estimates.html inherits linear violin summaries. Unified experiment HTML includes candidate violin summaries with and without baseline, reusing candidate analysis for comparison plots. Existing parameter-summary scale selection reaches unified and direct Cargo bootstrap violin rendering. report and direct Cargo accept --summary-scale without a numeric parameter; direct Cargo enables bootstrap HTML automatically and validates output/execution mode before workloads. Suite summary_scale, summary_scale_case and with_summary_scale_defaults provide lazy nearest-group inheritance and explicit linear overrides. Direct Cargo bootstrap HTML resolves selected case scales; explicit CLI scale overrides all registered cases. Rendering partitions scale groups without cloning retained bootstrap arrays. suite/group/bench attributes accept summary_scale linear/logarithmic; imported registration inherits the parent fallback while explicit child scales remain authoritative. Invalid and duplicate attribute values fail parsing. Suite run/test and direct Cargo save resolved case scales in versioned provenance metadata, outside measurement compatibility. analyze HTML restores per-case scales with explicit CLI override; legacy metadata defaults and invalid values are handled explicitly. Unified report restores case scales when no CLI override is provided; saved-scale parse errors produce an explicit unavailable section instead of silently choosing linear. Process-runner protocol merges per-case scale preferences by consensus, including legacy linear defaults; conflicts remain sticky, preserve measurements, and add one explanatory note. Original per-worker provenance is retained.",
+      "remaining": "Inspect complete HTML layouts and long labels; audit summary parity across report modes.",
+      "evidence": [
+        "violin::tests::symmetric_geometry_is_peak_normalized_independently",
+        "violin::tests::shared_axes_preserve_empty_constant_and_log_invalid_populations",
+        "bench/examples/violin_report.rs: linear/log SVGs raster inspected; missing lane labels corrected and log rendering rechecked",
+        "bootstrap::tests::violin_grouping_separates_contracts_sampling_units_and_legacy_rows",
+        "cli::analyze_saved_run_exports_distributions_without_mutating_source: violin HTML and logarithmic CLI scale",
+        "bench/scripts/test-cargo-bench.py: complete script passed with estimates.html violin population assertion",
+        "cli::report_summary_parameter_and_scale_reach_html: baseline-free violin and actual log-scale rejection of zero populations",
+        "cli::html_compare_overlays_independent_process_regressions: unified violin alongside baseline comparison",
+        "bench/scripts/test-cargo-bench.py: zero-valued loaded baseline proves logarithmic scale reaches estimates.html; full script passed",
+        "cli::report_summary_parameter_and_scale_reach_html: logarithmic violin without numeric parameter",
+        "bench/scripts/test-cargo-bench.py: direct Cargo scale-only request creates estimates.html from loaded zero baseline without --resamples; complete script passed",
+        "contracts::summary_scales_inherit_lazily_with_nearest_and_explicit_linear_overrides",
+        "bootstrap::tests::violin_grouping_separates_contracts_sampling_units_and_legacy_rows: case-specific log suppression and global linear override",
+        "attributes::summary_scale_attributes_inherit_inline_and_imported_groups",
+        "attributes::plot_suite_test::summary_scale_suite_attribute_preserves_case_override",
+        "macros::summary_scale_tests::validates_summary_scale_values_and_duplicates",
+        "bench/scripts/test-cargo-bench.py: real library-to-bench crate boundary with renamed dependency; inherited logarithmic vs explicit linear on deterministic zero durations, CLI override and invalid attribute diagnostic; complete script passed",
+        "presentation::tests::scales_roundtrip_without_changing_measurement_compatibility",
+        "cli::analyze_restores_saved_scale_and_allows_explicit_override",
+        "contracts::suite_results_persist_resolved_summary_scales",
+        "bench/scripts/test-cargo-bench.py: saved run.json contains effective cross-crate scales and explicit CLI override; complete script passed",
+        "cli::analyze_restores_saved_scale_and_allows_explicit_override: unified report restores zero-population log suppression and explicit linear override without changing source",
+        "presentation::tests::consensus_preserves_agreement_and_keeps_conflicts_sticky",
+        "cli::protocol_preserves_worker_allocations_across_processes_and_variants: saved logarithmic preferences survive repeated baseline/candidate process ingestion"
+      ]
+    },
+    {
+      "feature": "Welch null distribution",
+      "status": "implemented",
+      "implementation": "hypothesis_plot SVG/HTML with observed statistic, extreme counts, p-value and infinities; Cargo and compare CLI exports. Unified experiment HTML with an external baseline recomputes retained null draws from validated snapshots using the same default hypothesis configuration and family-adjusted alpha as its comparison rows. A reusable hypothesis_plot::fragment embeds SVG and diagnostics without nested HTML documents.",
+      "evidence": [
+        "hypothesis_plot::tests",
+        "history::tests::html_export_failure_preserves_history_and_existing_artifact",
+        "cli::compare_exports_seeded_null_draws_and_portable_html",
+        "cli::html_compare_overlays_independent_process_regressions: unified report contains Welch chart, two independent units on each side and one HTML document; incompatible contracts remain suppressed"
+      ],
+      "remaining": "Visual check of multi-comparison HTML remains; audit paired and multi-variant report diagnostics and collection-level resource limits."
+    },
+    {
+      "feature": "Linear/logarithmic summary axes",
+      "status": "partial",
+      "implementation": "Domain::Log and charts::scatter_scaled, report::SummaryPlot, --summary-parameter/--summary-scale in Cargo and report CLI",
+      "evidence": [
+        "viz::tests::log_ticks_and_mapping_span_decades",
+        "viz::tests::log_ticks_cover_wide_narrow_and_subnormal_ranges",
+        "report::summary_plot_tests"
+      ],
+      "remaining": "Apply to line and violin summaries; suite/group declarations and inheritance remain."
+    },
+    {
+      "feature": "Disable plot generation",
+      "status": "implemented",
+      "implementation": "Unified report --no-plots selects table-only HTML before invoking chart bootstrap analysis or SVG generation. Numerical comparison build is unchanged. Rejects non-HTML destinations and contradictory summary plot options. analyze --format html --no-plots renders numerical bootstrap estimates as tables without SVG. compare --html --no-plots uses ordinary comparison analysis without retained null draws and skips bootstrap graph analysis. Both reject non-HTML use; analyze rejects a simultaneous summary scale. Direct Cargo --no-plots skips SVG in primary, bootstrap and named-baseline reports; retains explicitly requested numerical distributions and uses History export_with_plots / record_with_export_plots to suppress captured-distribution HTML without changing comparison JSON or history publication order. Summary chart flags conflict before execution. Suite::plots(bool) supplies a suite-wide default to main; CLI --plots/--no-plots overrides it and duplicate switches are rejected. Upstream Criterion with_plots/without_plots are global Criterion settings, not per-group inheritance.",
+      "evidence": [
+        "cli::html_compare_overlays_independent_process_regressions: table-only baseline report retains tables/metric labels, has no SVG or violin section, rejects conflicting summary parameter",
+        "cli::analyze_saved_run_exports_distributions_without_mutating_source: table HTML without SVG, non-HTML flag rejection, source preservation",
+        "cli::html_compare_overlays_independent_process_regressions: compare table HTML without SVG and missing --html rejection",
+        "bench/scripts/test-cargo-bench.py: loaded named baselines with bootstrap and hypothesis capture have identical comparison.json to plotted run; all HTML has no SVG, estimates and relative distribution JSON remain; full script passed",
+        "bench/scripts/test-cargo-bench.py: separate crate Suite::plots(false), default table report, explicit --plots restores SVG, --no-plots suppresses it, contradictory flags rejected; complete script passed",
+        "history::tests::history_without_plots_retains_json_and_advances_previous_run: capture enabled, JSON preserved, no HTML, subsequent run finds newly published history"
+      ],
+      "remaining": "Full report visual audit remains tracked in the chart requirements; no remaining known enable/disable feature gap in the audited direct Cargo and saved-report entrypoints."
+    }
+  ],
+  "next_implementation": "Complete summary line and violin plots, then audit remaining configuration and artifact coverage.",
+  "completion": "Incomplete. Existing scatter, strip and interval plots do not prove density, violin or bootstrap-distribution features.",
+  "summary_estimator_audit": {
+    "criterion_version": "0.8.2",
+    "sources": [
+      "criterion/src/html/mod.rs: avg_times = time / iters in summary input loading",
+      "criterion/src/plot/plotters_backend/summary.rs: line_comparison_series_data uses Sample::mean before formatter scaling"
+    ],
+    "finding": "Criterion input summary lines use arithmetic mean of per-batch normalized times. Airbug defaults currently use median of process medians; these are distinct estimators. Criterion throughput is formatter scaling of mean time, not mean/median of batch rates.",
+    "progress": "Implemented chart API selection via SummaryPlot.estimator and CLI --summary-estimator process-median|mean in direct Cargo and runner report. Default remains process medians. Mean normalizes each batch before averaging, equally weights batches, uses complete populations, and computes throughput as ratio of mean normalized work to mean normalized time. CLI requires a summary parameter; captions identify estimator. Regression decisions are unaffected.",
+    "evidence": [
+      "bench/src/report.rs::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches (5:1 process batches: default 55 ns, mean 25 ns, mean throughput 80000000 items/s)",
+      "bench/cli/tests/cli.rs::report_summary_parameter_and_scale_reach_html (mean CLI route and missing parameter rejection)",
+      "bench/scripts/test-cargo-bench.py (cross-crate direct Cargo mean time and dynamic-byte throughput report captions, full script passed)"
+    ]
+  }
+}

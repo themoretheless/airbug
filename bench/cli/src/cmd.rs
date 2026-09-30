@@ -421,8 +421,20 @@ pub(crate) fn execute() -> Result<i32> {
             }
         }
         Action::Baseline { action } => match action {
-            BaselineAction::Save { name, run } => {
-                project::save_baseline(&cli.store, &name, &project::resolve(&cli.store, &run)?)?
+            BaselineAction::Save {
+                name,
+                run,
+                replace,
+                retain,
+            } => {
+                let mode = if replace {
+                    airbug_bench::baseline::SaveMode::Replace
+                } else if retain {
+                    airbug_bench::baseline::SaveMode::Retain
+                } else {
+                    airbug_bench::baseline::SaveMode::Create
+                };
+                project::save_baseline(&cli.store, &name, &run, mode)?
             }
             BaselineAction::List => project::baselines(&cli.store)?,
         },
@@ -593,14 +605,97 @@ pub(crate) fn execute() -> Result<i32> {
             );
         }
         Action::Serve { root, port } => web_ui::serve(&root, &cli.store, port)?,
+        Action::Analyze {
+            run,
+            resamples,
+            confidence_level,
+            analysis_seed,
+            bootstrap_distributions,
+            no_plots,
+            summary_scale,
+            format,
+            output: path,
+        } => {
+            if no_plots && format != "html" {
+                return Err(error("--no-plots requires --format html"));
+            }
+            if summary_scale.is_some() && format != "html" {
+                return Err(error("--summary-scale requires --format html"));
+            }
+            let scale = if summary_scale.as_deref() == Some("logarithmic") {
+                airbug_bench::viz::charts::AxisScale::Logarithmic
+            } else {
+                airbug_bench::viz::charts::AxisScale::Linear
+            };
+            let config = airbug_bench::bootstrap::Config {
+                resamples,
+                confidence_level,
+                seed: analysis_seed,
+            };
+            config.validate()?;
+            let run = load(run)?;
+            let report = if bootstrap_distributions {
+                airbug_bench::bootstrap::analyze_with_distributions(&run, &config)?
+            } else {
+                airbug_bench::bootstrap::analyze(&run, &config)?
+            };
+            let text = match format.as_str() {
+                "html" if no_plots => {
+                    airbug_bench::report::html(&airbug_bench::bootstrap::markdown(&report))
+                        .replace("<!--CHARTS-->", "")
+                        .replace("<!--DETAILS-->", "")
+                }
+                "html" => airbug_bench::bootstrap::html_with_case_scales(
+                    &report,
+                    summary_scale.as_ref().map(|_| scale),
+                    &airbug_bench::presentation::load_scales(&run)?,
+                ),
+                "markdown" => airbug_bench::bootstrap::markdown(&report),
+                _ => serde_json::to_string_pretty(&report)?,
+            };
+            output(&text, path)?;
+        }
         Action::Report {
             run,
             baseline,
             title,
             threshold,
             alpha,
+            no_plots,
+            summary_parameter,
+            summary_estimator,
+            summary_scale,
             output: path,
         } => {
+            if (no_plots || summary_parameter.is_some() || summary_scale.is_some())
+                && path
+                    .as_ref()
+                    .and_then(|p| p.extension())
+                    .and_then(|e| e.to_str())
+                    != Some("html")
+            {
+                return Err(error("summary charts require an .html output path"));
+            }
+            let scale = if summary_scale.as_deref() == Some("logarithmic") {
+                airbug_bench::viz::charts::AxisScale::Logarithmic
+            } else {
+                airbug_bench::viz::charts::AxisScale::Linear
+            };
+            let summary = summary_parameter
+                .as_deref()
+                .map(|parameter| report::SummaryPlot {
+                    estimator: if summary_estimator.as_deref() == Some("mean") {
+                        airbug_bench::summary::Estimator::Mean
+                    } else {
+                        airbug_bench::summary::Estimator::ProcessMedian
+                    },
+                    parameter,
+                    scale: if summary_scale.as_deref() == Some("logarithmic") {
+                        airbug_bench::viz::charts::AxisScale::Logarithmic
+                    } else {
+                        airbug_bench::viz::charts::AxisScale::Linear
+                    },
+                });
             let doc = experiment_report::build(experiment_report::Options {
                 source: &run,
                 baseline: baseline.as_deref(),
@@ -614,7 +709,16 @@ pub(crate) fn execute() -> Result<i32> {
                 .and_then(|p| p.extension())
                 .and_then(|e| e.to_str())
             {
-                Some("html") => doc.html()?,
+                Some("html") => {
+                    if no_plots {
+                        doc.html_without_plots()?
+                    } else {
+                        doc.html_with_scale(
+                            summary.as_ref(),
+                            summary_scale.as_ref().map(|_| scale),
+                        )?
+                    }
+                }
                 Some("json") => serde_json::to_string_pretty(&doc)?,
                 Some("md") | None => doc.markdown()?,
                 _ => return Err(error("report output extension must be .html, .json or .md")),
@@ -653,6 +757,7 @@ pub(crate) fn execute() -> Result<i32> {
         Action::Throughput {
             run,
             filter,
+            unit,
             max,
             min,
             json,
@@ -676,10 +781,23 @@ pub(crate) fn execute() -> Result<i32> {
             }
             let series: Vec<_> = report::throughput(&r)?
                 .into_iter()
-                .filter(|s| s.case.contains(&filter))
+                .filter(|s| {
+                    s.case.contains(&filter) && unit.as_ref().is_none_or(|unit| &s.unit == unit)
+                })
                 .collect();
             let mut failed = false;
             if gating {
+                if series.is_empty() || series.iter().any(|s| s.values.is_empty()) {
+                    return Err(error(
+                        "throughput budget requires measured values for the selected cases/unit",
+                    ));
+                }
+                let units: std::collections::BTreeSet<_> = series.iter().map(|s| &s.unit).collect();
+                if units.len() > 1 {
+                    return Err(error(
+                        "throughput budget spans multiple units; select --unit",
+                    ));
+                }
                 for s in &series {
                     for &v in &s.values {
                         if max.is_some_and(|m| v > m) {
@@ -743,6 +861,12 @@ pub(crate) fn execute() -> Result<i32> {
             threshold,
             alpha,
             json,
+            html,
+            no_plots,
+            hypothesis_distribution,
+            relative_distributions,
+            hypothesis_resamples,
+            hypothesis_seed,
             uncertainty,
             check,
             filter,
@@ -760,13 +884,73 @@ pub(crate) fn execute() -> Result<i32> {
                         .iter()
                         .any(|c| c.id == o.case && c.metrics.iter().any(|m| m.id == o.metric))
                 });
+                r.worker_allocations.retain(|w| {
+                    r.observations.iter().any(|o| {
+                        o.case == w.case
+                            && o.variant == w.variant
+                            && o.process == w.process
+                            && o.sequence == w.sequence
+                            && o.metric == "wall"
+                    })
+                });
                 r.validate()?;
                 Ok(r)
             };
             let a = select(load(baseline)?)?;
             let b = candidate.map(|p| select(load(p)?)).transpose()?;
-            let rows = analysis::compare(&a, b.as_ref(), threshold, alpha)?;
-            let text = if json {
+            let config = airbug_bench::hypothesis::Config {
+                resamples: hypothesis_resamples,
+                seed: hypothesis_seed,
+            };
+            let rows = if (html && !no_plots) || hypothesis_distribution {
+                analysis::compare_with_distribution(&a, b.as_ref(), threshold, alpha, config)?
+            } else {
+                analysis::compare_with_hypothesis(&a, b.as_ref(), threshold, alpha, config)?
+            };
+            let text = if html && no_plots {
+                report::html(&report::comparison(&rows))
+                    .replace("<!--CHARTS-->", "")
+                    .replace("<!--DETAILS-->", "")
+            } else if html {
+                let mut document =
+                    airbug_bench::hypothesis_plot::html(&rows, "Benchmark comparison")?;
+                if let Some(b) = &b {
+                    let config = airbug_bench::bootstrap::Config {
+                        resamples: hypothesis_resamples,
+                        seed: hypothesis_seed,
+                        confidence_level: (1. - alpha).clamp(f64::EPSILON, 1. - f64::EPSILON),
+                    };
+                    let baseline = airbug_bench::bootstrap::analyze(&a, &config)?;
+                    let candidate = airbug_bench::bootstrap::analyze(b, &config)?;
+                    document = document.replace(
+                        "</main>",
+                        &format!(
+                            "{}{}{}</main>",
+                            report::iteration_comparison(&a, b)?,
+                            airbug_bench::bootstrap::comparison_charts(&baseline, &candidate),
+                            airbug_bench::relative::charts(
+                                &airbug_bench::relative::compare_runs(&a, b, &config)?,
+                                threshold
+                            )?
+                        ),
+                    );
+                }
+                document
+            } else if relative_distributions {
+                let candidate = b
+                    .as_ref()
+                    .ok_or("relative distributions require two runs")?;
+                let config = airbug_bench::bootstrap::Config {
+                    resamples: hypothesis_resamples,
+                    seed: hypothesis_seed,
+                    confidence_level: (1. - alpha).clamp(f64::EPSILON, 1. - f64::EPSILON),
+                };
+                let relative = airbug_bench::relative::compare_runs(&a, candidate, &config)?;
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "comparisons": rows,
+                    "relative": relative,
+                }))?
+            } else if json {
                 serde_json::to_string_pretty(&rows)?
             } else {
                 report::comparison(&rows)

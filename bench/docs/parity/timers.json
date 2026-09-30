@@ -1,0 +1,49 @@
+{
+  "upstream": {
+    "divan": "0.1.21",
+    "sources": [
+      "src/time/timer.rs",
+      "src/time/timestamp/tsc/aarch64.rs",
+      "src/time/timestamp/tsc/x86.rs",
+      "src/benchmark/mod.rs"
+    ]
+  },
+  "status": "verified",
+  "implemented": [
+    "OS and CPU counters with lazy availability checks and frequency discovery",
+    "Suite, nested/imported attributes and CLI selection with explicit precedence",
+    "All Suite timing boundaries including async, allocations and shared worker starts",
+    "Empty-interval diagnostics and minimum black-box-loop interval over 100 batches of 10000 iterations",
+    "Per-clock diagnostic cache, run provenance, raw observations and cold/test/custom exclusions",
+    "Bounded delayed resolution probing after zero-only immediate intervals: 32 trials per power-of-two delay from 1 through 1024; at most 608 resolution trials total",
+    "Isolated allocation bookkeeping calibration using the production TLS and atomic event helpers; separate alloc/free/grow/shrink costs, exact fractional summation and overflow checks",
+    "Optional Suite/CLI compensation emits wall.adjusted alongside raw wall; combines fractional loop/tally costs, clamps each interval, takes each wave maximum before summing waves, and retains checked adjusted worker records",
+    "Compensation attributes on cases, nested/imported groups and suites; explicit raw settings override defaults and CLI overrides all selected cases",
+    "x86_64 CPU-counter runtime under Rosetta, with no unsupported-clock skips; five OS-bracketed frequency checks with 1% plus 1us tolerance on both ARM64 and x86_64",
+    "Timed-profile conflict preflight plus raw CLI override; cold/smoke/custom exclusions and repeated-run metadata tested"
+  ],
+  "remaining": [],
+  "measurement_policy": {
+    "loop_ratio": "loop_batch_ns / loop_iterations; retain the integer numerator and denominator to represent sub-nanosecond costs",
+    "empty_interval": "Minimum including zero from 256 immediate trials only; delayed intervals never inflate empty-read cost",
+    "cache": "once per process and real clock, before workload callbacks; no sample/warmup budget consumption",
+    "exclusions": "No diagnostic calibration for cold runs, test mode, caller-only timings, list or dry-run",
+    "raw": "Raw wall always preserved. Opt-in compensation writes wall.adjusted; caller-timed, cold and smoke cases remain raw. Scheduling, quick stopping and workload budgets use raw intervals.",
+    "resolution": "Smallest nonzero observation at first successful delay; explicit unresolved status after exhausting retries; measured estimate, not a guaranteed hardware quantum"
+  },
+  "limitations": [
+    "x86 runtime evidence is Rosetta on Apple Silicon, not a physical x86 host. Native OS/architecture coverage remains in the separate platforms requirement.",
+    "Compensation estimates uncontended bookkeeping, not workload-specific cache behavior or shared atomic contention."
+  ],
+  "runtime_evidence": {
+    "toolchain": "rustc 1.101.0-nightly (c1070d693 2026-09-28)",
+    "arm64": "Native aarch64-apple-darwin: library and integration suites, plus bracketed frequency test passed",
+    "x86_64": "x86_64-apple-darwin Mach-O binaries run via Rosetta: 65 library tests and 3 timer integration tests passed, then the additional bracketed frequency test passed",
+    "commands": [
+      "cargo test -p airbug-bench --all-features --lib --test timers --target x86_64-apple-darwin --offline -- --nocapture",
+      "cargo test -p airbug-bench --all-features --lib cpu_frequency_matches_os_bracketed_intervals --target x86_64-apple-darwin --offline -- --nocapture",
+      "cargo test -p airbug-bench --all-features --offline",
+      "python3 bench/scripts/test-cargo-bench.py"
+    ]
+  }
+}

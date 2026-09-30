@@ -18,6 +18,7 @@ fn paired(n: u32, factor: f64) -> Run {
     for p in 0..n {
         for (i, v, f) in [(0, "baseline", 1.0), (1, "candidate", factor)] {
             r.observations.push(Observation {
+                work_totals: Default::default(),
                 case: "case".into(),
                 metric: "latency".into(),
                 variant: v.into(),
@@ -233,6 +234,7 @@ fn allocator_failed_realloc_preserves_live_allocation() {
         }
     }
     let a = airbug_bench::alloc::TrackingAllocator::new(FailRealloc);
+    let thread_phase = a.begin_thread_phase().unwrap();
     unsafe {
         let l = Layout::from_size_align(32, 8).unwrap();
         let p = a.alloc(l);
@@ -240,6 +242,15 @@ fn allocator_failed_realloc_preserves_live_allocation() {
         assert!(a.realloc(p, l, 64).is_null());
         assert_eq!(a.snapshot().live_bytes, 32);
         assert_eq!(a.snapshot().reallocations, 0);
+        assert_eq!(a.snapshot().grow_operations, 0);
+        assert_eq!(a.snapshot().grown_bytes, 0);
+        assert_eq!(a.snapshot().shrink_operations, 0);
+        assert_eq!(a.snapshot().shrunk_bytes, 0);
+        let local = thread_phase.finish();
+        assert_eq!(local.allocations, 1);
+        assert_eq!(local.reallocations, 0);
+        assert_eq!(local.grow_operations, 0);
+        assert_eq!(local.net_live_bytes, 32);
         a.dealloc(p, l);
         assert_eq!(a.snapshot().live_bytes, 0);
     }
@@ -499,8 +510,11 @@ fn profiles_seeded_inputs_and_work_units() {
         std::thread::sleep(Duration::from_micros(10));
         1
     })
-    .work_units("bytes", 0);
+    .work_units("", 0);
     assert!(s.run("").is_err());
+    // A separate suite avoids retaining the intentionally invalid unit.
+    let mut s = Suite::new("units");
+    s.bench_custom("x", |n| Duration::from_nanos(n * 100));
     s.work_units("bytes", 64).seed(42);
     s.config(Config {
         samples: 1,
@@ -874,4 +888,943 @@ fn throughput_derives_rates_and_scales_bytes_to_mib() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[test]
+fn regex_selection_and_exact_exclusions_are_lazy_and_unicode_aware() {
+    let mut suite = Suite::new("s");
+    for name in ["parse/2", "parse/12", "parse/12/child", "тест/42", "other"] {
+        suite.bench(name, || panic!("selection must not execute workload"));
+    }
+    let mut selection = Selection::default()
+        .with_regex(r"^s/(parse|тест)/\d+$")
+        .unwrap();
+    assert_eq!(
+        suite.list_selected(&selection),
+        ["s/parse/2", "s/parse/12", "s/тест/42"]
+    );
+    selection.exclude_exact.push("s/parse/2".into());
+    selection.skip_regex(r"/тест/").unwrap();
+    assert_eq!(suite.list_selected(&selection), ["s/parse/12"]);
+    assert!(Selection::default().with_regex("[").is_err());
+    assert!(selection.skip_regex("(").is_err());
+    // An unsuccessful mutation preserves the existing valid exclusions.
+    assert_eq!(suite.list_selected(&selection), ["s/parse/12"]);
+    selection.glob = true;
+    assert!(suite.run_selected(&selection).is_err());
+    let exact_exclusion = Selection {
+        exclude_exact: vec!["s/parse/12".into()],
+        ..Default::default()
+    };
+    assert!(
+        suite
+            .list_selected(&exact_exclusion)
+            .contains(&"s/parse/12/child")
+    );
+}
+
+#[test]
+fn time_budget_distinguishes_reported_intervals_from_full_workload_calls() {
+    for measured_only in [false, true] {
+        let calls = AtomicUsize::new(0);
+        let mut suite = Suite::new("accounting");
+        suite.bench_custom("external", |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            // Simulate caller-excluded setup/drop. The reported interval is deterministic.
+            std::thread::sleep(Duration::from_millis(15));
+            Duration::from_nanos(1)
+        });
+        suite.sampling(Sampling {
+            iterations: Some(1),
+            samples: Some(2),
+            warmup: Some(Duration::ZERO),
+            max_time: Some(Duration::from_millis(5)),
+            exclude_external_time: Some(measured_only),
+            ..Default::default()
+        });
+        let run = suite.run("").unwrap();
+        let expected = if measured_only { 2 } else { 1 };
+        assert_eq!(run.observations.len(), expected);
+        assert_eq!(calls.load(Ordering::SeqCst), expected);
+        assert!(
+            run.observations
+                .iter()
+                .all(|o| o.value.as_deref() == Some("1"))
+        );
+        assert_eq!(
+            run.notes.iter().any(|n| n.contains("max_time reached")),
+            !measured_only
+        );
+    }
+}
+
+#[test]
+fn calibration_and_warmup_consume_the_time_budget() {
+    for fixed in [false, true] {
+        let calls = AtomicUsize::new(0);
+        let mut suite = Suite::new("limits");
+        suite.bench_custom("bounded", |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Duration::from_nanos(5)
+        });
+        suite.sampling(Sampling {
+            iterations: fixed.then_some(1),
+            samples: Some(2),
+            warmup: Some(if fixed {
+                Duration::from_secs(60)
+            } else {
+                Duration::ZERO
+            }),
+            sample_time: Some(Duration::from_nanos(100)),
+            max_time: Some(Duration::from_nanos(9)),
+            exclude_external_time: Some(true),
+            ..Default::default()
+        });
+        let error = suite.run("").unwrap_err().to_string();
+        assert!(
+            error.contains(if fixed {
+                "before collecting a sample"
+            } else {
+                "during calibration"
+            }),
+            "{error}"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+    let calls = AtomicUsize::new(0);
+    let mut suite = Suite::new("minimum");
+    suite.bench_custom("count_calibration", |_| {
+        calls.fetch_add(1, Ordering::SeqCst);
+        Duration::from_nanos(5)
+    });
+    suite.sampling(Sampling {
+        samples: Some(1),
+        warmup: Some(Duration::ZERO),
+        sample_time: Some(Duration::from_nanos(5)),
+        min_time: Some(Duration::from_nanos(12)),
+        exclude_external_time: Some(true),
+        ..Default::default()
+    });
+    let run = suite.run("").unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    assert_eq!(run.observations.len(), 2); // 5 ns calibration + 10 ns collected.
+}
+
+#[test]
+fn black_box_drop_consumes_lazy_noncopy_outputs_once() {
+    struct Output<'a>(&'a AtomicUsize);
+    impl Drop for Output<'_> {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let produced = AtomicUsize::new(0);
+    let dropped = AtomicUsize::new(0);
+    let values = (0..7).map(|_| {
+        produced.fetch_add(1, Ordering::SeqCst);
+        Output(&dropped)
+    });
+    assert_eq!(produced.load(Ordering::SeqCst), 0);
+    values.for_each(airbug_bench::black_box_drop);
+    assert_eq!(produced.load(Ordering::SeqCst), 7);
+    assert_eq!(dropped.load(Ordering::SeqCst), 7);
+    assert_eq!(
+        airbug_bench::black_box(String::from("retained")),
+        "retained"
+    );
+}
+
+#[test]
+fn sorting_matches_listing_execution_and_preserves_registration_order() {
+    use std::sync::Mutex;
+    for (sort, reverse, expected) in [
+        (
+            SortOrder::Registration,
+            false,
+            vec!["case10", "case2", "case01", "case1"],
+        ),
+        (
+            SortOrder::Lexical,
+            false,
+            vec!["case01", "case1", "case10", "case2"],
+        ),
+        (
+            SortOrder::Natural,
+            false,
+            vec!["case01", "case1", "case2", "case10"],
+        ),
+        (
+            SortOrder::Natural,
+            true,
+            vec!["case10", "case2", "case1", "case01"],
+        ),
+    ] {
+        let calls = Mutex::new(Vec::new());
+        let mut suite = Suite::new("order");
+        for name in ["case10", "case2", "case01", "case1"] {
+            let calls = &calls;
+            suite.bench(name, move || calls.lock().unwrap().push(name));
+        }
+        let selection = Selection {
+            sort,
+            reverse,
+            ..Default::default()
+        };
+        let expected_ids: Vec<_> = expected.iter().map(|n| format!("order/{n}")).collect();
+        assert_eq!(suite.list_selected(&selection), expected_ids);
+        assert!(calls.lock().unwrap().is_empty());
+        let run = suite.test_selected(&selection).unwrap();
+        assert_eq!(*calls.lock().unwrap(), expected);
+        assert_eq!(
+            run.cases.iter().map(|c| &c.id).collect::<Vec<_>>(),
+            expected_ids.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            suite.list(""),
+            ["order/case10", "order/case2", "order/case01", "order/case1"]
+        );
+    }
+    let mut suite = Suite::new("unicode");
+    for name in [
+        "тест10000000000000000000000000000000000000000",
+        "тест9",
+        "тест10",
+    ] {
+        suite.bench(name, || ());
+    }
+    let selection = Selection {
+        sort: SortOrder::Natural,
+        ..Default::default()
+    };
+    assert_eq!(
+        suite.list_selected(&selection),
+        [
+            "unicode/тест9",
+            "unicode/тест10",
+            "unicode/тест10000000000000000000000000000000000000000"
+        ]
+    );
+}
+
+#[test]
+fn source_sort_orders_files_lines_columns_and_unknown_locations() {
+    let mut suite = Suite::new("source");
+    suite.bench("unknown", || ());
+    suite.bench("b", || ()).source_location("b.rs", 1, 1);
+    suite.bench("a20", || ()).source_location("a.rs", 20, 1);
+    suite.bench("a3c9", || ()).source_location("a.rs", 3, 9);
+    suite.bench("a3c1", || ()).source_location("a.rs", 3, 1);
+    let selection = Selection {
+        sort: SortOrder::Source,
+        ..Default::default()
+    };
+    assert_eq!(
+        suite.list_selected(&selection),
+        [
+            "source/a3c1",
+            "source/a3c9",
+            "source/a20",
+            "source/b",
+            "source/unknown"
+        ]
+    );
+}
+
+#[test]
+fn bootstrap_uses_process_units_and_normalizes_batch_totals() {
+    let config = bootstrap::Config {
+        resamples: 200,
+        ..Default::default()
+    };
+    let mut run = paired(8, 1.2);
+    let report = bootstrap::analyze(&run, &config).unwrap();
+    assert!(
+        report
+            .rows
+            .iter()
+            .all(|r| r.units == 8 && r.resampling_unit == "process_median")
+    );
+    let original = report.rows[0].estimates.clone();
+    let mut extra = run.observations[0].clone();
+    extra.sequence = 1;
+    run.observations.push(extra);
+    assert_eq!(
+        bootstrap::analyze(&run, &config).unwrap().rows[0].estimates,
+        original
+    );
+
+    let mut suite = Suite::new("normalized");
+    suite.bench_custom("constant", |n| Duration::from_nanos(n * 20));
+    suite.sampling(Sampling {
+        iterations: Some(5),
+        samples: Some(4),
+        warmup: Some(Duration::ZERO),
+        ..Default::default()
+    });
+    let run = suite.run("").unwrap();
+    let report = bootstrap::analyze(&run, &config).unwrap();
+    assert_eq!(report.rows[0].estimates.as_ref().unwrap().mean.point, 20.0);
+    assert_eq!(report.rows[0].resampling_unit, "normalized_observation");
+    assert!(report.rows[0].note.contains("autocorrelation"));
+}
+
+#[test]
+fn linear_sampling_report_fits_totals_per_process() {
+    let mut suite = Suite::new("regression");
+    suite.bench_custom("linear", |n| Duration::from_nanos(n * 10));
+    suite.sampling(Sampling {
+        samples: Some(5),
+        sample_time: Some(Duration::from_nanos(100)),
+        warmup: Some(Duration::ZERO),
+        mode: Some(SamplingMode::Linear),
+        ..Default::default()
+    });
+    let mut run = suite.run("").unwrap();
+    let config = bootstrap::Config {
+        resamples: 200,
+        ..Default::default()
+    };
+    let report = bootstrap::analyze(&run, &config).unwrap();
+    assert_eq!(report.rows[0].regressions.len(), 1);
+    let fit = &report.rows[0].regressions[0].fit;
+    assert!((fit.slope.point - 10.0).abs() < 1e-12);
+    assert!((fit.slope.lower - 10.0).abs() < 1e-12);
+    assert!((fit.slope.upper - 10.0).abs() < 1e-12);
+    assert_eq!(fit.samples, 5);
+    assert_eq!(fit.r_squared, Some(1.0));
+    let another: Vec<_> = run
+        .observations
+        .iter()
+        .cloned()
+        .map(|mut o| {
+            o.process = 1;
+            o.value = Some((o.value.unwrap().parse::<u64>().unwrap() * 2).to_string());
+            o
+        })
+        .collect();
+    run.observations.extend(another);
+    let report = bootstrap::analyze(&run, &config).unwrap();
+    assert_eq!(report.rows[0].units, 2);
+    assert_eq!(report.rows[0].regressions.len(), 2);
+    assert!((report.rows[0].regressions[1].fit.slope.point - 20.0).abs() < 1e-12);
+    assert!(bootstrap::markdown(&report).contains("slope (process 1)"));
+}
+
+#[test]
+fn outlier_reporting_preserves_extreme_observations_in_estimates() {
+    let mut run = paired(6, 1.0);
+    for observation in &mut run.observations {
+        observation.value = Some(
+            if observation.pair == Some(5) {
+                "10000"
+            } else {
+                "1"
+            }
+            .into(),
+        );
+    }
+    let report = bootstrap::analyze(
+        &run,
+        &bootstrap::Config {
+            resamples: 100,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    for row in &report.rows {
+        assert_eq!(row.outliers.as_ref().unwrap().counts, [0, 0, 5, 0, 1]);
+        assert_eq!(row.outliers.as_ref().unwrap().points.len(), 6);
+        assert!((row.estimates.as_ref().unwrap().mean.point - 10005.0 / 6.0).abs() < 1e-10);
+    }
+    let html = bootstrap::html(&report);
+    assert!(html.contains("<svg") && html.contains("No observations discarded"));
+    assert!(!html.contains("<!--CHARTS-->"));
+    assert_eq!(html.matches("all fences (zero IQR)").count(), 2);
+}
+
+#[test]
+fn byte_format_scaling_is_display_only_and_keeps_custom_units() {
+    use report::BytesFormat;
+    let mut suite = Suite::new("formats");
+    suite
+        .bench_custom("one_second", |_| Duration::from_secs(1))
+        .work_units("bytes", 1_048_576)
+        .work_units("items", 3)
+        .work_units("MiB", 2);
+    suite.sampling(Sampling {
+        samples: Some(2),
+        iterations: Some(1),
+        warmup: Some(Duration::ZERO),
+        ..Default::default()
+    });
+    let run = suite.run("").unwrap();
+    let before = serde_json::to_string(&run).unwrap();
+    let decimal = report::throughput_with_format(&run, BytesFormat::Decimal).unwrap();
+    let binary = report::throughput_with_format(&run, BytesFormat::Binary).unwrap();
+    assert_eq!(
+        decimal.iter().find(|s| s.unit == "MB").unwrap().values,
+        [1.048576; 2]
+    );
+    assert!(
+        binary
+            .iter()
+            .any(|s| s.unit == "MiB" && s.values == [1.0; 2])
+    );
+    // A user-defined counter named MiB must not be mistaken for the bytes counter.
+    assert!(
+        decimal
+            .iter()
+            .any(|s| s.unit == "MiB" && s.values == [2.0; 2])
+    );
+    assert!(
+        decimal
+            .iter()
+            .any(|s| s.unit == "items" && s.values == [3.0; 2])
+    );
+    assert_eq!(serde_json::to_string(&run).unwrap(), before);
+    assert!(
+        report::markdown_with_bytes_format(&run, BytesFormat::Decimal)
+            .unwrap()
+            .contains("MB/s")
+    );
+    for (count, decimal_unit, binary_unit) in [
+        (0, "B", "B"),
+        (999, "B", "B"),
+        (1000, "KB", "B"),
+        (1024, "KB", "KiB"),
+        (1_000_000_000, "GB", "MiB"),
+    ] {
+        let mut run = run.clone();
+        run.cases[0].contract = BTreeMap::from([("work.counter.bytes".into(), count.to_string())]);
+        assert_eq!(
+            report::throughput_with_format(&run, BytesFormat::Decimal).unwrap()[0].unit,
+            decimal_unit
+        );
+        assert_eq!(
+            report::throughput_with_format(&run, BytesFormat::Binary).unwrap()[0].unit,
+            binary_unit
+        );
+    }
+}
+
+#[test]
+fn dynamic_work_totals_exclude_pilot_and_warmup_and_drive_throughput() {
+    use airbug_bench::counters::InputCounters;
+    use std::cell::RefCell;
+    let counts = InputCounters::new(&["bytes", "items"]).unwrap();
+    let collect = counts.clone();
+    let batches = RefCell::new(vec![]);
+    let mut next = 0u64;
+    let mut suite = Suite::new("dynamic");
+    suite
+        .bench_custom("input", |n| {
+            let mut sum = 0;
+            for _ in 0..n {
+                next += 1;
+                collect.add("bytes", next);
+                collect.add("items", 0);
+                sum += next;
+            }
+            batches.borrow_mut().push(sum);
+            Duration::from_nanos(n * 100)
+        })
+        .input_counters(counts)
+        .work_units("bytes", 999);
+    suite.config(Config {
+        samples: 2,
+        warmup: Duration::from_micros(10),
+        sample_time: Duration::from_nanos(300),
+        max_iterations: 3,
+    });
+    let run = suite.run("").unwrap();
+    assert!(batches.borrow().len() > 2);
+    let expected = &batches.borrow()[batches.borrow().len() - 2..];
+    for (observation, total) in run.observations.iter().zip(expected) {
+        assert_eq!(observation.work_totals["bytes"], total.to_string());
+        assert_eq!(observation.work_totals["items"], "0");
+    }
+    let rates = report::throughput(&run).unwrap();
+    let bytes = rates.iter().find(|r| r.unit == "MiB").unwrap();
+    for ((rate, total), observation) in bytes.values.iter().zip(expected).zip(&run.observations) {
+        let wanted = *total as f64 * 1e9 / observation.number().unwrap().unwrap() / 1_048_576.0;
+        assert!((rate - wanted).abs() < 1e-8);
+    }
+    assert!(
+        rates
+            .iter()
+            .find(|r| r.unit == "items")
+            .unwrap()
+            .values
+            .iter()
+            .all(|n| *n == 0.0)
+    );
+    let encoded = serde_json::to_vec(&run).unwrap();
+    let roundtrip: Run = serde_json::from_slice(&encoded).unwrap();
+    roundtrip.validate().unwrap();
+    assert_eq!(
+        roundtrip.observations[0].work_totals,
+        run.observations[0].work_totals
+    );
+    let mut missing = roundtrip.clone();
+    missing.observations[0].work_totals.clear();
+    assert!(missing.validate().is_err());
+    assert!(report::throughput(&missing).is_err());
+    let mut invalid = roundtrip;
+    invalid.observations[0]
+        .work_totals
+        .insert("bytes".into(), "-1".into());
+    assert!(invalid.validate().is_err());
+    assert!(report::throughput(&invalid).is_err());
+}
+
+#[test]
+fn invalid_dynamic_counter_units_fail_the_run() {
+    use airbug_bench::counters::InputCounters;
+    assert!(InputCounters::new(&[]).is_err());
+    assert!(InputCounters::new(&[""]).is_err());
+    assert!(InputCounters::new(&["items", "items"]).is_err());
+    let counts = InputCounters::new(&["items"]).unwrap();
+    let collect = counts.clone();
+    let mut suite = Suite::new("invalid-input-count");
+    suite
+        .bench_custom("case", move |_| {
+            collect.add("unknown", 1);
+            Duration::from_nanos(1)
+        })
+        .input_counters(counts);
+    assert!(suite.run("").is_err());
+}
+
+#[test]
+fn async_workers_poll_concurrently_and_release_after_future_panic() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let handle = std::thread::spawn(move || {
+        for fail in [false, true] {
+            let gate = std::sync::Barrier::new(2);
+            let reached = std::sync::atomic::AtomicUsize::new(0);
+            let mut suite = Suite::new("async-concurrency");
+            suite.bench_async_threads(
+                "case",
+                2,
+                || airbug_bench::workloads::LocalExecutor,
+                async || {
+                    gate.wait();
+                    let id = reached.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    assert!(!(fail && id == 0), "future panic");
+                },
+                airbug_bench::DropPolicy::OutsideTiming,
+            );
+            suite.config(Config {
+                samples: 1,
+                warmup: Duration::ZERO,
+                sample_time: Duration::from_nanos(1),
+                max_iterations: 1,
+            });
+            suite.sampling(airbug_bench::Sampling {
+                iterations: Some(1),
+                ..Default::default()
+            });
+            let result = suite.run("");
+            assert_eq!(result.is_err(), fail);
+            assert_eq!(reached.load(std::sync::atomic::Ordering::SeqCst), 2);
+            if let Ok(run) = result {
+                assert_eq!(run.observations[0].operations, 2);
+            }
+        }
+        tx.send(()).unwrap();
+    });
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("async workers must run concurrently and not deadlock on panic");
+    handle.join().unwrap();
+}
+
+#[test]
+fn kind_order_keeps_case_labels_distinct_from_nested_groups() {
+    use airbug_bench::{Selection, SortOrder, Suite};
+    let mut suite = Suite::new("root");
+    suite.group("a", |suite| {
+        suite.group("a", |suite| {
+            suite.bench("first", || ());
+        });
+        suite.bench("z", || ());
+    });
+    suite.bench("z/10", || ());
+    suite.bench("z/2", || ());
+    let mut selection = Selection {
+        sort: SortOrder::Kind,
+        ..Default::default()
+    };
+    let expected = vec!["root/z/2", "root/z/10", "root/a/z", "root/a/a/first"];
+    assert_eq!(suite.list_selected(&selection), expected);
+    let run = suite.test_selected(&selection).unwrap();
+    assert_eq!(
+        run.cases
+            .iter()
+            .map(|case| case.id.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    selection.reverse = true;
+    assert_eq!(
+        suite.list_selected(&selection),
+        expected.into_iter().rev().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn descriptive_rows_separate_processes_and_do_not_hide_missing_observations() {
+    let mut run = paired(3, 1.2);
+    let rows = airbug_bench::report::descriptive(&run).unwrap();
+    assert_eq!(rows.len(), 6);
+    for row in &rows {
+        let observation = run
+            .observations
+            .iter()
+            .find(|o| o.variant == row.variant && o.process == row.process)
+            .unwrap();
+        let summary = row.summary.as_ref().unwrap();
+        assert_eq!(summary.count, 1);
+        assert_eq!(summary.standard_deviation, None);
+        assert_eq!(
+            summary.mean,
+            observation.number().unwrap().unwrap() / observation.operations as f64
+        );
+    }
+    run.observations[0].value = None;
+    run.observations[0].availability = Availability::Unsupported("missing counter".into());
+    let rows = airbug_bench::report::descriptive(&run).unwrap();
+    assert_eq!(rows.iter().filter(|r| r.summary.is_none()).count(), 1);
+    assert_eq!(rows.iter().map(|r| r.unavailable).sum::<usize>(), 1);
+}
+
+#[test]
+fn descriptive_operation_mean_weights_unequal_batches_and_survives_large_totals() {
+    let mut run = paired(1, 1.0);
+    run.cases[0].metrics[0].statistic = "batch_total".into();
+    run.observations.truncate(1);
+    run.observations[0].pair = None;
+    run.observations[0].value = Some("10".into());
+    let mut second = run.observations[0].clone();
+    second.sequence = 1;
+    second.operations = 9;
+    second.value = Some("180".into());
+    run.observations.push(second);
+    let rows = report::descriptive(&run).unwrap();
+    assert_eq!(rows[0].operations, "10");
+    assert_eq!(rows[0].summary.as_ref().unwrap().mean, 15.0);
+    assert!((rows[0].operation_weighted_mean.unwrap() - 19.0).abs() < 1e-12);
+    for observation in &mut run.observations {
+        observation.operations = 1;
+        observation.value = Some("1e308".into());
+    }
+    let rows = report::descriptive(&run).unwrap();
+    assert_eq!(rows[0].operation_weighted_mean, Some(1e308));
+    run.observations[1].value = None;
+    run.observations[1].availability = Availability::Incomplete("missing".into());
+    assert!(
+        report::descriptive(&run).unwrap()[0]
+            .operation_weighted_mean
+            .is_none()
+    );
+}
+
+#[test]
+fn associated_work_counts_follow_timing_order_not_counter_order() {
+    let mut run = paired(1, 1.0);
+    run.cases[0].metrics[0] = Metric::duration("wall", "test", "batch_total");
+    run.cases[0]
+        .contract
+        .insert("work.input.items".into(), "batch_total".into());
+    run.cases[0]
+        .contract
+        .insert("work.counter.bytes".into(), "0".into());
+    let mut original = run.observations[0].clone();
+    original.metric = "wall".into();
+    original.pair = None;
+    run.observations.clear();
+    for (sequence, (time, work)) in [(10, 100), (40, 3), (20, 50), (30, 10)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut observation = original.clone();
+        observation.sequence = sequence as u64;
+        observation.value = Some(time.to_string());
+        observation
+            .work_totals
+            .insert("items".into(), work.to_string());
+        run.observations.push(observation);
+    }
+    let rows = report::descriptive(&run).unwrap();
+    let counts = &rows[0].associated_counters["items"];
+    assert_eq!(counts.fastest, 100.0);
+    assert_eq!(counts.slowest, 3.0);
+    assert_eq!(counts.median, 30.0);
+    assert_eq!(counts.operation_mean, 40.75);
+    assert_eq!(rows[0].associated_counters["bytes"].operation_mean, 0.0);
+    run.observations[1].operations = 100;
+    let weighted = report::descriptive(&run).unwrap();
+    let counts = &weighted[0].associated_counters["items"];
+    assert_eq!(counts.fastest, 0.03);
+    assert_eq!(counts.slowest, 10.0);
+    assert_eq!(counts.median, 75.0);
+    assert!((counts.operation_mean - 163.0 / 103.0).abs() < 1e-12);
+    assert!(report::descriptive_markdown(&weighted).contains("Work counts associated with timing"));
+    run.observations[1].value = None;
+    run.observations[1].availability = Availability::Incomplete("missing timing".into());
+    assert!(
+        report::descriptive(&run).unwrap()[0]
+            .associated_counters
+            .is_empty()
+    );
+}
+
+#[test]
+fn allocation_phases_distinguish_growth_shrink_and_freed_bytes() {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    let allocator = alloc::TrackingAllocator::new(System);
+    // Explicit allocator calls isolate the accounting from the test harness.
+    unsafe {
+        let original = Layout::from_size_align(32, 8).unwrap();
+        let pointer = allocator.alloc_zeroed(original);
+        assert!(!pointer.is_null());
+        let phase = allocator.begin_phase().unwrap();
+        let pointer = allocator.realloc(pointer, original, 128);
+        assert!(!pointer.is_null());
+        let pointer = allocator.realloc(pointer, Layout::from_size_align(128, 8).unwrap(), 16);
+        assert!(!pointer.is_null());
+        allocator.dealloc(pointer, Layout::from_size_align(16, 8).unwrap());
+        let result = phase.finish();
+        assert_eq!(result.allocations, 0);
+        assert_eq!(result.allocated_bytes, 0);
+        assert_eq!(result.deallocations, 1);
+        assert_eq!(result.deallocated_bytes, 16);
+        assert_eq!(result.reallocations, 2);
+        assert_eq!(result.grow_operations, 1);
+        assert_eq!(result.shrink_operations, 1);
+        assert_eq!(result.grown_bytes, 96);
+        assert_eq!(result.shrunk_bytes, 112);
+        assert_eq!(result.live_start_bytes, 32);
+        assert_eq!(result.live_end_bytes, 0);
+        assert_eq!(result.peak_above_start_bytes, 96);
+        let snapshot = allocator.snapshot();
+        assert_eq!(snapshot.allocated_bytes, 32);
+        assert_eq!(
+            snapshot.allocated_bytes + snapshot.grown_bytes,
+            snapshot.deallocated_bytes + snapshot.shrunk_bytes + snapshot.live_bytes
+        );
+        let empty = allocator.begin_phase().unwrap().finish();
+        assert_eq!(
+            (
+                empty.grow_operations,
+                empty.shrink_operations,
+                empty.allocated_bytes,
+                empty.deallocated_bytes
+            ),
+            (0, 0, 0, 0)
+        );
+    }
+}
+
+#[test]
+fn summary_scales_inherit_lazily_with_nearest_and_explicit_linear_overrides() {
+    use airbug_bench::viz::charts::AxisScale::{Linear, Logarithmic};
+    let mut suite = airbug_bench::Suite::new("plots");
+    suite.summary_scale(Logarithmic);
+    suite.bench("default", || panic!("must stay lazy"));
+    suite.with_summary_scale_defaults(Linear, |suite| {
+        suite.group("outer", |suite| {
+            suite.bench("inherited", || panic!("must stay lazy"));
+            suite.with_summary_scale_defaults(Logarithmic, |suite| {
+                suite.group("inner", |suite| {
+                    suite.bench("inherited", || panic!("must stay lazy"));
+                    suite.bench("explicit", || panic!("must stay lazy"));
+                    suite.summary_scale_case(Linear);
+                });
+            });
+        });
+    });
+    suite.bench("after", || panic!("must stay lazy"));
+    let scales = suite.summary_scales(&Default::default()).unwrap();
+    assert_eq!(scales["plots/default"], Logarithmic);
+    assert_eq!(scales["plots/outer/inherited"], Linear);
+    assert_eq!(scales["plots/outer/inner/inherited"], Logarithmic);
+    assert_eq!(scales["plots/outer/inner/explicit"], Linear);
+    assert_eq!(scales["plots/after"], Logarithmic);
+}
+
+#[test]
+fn suite_results_persist_resolved_summary_scales() {
+    use airbug_bench::viz::charts::AxisScale::{Linear, Logarithmic};
+    let mut suite = airbug_bench::Suite::new("persisted");
+    suite.summary_scale(Logarithmic);
+    suite.bench("inherited", || ());
+    suite.bench("explicit", || ());
+    suite.summary_scale_case(Linear);
+    let run = suite.test_selected(&Default::default()).unwrap();
+    let restored: airbug_bench::Run =
+        serde_json::from_str(&serde_json::to_string(&run).unwrap()).unwrap();
+    let scales = airbug_bench::presentation::load_scales(&restored).unwrap();
+    assert_eq!(scales["persisted/inherited"], Logarithmic);
+    assert_eq!(scales["persisted/explicit"], Linear);
+}
+
+#[test]
+fn declared_summary_families_persist_and_connect_only_related_inputs() {
+    let mut suite = airbug_bench::Suite::new("families");
+    for size in [100, 1, 10] {
+        suite.bench(&format!("sort/{size}"), || ());
+        suite.parameter("size", size.to_string());
+        suite.summary_family("sort");
+    }
+    suite.group("other", |suite| {
+        suite.bench("sort", || ());
+        suite.parameter("size", "1");
+        suite.summary_family("sort");
+    });
+    let mut run = suite.test_selected(&Default::default()).unwrap();
+    for o in &mut run.observations {
+        o.value = Some("10".into());
+    }
+    let restored: airbug_bench::Run =
+        serde_json::from_str(&serde_json::to_string(&run).unwrap()).unwrap();
+    let families = airbug_bench::presentation::load_families(&restored).unwrap();
+    assert_eq!(families["families/sort/100"], "families/sort");
+    assert_eq!(families["families/other/sort"], "families/other/sort");
+    let config = airbug_bench::report::SummaryPlot {
+        estimator: Default::default(),
+        parameter: "size",
+        scale: airbug_bench::viz::charts::AxisScale::Linear,
+    };
+    let html = airbug_bench::report::parameter_charts(&restored, &config).unwrap();
+    assert!(html.contains("Lines connect observed estimates"));
+    assert!(html.contains("family families/sort / candidate"));
+    assert!(html.contains("family families/other/sort / candidate"));
+    assert!(!html.contains("line summary unavailable"));
+    let mut missing = restored.clone();
+    for o in &mut missing.observations {
+        if o.case == "families/sort/10" {
+            o.value = None;
+            o.availability = airbug_bench::Availability::Unsupported("fixture".into());
+        }
+    }
+    let gap = airbug_bench::report::parameter_charts(&missing, &config).unwrap();
+    assert!(gap.contains("no line crosses an unavailable case"));
+    assert!(!gap.contains("Lines connect observed estimates"));
+    assert_eq!(gap.matches("<circle").count(), 3);
+    let mut duplicate = restored.clone();
+    duplicate.cases[0]
+        .contract
+        .insert("param.size".into(), "1".into());
+    assert!(
+        airbug_bench::report::parameter_charts(&duplicate, &config)
+            .unwrap()
+            .contains("duplicate inputs")
+    );
+}
+
+#[test]
+fn throughput_input_lines_use_equal_process_weights_and_separate_units() {
+    let mut suite = airbug_bench::Suite::new("rates");
+    for size in [1, 10] {
+        suite.bench(&format!("case/{size}"), || ());
+        suite.parameter("size", size.to_string());
+        suite.summary_family("work");
+    }
+    let mut run = suite.test_selected(&Default::default()).unwrap();
+    for case in &mut run.cases {
+        case.contract
+            .insert("work.counter.items".into(), "2".into());
+        case.contract
+            .insert("work.counter.chars".into(), "4".into());
+    }
+    let originals = run.observations.clone();
+    run.observations.clear();
+    for original in originals {
+        for sequence in 0..6 {
+            let mut o = original.clone();
+            o.process = if sequence < 5 { 0 } else { 1 };
+            o.sequence = sequence;
+            o.operations = 1;
+            o.value = Some(if sequence < 5 { "2" } else { "1" }.into());
+            run.observations.push(o);
+        }
+    }
+    let values = airbug_bench::report::throughput_process_medians(&run).unwrap();
+    let item_values: Vec<_> = values
+        .iter()
+        .filter(|r| r.case == "rates/case/1" && r.unit == "items")
+        .map(|r| r.median)
+        .collect();
+    assert_eq!(item_values, [1e9, 2e9]);
+    let config = airbug_bench::report::SummaryPlot {
+        estimator: Default::default(),
+        parameter: "size",
+        scale: airbug_bench::viz::charts::AxisScale::Linear,
+    };
+    let html = airbug_bench::report::throughput_parameter_charts(&run, &config).unwrap();
+    assert!(html.contains("items/s") && html.contains("chars/s"));
+    assert_eq!(html.matches("<svg").count(), 2);
+    assert!(html.contains("Lines connect observed estimates"));
+    assert!(html.contains("1.50e9"));
+    for o in &mut run.observations {
+        o.value = Some("0".into());
+    }
+    assert!(
+        !airbug_bench::report::throughput_parameter_charts(&run, &config)
+            .unwrap()
+            .contains("<svg")
+    );
+}
+
+#[test]
+fn throughput_families_disconnect_zero_missing_and_unavailable_members() {
+    let mut suite = airbug_bench::Suite::new("gaps");
+    for size in [1, 2, 3] {
+        suite.bench(&format!("case/{size}"), || ());
+        suite.parameter("size", size.to_string());
+        suite.summary_family("family");
+    }
+    let mut run = suite.test_selected(&Default::default()).unwrap();
+    for case in &mut run.cases {
+        case.contract
+            .insert("work.counter.items".into(), "1".into());
+    }
+    for o in &mut run.observations {
+        o.value = Some("10".into());
+    }
+    let config = airbug_bench::report::SummaryPlot {
+        estimator: Default::default(),
+        parameter: "size",
+        scale: airbug_bench::viz::charts::AxisScale::Linear,
+    };
+    for mode in ["zero", "missing", "unavailable", "parameter"] {
+        let mut partial = run.clone();
+        if mode == "missing" {
+            partial.status = airbug_bench::Status::Incomplete;
+        }
+        match mode {
+            "missing" => partial.observations.retain(|o| o.case != "gaps/case/2"),
+            "parameter" => {
+                partial.cases[1].contract.remove("param.size");
+            }
+            _ => {
+                for o in &mut partial.observations {
+                    if o.case == "gaps/case/2" {
+                        if mode == "zero" {
+                            o.value = Some("0".into());
+                        } else {
+                            o.value = None;
+                            o.availability =
+                                airbug_bench::Availability::Unsupported("fixture".into());
+                        }
+                    }
+                }
+            }
+        }
+        let chart = airbug_bench::report::throughput_parameter_charts(&partial, &config).unwrap();
+        assert!(chart.contains("Incomplete throughput families"), "{mode}");
+        assert_eq!(chart.matches("<circle").count(), 2, "{mode}");
+        // The chart retains axes/points but has no family line path.
+        assert!(!chart.contains("pathLength=\"100\""), "{mode}");
+    }
 }

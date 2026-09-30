@@ -160,19 +160,25 @@ dependencies = [
 name = "airbug-bench"
 version = "0.9.0"
 dependencies = [
+ "airbug",
  "airbug-bench-macros",
  "backtrace",
+ "futures-executor",
+ "regex-automata",
  "serde",
  "serde_json",
  "sha2",
+ "smol",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
 name = "airbug-bench-macros"
 version = "0.9.0"
 dependencies = [
+ "proc-macro-crate",
  "quote",
  "syn 2.0.119",
 ]
@@ -475,6 +481,17 @@ dependencies = [
  "event-listener",
  "event-listener-strategy",
  "pin-project-lite",
+]
+
+[[package]]
+name = "async-net"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b948000fad4873c1c9339d60f2623323a0cfd3816e5181033c6a5cb68b2accf7"
+dependencies = [
+ "async-io",
+ "blocking",
+ "futures-lite",
 ]
 
 [[package]]
@@ -4053,6 +4070,23 @@ dependencies = [
  "libc",
  "smithay-client-toolkit 0.20.0",
  "wayland-backend",
+]
+
+[[package]]
+name = "smol"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a33bd3e260892199c3ccfc487c88b2da2265080acb316cd920da72fdfd7c599f"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-fs",
+ "async-io",
+ "async-lock",
+ "async-net",
+ "async-process",
+ "blocking",
+ "futures-lite",
 ]
 
 [[package]]

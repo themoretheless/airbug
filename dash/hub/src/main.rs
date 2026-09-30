@@ -9,6 +9,7 @@ mod otlp;
 mod runs;
 mod scan;
 mod serve;
+mod test_runs;
 
 use std::{env, path::PathBuf, process, sync::Arc};
 

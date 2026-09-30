@@ -15,6 +15,10 @@ use std::{
     time::Instant,
 };
 
+// Shared implementation for the reporter binary and the benchmark harness.
+#[doc(hidden)]
+pub mod live;
+
 const MAX_TEXT: usize = 64 * 1024;
 const MAX_ATTACHMENT: usize = 1024 * 1024;
 const MAX_ATTACHMENTS: usize = 4 * MAX_ATTACHMENT;

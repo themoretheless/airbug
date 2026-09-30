@@ -65,6 +65,12 @@ fn handle(stream: &mut TcpStream, app: &HubApp) -> std::io::Result<()> {
             "text/javascript; charset=utf-8",
             DASHBOARD_JS,
         ),
+        ("GET", "/static/runs.js") => http::respond(
+            stream,
+            "200 OK",
+            "text/javascript; charset=utf-8",
+            include_str!("../static/runs.js"),
+        ),
         (method, path) if api_path(path).is_some() => {
             let rest = api_path(path).unwrap_or("");
             handle_api(stream, app, method, rest, &req)
@@ -99,6 +105,42 @@ fn handle_api(
 ) -> std::io::Result<()> {
     let rest = if rest.is_empty() { "/" } else { rest };
     match (method, rest) {
+        ("GET", "/runs") => match crate::test_runs::list(&app.paths.root) {
+            Ok(value) => http::respond_json(stream, "200 OK", &value),
+            Err(error) => http::respond_err(stream, "500 Internal Server Error", &error.into()),
+        },
+        ("GET", p) if p.starts_with("/runs/") => {
+            let parts: Vec<_> = p["/runs/".len()..].split('/').collect();
+            let result = match parts.as_slice() {
+                [id] => crate::test_runs::detail(&app.paths.root, id),
+                [id, "cases", index] => index
+                    .parse::<usize>()
+                    .map_err(std::io::Error::other)
+                    .and_then(|index| crate::test_runs::case(&app.paths.root, id, index)),
+                [id, "cases", index, "attachments", file] => {
+                    let result = index
+                        .parse::<usize>()
+                        .map_err(std::io::Error::other)
+                        .and_then(|index| {
+                            crate::test_runs::attachment(&app.paths.root, id, index, file)
+                        });
+                    return match result {
+                        Ok(bytes) => http::respond_bytes(
+                            stream,
+                            "200 OK",
+                            "application/octet-stream",
+                            &bytes,
+                        ),
+                        Err(error) => http::respond_err(stream, "404 Not Found", &error.into()),
+                    };
+                }
+                _ => Err(std::io::ErrorKind::NotFound.into()),
+            };
+            match result {
+                Ok(value) => http::respond_json(stream, "200 OK", &value),
+                Err(error) => http::respond_err(stream, "404 Not Found", &error.into()),
+            }
+        }
         ("GET", "/") => {
             let snap = scan::scan_with_hub(&app.paths.root, app.port, &app.hub_id);
             http::respond_json(stream, "200 OK", &snap.apis)

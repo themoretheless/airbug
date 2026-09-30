@@ -441,3 +441,49 @@ fn serve_unified_event_archive_accepts_trace() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn launch_history_updates_and_serves_only_registered_attachments() {
+    let root = std::env::temp_dir().join(format!("airbug-launch-history-{}", std::process::id()));
+    let run = root.join("target/airbug-report/runs/123-456");
+    std::fs::create_dir_all(run.join("0")).unwrap();
+    let (port, hub) = start_hub(&root);
+    let report = serde_json::json!({"version":1,"id":"123-456","kind":"test","state":"running","tests":[{"name":"example","status":"running"}]});
+    std::fs::write(run.join("run.json"), report.to_string()).unwrap();
+    let (status, body) = http(port, "GET", "/api/v1/runs", None);
+    assert_eq!(status, 200);
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(value["runs"][0]["counts"]["running"], 1);
+    assert!(value["runs"][0].get("tests").is_none());
+    std::fs::write(run.join("0/events.jsonl"), "{\"type\":\"attachment\",\"file\":\"attachment-1-1.bin\",\"name\":\"payload\"}\n{unfinished").unwrap();
+    std::fs::write(run.join("0/attachment-1-1.bin"), "payload").unwrap();
+    std::fs::write(run.join("0/attachment-1-2.bin"), "unlisted").unwrap();
+    let (status, body) = http(port, "GET", "/api/v1/runs/123-456/cases/0", None);
+    assert_eq!(status, 200);
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(value["events"].as_array().unwrap().len(), 1);
+    assert_eq!(value["warnings"].as_array().unwrap().len(), 1);
+    let (status, body) = http(
+        port,
+        "GET",
+        "/api/v1/runs/123-456/cases/0/attachments/attachment-1-1.bin",
+        None,
+    );
+    assert_eq!((status, body.as_str()), (200, "payload"));
+    for path in [
+        "/api/v1/runs/../Cargo.toml",
+        "/api/v1/runs/123-456/cases/99",
+        "/api/v1/runs/123-456/cases/0/attachments/attachment-1-2.bin",
+    ] {
+        assert_eq!(http(port, "GET", path, None).0, 404);
+    }
+    let finished = report.to_string().replace("running", "passed");
+    std::fs::write(run.join("run.json"), finished).unwrap();
+    let (_, body) = http(port, "GET", "/api/v1/runs/123-456", None);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap()["state"],
+        "passed"
+    );
+    drop(hub);
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -107,3 +107,173 @@ cargo airbug-bench serve .bench --port 8787
 В каталоге запуска автоматически сохраняются `run.json`, `report.html`, `report.json`, `report.md`, логи и финальный статус. Ошибки/отмена после начала измерений также сохраняются с соответствующим статусом. После закрытия runner HTML можно открыть самостоятельно либо запустить `serve` на сохранённом каталоге. Ошибки до создания запуска могут не иметь артефактов.
 
 Счётчик обновляется между измерениями; UI опрашивает маленький статус раз в 1,5 секунды. Браузер и сервер всё равно потребляют ресурсы системы: для строгих измерений используйте `--no-ui`.
+
+### Relative bootstrap distributions from saved runs
+
+For two independent runs, export relative mean and median changes without rerunning
+workloads:
+
+```sh
+cargo airbug-bench compare baseline candidate --json --relative-distributions \
+  --hypothesis-resamples 10000 --hypothesis-seed 7 --alpha 0.05
+```
+
+This opt-in output is an object with `comparisons` (the ordinary comparison rows)
+and `relative` (bootstrap reports). Without the flag, JSON remains an array of
+comparison rows. `--hypothesis-distribution` can additionally retain Welch null
+draws in `comparisons`.
+
+Relative draws use independent resampling of each run's process medians, after
+normalizing batch totals by operation counts. A process with more batches does
+not receive more weight. Each report records process counts, seed, resample count,
+and confidence level (`1 - alpha`). These are per-statistic percentile intervals,
+not family-adjusted regression decisions; `--check` still uses the ordinary
+comparison decisions. Undefined percentage ratios remain JSON `null`; an interval
+is unavailable if any draw has an undefined ratio. Missing or insufficient process
+observations also produce explicit unavailable reports. This flag requires both a
+candidate run and `--json`; paired single-run relative export is not supported.
+
+`compare baseline candidate --html` also includes relative mean/median density
+charts. Blue shading is the bootstrap confidence interval; amber shading marks
+`[-threshold, +threshold]` percent (the existing `--threshold`, default 5). A gray
+line marks zero and a red line marks the original point estimate. Positive changes
+mean an increase in the measured quantity, which is not necessarily a regression
+for every metric. Charts use the same `--hypothesis-resamples`,
+`--hypothesis-seed`, and `--alpha` controls as relative JSON export. Undefined
+ratios suppress the complete density chart and show an explicit reason; finite
+subsets are never silently plotted as the full population. Constant distributions
+are marked as point masses. These charts do not change `--check` decisions.
+
+The unified `report candidate --baseline baseline --output report.html` includes
+relative mean/median charts using its confidence and threshold settings. Direct
+Cargo suites with a named `--baseline`, `--resamples N`, and `--output DIR` include
+the same charts in `regression-comparison.html` and save retained draws in
+`relative-distributions.json`. Each case uses its own baseline snapshot and
+resolved practical-change threshold; the bootstrap confidence, seed, and sample
+count come from the requested bootstrap configuration. Comparison export happens
+before baseline promotion. Incompatible or absent case baselines remain explicitly
+unavailable and are not synthesized into relative distributions.
+
+### Violin summaries
+
+Bootstrap HTML reports now include violin summaries. They use the full retained
+measurement population, including outliers. Multi-process runs contribute one
+median per process; single-process runs show normalized observations and make no
+claim of process independence. Missing observations suppress that population and
+retain the reason in the report. Compatible metric contracts and sampling units
+share a chart; legacy JSON without metric contracts remains separated by row.
+
+```sh
+cargo airbug-bench analyze saved-run --format html --summary-scale logarithmic \
+  --output analysis.html
+```
+
+The default summary scale is linear. `--summary-scale` on `analyze` requires HTML
+output. This setting controls violin summaries; other diagnostic plots keep their
+own axes. Direct Cargo bootstrap `estimates.html` includes violin summaries, linear by default.
+Each violin's width is normalized to its own peak density, not its sample count.
+
+Unified experiment HTML includes candidate violin summaries with or without a
+baseline. `--summary-scale logarithmic` controls violin axes independently of
+`--summary-parameter`. Direct Cargo passes the same summary scale
+to `estimates.html`; selecting a summary scale enables bootstrap reporting even
+without `--resamples`. It requires `--output` and a measurement or loaded baseline. Nonpositive populations
+on log axes are explicitly unavailable; no positive-only subset is substituted.
+
+Rust registration can set suite, group and individual case scales:
+
+```rust
+use airbug_bench::{Suite, viz::charts::AxisScale};
+let mut suite = Suite::new("sorting");
+suite.summary_scale(AxisScale::Logarithmic);
+suite.with_summary_scale_defaults(AxisScale::Linear, |suite| {
+    suite.group("small", |suite| {
+        suite.bench("case", || std::hint::black_box(1));
+    });
+});
+```
+
+`summary_scale_case` sets an explicit scale on the last registered case. Nearest
+nested group defaults win; an explicit `Linear` overrides inherited
+`Logarithmic`. Defaults also wrap registration functions imported from other
+modules or crates. `summary_scales` resolves selected cases without executing
+workloads. Direct Cargo bootstrap HTML uses these settings when requested with
+`--resamples` and `--output`; an explicit CLI `--summary-scale` overrides all
+registered settings. Resolved presentation defaults are saved in `run.json` provenance under
+`airbug.presentation.summary_scales.v1`, separately from workload compatibility
+contracts. `analyze --format html` and unified `report` HTML restore them; an explicit CLI scale wins.
+Legacy runs without this metadata retain linear defaults. Invalid stored scale
+values produce an error. The process runner propagates preferences agreed across workers. If workers
+disagree (including a legacy worker with implicit linear scale), it keeps the
+measurements, records a note, and leaves that case at the default scale unless
+explicitly overridden. Original worker provenance remains available.
+
+The same defaults are available through attributes:
+
+```rust
+#[airbug_bench::suite(summary_scale = "logarithmic")]
+mod benchmarks {
+    #[group(summary_scale = "linear")]
+    mod small {
+        #[bench]
+        fn operation() { std::hint::black_box(1); }
+    }
+    #[bench(summary_scale = "linear")]
+    fn explicit_override() { std::hint::black_box(2); }
+}
+```
+
+`summary_scale` accepts only `linear` or `logarithmic`. Repeated options and invalid
+values fail at compilation. Inline and imported groups use the same nearest-default
+precedence; a case attribute overrides both. Registration and scale inspection do
+not execute benchmark functions.
+
+### Declared input families
+
+After registering a case, call `suite.summary_family("sort")` and
+`suite.parameter("size", "1024")` to include it in a numeric input family.
+Family names are scoped to the current group. The resolved mapping is saved in
+`airbug.presentation.summary_families.v1` provenance, outside workload contracts.
+`--summary-parameter size` joins estimates from the same declared family and
+variant, ordered by numeric input. Metric contracts remain separate. Unassigned
+cases stay individual points. Duplicate input values in a family produce an
+explicit unavailable line summary instead of averaging different cases.
+
+The process runner preserves family identities agreed across all workers. A
+conflicting or missing identity leaves that case as separate points and adds a
+report note; measurements remain usable. Attributes support `summary_family = "name"` on a bench, group or suite.
+A child declaration overrides inherited defaults, including imported groups.
+For scalar `args`, `--summary-parameter arg` uses the generated numeric argument
+labels as inputs. Choose distinct family names for different functions that
+share the same input values; otherwise the report rejects duplicate inputs.
+
+Numeric input summaries also include throughput lines for declared work counters.
+They use median batch throughput within each process, then the median across
+processes, so unequal batch counts do not change process weights. Bytes use fixed
+MiB/s across cases; other counter units stay separate. Work totals reuse the same
+calculation as throughput tables. Charts require positive, complete `wall`
+`batch_total` observations in nanoseconds; unsupported or incomplete populations
+are omitted with a diagnostic. On logarithmic axes, zero work rates cannot form
+a line and produce an explicit unavailable chart.
+
+`bench/examples/input_summary.rs` generates deterministic time and throughput
+summary figures without running workloads.
+
+### HTML без графиков
+
+`cargo airbug-bench report RUN --baseline BASELINE --no-plots --output report.html`
+сохраняет таблицы и результаты сравнения, пропуская bootstrap-анализ для графиков
+и генерацию SVG. Флаг доступен для HTML-команды `report`; он несовместим с
+`--summary-parameter`, `--summary-scale` и `--summary-estimator`.
+
+Тот же режим доступен для сохранённых измерений:
+
+```sh
+cargo airbug-bench analyze RUN --format html --no-plots --output estimates.html
+cargo airbug-bench compare BASELINE CANDIDATE --html --no-plots --output comparison.html
+```
+
+`analyze` продолжает рассчитывать численные bootstrap-оценки. `compare` сохраняет
+обычные статистические решения, но не удерживает массивы нулевых распределений
+для графиков. `--no-plots` требует HTML; в `analyze` он несовместим с
+`--summary-scale`.

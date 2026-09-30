@@ -23,30 +23,102 @@ impl Config {
         })
     }
 }
+/// Order applies equally to listing, dry-run and workload execution.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SortOrder {
+    #[default]
+    Registration,
+    Lexical,
+    Natural,
+    Source,
+    /// At every group level, cases precede subgroups; names break ties.
+    Kind,
+}
+impl SortOrder {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "registration" => Ok(Self::Registration),
+            "lexical" => Ok(Self::Lexical),
+            "natural" => Ok(Self::Natural),
+            "source" => Ok(Self::Source),
+            "kind" => Ok(Self::Kind),
+            _ => Err(error(
+                "sort must be registration, lexical, natural, source or kind",
+            )),
+        }
+    }
+    pub(crate) fn compare(self, a: &str, b: &str) -> std::cmp::Ordering {
+        match self {
+            Self::Registration | Self::Source | Self::Kind => std::cmp::Ordering::Equal,
+            Self::Lexical => a.cmp(b),
+            Self::Natural => crate::ordering::natural_path_cmp(a, b),
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct Selection {
     pub pattern: String,
+    pub sort: SortOrder,
+    pub reverse: bool,
     pub exact: bool,
     pub glob: bool,
+    /// A compiled expression, matched anywhere in the full case path. Use anchors for exact paths.
+    pub regex: Option<regex_automata::meta::Regex>,
+    pub exclude_exact: Vec<String>,
+    pub exclude_regex: Vec<regex_automata::meta::Regex>,
     pub exclude: Vec<String>,
     pub tags: Vec<String>,
+    pub include_ignored: bool,
+    pub only_ignored: bool,
 }
 impl Selection {
+    /// Compile once before listing or measuring. Invalid expressions return an error.
+    pub fn with_regex(mut self, pattern: &str) -> Result<Self> {
+        self.regex = Some(
+            regex_automata::meta::Regex::new(pattern)
+                .map_err(|e| error(format!("invalid benchmark regex: {e}")))?,
+        );
+        self.validate()?;
+        Ok(self)
+    }
+    pub fn skip_regex(&mut self, pattern: &str) -> Result<&mut Self> {
+        self.exclude_regex.push(
+            regex_automata::meta::Regex::new(pattern)
+                .map_err(|e| error(format!("invalid exclusion regex: {e}")))?,
+        );
+        Ok(self)
+    }
+
     pub fn validate(&self) -> Result<()> {
-        if self.exact && self.glob {
-            return Err(error("exact and glob are mutually exclusive"));
+        if usize::from(self.exact) + usize::from(self.glob) + usize::from(self.regex.is_some()) > 1
+        {
+            return Err(error("exact, glob and regex are mutually exclusive"));
         }
         Ok(())
     }
     pub fn matches(&self, c: &Case) -> bool {
-        let matches = if self.exact {
+        let matches = if let Some(regex) = &self.regex {
+            regex.is_match(&c.id)
+        } else if self.exact {
             c.id == self.pattern
         } else if self.glob {
             glob(&self.pattern, &c.id)
         } else {
             c.id.contains(&self.pattern)
         };
+        let ignored = c
+            .contract
+            .get("ignored")
+            .is_some_and(|value| value == "true");
         matches
+            && if self.only_ignored {
+                ignored
+            } else {
+                self.include_ignored || !ignored
+            }
+            && !self.exclude_exact.contains(&c.id)
+            && !self.exclude_regex.iter().any(|r| r.is_match(&c.id))
             && !self.exclude.iter().any(|p| glob(p, &c.id))
             && self
                 .tags

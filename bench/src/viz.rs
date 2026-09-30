@@ -194,9 +194,17 @@ impl Domain {
             }
             Self::Linear { min, .. } => (*min, *min + 1.),
             Self::Log { min, max } => {
-                let lo = min.max(f64::MIN_POSITIVE);
-                let hi = max.max(lo * 10.);
-                (lo.log10(), hi.log10())
+                let lo = if min.is_finite() && *min > 0. {
+                    min.log10()
+                } else {
+                    0.
+                };
+                let hi = if max.is_finite() && *max > 0. && max.log10() > lo {
+                    max.log10()
+                } else {
+                    lo + 1.
+                };
+                (lo, hi)
             }
             Self::Categories { labels } => (-0.5, labels.len().max(1) as f64 - 0.5),
         }
@@ -246,16 +254,30 @@ fn nice_steps(min: f64, max: f64, target: usize) -> Vec<f64> {
 
 /// Decade and 1/2/5 subdivisions inside a logarithmic domain.
 fn decade_ticks(min: f64, max: f64) -> Vec<f64> {
-    let lo = min.max(f64::MIN_POSITIVE).log10().floor() as i32;
-    let hi = max.max(f64::MIN_POSITIVE).log10().ceil() as i32;
+    if !min.is_finite() || !max.is_finite() || min <= 0. || max < min {
+        return vec![];
+    }
+    let lo = min.log10().floor() as i32;
+    let hi = max.log10().ceil() as i32;
     let mut out = vec![];
     for decade in lo..=hi {
-        for m in [1., 2., 5.] {
-            let v = m * 10f64.powi(decade);
-            if v >= min && v <= max && out.len() < 24 {
+        for m in [1, 2, 5] {
+            // Decimal parsing retains subnormals even when 10^decade underflows.
+            let v: f64 = format!("{m}e{decade}").parse().unwrap();
+            if v.is_finite() && v >= min && v <= max && out.last() != Some(&v) {
                 out.push(v);
             }
         }
+    }
+    if out.is_empty() {
+        out.push(min);
+        if max > min {
+            out.push(max);
+        }
+    }
+    if out.len() > 24 {
+        // Thin across the complete range, keeping both ends visible.
+        return (0..24).map(|i| out[i * (out.len() - 1) / 23]).collect();
     }
     out
 }
@@ -398,6 +420,14 @@ impl Plot {
         if !v.is_finite() {
             return None;
         }
+        let v = if matches!(domain, Domain::Log { .. }) {
+            if v <= 0. {
+                return None;
+            }
+            v.log10()
+        } else {
+            v
+        };
         let (lo, hi) = domain.ends();
         let t = (v - lo) / (hi - lo);
         if !t.is_finite() {
@@ -503,12 +533,28 @@ impl Plot {
 
     /// Dots with a per-point tooltip. Non-finite coordinates are skipped, never plotted at zero.
     pub fn points(&mut self, points: &[(f64, f64)], color: &str, radius: f64) -> &mut Self {
+        self.points_labeled(points, color, radius, "")
+    }
+
+    /// Points whose tooltips identify the series as well as original coordinates.
+    pub fn points_labeled(
+        &mut self,
+        points: &[(f64, f64)],
+        color: &str,
+        radius: f64,
+        label: &str,
+    ) -> &mut Self {
+        let prefix = if label.is_empty() {
+            String::new()
+        } else {
+            format!("{}: ", esc(label))
+        };
         for (x, y) in points {
             let (Some(cx), Some(cy)) = (self.xpx(*x), self.ypx(*y)) else {
                 continue;
             };
             self.marks.push(format!(
-                "<circle cx=\"{cx:.2}\" cy=\"{cy:.2}\" r=\"{radius:.2}\" fill=\"{}\"><title>x = {}, y = {}</title></circle>",
+                "<circle cx=\"{cx:.2}\" cy=\"{cy:.2}\" r=\"{radius:.2}\" fill=\"{}\"><title>{prefix}x = {}, y = {}</title></circle>",
                 esc(color),
                 fmt(*x),
                 fmt(*y)
@@ -519,6 +565,22 @@ impl Plot {
 
     /// Polyline through the points in the order given.
     pub fn path(&mut self, points: &[(f64, f64)], color: &str, width: f64) -> &mut Self {
+        self.path_labeled(points, color, width, "")
+    }
+
+    /// Polyline with an escaped series label in its tooltip.
+    pub fn path_labeled(
+        &mut self,
+        points: &[(f64, f64)],
+        color: &str,
+        width: f64,
+        label: &str,
+    ) -> &mut Self {
+        let tooltip = if label.is_empty() {
+            String::new()
+        } else {
+            format!("<title>{}</title>", esc(label))
+        };
         let mut d = String::new();
         for (x, y) in points {
             let (Some(px), Some(py)) = (self.xpx(*x), self.ypx(*y)) else {
@@ -529,11 +591,27 @@ impl Plot {
         }
         if !d.is_empty() {
             self.marks.push(format!(
-                "<path d=\"{d}\" pathLength=\"100\" class=\"dv\" fill=\"none\" stroke=\"{}\" stroke-width=\"{:.2}\" stroke-linejoin=\"round\"/>",
+                "<path d=\"{d}\" pathLength=\"100\" class=\"dv\" fill=\"none\" stroke=\"{}\" stroke-width=\"{:.2}\" stroke-linejoin=\"round\">{tooltip}</path>",
                 esc(color),
                 width
             ));
         }
+        self
+    }
+
+    /// Filled polygon in data coordinates. Invalid vertices reject the whole shape.
+    pub fn polygon(&mut self, points: &[(f64, f64)], color: &str, tip: &str) -> &mut Self {
+        if points.len() < 3 {
+            return self;
+        }
+        let mut vertices = String::new();
+        for &(x, y) in points {
+            let (Some(x), Some(y)) = (self.xpx(x), self.ypx(y)) else {
+                return self;
+            };
+            vertices.push_str(&format!("{x:.2},{y:.2} "));
+        }
+        self.marks.push(format!("<polygon points=\"{vertices}\" fill=\"{}\" fill-opacity=\"0.18\"><title>{}</title></polygon>", esc(color), esc(tip)));
         self
     }
 
@@ -627,6 +705,44 @@ impl Plot {
             ));
             x += 34. + label.chars().count() as f64 * 6.6;
         }
+        self
+    }
+
+    /// Lay out a wrapping legend before adding marks. Expands the canvas and top
+    /// margin equally, preserving the data area's height. Long labels are split
+    /// by Unicode scalar values and retained in full in tooltips.
+    pub fn legend_wrapped(&mut self, entries: &[(String, &str)]) -> &mut Self {
+        if entries.is_empty() {
+            return self;
+        }
+        let width = (self.width - self.left - self.right).max(34.);
+        let limit = ((width - 24.) / 11.).floor().max(1.) as usize;
+        let (mut x, mut row) = (self.left, 0usize);
+        for (label, color) in entries {
+            let chars: Vec<_> = label.chars().collect();
+            let parts: Vec<String> = if chars.is_empty() {
+                vec![String::new()]
+            } else {
+                chars
+                    .chunks(limit)
+                    .map(|part| part.iter().collect())
+                    .collect()
+            };
+            for (part_index, part) in parts.iter().enumerate() {
+                let size = 24. + part.chars().count() as f64 * 11.;
+                if x > self.left && (x + size > self.width - self.right || part_index > 0) {
+                    row += 1;
+                    x = self.left;
+                }
+                let y = 4. + row as f64 * 18.;
+                self.legend.push_str(&format!("<g><title>{}</title><rect x=\"{x:.2}\" y=\"{y:.2}\" width=\"10\" height=\"10\" fill=\"{}\"/><text x=\"{:.2}\" y=\"{:.2}\" font-size=\"11\">{}</text></g>", esc(label), esc(color), x + 14., y + 9., esc(part)));
+                x += size;
+            }
+        }
+        let required = 24. + row as f64 * 18.;
+        let extra = (required - self.top).max(0.);
+        self.top += extra;
+        self.height += extra;
         self
     }
 
@@ -731,7 +847,7 @@ impl Plot {
         body.push_str(&std::mem::take(&mut self.overlay));
         body.push_str(&std::mem::take(&mut self.legend));
         format!(
-            "<svg role=\"img\" aria-label=\"{}\" viewBox=\"0 0 {:.0} {:.0}\" style=\"width:100%;max-width:1000px\" font-family=\"ui-monospace,monospace\">{}</svg>",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" aria-label=\"{}\" viewBox=\"0 0 {:.0} {:.0}\" style=\"width:100%;max-width:1000px\" font-family=\"ui-monospace,monospace\">{}</svg>",
             esc(&self.title),
             self.width,
             self.height,
@@ -785,13 +901,84 @@ pub mod charts {
         }
     }
 
+    /// Scaling for a chart axis. Logarithmic axes accept positive values only.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum AxisScale {
+        #[default]
+        Linear,
+        Logarithmic,
+    }
+    impl AxisScale {
+        fn accepts(self, value: f64) -> bool {
+            value.is_finite() && (self == Self::Linear || value > 0.)
+        }
+        fn domain(self, values: impl Iterator<Item = f64>) -> Domain {
+            if self == Self::Linear {
+                return Domain::fit(values);
+            }
+            let (mut min, mut max) = (f64::INFINITY, f64::NEG_INFINITY);
+            for value in values {
+                min = min.min(value);
+                max = max.max(value);
+            }
+            if min.is_finite() {
+                Domain::Log { min, max }
+            } else {
+                Domain::Log { min: 1., max: 10. }
+            }
+        }
+    }
+
     /// Shared-scale scatter of one or more series, thinned to `max_points` each.
     pub fn scatter(title: &str, series: &[Series], max_points: usize, notes: &str) -> String {
+        scatter_scaled(
+            title,
+            series,
+            max_points,
+            notes,
+            AxisScale::Linear,
+            AxisScale::Linear,
+        )
+    }
+
+    /// Shared domains across all series, with independent axis scales.
+    /// Invalid point pairs are omitted before fitting and thinning; the caption
+    /// reports their count. Values and tooltips retain their original units.
+    pub fn scatter_scaled(
+        title: &str,
+        series: &[Series],
+        max_points: usize,
+        notes: &str,
+        x_scale: AxisScale,
+        y_scale: AxisScale,
+    ) -> String {
+        let clean: Vec<_> = series
+            .iter()
+            .map(|series| {
+                Series::new(
+                    &series.label,
+                    series
+                        .points
+                        .iter()
+                        .copied()
+                        .filter(|(x, y)| x_scale.accepts(*x) && y_scale.accepts(*y))
+                        .collect(),
+                )
+            })
+            .collect();
+        let omitted = series.iter().map(|s| s.points.len()).sum::<usize>()
+            - clean.iter().map(|s| s.points.len()).sum::<usize>();
+        let notes = if omitted > 0 {
+            format!("{notes} Omitted {omitted} points outside the axis domains.")
+        } else {
+            notes.to_string()
+        };
+        let series = &clean;
         let xs = series.iter().flat_map(|s| s.points.iter().map(|p| p.0));
         let ys = series.iter().flat_map(|s| s.points.iter().map(|p| p.1));
         let mut plot = Plot::new(title)
-            .x(Domain::fit(xs))
-            .y(Domain::fit(ys))
+            .x(x_scale.domain(xs))
+            .y(y_scale.domain(ys))
             .notes(notes);
         if series.len() > 1 {
             plot = plot.margins(64., 16., 26., 34.);
@@ -808,6 +995,61 @@ pub mod charts {
             plot.points(&points, Palette::LIGHT.series(i), 2.3);
         }
         plot.figure()
+    }
+
+    /// Connect a declared family in ascending numeric input order. Each series
+    /// must contain at most one estimate per input; ambiguous duplicate inputs
+    /// and values outside the chosen axes are rejected rather than interpolated.
+    pub fn line_scaled(
+        title: &str,
+        series: &[Series],
+        notes: &str,
+        x_scale: AxisScale,
+        y_scale: AxisScale,
+    ) -> crate::Result<String> {
+        let mut ordered = Vec::with_capacity(series.len());
+        for row in series {
+            if row
+                .points
+                .iter()
+                .any(|(x, y)| !x_scale.accepts(*x) || !y_scale.accepts(*y))
+            {
+                return Err(crate::error(format!(
+                    "line series {:?} contains values outside the axis domains",
+                    row.label
+                )));
+            }
+            let mut points = row.points.clone();
+            points.sort_by(|a, b| a.0.total_cmp(&b.0));
+            if points.windows(2).any(|w| w[0].0 == w[1].0) {
+                return Err(crate::error(format!(
+                    "line series {:?} contains duplicate inputs",
+                    row.label
+                )));
+            }
+            ordered.push(Series::new(&row.label, points));
+        }
+        let mut plot = Plot::new(title)
+            .x(x_scale.domain(ordered.iter().flat_map(|s| s.points.iter().map(|p| p.0))))
+            .y(y_scale.domain(ordered.iter().flat_map(|s| s.points.iter().map(|p| p.1))))
+            .notes(format!("{notes} Points are ordered by numeric input. Lines connect observed estimates; they are not fitted models."));
+        if ordered.len() > 1 {
+            plot.legend_wrapped(
+                &ordered
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| (s.label.clone(), Palette::LIGHT.series(i)))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        for (i, row) in ordered.iter().enumerate() {
+            let color = Palette::LIGHT.series(i);
+            if row.points.len() > 1 {
+                plot.path_labeled(&row.points, color, 1.5, &row.label);
+            }
+            plot.points_labeled(&row.points, color, 3., &row.label);
+        }
+        Ok(plot.figure())
     }
 
     /// Single-series scatter for callers plotting one process or series at a time.
@@ -1280,6 +1522,38 @@ pub mod charts {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn numeric_family_lines_sort_and_reject_ambiguous_or_invalid_inputs() {
+        use super::charts::{AxisScale, Series, line_scaled};
+        let a = Series::new("family <A>", vec![(100., 20.), (1., 2.), (10., 5.)]);
+        let b = Series::new("family <A>", vec![(1., 2.), (10., 5.), (100., 20.)]);
+        for scale in [AxisScale::Linear, AxisScale::Logarithmic] {
+            let html = line_scaled("families", std::slice::from_ref(&a), "", scale, scale).unwrap();
+            assert_eq!(
+                html,
+                line_scaled("families", std::slice::from_ref(&b), "", scale, scale).unwrap()
+            );
+            assert!(html.contains("family &lt;A&gt;"));
+            assert_eq!(html.matches("<circle").count(), 3);
+            assert!(html.contains("not fitted models"));
+        }
+        for points in [
+            vec![(1., 2.), (1., 3.)],
+            vec![(0., 2.)],
+            vec![(1., f64::NAN)],
+        ] {
+            assert!(
+                line_scaled(
+                    "bad",
+                    &[Series::new("bad", points)],
+                    "",
+                    AxisScale::Logarithmic,
+                    AxisScale::Logarithmic
+                )
+                .is_err()
+            );
+        }
+    }
     use super::*;
 
     #[test]
@@ -1344,8 +1618,139 @@ mod tests {
             .y(Domain::Linear { min: 0., max: 1. });
         let left = plot.xpx(1.).unwrap();
         let right = plot.xpx(1000.).unwrap();
-        let middle = plot.xpx(31.6).unwrap();
-        assert!(left < middle && middle < right, "{left} {middle} {right}");
+        assert_eq!(left, plot.plot_left());
+        assert_eq!(right, plot.plot_right());
+        let step = (right - left) / 3.;
+        assert!((plot.xpx(10.).unwrap() - left - step).abs() < 1e-10);
+        assert!((plot.xpx(100.).unwrap() - left - 2. * step).abs() < 1e-10);
+        assert!(plot.xpx(0.).is_none());
+        assert!(plot.xpx(-1.).is_none());
+        let narrow = Domain::Log { min: 10., max: 20. };
+        assert_eq!(plot.at(20., &narrow, (0., 1.)), Some(1.));
+        let tiny = f64::from_bits(1);
+        let extreme = Domain::Log {
+            min: tiny,
+            max: f64::MAX,
+        };
+        assert_eq!(plot.at(tiny, &extreme, (0., 1.)), Some(0.));
+        assert_eq!(plot.at(f64::MAX, &extreme, (0., 1.)), Some(1.));
+        let vertical = Plot::new("vertical").y(Domain::Log { min: 1., max: 100. });
+        let bottom = vertical.ypx(1.).unwrap();
+        let top = vertical.ypx(100.).unwrap();
+        assert!(bottom > top);
+        assert!((vertical.ypx(10.).unwrap() - (bottom + top) / 2.).abs() < 1e-10);
+    }
+
+    #[test]
+    fn log_ticks_cover_wide_narrow_and_subnormal_ranges() {
+        let ticks = decade_ticks(1e-300, 1e300);
+        assert_eq!(ticks.len(), 24);
+        assert_eq!(ticks.first(), Some(&1e-300));
+        assert_eq!(ticks.last(), Some(&1e300));
+        assert!(ticks.windows(2).all(|pair| pair[0] < pair[1]));
+        assert_eq!(decade_ticks(3., 4.), vec![3., 4.]);
+        assert_eq!(decade_ticks(3., 3.), vec![3.]);
+        let tiny = f64::from_bits(1);
+        let subnormal = decade_ticks(tiny, 1e-320);
+        assert_eq!(subnormal.first(), Some(&tiny));
+        assert!(subnormal.iter().all(|v| *v > 0. && v.is_finite()));
+        assert!(subnormal.windows(2).all(|pair| pair[0] < pair[1]));
+        for (min, max) in [
+            (0., 1.),
+            (-1., 1.),
+            (2., 1.),
+            (1., f64::INFINITY),
+            (f64::NAN, 1.),
+        ] {
+            assert!(decade_ticks(min, max).is_empty());
+        }
+    }
+
+    #[test]
+    fn scaled_scatter_filters_pairs_before_fitting_and_thinning() {
+        use charts::{AxisScale, Series, scatter_scaled};
+        let series = [
+            Series::new(
+                "<one>",
+                vec![(-1., 1e300), (1., 1.), (10., 10.), (100., 100.)],
+            ),
+            Series::new("two", vec![(1e300, f64::NAN), (10., 10.)]),
+        ];
+        let svg = scatter_scaled(
+            "log",
+            &series,
+            100,
+            "",
+            AxisScale::Logarithmic,
+            AxisScale::Logarithmic,
+        );
+        assert_eq!(svg.matches("<circle").count(), 4);
+        assert!(svg.contains("Omitted 2 points"));
+        let expected = [
+            Series::new("<one>", vec![(1., 1.), (10., 10.), (100., 100.)]),
+            Series::new("two", vec![(10., 10.)]),
+        ];
+        assert_eq!(
+            svg,
+            scatter_scaled(
+                "log",
+                &expected,
+                100,
+                " Omitted 2 points outside the axis domains.",
+                AxisScale::Logarithmic,
+                AxisScale::Logarithmic
+            )
+        );
+        assert!(svg.contains("&lt;one&gt;"));
+        assert!(!svg.contains("NaN"));
+        let thinned = scatter_scaled(
+            "log",
+            &series[..1],
+            1,
+            "",
+            AxisScale::Logarithmic,
+            AxisScale::Linear,
+        );
+        assert_eq!(thinned.matches("<circle").count(), 1);
+        let empty = scatter_scaled(
+            "empty",
+            &[],
+            100,
+            "",
+            AxisScale::Logarithmic,
+            AxisScale::Logarithmic,
+        );
+        assert!(!empty.contains("NaN") && !empty.contains("inf"));
+        let linear = [Series::new("linear", vec![(0., -1.), (1., 2.)])];
+        assert_eq!(
+            charts::scatter("linear", &linear, 100, ""),
+            scatter_scaled(
+                "linear",
+                &linear,
+                100,
+                "",
+                AxisScale::Linear,
+                AxisScale::Linear
+            )
+        );
+    }
+
+    #[test]
+    fn wrapped_legend_preserves_plot_height_and_complete_unicode_labels() {
+        let mut plot = Plot::new("legend");
+        let before = (plot.ypx(0.).unwrap() - plot.ypx(1.).unwrap()).abs();
+        let label = "<長い凡例>".repeat(30);
+        let entries: Vec<_> = (0..8)
+            .map(|i| (format!("process {i} {label}"), "#397ec0"))
+            .collect();
+        plot.legend_wrapped(&entries);
+        let after = (plot.ypx(0.).unwrap() - plot.ypx(1.).unwrap()).abs();
+        assert_eq!(before, after);
+        assert!(plot.top > 100.);
+        assert!(plot.legend.contains(&esc(&entries[7].0)));
+        assert!(!plot.legend.contains("<長い凡例>"));
+        let last_baseline = 13. + ((plot.top - 24.) / 18.) * 18.;
+        assert!(last_baseline < plot.top);
     }
 
     #[test]

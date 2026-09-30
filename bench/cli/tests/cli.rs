@@ -499,6 +499,267 @@ fn init_discovery_preserves_manifest_and_refuses_overwrite() {
     assert_eq!(content, fs::read_to_string(&manifest).unwrap());
 }
 #[test]
+fn retention_protects_case_baseline_artifacts_and_checks_hashes() {
+    let _guard = RUNNER_TEST.lock().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let protected = root.path().join("protected");
+    let unused = root.path().join("unused");
+    let run = simple_run(&protected);
+    simple_run(&unused);
+    for directory in [&protected, &unused] {
+        for file in ["plan.json", "schedule.json", "status-final.json"] {
+            fs::write(directory.join(file), "{}").unwrap();
+        }
+    }
+    let store = airbug_bench::baseline::Store::new(root.path());
+    store
+        .save("main", &protected, airbug_bench::baseline::SaveMode::Create)
+        .unwrap();
+    let reference: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.path().join("baselines/main.json")).unwrap())
+            .unwrap();
+    fs::write(
+        root.path().join("baselines/main.cases.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1, "cases": {run.cases[0].id.clone(): reference}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let result = cli(&[
+        "--store",
+        root.path().to_str().unwrap(),
+        "retention",
+        "--keep",
+        "0",
+        "--apply",
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(protected.join("run.json").exists());
+    assert!(!unused.exists());
+    fs::write(protected.join("run.json"), "{}").unwrap();
+    let result = cli(&[
+        "--store",
+        root.path().to_str().unwrap(),
+        "retention",
+        "--keep",
+        "0",
+        "--apply",
+    ]);
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("integrity failed"));
+    assert!(protected.exists());
+}
+
+#[test]
+fn runner_save_updates_cargo_case_baseline_without_shadow_reference() {
+    let _guard = RUNNER_TEST.lock().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let a = simple_run(&root.path().join("a"));
+    let mut b = a.clone();
+    b.id = "other-run".into();
+    b.cases[0].id = "other-case".into();
+    b.observations[0].case = "other-case".into();
+    let store = airbug_bench::baseline::Store::new(root.path());
+    store
+        .save_cases("main", &a, airbug_bench::baseline::SaveMode::Create)
+        .unwrap();
+    store
+        .save_cases("main", &b, airbug_bench::baseline::SaveMode::Replace)
+        .unwrap();
+    let mut replacement = a.clone();
+    replacement.observations[0].value = Some("777".into());
+    let source = root.path().join("replacement");
+    replacement.save_new(&source).unwrap();
+    let save = |source: &str, flag: &str| {
+        cli(&[
+            "--store",
+            root.path().to_str().unwrap(),
+            "baseline",
+            "save",
+            "main",
+            source,
+            flag,
+        ])
+    };
+    assert!(save("@missing", "--retain").status.success());
+    assert_eq!(
+        store.load_cases("main").unwrap()[&a.cases[0].id].observations[0]
+            .value
+            .as_deref(),
+        Some("42")
+    );
+    let result = save(source.to_str().unwrap(), "--replace");
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let cases = store.load_cases("main").unwrap();
+    assert_eq!(cases.len(), 2);
+    assert_eq!(
+        cases[&a.cases[0].id].observations[0].value.as_deref(),
+        Some("777")
+    );
+    assert_eq!(
+        serde_json::to_value(&cases["other-case"]).unwrap(),
+        serde_json::to_value(b).unwrap()
+    );
+    assert!(!root.path().join("baselines/main.json").exists());
+    assert!(
+        store
+            .save("main", &source, airbug_bench::baseline::SaveMode::Replace)
+            .is_err()
+    );
+}
+
+#[test]
+fn case_alias_reports_preserve_updates_and_match_cases_across_runs() {
+    let root = tempfile::tempdir().unwrap();
+    let mut a = simple_run(&root.path().join("original"));
+    let store = airbug_bench::baseline::Store::new(root.path());
+    store
+        .save(
+            "main",
+            &root.path().join("original"),
+            airbug_bench::baseline::SaveMode::Create,
+        )
+        .unwrap();
+    a.observations[0].value = Some("999".into());
+    store
+        .save_cases("main", &a, airbug_bench::baseline::SaveMode::Replace)
+        .unwrap();
+    store
+        .save_cases("comparison", &a, airbug_bench::baseline::SaveMode::Create)
+        .unwrap();
+    assert!(
+        cli(&["--store", root.path().to_str().unwrap(), "list", "@main"])
+            .status
+            .success()
+    );
+    let mut b = a.clone();
+    b.id = "different-run".into();
+    b.cases[0].id = "second".into();
+    b.observations[0].case = "second".into();
+    b.environment
+        .insert("machine".into(), "second-machine".into());
+    store
+        .save_cases("main", &b, airbug_bench::baseline::SaveMode::Replace)
+        .unwrap();
+    store
+        .save_cases("comparison", &b, airbug_bench::baseline::SaveMode::Replace)
+        .unwrap();
+    let output = root.path().join("report.json");
+    let result = cli(&[
+        "--store",
+        root.path().to_str().unwrap(),
+        "report",
+        "@main",
+        "--baseline",
+        "@comparison",
+        "--output",
+        output.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+    let entries = document["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().all(|e| e["baseline_sha256"].is_string()));
+    assert!(
+        entries
+            .iter()
+            .all(|e| e["run"]["observations"][0]["value"] == "999")
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|e| e["run"]["environment"]["machine"] == "second-machine")
+    );
+    let result = cli(&["--store", root.path().to_str().unwrap(), "list", "@main"]);
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("multiple source runs"));
+}
+
+#[test]
+fn baseline_listing_understands_case_manifests_and_hides_legacy_duplicate() {
+    let root = tempfile::tempdir().unwrap();
+    let run = simple_run(&root.path().join("run"));
+    let store = airbug_bench::baseline::Store::new(root.path());
+    store
+        .save(
+            "main",
+            &root.path().join("run"),
+            airbug_bench::baseline::SaveMode::Create,
+        )
+        .unwrap();
+    store
+        .save_cases("main", &run, airbug_bench::baseline::SaveMode::Replace)
+        .unwrap();
+    let result = cli(&["--store", root.path().to_str().unwrap(), "baseline", "list"]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert_eq!(text.matches("@main").count(), 1);
+    assert!(text.contains("cases"), "{text}");
+}
+
+#[test]
+fn baseline_save_modes_resolve_only_needed_sources() {
+    let _guard = RUNNER_TEST.lock().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let a = dir.path().join("a");
+    let b = dir.path().join("b");
+    simple_run(&a);
+    simple_run(&b);
+    let original = fs::read(a.join("run.json")).unwrap();
+    let store = dir.path().to_str().unwrap();
+    let save = |source: &str, flags: &[&str]| {
+        let mut args = vec!["--store", store, "baseline", "save", "main", source];
+        args.extend_from_slice(flags);
+        cli(&args)
+    };
+    assert!(save(a.to_str().unwrap(), &[]).status.success());
+    let pointer = dir.path().join("baselines/main.json");
+    let initial = fs::read(&pointer).unwrap();
+    let retained = save("@missing", &["--retain"]);
+    assert!(
+        retained.status.success(),
+        "{}",
+        String::from_utf8_lossy(&retained.stderr)
+    );
+    assert!(String::from_utf8_lossy(&retained.stdout).contains("Retained baseline @main"));
+    assert_eq!(fs::read(&pointer).unwrap(), initial);
+    assert!(
+        !save(b.to_str().unwrap(), &["--retain", "--replace"])
+            .status
+            .success()
+    );
+    assert_eq!(fs::read(&pointer).unwrap(), initial);
+    assert!(!save("@missing", &["--replace"]).status.success());
+    assert_eq!(fs::read(&pointer).unwrap(), initial);
+    assert!(save(b.to_str().unwrap(), &["--replace"]).status.success());
+    let reference = airbug_bench::baseline::Store::new(dir.path())
+        .require("main")
+        .unwrap();
+    assert_eq!(reference.run, fs::canonicalize(b.join("run.json")).unwrap());
+    assert_eq!(fs::read(a.join("run.json")).unwrap(), original);
+    fs::write(b.join("run.json"), "{}").unwrap();
+    assert!(!save(a.to_str().unwrap(), &["--retain"]).status.success());
+    assert!(save(a.to_str().unwrap(), &["--replace"]).status.success());
+}
+
+#[test]
 fn baseline_alias_checks_integrity_and_gate_exit_codes() {
     let _guard = RUNNER_TEST.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
@@ -1124,4 +1385,911 @@ fn memory_requires_instrumentation_and_dry_run_is_read_only() {
             .iter()
             .any(|n| n.contains("memory profile missing"))
     );
+}
+
+#[test]
+fn throughput_budget_selects_one_unit_and_rejects_missing_values() {
+    let directory = tempfile::tempdir().unwrap();
+    let run_path = directory.path().join("run");
+    let mut rec = airbug_bench::Recorder::new();
+    rec.case(airbug_bench::Case {
+        id: "multi".into(),
+        contract: std::collections::BTreeMap::from([
+            ("work.counter.items".into(), "10".into()),
+            ("work.counter.bytes".into(), "1048576".into()),
+        ]),
+        metrics: vec![airbug_bench::Metric::duration(
+            "wall",
+            "test",
+            "batch_total",
+        )],
+    })
+    .unwrap();
+    rec.observe("multi", "wall", 1_000_000_000).unwrap();
+    rec.finish().unwrap().save_new(&run_path).unwrap();
+    let path = run_path.to_str().unwrap();
+    assert_eq!(
+        cli(&["throughput", path, "--min", "2"]).status.code(),
+        Some(2)
+    );
+    assert!(
+        cli(&["throughput", path, "--unit", "items", "--min", "2"])
+            .status
+            .success()
+    );
+    assert_eq!(
+        cli(&["throughput", path, "--unit", "MiB", "--min", "2"])
+            .status
+            .code(),
+        Some(1)
+    );
+    assert_eq!(
+        cli(&["throughput", path, "--unit", "missing", "--min", "2"])
+            .status
+            .code(),
+        Some(2)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn protocol_preserves_worker_allocations_across_processes_and_variants() {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    let _guard = RUNNER_TEST.lock().unwrap();
+    let allocator = airbug_bench::alloc::TrackingAllocator::new(System);
+    let mut suite = airbug_bench::Suite::new("worker-protocol");
+    suite.bench_threads_allocated_with_local_input(
+        "case",
+        &allocator,
+        2,
+        || (),
+        |_| unsafe {
+            let layout = Layout::from_size_align(64, 8).unwrap();
+            let pointer = allocator.alloc(layout);
+            assert!(!pointer.is_null());
+            allocator.dealloc(pointer, layout);
+        },
+        airbug_bench::DropPolicy::InsideTiming,
+    );
+    suite.summary_family("workers");
+    suite.summary_scale(airbug_bench::viz::charts::AxisScale::Logarithmic);
+    suite.config(airbug_bench::Config {
+        samples: 1,
+        warmup: std::time::Duration::ZERO,
+        sample_time: std::time::Duration::from_nanos(1),
+        max_iterations: 2,
+    });
+    suite.sampling(airbug_bench::Sampling {
+        iterations: Some(2),
+        ..Default::default()
+    });
+    suite.compensate_overhead(true);
+    let fixture = suite.run("").unwrap();
+    let t = tempfile::tempdir().unwrap();
+    let payload = t.path().join("payload.txt");
+    fs::write(
+        &payload,
+        format!(
+            "BENCH_RESULT={}\n",
+            serde_json::to_string(&fixture).unwrap()
+        ),
+    )
+    .unwrap();
+    let output = t.path().join("run");
+    let result = cli(&[
+        "run",
+        "--program",
+        "/bin/cat",
+        "--baseline",
+        "/bin/cat",
+        "--repetitions",
+        "2",
+        "--protocol",
+        "--no-ui",
+        "--output",
+        output.to_str().unwrap(),
+        "--",
+        payload.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let run = airbug_bench::Run::load(&output).unwrap();
+    assert_eq!(
+        airbug_bench::presentation::load_scales(&run).unwrap()["worker-protocol/case"],
+        airbug_bench::viz::charts::AxisScale::Logarithmic
+    );
+    assert_eq!(
+        airbug_bench::presentation::load_families(&run).unwrap()["worker-protocol/case"],
+        "worker-protocol/workers"
+    );
+    assert_eq!(run.worker_allocations.len(), 8);
+    let identities: std::collections::BTreeSet<_> = run
+        .worker_allocations
+        .iter()
+        .map(|w| (w.variant.as_str(), w.process))
+        .collect();
+    assert_eq!(identities.len(), 4);
+    for worker in &run.worker_allocations {
+        assert_eq!(worker.metrics["alloc.bytes"], "128");
+        assert_eq!(worker.operations, 2);
+        assert!(worker.adjusted_wall_ns.is_some());
+        assert!(run.observations.iter().any(|o| o.case == worker.case
+            && o.variant == worker.variant
+            && o.process == worker.process
+            && o.sequence == worker.sequence
+            && o.metric == "wall.adjusted"));
+        assert!(run.observations.iter().any(|o| o.case == worker.case
+            && o.variant == worker.variant
+            && o.process == worker.process
+            && o.sequence == worker.sequence
+            && o.metric == "wall"));
+    }
+    // Metric selection must retain matching worker records or remove them when
+    // their enclosing wall sample is filtered out.
+    for metric in ["wall", "wall.adjusted", "alloc.bytes"] {
+        let selected = cli(&["compare", output.to_str().unwrap(), "--metric", metric]);
+        assert!(
+            selected.status.success(),
+            "{}",
+            String::from_utf8_lossy(&selected.stderr)
+        );
+    }
+}
+
+#[test]
+fn compare_exports_seeded_null_draws_and_portable_html() {
+    let t = tempfile::tempdir().unwrap();
+    let source = t.path().join("source");
+    let mut run = simple_run(&source);
+    let original = run.observations[0].clone();
+    run.observations.clear();
+    for process in 0..8 {
+        let mut observation = original.clone();
+        observation.process = process;
+        observation.value = Some((40 + process).to_string());
+        run.observations.push(observation);
+    }
+    let baseline = t.path().join("baseline");
+    run.save_new(&baseline).unwrap();
+    let path = baseline.to_str().unwrap();
+    let args = [
+        "compare",
+        path,
+        path,
+        "--json",
+        "--hypothesis-distribution",
+        "--hypothesis-resamples",
+        "128",
+        "--hypothesis-seed",
+        "7",
+    ];
+    let first = cli(&args);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert_eq!(first.stdout, cli(&args).stdout);
+    let rows: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(
+        rows[0]["hypothesis"]["null_distribution"]
+            .as_array()
+            .unwrap()
+            .len(),
+        128
+    );
+    let output = t.path().join("comparison.html");
+    let html = cli(&[
+        "compare",
+        path,
+        path,
+        "--html",
+        "--hypothesis-resamples",
+        "128",
+        "--output",
+        output.to_str().unwrap(),
+    ]);
+    assert!(
+        html.status.success(),
+        "{}",
+        String::from_utf8_lossy(&html.stderr)
+    );
+    let document = fs::read_to_string(output).unwrap();
+    assert!(document.contains("<svg ") && document.contains("128 null draws"));
+    assert!(!cli(&["compare", path, "--json", "--html"]).status.success());
+    assert!(
+        !cli(&["compare", path, "--hypothesis-resamples", "1"])
+            .status
+            .success()
+    );
+    assert!(
+        !cli(&["compare", path, "--hypothesis-distribution"])
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn report_summary_parameter_and_scale_reach_html() {
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    run.cases[0]
+        .contract
+        .insert("param.size".into(), "10".into());
+    let source = t.path().join("numeric");
+    run.save_new(&source).unwrap();
+    let source = source.to_str().unwrap();
+    let output = t.path().join("summary.html");
+    let result = cli(&[
+        "report",
+        source,
+        "--summary-parameter",
+        "size",
+        "--summary-scale",
+        "logarithmic",
+        "--output",
+        output.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let html = fs::read_to_string(output).unwrap();
+    assert!(html.contains("Input parameter summaries"));
+    assert!(html.contains("X: size"));
+    assert!(html.contains("0 series omitted"));
+    assert!(html.contains("Violin summaries"));
+    let mean_output = t.path().join("mean.html");
+    assert!(
+        cli(&[
+            "report",
+            source,
+            "--summary-parameter",
+            "size",
+            "--summary-estimator",
+            "mean",
+            "-o",
+            mean_output.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    assert!(
+        fs::read_to_string(&mean_output)
+            .unwrap()
+            .contains("arithmetic mean of normalized observations")
+    );
+    assert!(
+        !cli(&[
+            "report",
+            source,
+            "--summary-estimator",
+            "mean",
+            "-o",
+            t.path().join("invalid.html").to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    for observation in &mut run.observations {
+        observation.value = Some("0".into());
+    }
+    let zero = t.path().join("zero");
+    run.save_new(&zero).unwrap();
+    let zero_html = t.path().join("zero.html");
+    assert!(
+        cli(&[
+            "report",
+            zero.to_str().unwrap(),
+            "--summary-scale",
+            "logarithmic",
+            "--output",
+            zero_html.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    assert!(
+        fs::read_to_string(zero_html)
+            .unwrap()
+            .contains("population contains nonpositive values; no subset was plotted")
+    );
+
+    assert!(
+        !cli(&["report", source, "--summary-scale", "logarithmic"])
+            .status
+            .success()
+    );
+    assert!(
+        !cli(&["report", source, "--summary-parameter", "size"])
+            .status
+            .success()
+    );
+    let bad = t.path().join("summary.json");
+    assert!(
+        !cli(&[
+            "report",
+            source,
+            "--summary-parameter",
+            "size",
+            "-o",
+            bad.to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+    assert!(!bad.exists());
+}
+
+#[test]
+fn html_compare_overlays_independent_process_regressions() {
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    run.cases[0].metrics[0].statistic = "batch_total".into();
+    let original = run.observations[0].clone();
+    run.observations.clear();
+    for process in 0..2 {
+        for count in 1..=3 {
+            let mut o = original.clone();
+            o.process = process;
+            o.sequence = count;
+            o.operations = count;
+            o.value = Some((count * (10 + u64::from(process))).to_string());
+            run.observations.push(o);
+        }
+    }
+    let baseline = t.path().join("baseline");
+    run.save_new(&baseline).unwrap();
+    for o in &mut run.observations {
+        o.value = Some((o.operations * 20).to_string());
+    }
+    let candidate = t.path().join("candidate");
+    run.save_new(&candidate).unwrap();
+    let output = cli(&[
+        "compare",
+        baseline.to_str().unwrap(),
+        candidate.to_str().unwrap(),
+        "--html",
+        "--hypothesis-resamples",
+        "128",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let html = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(html.matches("<polygon").count(), 8);
+    assert!(html.contains("relative mean change"));
+    assert!(html.contains("relative median change"));
+    assert!(html.contains("Practical noise region"));
+    for label in [
+        "baseline process 0",
+        "baseline process 1",
+        "candidate process 0",
+        "candidate process 1",
+    ] {
+        assert!(html.contains(label), "{label}");
+    }
+    assert!(html.contains("regression comparison"));
+    assert!(html.contains("density comparison"));
+    assert!(html.contains("Gaussian KDE bandwidth"));
+    assert!(html.contains("point mass"));
+    assert!(html.contains("Observation rug at zero"));
+    let table_comparison = cli(&[
+        "compare",
+        baseline.to_str().unwrap(),
+        candidate.to_str().unwrap(),
+        "--html",
+        "--no-plots",
+    ]);
+    assert!(table_comparison.status.success());
+    let table_comparison = String::from_utf8(table_comparison.stdout).unwrap();
+    assert!(table_comparison.contains("<table"));
+    assert!(!table_comparison.contains("<svg"));
+    assert!(
+        !cli(&[
+            "compare",
+            baseline.to_str().unwrap(),
+            candidate.to_str().unwrap(),
+            "--no-plots"
+        ])
+        .status
+        .success()
+    );
+    let report_path = t.path().join("experiment.html");
+    let report = cli(&[
+        "report",
+        candidate.to_str().unwrap(),
+        "--baseline",
+        baseline.to_str().unwrap(),
+        "--output",
+        report_path.to_str().unwrap(),
+    ]);
+    assert!(
+        report.status.success(),
+        "{}",
+        String::from_utf8_lossy(&report.stderr)
+    );
+    let report_html = fs::read_to_string(&report_path).unwrap();
+    assert_eq!(report_html.matches("<polygon").count(), 8);
+    assert!(report_html.contains("Iteration time comparison"));
+    assert!(report_html.contains("Sequence indices do not imply paired measurements"));
+    assert!(report_html.contains("Welch null distribution"));
+    assert!(report_html.contains("Independent units: baseline 2, candidate 2"));
+    assert_eq!(report_html.matches("<!doctype html>").count(), 1);
+    assert!(report_html.contains("relative mean change"));
+    assert!(report_html.contains("relative median change"));
+    assert!(report_html.contains("Practical noise region"));
+    assert!(report_html.contains("Violin summaries"));
+    assert!(report_html.contains("candidate process 1"));
+    assert!(report_html.contains("density comparison"));
+    assert!(report_html.contains("Gaussian KDE bandwidth"));
+    assert!(report_html.contains("point mass"));
+    assert!(report_html.contains("No observations discarded"));
+    let tables_path = t.path().join("tables.html");
+    let tables = cli(&[
+        "report",
+        candidate.to_str().unwrap(),
+        "--baseline",
+        baseline.to_str().unwrap(),
+        "--no-plots",
+        "--output",
+        tables_path.to_str().unwrap(),
+    ]);
+    assert!(
+        tables.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tables.stderr)
+    );
+    let tables = fs::read_to_string(tables_path).unwrap();
+    assert!(tables.contains("<table"));
+    assert!(!tables.contains("<svg"));
+    assert!(!tables.contains("Violin summaries"));
+    assert!(tables.contains("wall"));
+    assert!(
+        !cli(&[
+            "report",
+            candidate.to_str().unwrap(),
+            "--no-plots",
+            "--summary-parameter",
+            "size",
+            "--output",
+            t.path().join("bad.html").to_str().unwrap()
+        ])
+        .status
+        .success()
+    );
+
+    run.cases[0].metrics[0].scope = "incompatible".into();
+    let incompatible = t.path().join("incompatible");
+    run.save_new(&incompatible).unwrap();
+    let failed_path = t.path().join("incompatible.html");
+    let failed = cli(&[
+        "report",
+        incompatible.to_str().unwrap(),
+        "--baseline",
+        baseline.to_str().unwrap(),
+        "--output",
+        failed_path.to_str().unwrap(),
+    ]);
+    assert!(
+        failed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&failed.stderr)
+    );
+    let failed_html = fs::read_to_string(failed_path).unwrap();
+    assert!(failed_html.contains("incompatible cases, metrics or workload contracts"));
+    assert!(!failed_html.contains("regression comparison"));
+    assert!(!failed_html.contains("density comparison"));
+}
+
+#[test]
+fn analyze_saved_run_exports_distributions_without_mutating_source() {
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    run.cases[0].metrics[0].statistic = "batch_total".into();
+    let original = run.observations[0].clone();
+    run.observations = (1..=4)
+        .map(|count| {
+            let mut o = original.clone();
+            o.operations = count;
+            o.sequence = count;
+            o.value = Some((count * 10 + count % 2).to_string());
+            o
+        })
+        .collect();
+    let path = t.path().join("run");
+    run.save_new(&path).unwrap();
+    let original_bytes = fs::read(path.join("run.json")).unwrap();
+    let args = [
+        "analyze",
+        path.to_str().unwrap(),
+        "--resamples",
+        "128",
+        "--analysis-seed",
+        "7",
+        "--bootstrap-distributions",
+    ];
+    let first = cli(&args);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert_eq!(first.stdout, cli(&args).stdout);
+    let report: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(
+        report["rows"][0]["distributions"]["mean"]
+            .as_array()
+            .unwrap()
+            .len(),
+        128
+    );
+    assert_eq!(
+        report["rows"][0]["regressions"][0]["slope_distribution"]
+            .as_array()
+            .unwrap()
+            .len(),
+        128
+    );
+    let mut tables_args = args.to_vec();
+    tables_args.extend(["--format", "html", "--no-plots"]);
+    let tables = cli(&tables_args);
+    assert!(tables.status.success());
+    let tables = String::from_utf8(tables.stdout).unwrap();
+    assert!(tables.contains("<table"));
+    assert!(!tables.contains("<svg"));
+    assert!(tables.contains("wall"));
+    let mut invalid = args.to_vec();
+    invalid.push("--no-plots");
+    assert!(!cli(&invalid).status.success());
+    let html_path = t.path().join("analysis.html");
+    let mut html_args = args.to_vec();
+    html_args.extend(["--format", "html", "--output", html_path.to_str().unwrap()]);
+    assert!(cli(&html_args).status.success());
+    let html = fs::read(&html_path).unwrap();
+    assert!(String::from_utf8_lossy(&html).contains("Violin summaries"));
+    let log = cli(&[
+        "analyze",
+        path.to_str().unwrap(),
+        "--resamples",
+        "128",
+        "--format",
+        "html",
+        "--summary-scale",
+        "logarithmic",
+    ]);
+    assert!(log.status.success());
+    assert!(String::from_utf8_lossy(&log.stdout).contains("violin summary"));
+    assert!(
+        !cli(&[
+            "analyze",
+            path.to_str().unwrap(),
+            "--summary-scale",
+            "logarithmic"
+        ])
+        .status
+        .success()
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&html)
+            .matches("Bootstrap confidence interval")
+            .count(),
+        5
+    );
+    assert!(!cli(&html_args).status.success());
+    assert_eq!(fs::read(&html_path).unwrap(), html);
+    assert_eq!(fs::read(path.join("run.json")).unwrap(), original_bytes);
+    assert!(
+        !cli(&["analyze", path.to_str().unwrap(), "--resamples", "1"])
+            .status
+            .success()
+    );
+    let ordinary = cli(&["analyze", path.to_str().unwrap(), "--resamples", "128"]);
+    assert!(ordinary.status.success());
+    assert!(!String::from_utf8_lossy(&ordinary.stdout).contains("slope_distribution"));
+}
+
+#[test]
+fn compare_relative_export_preserves_process_units_and_check_decisions() {
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    run.cases[0].metrics[0].statistic = "batch_total".into();
+    let original = run.observations[0].clone();
+    run.observations.clear();
+    for (process, count, value) in [(0, 5, 2), (1, 1, 4)] {
+        for sequence in 0..count {
+            let mut o = original.clone();
+            o.process = process;
+            o.sequence = sequence;
+            o.operations = 10;
+            o.value = Some((value * 10).to_string());
+            run.observations.push(o);
+        }
+    }
+    let baseline = t.path().join("baseline");
+    run.save_new(&baseline).unwrap();
+    for o in &mut run.observations {
+        o.value = Some((o.value.as_ref().unwrap().parse::<u64>().unwrap() * 2).to_string());
+    }
+    let candidate = t.path().join("candidate");
+    run.save_new(&candidate).unwrap();
+    let before = fs::read(baseline.join("run.json")).unwrap();
+    let args = [
+        "compare",
+        baseline.to_str().unwrap(),
+        candidate.to_str().unwrap(),
+        "--json",
+        "--check",
+        "--hypothesis-resamples",
+        "128",
+        "--hypothesis-seed",
+        "7",
+    ];
+    let ordinary = cli(&args);
+    let mut extended = args.to_vec();
+    extended.push("--relative-distributions");
+    let captured = cli(&extended);
+    assert_eq!(ordinary.status.code(), captured.status.code());
+    assert_eq!(captured.stdout, cli(&extended).stdout);
+    let data: serde_json::Value = serde_json::from_slice(&captured.stdout).unwrap();
+    let rows: serde_json::Value = serde_json::from_slice(&ordinary.stdout).unwrap();
+    assert_eq!(data["comparisons"], rows);
+    let relative = &data["relative"][0];
+    assert_eq!(relative["baseline_units"], 2);
+    assert_eq!(relative["candidate_units"], 2);
+    let reference = airbug_bench::relative::bootstrap(
+        &[2., 4.],
+        &[4., 8.],
+        &airbug_bench::bootstrap::Config {
+            resamples: 128,
+            seed: 7,
+            confidence_level: 0.95,
+        },
+    )
+    .unwrap();
+    assert_eq!(relative["report"], serde_json::to_value(reference).unwrap());
+    assert_eq!(before, fs::read(baseline.join("run.json")).unwrap());
+    assert!(
+        !cli(&[
+            "compare",
+            baseline.to_str().unwrap(),
+            "--json",
+            "--relative-distributions"
+        ])
+        .status
+        .success()
+    );
+    assert!(
+        !cli(&[
+            "compare",
+            baseline.to_str().unwrap(),
+            candidate.to_str().unwrap(),
+            "--relative-distributions"
+        ])
+        .status
+        .success()
+    );
+}
+
+#[test]
+fn analyze_restores_saved_scale_and_allows_explicit_override() {
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    for o in &mut run.observations {
+        o.value = Some("0".into());
+    }
+    let scales = run
+        .cases
+        .iter()
+        .map(|c| {
+            (
+                c.id.clone(),
+                airbug_bench::viz::charts::AxisScale::Logarithmic,
+            )
+        })
+        .collect();
+    airbug_bench::presentation::save_scales(&mut run, &scales).unwrap();
+    let path = t.path().join("saved");
+    run.save_new(&path).unwrap();
+    let source = fs::read(path.join("run.json")).unwrap();
+    let args = [
+        "analyze",
+        path.to_str().unwrap(),
+        "--format",
+        "html",
+        "--resamples",
+        "128",
+    ];
+    let restored = cli(&args);
+    assert!(
+        restored.status.success(),
+        "{}",
+        String::from_utf8_lossy(&restored.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&restored.stdout)
+            .contains("population contains nonpositive values")
+    );
+    let mut explicit = args.to_vec();
+    explicit.extend(["--summary-scale", "linear"]);
+    let overridden = cli(&explicit);
+    assert!(overridden.status.success());
+    assert!(
+        !String::from_utf8_lossy(&overridden.stdout)
+            .contains("population contains nonpositive values")
+    );
+    for (name, flags, suppressed) in [
+        ("restored", vec![], true),
+        ("override", vec!["--summary-scale", "linear"], false),
+    ] {
+        let destination = t.path().join(format!("{name}.html"));
+        let mut args = vec![
+            "report",
+            path.to_str().unwrap(),
+            "--output",
+            destination.to_str().unwrap(),
+        ];
+        args.extend(flags);
+        let result = cli(&args);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(destination)
+                .unwrap()
+                .contains("population contains nonpositive values"),
+            suppressed
+        );
+    }
+    assert_eq!(source, fs::read(path.join("run.json")).unwrap());
+}
+
+#[test]
+fn report_restores_families_and_plots_dynamic_throughput_with_gaps() {
+    use airbug_bench::{Status, presentation, report};
+    use std::collections::BTreeMap;
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    let template_case = run.cases[0].clone();
+    let template_observation = run.observations[0].clone();
+    run.cases.clear();
+    run.observations.clear();
+    let mut families = BTreeMap::new();
+    for size in [100u64, 1, 10] {
+        let id = format!("input/{size}");
+        let mut case = template_case.clone();
+        case.id = id.clone();
+        case.metrics[0].statistic = "batch_total".into();
+        case.contract.insert("param.size".into(), size.to_string());
+        for unit in ["bytes", "items"] {
+            case.contract
+                .insert(format!("work.input.{unit}"), "batch_total".into());
+        }
+        run.cases.push(case);
+        families.insert(id.clone(), "dynamic".into());
+        for sequence in 0..6 {
+            let mut o = template_observation.clone();
+            o.case = id.clone();
+            o.process = if sequence < 5 { 0 } else { 1 };
+            o.sequence = sequence;
+            o.operations = 8;
+            o.value = Some("1000000000".into());
+            let total = size * if sequence < 5 { 1 } else { 3 };
+            o.work_totals
+                .insert("bytes".into(), (total * 1048576).to_string());
+            o.work_totals.insert("items".into(), total.to_string());
+            run.observations.push(o);
+        }
+    }
+    presentation::save_families(&mut run, &families).unwrap();
+    let medians = report::throughput_process_medians(&run).unwrap();
+    let values: Vec<_> = medians
+        .iter()
+        .filter(|r| r.case == "input/10" && r.unit == "MiB")
+        .map(|r| r.median)
+        .collect();
+    assert_eq!(values, [10., 30.]); // Work totals are per batch, not multiplied by eight operations.
+    for gap in [false, true] {
+        let mut fixture = run.clone();
+        if gap {
+            fixture.status = Status::Incomplete;
+            fixture.observations.retain(|o| o.case != "input/10");
+        }
+        let source = t.path().join(if gap { "gap" } else { "complete" });
+        fixture.save_new(&source).unwrap();
+        let before = fs::read(source.join("run.json")).unwrap();
+        let destination = source.join("report.html");
+        let result = cli(&[
+            "report",
+            source.to_str().unwrap(),
+            "--summary-parameter",
+            "size",
+            "--output",
+            destination.to_str().unwrap(),
+        ]);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let html = fs::read_to_string(destination).unwrap();
+        assert!(html.contains("MiB/s") && html.contains("items/s"));
+        assert!(html.contains("family dynamic / candidate"));
+        assert_eq!(html.contains("Incomplete throughput families"), gap);
+        let throughput = html
+            .split("<h2>Throughput input summaries</h2>")
+            .nth(1)
+            .unwrap()
+            .split("</section>")
+            .next()
+            .unwrap();
+        assert_eq!(
+            throughput.matches("pathLength=\"100\"").count(),
+            if gap { 0 } else { 2 }
+        );
+        assert_eq!(before, fs::read(source.join("run.json")).unwrap());
+    }
+}
+
+#[test]
+fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
+    use airbug_bench::measurement::{FormattedMetric, FormattedObservation, save_formatted};
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("source"));
+    let case = &run.cases[0];
+    let metric = case.metrics[0].clone();
+    let rows: Vec<_> = run
+        .observations
+        .iter()
+        .filter(|o| o.case == case.id && o.metric == metric.id)
+        .map(|o| FormattedObservation {
+            variant: o.variant.clone(),
+            process: o.process,
+            sequence: o.sequence,
+            value: o.number().unwrap().map(|v| v / 1000.0),
+            unit: "custom-display".into(),
+            unavailable_reason: None,
+        })
+        .collect();
+    let formatted = FormattedMetric {
+        case: case.id.clone(),
+        metric,
+        human: rows.clone(),
+        machine: rows,
+    };
+    save_formatted(&mut run, &[formatted]).unwrap();
+    let source = t.path().join("formatted");
+    run.save_new(&source).unwrap();
+    let original = fs::read(source.join("run.json")).unwrap();
+    let html = t.path().join("formatted.html");
+    let result = cli(&[
+        "report",
+        source.to_str().unwrap(),
+        "--no-plots",
+        "-o",
+        html.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(fs::read_to_string(html).unwrap().contains("custom-display"));
+    assert_eq!(original, fs::read(source.join("run.json")).unwrap());
+    run.observations[0].value = Some("99999".into());
+    let stale = t.path().join("stale");
+    run.save_new(&stale).unwrap();
+    let result = cli(&["report", stale.to_str().unwrap()]);
+    assert!(result.status.success());
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert!(text.contains("saved formatting is stale"));
+    assert!(!text.contains("custom-display"));
 }

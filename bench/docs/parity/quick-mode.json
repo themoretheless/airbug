@@ -1,0 +1,18 @@
+{
+  "upstream": "criterion 0.8.2 src/routine.rs:94-140",
+  "status": "verified",
+  "behavior": {
+    "batch_growth": "Measured batches begin at one operation, double to the configured cap, then continue at the cap. No calibration or warmup.",
+    "stability": "Adjacent-batch residual against least-squares per-operation estimate; default relative deviation 0.05 after 100ms. For ratio 2 this is Criterion formula. Equal-sized capped batches use ratio 1.",
+    "deadlines": "Default wall limit 5s; cooperative checks after each completed call. Sampling maximum budget checked first; stability also requires sampling minimum budget.",
+    "samples": "Every actual completed batch retained; slow first batch stays a single sample instead of synthetic duplication. Iteration and sample caps prevent unbounded growth.",
+    "configuration": "Suite fallback, case attributes, inline/imported groups and direct Cargo CLI. CLI overrides case choices. Explicit false disables inheritance.",
+    "reports": "Actual sample counts and stop reason recorded; repeated runs reset schedule and remove stale quick metadata."
+  },
+  "evidence": [
+    "bench/src/quick.rs::tests::residual_stop_obeys_minimum_deadline_zero_and_iteration_cap",
+    "bench/tests/quick.rs",
+    "bench/tests/allocated_suite.rs::adaptive_quick_preserves_worker_allocations_and_resets_between_runs",
+    "bench/scripts/test-cargo-bench.py (quick CLI, attributes, dry-run, conflicts and test precedence)"
+  ]
+}

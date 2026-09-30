@@ -1,0 +1,23 @@
+{
+  "upstream": {
+    "criterion": "0.8.2",
+    "source": "src/analysis/mod.rs (baseline directory lookup, comparison and promotion)"
+  },
+  "status": "verified",
+  "implementation": "bench/src/history.rs and Suite::main",
+  "behaviors": [
+    "Automatic comparison and promotion after successful direct Cargo measurement and requested artifact output",
+    "First-run, compared and incompatible states per case; filtered runs do not erase history of unselected cases",
+    "Immutable generated paths, SHA-256 validation and atomic final publication marker; incomplete entries ignored, corrupt committed entries fail visibly",
+    "Concurrent writers keep distinct complete entries and compare snapshots of committed history",
+    "Smoke/profile/list/dry-run and no-history modes do not publish entries",
+    "Raw original runs retained; realized sample counts and quick stop reasons ignored only in the comparison projection",
+    "JSON and text previous-run output, custom history root and explicit opt-out"
+  ],
+  "limits": [
+    "Namespaces include suite and executable filename; a changed Cargo binary identity can start a separate history",
+    "Comparison retains strict environment, metric and lifecycle/configuration compatibility",
+    "One process per direct invocation gives descriptive changes and normally an inconclusive inferential verdict; hypothesis-test extensions remain in significance requirement",
+    "Named baseline save/load/retain/discard policies remain in baseline requirement"
+  ]
+}

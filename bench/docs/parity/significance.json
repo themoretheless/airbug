@@ -1,0 +1,59 @@
+{
+  "versions": {
+    "criterion": "0.8.2",
+    "divan": "0.1.21"
+  },
+  "scope": "Hypothesis tests, significance and practical noise threshold; source/API compatibility is not required.",
+  "upstream_sources": [
+    "criterion/src/analysis/compare.rs:common,t_test",
+    "criterion/src/report.rs:ComparisonData,measurement_complete",
+    "criterion/src/lib.rs:noise_threshold,significance_level,configure_from_args",
+    "criterion/src/benchmark_group.rs:noise_threshold,significance_level"
+  ],
+  "mapping": [
+    {
+      "feature": "Welch statistic and pooled-bootstrap two-sided p-value",
+      "implementation": "hypothesis::welch; analysis::compare_with_hypothesis reports method, counts, seed, repeats, p-value and family alpha",
+      "evidence": [
+        "hypothesis.rs known formula and exhaustive 4^4 null oracle",
+        "hypothesis integration tests normalized process medians and report serialization"
+      ]
+    },
+    {
+      "feature": "Significance threshold",
+      "implementation": "ComparisonConfig plus sparse ComparisonOptions; suite/group/case fields, attributes and CLI overrides; reported effective per-case configuration",
+      "evidence": [
+        "suite comparison_scope_tests",
+        "history case_overrides test",
+        "test-cargo-bench.py cross-crate attribute and per-field CLI precedence"
+      ]
+    },
+    {
+      "feature": "Practical noise threshold",
+      "implementation": "Finite nonnegative percentage, including zero and >=100%; practical median-interval decisions reported independently from zero-mean hypothesis decisions",
+      "evidence": [
+        "hypothesis integration test 250% margin with significant zero-effect test",
+        "test-cargo-bench.py 250% margin reanalysis"
+      ]
+    },
+    {
+      "feature": "Reproducible resampling",
+      "implementation": "Explicit repeat count and seed via library, attributes and direct Cargo; nonzero Monte Carlo probability correction; degenerate null draws counted rather than removed",
+      "evidence": [
+        "hypothesis unit tests",
+        "test-cargo-bench.py 12-process repeated reanalysis matches exactly"
+      ]
+    }
+  ],
+  "differences": [
+    "Independent processes are sampling units; within-process batches cannot inflate significance. Criterion uses its timing samples.",
+    "Airbug uses process medians as inputs to Welch and retains its existing median-interval practical-change decisions. p-values and practical margins answer distinct questions.",
+    "Distinct constant groups with zero variance produce an unavailable Welch test. Equal constant groups yield p=1.",
+    "Paired A/B analysis is an Airbug extension; no paired comparison API was found in the audited Criterion/Divan surface, so its interval method does not block this parity item."
+  ],
+  "tracked_elsewhere": {
+    "plots": "Criterion t-distribution visualization remains part of plots coverage.",
+    "artifacts": "Raw resampling distribution export and full Criterion report artifact mapping remain part of artifacts coverage.",
+    "platforms": "Cross-platform runtime validation remains separate."
+  }
+}

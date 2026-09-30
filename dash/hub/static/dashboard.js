@@ -11,6 +11,7 @@
     const DOMAIN_ORDER = ["unit", "mon", "otel", "err", "collector"];
     const CATS = [
       { id: "overview", label: "Overview" },
+      { id: "runs", label: "Test & bench runs" },
       { id: "unit", label: "Unit" },
       { id: "bench", label: "Bench" },
       { id: "mon", label: "Mon" },
@@ -23,6 +24,7 @@
       { id: "apis", label: "APIs" },
     ];
     const CAT_LEDE = {
+      runs: "Live progress, case results, diagnostics and launch history.",
       overview: "Status cards across unit, bench, mon, otel, err, and collector.",
       unit: "Unit test helpers and airbug report artifacts.",
       bench: "Live and finished bench runs (GUID sessions).",

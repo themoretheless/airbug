@@ -63,6 +63,10 @@ pub struct Case {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Observation {
+    /// Actual logical work totals for this batch, encoded as decimal integers.
+    /// Empty for legacy observations and cases with fixed per-operation counters.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub work_totals: BTreeMap<String, String>,
     pub case: String,
     pub metric: String,
     pub variant: String,
@@ -75,6 +79,30 @@ pub struct Observation {
     pub availability: Availability,
 }
 impl Observation {
+    pub(crate) fn validate_work_totals(&self, case: &Case) -> Result<()> {
+        for (unit, value) in &self.work_totals {
+            if unit.is_empty()
+                || self.metric != "wall"
+                || !case.contract.contains_key(&format!("work.input.{unit}"))
+            {
+                return Err(error("undeclared input work total"));
+            }
+            value.parse::<u128>()?;
+        }
+        if self.metric == "wall" && self.availability == Availability::Available {
+            for (key, value) in &case.contract {
+                if let Some(unit) = key.strip_prefix("work.input.") {
+                    if unit.is_empty()
+                        || value != "batch_total"
+                        || !self.work_totals.contains_key(unit)
+                    {
+                        return Err(error("missing or invalid input work total"));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn number(&self) -> Result<Option<f64>> {
         match (&self.availability, &self.value) {
             (Availability::Available, Some(v)) => {
@@ -90,6 +118,22 @@ impl Observation {
         }
     }
 }
+/// One worker's measured wave, linked to its enclosing sample. Worker indices
+/// identify slots within a wave, not persistent OS threads across waves.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkerAllocation {
+    pub case: String,
+    pub variant: String,
+    pub process: u32,
+    pub sequence: u64,
+    pub wave: u64,
+    pub worker: u32,
+    pub operations: u64,
+    pub wall_ns: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjusted_wall_ns: Option<String>,
+    pub metrics: BTreeMap<String, String>,
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Run {
     pub schema: u32,
@@ -99,6 +143,8 @@ pub struct Run {
     pub provenance: BTreeMap<String, String>,
     pub cases: Vec<Case>,
     pub observations: Vec<Observation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub worker_allocations: Vec<WorkerAllocation>,
     pub notes: Vec<String>,
 }
 impl Run {
@@ -121,6 +167,7 @@ impl Run {
             provenance: BTreeMap::new(),
             cases: vec![],
             observations: vec![],
+            worker_allocations: vec![],
             notes: vec![],
         }
     }
@@ -167,7 +214,52 @@ impl Run {
                 return Err(error("duplicate observation"));
             }
             o.number()?;
+            o.validate_work_totals(c)?;
         }
+        let mut worker_ids = BTreeSet::new();
+        for w in &self.worker_allocations {
+            let case = cases
+                .get(&w.case)
+                .ok_or_else(|| error("worker allocation refers to unknown case"))?;
+            let workers: u32 = case
+                .contract
+                .get("threads")
+                .ok_or_else(|| error("worker allocation without thread contract"))?
+                .parse()?;
+            if w.worker >= workers
+                || w.operations == 0
+                || !worker_ids
+                    .insert((&w.case, &w.variant, w.process, w.sequence, w.wave, w.worker))
+            {
+                return Err(error("invalid or duplicate worker allocation identity"));
+            }
+            w.wall_ns.parse::<u128>()?;
+            if !self.observations.iter().any(|o| {
+                o.case == w.case
+                    && o.variant == w.variant
+                    && o.process == w.process
+                    && o.sequence == w.sequence
+                    && o.metric == "wall"
+                    && o.availability == Availability::Available
+            }) {
+                return Err(error("worker allocation has no enclosing timing sample"));
+            }
+            if let Some(adjusted) = &w.adjusted_wall_ns {
+                if adjusted.parse::<u128>()? > w.wall_ns.parse::<u128>()? {
+                    return Err(error("adjusted worker duration exceeds raw duration"));
+                }
+            }
+            if w.metrics.len() != crate::alloc::ThreadStats::METRICS.len() {
+                return Err(error("incomplete worker allocation metrics"));
+            }
+            for (id, _, _) in crate::alloc::ThreadStats::METRICS {
+                w.metrics
+                    .get(id)
+                    .ok_or_else(|| error("missing worker allocation metric"))?
+                    .parse::<u128>()?;
+            }
+        }
+        self.validate_worker_aggregates()?;
         if self.status == Status::Complete {
             let variants: BTreeSet<_> = self.observations.iter().map(|o| &o.variant).collect();
             for c in &self.cases {
@@ -196,6 +288,138 @@ impl Run {
                 }
                 if variants.is_empty() {
                     return Err(error("complete run has no observations"));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn validate_worker_aggregates(&self) -> Result<()> {
+        fn add(a: u128, b: u128) -> Result<u128> {
+            a.checked_add(b)
+                .ok_or_else(|| error("worker aggregate overflow"))
+        }
+        for wall in self.observations.iter().filter(|o| o.metric == "wall") {
+            let case = self.cases.iter().find(|c| c.id == wall.case).unwrap();
+            let mut waves: BTreeMap<u64, Vec<&WorkerAllocation>> = BTreeMap::new();
+            for worker in self.worker_allocations.iter().filter(|w| {
+                w.case == wall.case
+                    && w.variant == wall.variant
+                    && w.process == wall.process
+                    && w.sequence == wall.sequence
+            }) {
+                waves.entry(worker.wave).or_default().push(worker);
+            }
+            let required = case
+                .contract
+                .get("alloc.worker_records")
+                .is_some_and(|v| v == "wave-v1");
+            if waves.is_empty() && !required {
+                continue;
+            }
+            if waves.is_empty() {
+                return Err(error("missing worker allocation records"));
+            }
+            let worker_count: usize = case
+                .contract
+                .get("threads")
+                .ok_or_else(|| error("missing worker count"))?
+                .parse()?;
+            let mut operations = 0u128;
+            let adjusted_observation = self.observations.iter().find(|o| {
+                o.metric == "wall.adjusted"
+                    && o.case == wall.case
+                    && o.variant == wall.variant
+                    && o.process == wall.process
+                    && o.sequence == wall.sequence
+            });
+            let mut adjusted_elapsed = 0u128;
+            let mut elapsed = 0u128;
+            let mut aggregate: BTreeMap<&str, u128> = BTreeMap::new();
+            for (expected, (&index, workers)) in waves.iter().enumerate() {
+                if index != expected as u64
+                    || workers.len() != worker_count
+                    || workers
+                        .iter()
+                        .any(|w| w.operations != workers[0].operations)
+                {
+                    return Err(error("incomplete or inconsistent worker wave"));
+                }
+                let mut wave_elapsed = 0;
+                let mut wave_adjusted = 0;
+                for worker in workers {
+                    operations = add(operations, worker.operations as u128)?;
+                    wave_elapsed = wave_elapsed.max(worker.wall_ns.parse::<u128>()?);
+                    if adjusted_observation.is_some() {
+                        let adjusted = worker
+                            .adjusted_wall_ns
+                            .as_deref()
+                            .ok_or_else(|| error("missing adjusted worker interval"))?
+                            .parse::<u128>()?;
+                        wave_adjusted = wave_adjusted.max(adjusted);
+                    }
+                }
+                elapsed = add(elapsed, wave_elapsed)?;
+                adjusted_elapsed = add(adjusted_elapsed, wave_adjusted)?;
+                for (id, _, statistic) in crate::alloc::ThreadStats::METRICS {
+                    let mut value = 0;
+                    for worker in workers {
+                        value = add(value, worker.metrics[id].parse()?)?;
+                    }
+                    let total = aggregate.entry(id).or_default();
+                    *total = if statistic == "sample_peak" {
+                        (*total).max(value)
+                    } else {
+                        add(*total, value)?
+                    };
+                }
+            }
+            if let Some(adjusted) = adjusted_observation {
+                if adjusted.operations != wall.operations
+                    || adjusted
+                        .value
+                        .as_deref()
+                        .ok_or_else(|| error("missing adjusted aggregate"))?
+                        .parse::<u128>()?
+                        != adjusted_elapsed
+                {
+                    return Err(error("adjusted worker durations disagree with aggregate"));
+                }
+            }
+            // Net growth/release are the positive/negative halves of one signed
+            // balance; opposing worker balances cancel before comparison.
+            let growth = aggregate["alloc.net_growth_bytes"];
+            let release = aggregate["alloc.net_release_bytes"];
+            aggregate.insert("alloc.net_growth_bytes", growth.saturating_sub(release));
+            aggregate.insert("alloc.net_release_bytes", release.saturating_sub(growth));
+            if operations != wall.operations as u128
+                || wall
+                    .value
+                    .as_deref()
+                    .ok_or_else(|| error("missing worker aggregate time"))?
+                    .parse::<u128>()?
+                    != elapsed
+            {
+                return Err(error(
+                    "worker operations or duration disagree with aggregate",
+                ));
+            }
+            for observation in self.observations.iter().filter(|o| {
+                o.case == wall.case
+                    && o.variant == wall.variant
+                    && o.process == wall.process
+                    && o.sequence == wall.sequence
+                    && o.metric.starts_with("alloc.")
+            }) {
+                let expected = aggregate
+                    .get(observation.metric.as_str())
+                    .ok_or_else(|| error("unknown worker aggregate metric"))?;
+                let actual = observation
+                    .value
+                    .as_deref()
+                    .ok_or_else(|| error("missing worker aggregate metric value"))?
+                    .parse::<u128>()?;
+                if actual != *expected {
+                    return Err(error("worker allocation metrics disagree with aggregate"));
                 }
             }
         }

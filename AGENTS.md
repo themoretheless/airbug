@@ -97,22 +97,25 @@ Checks, in order:
    started from a non-interactive shell inherits SIGINT as ignored — stop it with
    SIGTERM.
 
-## `airbug` (unit) has no live dashboard
+## Live tests and direct cargo bench
 
-`airbug` is a test-support library. Its one binary, `airbug_report`, blocks on
-`cargo test --workspace` and writes the report only afterwards, so there is nothing to
-attach a URL to while tests run. Do not invent one.
+`airbug_report` records individual standard Rust tests in
+`target/airbug-report/runs/<id>/run.json` while they execute. Run it with:
 
 ```sh
-cargo run -p airbug --bin airbug_report -- --all-features --locked --doc-tests
+cargo run -p airbug --features json --bin airbug_report -- --all-features --locked --doc-tests
 ```
 
-- It writes `target/airbug-report/{report.json,index.html}` at the end
-  (`unit/src/bin/airbug_report.rs:85`); CI does exactly this and uploads the folder.
-- Hand over `http://127.0.0.1:8790/report/` — the hub serves that folder — and say it is
-  a snapshot that appears only when the run finishes, not a live view.
-- Per-test machine-readable events are written only when something exports
-  `AIRBUG_REPORT_DIR` (`unit/src/report.rs:28`); the report binary does not set it.
+The hub's `/#/runs` tab displays test and benchmark launch history, case progress,
+output, steps, comparisons and attachments. Verify the hub's root before handing
+out its URL, as above. Test execution is sequential with one process per case;
+duration includes process startup. Doctests are an aggregate suite.
+`report.json` and `index.html` at the report root remain final CI snapshots.
+
+Direct `cargo bench` targets using `Suite::main()` write the same live history at
+case boundaries. `AIRBUG_DASHBOARD=0` disables those writes for strict measurements.
+`AIRBUG_DASHBOARD_ROOT` overrides workspace discovery. `--list` and `--dry-run`
+write no history. The separate process runner's live dashboard rules above still apply.
 
 ## Deeper docs
 

@@ -1,16 +1,31 @@
 //! Opt-in whole-process Rust allocation accounting. Does not count driver/ObjC,
 //! mmap or allocator overhead. Snapshots of multiple atomics are observational.
+mod overhead;
+mod thread;
+pub use overhead::{AllocationOverhead, calibrate_overhead};
 use std::alloc::{GlobalAlloc, Layout};
 use std::sync::atomic::{
     AtomicBool, AtomicU64,
     Ordering::{Relaxed, SeqCst},
 };
+pub use thread::{ThreadPhase, ThreadStats};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Snapshot {
     pub allocations: u64,
     pub reallocations: u64,
     pub deallocations: u64,
     pub requested_bytes: u64,
+    /// Bytes from successful alloc/alloc_zeroed calls, excluding realloc.
+    pub allocated_bytes: u64,
+    /// Bytes released by dealloc calls, excluding realloc shrinkage.
+    pub deallocated_bytes: u64,
+    pub grow_operations: u64,
+    pub shrink_operations: u64,
+    /// Additional bytes from successful growing reallocations.
+    pub grown_bytes: u64,
+    /// Bytes released by successful shrinking reallocations.
+    pub shrunk_bytes: u64,
+
     pub live_bytes: u64,
     pub lifetime_peak_bytes: u64,
 }
@@ -20,6 +35,13 @@ pub struct TrackingAllocator<A> {
     reallocations: AtomicU64,
     deallocations: AtomicU64,
     requested: AtomicU64,
+    allocated_bytes: AtomicU64,
+    deallocated_bytes: AtomicU64,
+    grow_operations: AtomicU64,
+    shrink_operations: AtomicU64,
+    grown_bytes: AtomicU64,
+    shrunk_bytes: AtomicU64,
+
     live: AtomicU64,
     peak: AtomicU64,
     phase_active: AtomicBool,
@@ -33,6 +55,13 @@ impl<A> TrackingAllocator<A> {
             reallocations: AtomicU64::new(0),
             deallocations: AtomicU64::new(0),
             requested: AtomicU64::new(0),
+            allocated_bytes: AtomicU64::new(0),
+            deallocated_bytes: AtomicU64::new(0),
+            grow_operations: AtomicU64::new(0),
+            shrink_operations: AtomicU64::new(0),
+            grown_bytes: AtomicU64::new(0),
+            shrunk_bytes: AtomicU64::new(0),
+
             live: AtomicU64::new(0),
             peak: AtomicU64::new(0),
             phase_active: AtomicBool::new(false),
@@ -59,6 +88,13 @@ impl<A> TrackingAllocator<A> {
             reallocations: self.reallocations.load(Relaxed),
             deallocations: self.deallocations.load(Relaxed),
             requested_bytes: self.requested.load(Relaxed),
+            allocated_bytes: self.allocated_bytes.load(Relaxed),
+            deallocated_bytes: self.deallocated_bytes.load(Relaxed),
+            grow_operations: self.grow_operations.load(Relaxed),
+            shrink_operations: self.shrink_operations.load(Relaxed),
+            grown_bytes: self.grown_bytes.load(Relaxed),
+            shrunk_bytes: self.shrunk_bytes.load(Relaxed),
+
             live_bytes: self.live.load(Relaxed),
             lifetime_peak_bytes: self.peak.load(Relaxed),
         }
@@ -71,9 +107,31 @@ impl<A> TrackingAllocator<A> {
         }
     }
     fn allocated(&self, n: usize) {
+        self.record_thread(thread::Event::Allocate(n));
         self.allocations.fetch_add(1, Relaxed);
+        self.allocated_bytes.fetch_add(n as u64, Relaxed);
         self.requested.fetch_add(n as u64, Relaxed);
         self.grow(n as u64);
+    }
+    fn deallocated(&self, n: usize) {
+        self.record_thread(thread::Event::Free(n));
+        self.deallocations.fetch_add(1, Relaxed);
+        self.deallocated_bytes.fetch_add(n as u64, Relaxed);
+        self.live.fetch_sub(n as u64, Relaxed);
+    }
+    fn resized(&self, old: usize, n: usize) {
+        self.record_thread(thread::Event::Resize(old, n));
+        self.reallocations.fetch_add(1, Relaxed);
+        self.requested.fetch_add(n as u64, Relaxed);
+        if n >= old {
+            self.grow_operations.fetch_add(1, Relaxed);
+            self.grown_bytes.fetch_add((n - old) as u64, Relaxed);
+            self.grow((n - old) as u64);
+        } else if n < old {
+            self.shrink_operations.fetch_add(1, Relaxed);
+            self.shrunk_bytes.fetch_add((old - n) as u64, Relaxed);
+            self.live.fetch_sub((old - n) as u64, Relaxed);
+        }
     }
 }
 // SAFETY: all calls forward original pointers and layouts to the wrapped
@@ -95,19 +153,12 @@ unsafe impl<A: GlobalAlloc> GlobalAlloc for TrackingAllocator<A> {
     }
     unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
         unsafe { self.inner.dealloc(p, l) };
-        self.deallocations.fetch_add(1, Relaxed);
-        self.live.fetch_sub(l.size() as u64, Relaxed);
+        self.deallocated(l.size());
     }
     unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
         let p = unsafe { self.inner.realloc(p, l, n) };
         if !p.is_null() {
-            self.reallocations.fetch_add(1, Relaxed);
-            self.requested.fetch_add(n as u64, Relaxed);
-            if n >= l.size() {
-                self.grow((n - l.size()) as u64);
-            } else {
-                self.live.fetch_sub((l.size() - n) as u64, Relaxed);
-            }
+            self.resized(l.size(), n);
         }
         p
     }
@@ -119,6 +170,17 @@ pub struct PhaseResult {
     pub reallocations: u64,
     pub deallocations: u64,
     pub requested_bytes: u64,
+    /// Bytes from successful alloc/alloc_zeroed calls, excluding realloc.
+    pub allocated_bytes: u64,
+    /// Bytes released by dealloc calls, excluding realloc shrinkage.
+    pub deallocated_bytes: u64,
+    pub grow_operations: u64,
+    pub shrink_operations: u64,
+    /// Additional bytes from successful growing reallocations.
+    pub grown_bytes: u64,
+    /// Bytes released by successful shrinking reallocations.
+    pub shrunk_bytes: u64,
+
     pub live_start_bytes: u64,
     pub live_end_bytes: u64,
     pub peak_live_bytes: u64,
@@ -142,6 +204,13 @@ impl<A> Phase<'_, A> {
             reallocations: after.reallocations - self.before.reallocations,
             deallocations: after.deallocations - self.before.deallocations,
             requested_bytes: after.requested_bytes - self.before.requested_bytes,
+            allocated_bytes: after.allocated_bytes - self.before.allocated_bytes,
+            deallocated_bytes: after.deallocated_bytes - self.before.deallocated_bytes,
+            grow_operations: after.grow_operations - self.before.grow_operations,
+            shrink_operations: after.shrink_operations - self.before.shrink_operations,
+            grown_bytes: after.grown_bytes - self.before.grown_bytes,
+            shrunk_bytes: after.shrunk_bytes - self.before.shrunk_bytes,
+
             live_start_bytes: self.before.live_bytes,
             live_end_bytes: after.live_bytes,
             peak_live_bytes: peak,

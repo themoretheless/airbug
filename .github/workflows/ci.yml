@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
       - name: Generate web report
-        run: cargo +stable run --locked -p airbug --bin airbug_report -- --all-features --locked --doc-tests
+        run: cargo +stable run --locked -p airbug --features json --bin airbug_report -- --all-features --locked --doc-tests
       - uses: actions/upload-artifact@v4
         if: always()
         with:

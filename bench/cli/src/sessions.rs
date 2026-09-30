@@ -211,6 +211,7 @@ pub fn profile(
 pub fn retention(store: &Path, keep: usize, apply: bool) -> Result<serde_json::Value> {
     let _lease = runner::acquire_lease()?;
     let root = fs::canonicalize(store)?;
+    let _baseline_lock = airbug_bench::baseline::Store::new(&root).lock_storage()?;
     let history = artifacts::history(&root)?;
     let mut protected = BTreeSet::new();
     let refs = root.join("baselines");
@@ -220,19 +221,43 @@ pub fn retention(store: &Path, keep: usize, apply: bool) -> Result<serde_json::V
             if !e.file_type()?.is_file() {
                 return Err(error("unexpected baseline entry"));
             }
-            let v: serde_json::Value = serde_json::from_slice(&fs::read(e.path())?)?;
-            let p = PathBuf::from(
-                v["run"]
-                    .as_str()
-                    .ok_or_else(|| error("invalid baseline reference"))?,
-            );
-            let hash = v["sha256"]
-                .as_str()
-                .ok_or_else(|| error("missing baseline hash"))?;
-            if hash_file(&p)? != hash {
-                return Err(error("baseline integrity failed; retention refused"));
+            let path = e.path();
+            if path.extension().is_some_and(|ext| ext == "lock") {
+                continue;
             }
-            protected.insert(artifact(&p)?);
+            let v: serde_json::Value = serde_json::from_slice(&fs::read(&path)?)?;
+            let references: Vec<&serde_json::Value> = if path
+                .file_name()
+                .and_then(|v| v.to_str())
+                .is_some_and(|v| v.ends_with(".cases.json"))
+            {
+                if v["version"] != 1 {
+                    return Err(error("unsupported case baseline version"));
+                }
+                let cases = v["cases"]
+                    .as_object()
+                    .ok_or_else(|| error("invalid case baseline manifest"))?;
+                cases.values().collect()
+            } else {
+                if path.with_extension("cases.json").exists() {
+                    continue;
+                }
+                vec![&v]
+            };
+            for reference in references {
+                let p = PathBuf::from(
+                    reference["run"]
+                        .as_str()
+                        .ok_or_else(|| error("invalid baseline reference"))?,
+                );
+                let hash = reference["sha256"]
+                    .as_str()
+                    .ok_or_else(|| error("missing baseline hash"))?;
+                if hash_file(&p)? != hash {
+                    return Err(error("baseline integrity failed; retention refused"));
+                }
+                protected.insert(artifact(&p)?);
+            }
         }
     }
     for row in &history {

@@ -58,6 +58,16 @@ pub enum Decision {
     Neutral,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HypothesisResult {
+    pub method: String,
+    pub test: crate::hypothesis::WelchTest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub null_distribution: Option<Vec<crate::hypothesis::NullStatistic>>,
+    /// Family-corrected significance threshold, not an adjusted p-value.
+    pub significance_level: f64,
+    pub rejects_zero_effect: Option<bool>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Comparison {
     pub case: String,
     pub metric: String,
@@ -68,10 +78,12 @@ pub struct Comparison {
     pub change_percent: Option<f64>,
     pub interval_percent: Option<(f64, f64)>,
     pub independent_units: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hypothesis: Option<HypothesisResult>,
     pub decision: Decision,
     pub note: String,
 }
-fn values(
+pub(crate) fn values(
     run: &Run,
     case: &str,
     metric: &Metric,
@@ -107,6 +119,33 @@ fn values(
         .collect())
 }
 pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<Vec<Comparison>> {
+    compare_with_hypothesis(a, b, threshold, alpha, crate::hypothesis::Config::default())
+}
+pub fn compare_with_hypothesis(
+    a: &Run,
+    b: Option<&Run>,
+    threshold: f64,
+    alpha: f64,
+    hypothesis: crate::hypothesis::Config,
+) -> Result<Vec<Comparison>> {
+    compare_impl(a, b, threshold, alpha, hypothesis, false)
+}
+/// Include every hypothesis resample in the serializable comparison report.
+pub fn compare_with_distribution(
+    a: &Run,
+    b: Option<&Run>,
+    threshold: f64,
+    alpha: f64,
+    hypothesis: crate::hypothesis::Config,
+) -> Result<Vec<Comparison>> {
+    compare_impl(a, b, threshold, alpha, hypothesis, true)
+}
+pub(crate) fn validate_comparison(
+    a: &Run,
+    b: Option<&Run>,
+    threshold: f64,
+    alpha: f64,
+) -> Result<()> {
     a.validate()?;
     let allowed = |r: &Run, paired: bool| {
         let variants: BTreeSet<_> = r.observations.iter().map(|o| o.variant.as_str()).collect();
@@ -125,13 +164,13 @@ pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<V
         return Err(error("comparison requires complete runs"));
     }
     if !threshold.is_finite()
-        || !(0.0..100.0).contains(&threshold)
+        || threshold < 0.0
         || !alpha.is_finite()
         || alpha <= 0.0
         || alpha >= 1.0
     {
         return Err(error(
-            "threshold must be 0..100 percent; alpha must be 0..1",
+            "threshold must be a finite nonnegative percent; alpha must be 0..1",
         ));
     }
     if a.environment != other.environment {
@@ -142,6 +181,19 @@ pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<V
     if ac != bc {
         return Err(error("incompatible cases, metrics or workload contracts"));
     }
+    Ok(())
+}
+fn compare_impl(
+    a: &Run,
+    b: Option<&Run>,
+    threshold: f64,
+    alpha: f64,
+    hypothesis: crate::hypothesis::Config,
+    capture_distribution: bool,
+) -> Result<Vec<Comparison>> {
+    hypothesis.validate()?;
+    validate_comparison(a, b, threshold, alpha)?;
+    let other = b.unwrap_or(a);
     let family = a
         .cases
         .iter()
@@ -167,6 +219,7 @@ pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<V
                 change_percent: None,
                 interval_percent: None,
                 independent_units: 0,
+                hypothesis: None,
                 decision: Decision::Inconclusive,
                 note: String::new(),
             };
@@ -238,6 +291,26 @@ pub fn compare(a: &Run, b: Option<&Run>, threshold: f64, alpha: f64) -> Result<V
                     row.interval_percent = Some(((bl / ah - 1.0) * 100.0, (bh / al - 1.0) * 100.0));
                 }
                 row.note="Ratio of process medians; conservative simultaneous median intervals, Bonferroni correction. Historical runs may be confounded by environment drift.".into();
+                let (test, null_distribution) = if capture_distribution {
+                    let distribution = crate::hypothesis::welch_distribution(&av, &bv, hypothesis)?;
+                    (distribution.test, Some(distribution.null_statistics))
+                } else {
+                    (crate::hypothesis::welch(&av, &bv, hypothesis)?, None)
+                };
+                let rejects_zero_effect = test.p_value.map(|p| p < corrected);
+                if let Some(p) = test.p_value {
+                    row.note.push_str(&format!(" Welch pooled-bootstrap p={p:.6}; family alpha={corrected:.6}. Tests zero mean effect under exchangeability; practical margin is assessed separately."));
+                } else if let Some(reason) = &test.unavailable_reason {
+                    row.note
+                        .push_str(&format!(" Welch test unavailable: {reason}."));
+                }
+                row.hypothesis = Some(HypothesisResult {
+                    method: "welch_pooled_bootstrap_process_medians".into(),
+                    test,
+                    null_distribution,
+                    significance_level: corrected,
+                    rejects_zero_effect,
+                });
             }
             if row.change_percent.is_some_and(|v| !v.is_finite())
                 || row
@@ -386,6 +459,16 @@ pub fn compare_multi(
             .retain(|o| o.variant == reference || o.variant == *name);
         for o in &mut pair.observations {
             o.variant = if o.variant == reference {
+                "baseline"
+            } else {
+                "candidate"
+            }
+            .into();
+        }
+        pair.worker_allocations
+            .retain(|w| w.variant == reference || w.variant == *name);
+        for w in &mut pair.worker_allocations {
+            w.variant = if w.variant == reference {
                 "baseline"
             } else {
                 "candidate"

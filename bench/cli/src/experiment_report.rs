@@ -24,6 +24,8 @@ pub struct Entry {
     pub comparisons: Vec<Row>,
     pub unavailable_observations: usize,
     pub run: Option<Run>,
+    #[serde(skip)]
+    baseline_run: Option<Run>,
 }
 #[derive(Serialize)]
 pub struct Row {
@@ -105,6 +107,7 @@ pub(crate) fn files(root: &Path) -> Result<Vec<(String, PathBuf)>> {
                             | ".git"
                             | "checkouts"
                             | "baselines"
+                            | "baseline-views"
                             | "notes"
                             | "quarantine"
                             | "logs"
@@ -154,11 +157,11 @@ pub fn build(o: Options<'_>) -> Result<Document> {
     {
         return Err(error("threshold 0..100 and alpha 0..1 required"));
     }
-    let source = project::resolve(o.store, o.source)?;
+    let source = project::resolve_report(o.store, o.source)?;
     let candidates = files(&source)?;
     let baseline = o
         .baseline
-        .map(|p| project::resolve(o.store, p))
+        .map(|p| project::resolve_report(o.store, p))
         .transpose()?;
     let baselines = baseline.as_deref().map(files).transpose()?;
     if baselines
@@ -202,6 +205,7 @@ pub fn build(o: Options<'_>) -> Result<Document> {
             comparisons: vec![],
             unavailable_observations: 0,
             run: None,
+            baseline_run: None,
         };
         match read(path, o.store) {
             Err(e) => {
@@ -257,18 +261,20 @@ pub fn build(o: Options<'_>) -> Result<Document> {
                                     "diagnostic profiler run cannot serve as baseline",
                                 ));
                             }
-                            Ok(analysis::compare(
+                            let comparisons = analysis::compare(
                                 &b,
                                 Some(&r),
                                 o.threshold,
                                 o.alpha / family as f64,
-                            )?
-                            .into_iter()
-                            .map(|comparison| Row {
-                                variant: "candidate".into(),
-                                comparison,
-                            })
-                            .collect())
+                            )?;
+                            entry.baseline_run = Some(b);
+                            Ok(comparisons
+                                .into_iter()
+                                .map(|comparison| Row {
+                                    variant: "candidate".into(),
+                                    comparison,
+                                })
+                                .collect())
                         } else if variants.contains("baseline") && variants.len() > 1 {
                             Ok(analysis::compare_multi(
                                 &r,
@@ -342,6 +348,7 @@ pub fn build(o: Options<'_>) -> Result<Document> {
                     comparisons: vec![],
                     unavailable_observations: 0,
                     run: None,
+                    baseline_run: None,
                 });
             }
         }
@@ -445,7 +452,26 @@ impl Document {
         }
         Ok(out)
     }
+    /// Numerical report without bootstrap chart analysis or SVG generation.
+    pub fn html_without_plots(&self) -> Result<String> {
+        Ok(report::html(&self.markdown()?)
+            .replace("<!--CHARTS-->", "")
+            .replace("<!--DETAILS-->", ""))
+    }
     pub fn html(&self) -> Result<String> {
+        self.html_with_summary(None)
+    }
+    pub fn html_with_summary(
+        &self,
+        summary_plot: Option<&report::SummaryPlot<'_>>,
+    ) -> Result<String> {
+        self.html_with_scale(summary_plot, summary_plot.map(|s| s.scale))
+    }
+    pub fn html_with_scale(
+        &self,
+        summary_plot: Option<&report::SummaryPlot<'_>>,
+        scale: Option<airbug_bench::viz::charts::AxisScale>,
+    ) -> Result<String> {
         let mut content =
             String::from("<section class=\"cards\" aria-label=\"Experiment summary\">");
         for state in [
@@ -507,7 +533,64 @@ impl Document {
             for issue in &e.issues {
                 content.push_str(&format!("<p class=\"issue\">{}</p>", esc(issue)));
             }
+            let config = airbug_bench::bootstrap::Config {
+                confidence_level: (1. - self.alpha_family).clamp(f64::EPSILON, 1. - f64::EPSILON),
+                ..Default::default()
+            };
+            let candidate_analysis = e
+                .run
+                .as_ref()
+                .map(|run| airbug_bench::bootstrap::analyze(run, &config));
+            if let Some(analysis) = &candidate_analysis {
+                match analysis {
+                    Ok(report) => {
+                        let scales = e
+                            .run
+                            .as_ref()
+                            .map(airbug_bench::presentation::load_scales)
+                            .transpose();
+                        match scales {
+                            Ok(scales) => content.push_str(
+                                &airbug_bench::bootstrap::violin_charts_with_case_scales(
+                                    report,
+                                    scale,
+                                    &scales.unwrap_or_default(),
+                                ),
+                            ),
+                            Err(err) => content.push_str(&format!(
+                                "<p>Violin summaries unavailable: {}</p>",
+                                esc(&err.to_string())
+                            )),
+                        }
+                    }
+                    Err(err) => content.push_str(&format!(
+                        "<p>Violin summaries unavailable: {}</p>",
+                        esc(&err.to_string())
+                    )),
+                }
+            }
             if !e.comparisons.is_empty() {
+                if let (Some(baseline), Some(candidate)) = (&e.baseline_run, &e.run) {
+                    content.push_str(&report::iteration_comparison(baseline, candidate)?);
+                    let retained = analysis::compare_with_distribution(
+                        baseline,
+                        Some(candidate),
+                        self.threshold_percent,
+                        self.alpha_family / self.family_run_count.max(1) as f64,
+                        airbug_bench::hypothesis::Config::default(),
+                    )?;
+                    content.push_str(&airbug_bench::hypothesis_plot::fragment(&retained)?);
+                    content.push_str(&airbug_bench::relative::charts(
+                        &airbug_bench::relative::compare_runs(baseline, candidate, &config)?,
+                        self.threshold_percent,
+                    )?);
+                    let baseline = airbug_bench::bootstrap::analyze(baseline, &config)?;
+                    if let Some(Ok(candidate)) = &candidate_analysis {
+                        content.push_str(&airbug_bench::bootstrap::comparison_charts(
+                            &baseline, candidate,
+                        ));
+                    }
+                }
                 if let Some(r) = &e.run {
                     let comparisons: Vec<_> = e
                         .comparisons
@@ -532,6 +615,9 @@ impl Document {
                 ));
             }
             if let Some(r) = &e.run {
+                if let Some(summary) = summary_plot {
+                    content.push_str(&report::parameter_charts(r, summary)?);
+                }
                 content.push_str("<details><summary>Measurements, scopes and notes</summary>");
                 content.push_str(&report::html_fragment(&report::markdown(r)?));
                 content.push_str("</details>");

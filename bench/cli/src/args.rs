@@ -17,6 +17,28 @@ pub(crate) struct Cli {
 }
 #[derive(Subcommand)]
 pub(crate) enum Action {
+    /// Bootstrap analysis of a saved run, without executing workloads.
+    Analyze {
+        run: PathBuf,
+        #[arg(long, default_value_t = 10000)]
+        resamples: usize,
+        #[arg(long, default_value_t = 0.95)]
+        confidence_level: f64,
+        #[arg(long, default_value_t = 0)]
+        analysis_seed: u64,
+        #[arg(long)]
+        bootstrap_distributions: bool,
+        /// Keep numerical estimates in HTML and skip SVG generation.
+        #[arg(long, conflicts_with = "summary_scale")]
+        no_plots: bool,
+        /// Scale for violin summaries in HTML output.
+        #[arg(long, value_parser = ["linear", "logarithmic"])]
+        summary_scale: Option<String>,
+        #[arg(long, value_parser = ["json", "html", "markdown"], default_value = "json")]
+        format: String,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Browse saved experiments in a local web interface.
     Serve {
         #[arg(default_value = ".airbug-bench")]
@@ -253,7 +275,7 @@ pub(crate) enum Action {
         #[arg(last = true)]
         args: Vec<String>,
     },
-    /// Register or list immutable named baseline references.
+    /// Register or list hash-checked named baseline references.
     Baseline {
         #[command(subcommand)]
         action: BaselineAction,
@@ -316,6 +338,22 @@ pub(crate) enum Action {
         alpha: f64,
         #[arg(long)]
         json: bool,
+        /// Portable HTML with retained Welch null-distribution charts.
+        #[arg(long, conflicts_with = "json")]
+        html: bool,
+        /// HTML tables only, without retaining null draws or generating charts.
+        #[arg(long, requires = "html")]
+        no_plots: bool,
+        /// Include every null draw in JSON output.
+        #[arg(long, requires = "json")]
+        hypothesis_distribution: bool,
+        /// Export relative mean/median draws for two independent runs in a JSON envelope.
+        #[arg(long, requires_all = ["json", "candidate"])]
+        relative_distributions: bool,
+        #[arg(long, default_value_t = 10_000)]
+        hypothesis_resamples: usize,
+        #[arg(long, default_value_t = 0)]
+        hypothesis_seed: u64,
         #[arg(long, value_enum, default_value = "fail")]
         uncertainty: Uncertainty,
         #[arg(long)]
@@ -360,6 +398,17 @@ pub(crate) enum Action {
         threshold: f64,
         #[arg(long, default_value_t = 0.05)]
         alpha: f64,
+        /// Write an HTML report with tables only; skip chart analysis and rendering.
+        #[arg(long, conflicts_with_all = ["summary_parameter", "summary_scale", "summary_estimator"])]
+        no_plots: bool,
+        /// Numeric contract parameter for input-size summary charts (HTML only).
+        #[arg(long)]
+        summary_parameter: Option<String>,
+        /// Summary point calculation; does not change regression decisions.
+        #[arg(long, value_parser = ["process-median", "mean"], requires = "summary_parameter")]
+        summary_estimator: Option<String>,
+        #[arg(long, value_parser = ["linear", "logarithmic"])]
+        summary_scale: Option<String>,
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -377,6 +426,9 @@ pub(crate) enum Action {
         run: PathBuf,
         #[arg(long, default_value = "")]
         filter: String,
+        /// Select a displayed unit (e.g. MiB, items, chars, cycles).
+        #[arg(long)]
+        unit: Option<String>,
         /// Fail if any per-observation throughput exceeds this rate.
         #[arg(long)]
         max: Option<f64>,
@@ -414,6 +466,13 @@ pub(crate) enum Uncertainty {
 
 #[derive(Subcommand)]
 pub(crate) enum BaselineAction {
-    Save { name: String, run: PathBuf },
+    Save {
+        name: String,
+        run: PathBuf,
+        #[arg(long, conflicts_with = "retain")]
+        replace: bool,
+        #[arg(long)]
+        retain: bool,
+    },
     List,
 }

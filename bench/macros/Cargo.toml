@@ -11,5 +11,6 @@ description = "Attribute macros for the airbug-bench benchmark library"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
+syn = { version = "2", features = ["full", "visit-mut"] }
 quote = "1"
+proc-macro-crate = "3.5"

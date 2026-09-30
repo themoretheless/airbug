@@ -1,0 +1,54 @@
+{
+  "upstream": "divan 0.1.21",
+  "status": "verified",
+  "checks": [
+    {
+      "feature": "alloc/free/grow/shrink event counts and byte deltas",
+      "source": "src/alloc.rs:321-364",
+      "airbug": "bench/src/alloc/thread.rs",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/thread_allocations.rs::successful_same_size_realloc_is_zero_byte_growth_in_all_accounting_scopes",
+        "bench/tests/thread_allocations.rs::thread_phases_isolate_workers_and_handle_cross_thread_frees",
+        "bench/tests/contracts.rs::allocation_phases_distinguish_growth_shrink_and_freed_bytes",
+        "bench/tests/contracts.rs::allocator_failed_realloc_preserves_live_allocation"
+      ],
+      "comparison": "Successful same-size realloc increments grow and realloc counts with zero byte delta; failed realloc changes no counters. Grow/shrink use size differences."
+    },
+    {
+      "feature": "signed live count and byte balances; nonnegative count and byte peaks",
+      "source": "src/alloc.rs:198-217,321-356",
+      "airbug": "ThreadStats net_live_count/net_live_bytes and peak_above_start_count/bytes",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/thread_allocations.rs",
+        "bench/tests/allocated_suite.rs"
+      ]
+    },
+    {
+      "feature": "fastest/slowest/median-associated allocation metrics",
+      "source": "src/benchmark/mod.rs:1141-1225",
+      "airbug": "associated_allocations in bench/src/report.rs",
+      "status": "verified",
+      "comparison": "Associated sample peaks retain absolute values plus per_operation: fastest/slowest/median use timing-ranked paired samples divided by their operation count; operation_mean is sum of peaks / sum of operations.",
+      "evidence": [
+        "bench/tests/allocated_suite.rs::allocation_summaries_pair_by_sequence_and_preserve_peak_units"
+      ]
+    },
+    {
+      "feature": "per-worker samples",
+      "source": "src/benchmark/mod.rs:770-780",
+      "airbug": "Run.worker_allocations preserves wave/worker/operation/time and exact integer allocation metrics; aggregate observations retained",
+      "status": "verified",
+      "evidence": [
+        "bench/tests/allocated_suite.rs::allocated_workers_exclude_local_setup_and_sum_all_workers_across_waves",
+        "bench/tests/allocated_suite.rs::attributed_async_worker_allocations_cover_plain_borrowed_owned_and_drop_policies",
+        "bench/tests/allocated_suite.rs::allocated_coordinator_setup_accepts_local_state_and_preserves_drop_threads",
+        "bench/tests/allocated_suite.rs::worker_validation_cancels_opposite_signed_net_balances",
+        "bench/cli/tests/cli.rs::protocol_preserves_worker_allocations_across_processes_and_variants",
+        "bench/tests/allocated_suite.rs::worker_allocation_reports_pair_metrics_by_worker_time"
+      ],
+      "comparison": "Validated per-wave worker records feed a separate timing-ranked JSON/text summary, preserving source sample/wave/worker identities and absolute/normalized peaks. Unequal operation counts use operation-weighted totals. Worker waves are not treated as independent process repetitions."
+    }
+  ]
+}

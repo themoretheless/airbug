@@ -1,5 +1,5 @@
-use airbug_bench::{Result, Run, Status, error, model::write_new};
-use serde::{Deserialize, Serialize};
+use airbug_bench::{Result, error, model::write_new};
+use serde::Serialize;
 use std::{
     fs,
     io::Write,
@@ -229,42 +229,40 @@ fn main() -> airbug_bench::Result<()> {
     );
     Ok(())
 }
-#[derive(Serialize, Deserialize)]
-struct Baseline {
-    run: PathBuf,
-    sha256: String,
-}
-fn name_path(store: &Path, name: &str) -> Result<PathBuf> {
-    if name.is_empty()
-        || !name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-    {
-        return Err(error("baseline name: letters, digits, '-' or '_' only"));
-    }
-    Ok(store.join("baselines").join(format!("{name}.json")))
-}
-pub fn save_baseline(store: &Path, name: &str, run: &Path) -> Result<()> {
+use airbug_bench::baseline::BaselineRef as Baseline;
+pub fn save_baseline(
+    store: &Path,
+    name: &str,
+    run: &Path,
+    mode: airbug_bench::baseline::SaveMode,
+) -> Result<()> {
     let _lease = crate::runner::acquire_lease()?;
-    let r = Run::load(run)?;
-    if r.status != Status::Complete {
-        return Err(error("baseline requires complete run"));
+    let baselines = airbug_bench::baseline::Store::new(store);
+    if baselines.has_case_manifest(name)? {
+        if matches!(mode, airbug_bench::baseline::SaveMode::Retain) {
+            baselines.prepare_case_save(name, mode)?;
+            println!("Retained baseline @{name}");
+            return Ok(());
+        }
+        let source = resolve(store, run)?;
+        let measured = airbug_bench::Run::load(&source)?;
+        baselines.save_cases(name, &measured, mode)?;
+        println!("Saved baseline @{name}");
+        return Ok(());
     }
-    let run = fs::canonicalize(if run.is_dir() {
-        run.join("run.json")
+    // Retaining a valid reference must not depend on resolving the unused source.
+    let source = if matches!(mode, airbug_bench::baseline::SaveMode::Retain)
+        && baselines.load(name)?.is_some()
+    {
+        run.to_owned()
     } else {
-        run.into()
-    })?;
-    let path = name_path(store, name)?;
-    fs::create_dir_all(path.parent().unwrap())?;
-    write_new(
-        &path,
-        &Baseline {
-            sha256: airbug_bench::model::hash_file(&run)?,
-            run,
-        },
-    )?;
-    println!("Saved baseline @{name}; existing names are never overwritten");
+        resolve(store, run)?
+    };
+    let saved = baselines.save(name, &source, mode)?;
+    println!(
+        "{} baseline @{name}",
+        if saved.retained { "Retained" } else { "Saved" }
+    );
     Ok(())
 }
 pub fn resolve(store: &Path, value: &Path) -> Result<PathBuf> {
@@ -272,14 +270,77 @@ pub fn resolve(store: &Path, value: &Path) -> Result<PathBuf> {
         return crate::artifacts::last(store);
     }
     if let Some(name) = value.to_str().and_then(|s| s.strip_prefix('@')) {
-        let b: Baseline = serde_json::from_slice(&fs::read(name_path(store, name)?)?)?;
-        if airbug_bench::model::hash_file(&b.run)? != b.sha256 {
-            return Err(error("baseline artifact changed since registration"));
+        if store
+            .join("baselines")
+            .join(format!("{name}.cases.json"))
+            .exists()
+        {
+            baseline_view(store, name, false)
+        } else {
+            Ok(airbug_bench::baseline::Store::new(store).require(name)?.run)
         }
-        Ok(b.run)
     } else {
         Ok(value.into())
     }
+}
+/// Reports compare stable case labels even when their source runs differ.
+pub fn resolve_report(store: &Path, value: &Path) -> Result<PathBuf> {
+    if let Some(name) = value.to_str().and_then(|s| s.strip_prefix('@')) {
+        baseline_view(store, name, true)
+    } else {
+        resolve(store, value)
+    }
+}
+fn baseline_view(store: &Path, name: &str, per_case: bool) -> Result<PathBuf> {
+    use sha2::{Digest, Sha256};
+    let baselines = airbug_bench::baseline::Store::new(store);
+    let _lock = baselines.lock_storage()?;
+    let cases = baselines.load_cases(name)?;
+    if cases.is_empty() {
+        return Err(error(format!("baseline @{name} has no cases")));
+    }
+    let rows: Vec<(String, airbug_bench::Run)> = if per_case {
+        cases
+            .into_iter()
+            .map(|(id, run)| {
+                (
+                    airbug_bench::model::hex(&Sha256::digest(id.as_bytes())),
+                    run,
+                )
+            })
+            .collect()
+    } else {
+        let ids: Vec<_> = cases.keys().map(String::as_str).collect();
+        let mut runs = baselines.load_selected_runs(name, &ids)?;
+        if runs.len() != 1 {
+            return Err(error(format!(
+                "baseline @{name} contains multiple source runs; use report or cargo bench --load-baseline for per-source analysis"
+            )));
+        }
+        vec![(String::new(), runs.remove(0))]
+    };
+    let digest = airbug_bench::model::hex(&Sha256::digest(serde_json::to_vec(&rows)?));
+    let root = store.join("baseline-views");
+    let destination = root.join(digest);
+    if destination.exists() {
+        for (label, run) in &rows {
+            let saved = airbug_bench::Run::load(destination.join(label))?;
+            if serde_json::to_value(saved)? != serde_json::to_value(run)? {
+                return Err(error("resolved baseline view changed; refusing stale data"));
+            }
+        }
+        return Ok(destination);
+    }
+    fs::create_dir_all(&root)?;
+    let temporary = root.join(format!(".{}.tmp", airbug_bench::Run::new().id));
+    if per_case {
+        fs::create_dir(&temporary)?;
+    }
+    for (label, run) in &rows {
+        run.save_new(temporary.join(label))?;
+    }
+    fs::rename(&temporary, &destination)?;
+    Ok(destination)
 }
 pub fn baselines(store: &Path) -> Result<()> {
     let dir = store.join("baselines");
@@ -291,7 +352,17 @@ pub fn baselines(store: &Path) -> Result<()> {
         .collect::<std::io::Result<Vec<_>>>()?;
     files.sort();
     for p in files {
-        if p.extension().is_some_and(|e| e == "json") {
+        if let Some(name) = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.strip_suffix(".cases.json"))
+        {
+            let cases = airbug_bench::baseline::Store::new(store).load_cases(name)?;
+            println!("@{name} → {} cases ({})", cases.len(), p.display());
+        } else if p.extension().is_some_and(|e| e == "json") {
+            if p.with_extension("cases.json").exists() {
+                continue;
+            }
             let b: Baseline = serde_json::from_slice(&fs::read(&p)?)?;
             println!(
                 "@{} → {}",
