@@ -570,7 +570,7 @@ fn comparison_charts_plot_intervals_and_units_without_overclaiming() {
     assert!(!few.contains("cumulative share"), "{few}");
     assert_eq!(
         charts.matches("<figure").count(),
-        charts.matches("<svg role=\"img\" aria-label=").count()
+        charts.matches("role=\"img\" aria-label=").count()
     );
 
     let mut hostile = rows.clone();
