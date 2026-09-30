@@ -34,7 +34,7 @@
         "python3 bench/scripts/test-cargo-bench.py passed after batch inheritance; /tmp/airbug-imported-batch-recovered.log",
         "bench/docs/parity/groups.json: source-level Divan/ Criterion group option audit"
       ],
-      "remaining": "Imported group thread defaults remain incomplete. Per-group absolute bootstrap settings now work through attributes, imported groups and CLI; standalone saved-run reanalysis settings still need persistence. Numeric domains remain tracked under samples. Imported executor/allocator/input-counter/custom-measurement defaults remain Airbug extensions in groups.json."
+      "remaining": "Imported group thread defaults remain incomplete. Per-group absolute bootstrap settings now support attributes, CLI precedence and saved-run reanalysis. Numeric domains remain tracked under samples. Imported executor/allocator/input-counter/custom-measurement defaults remain Airbug extensions in groups.json."
     },
     {
       "id": "external_modules",
@@ -445,7 +445,7 @@
         "bench/src/sampling.rs::environment_tests::environment_sampling_precedence_and_errors",
         "bench/scripts/test-cargo-bench.py (environment sampling and per-field CLI precedence)"
       ],
-      "remaining": "Core schedules, budgets and inherited configuration implemented. Airbug currently caps samples at 100000, per-worker operations at 1048576 and individual sample/warmup times at 60s; upstream numeric-domain and threaded sample aggregation differences still require an explicit audit. Per-group absolute bootstrap settings now exist separately from hypothesis settings, with attributes and CLI precedence; independent saved-run restoration remains open (groups.json)."
+      "remaining": "Core schedules, budgets and inherited configuration implemented. Airbug currently caps samples at 100000, per-worker operations at 1048576 and individual sample/warmup times at 60s; upstream numeric-domain and threaded sample aggregation differences still require an explicit audit. Per-group absolute bootstrap settings now exist separately from hypothesis settings, with attributes and CLI precedence; independent saved-run restoration is implemented (groups.json)."
     },
     {
       "id": "sample_size",

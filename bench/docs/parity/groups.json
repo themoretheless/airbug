@@ -47,8 +47,8 @@
     },
     {
       "feature": "Confidence level and absolute bootstrap resample count for each group",
-      "status": "partial",
-      "airbug": "Per-case bootstrap calculation and report metadata implemented. suite/group/bench resamples, confidence_level and analysis_seed inherit per field across inline/imported groups. Explicit CLI fields override registered defaults; attributes enable analysis without an extra flag. Baseline and relative comparisons resolve the same case config. Restoring effective settings when independently reanalyzing only run.json remains open."
+      "status": "implemented",
+      "airbug": "Per-case bootstrap calculation, report metadata, suite/group/bench fields, imported inheritance and per-field CLI precedence are implemented. Direct Cargo stores effective settings in airbug.analysis.bootstrap.v1 provenance. analyze/analyze_saved restore them and preserve source bytes; explicit CLI fields override saved fields. Old runs use standard defaults; malformed settings fail explicitly."
     }
   ],
   "additional_airbug_group_capabilities": {
@@ -66,13 +66,11 @@
     "classification": "These are not Divan bench_group options or Criterion BenchmarkGroup setters. They remain tracked as Airbug extensions; this classification does not assert their implementation."
   },
   "next_required_implementation": {
-    "feature": "Per-case/group absolute bootstrap configuration",
+    "feature": "Imported group thread defaults and remaining numeric-domain audit",
     "requirements": [
-      "Sparse confidence/resamples/seed options with nearest explicit override and CLI precedence",
-      "Store effective configuration with each case in reports; never label mixed confidence levels with one global confidence value",
-      "Apply matching effective configuration to absolute estimates, retained distributions, regressions and baseline comparison plots",
-      "Preserve saved-run and formatter behavior",
-      "Verify two groups with distinct confidence/resample settings and CLI field overrides against independent bootstrap computations"
+      "Resolve inherited worker counts before case registration so case names and execution agree",
+      "Preserve explicit sequential opt-out and child overrides",
+      "Avoid silently imposing Send/Sync requirements on ordinary local benchmarks"
     ]
   },
   "validation": {
@@ -85,6 +83,7 @@
     ],
     "run": ".airbug/runs/76c82e69-aa93-47b2-9530-4e6a125a11e1/index.html",
     "attribute_test": "bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields",
-    "cargo_fixture": "bench/scripts/test-cargo-bench.py final standalone bootstrap-options fixture: auto-enabled estimates, imported group from another crate, 32/64 resamples, independent 0.99/0.9 confidence and 0/7 seeds. Passed after correcting --bench cases in fixture invocation; all preceding full-script checks passed."
+    "cargo_fixture": "bench/scripts/test-cargo-bench.py final standalone bootstrap-options fixture: auto-enabled estimates, imported group from another crate, 32/64 resamples, independent 0.99/0.9 confidence and 0/7 seeds. Passed after correcting --bench cases in fixture invocation; all preceding full-script checks passed.",
+    "saved_settings": "bootstrap::tests::case_configs_control_estimates_draws_regressions_and_labels; cli::analyze_restores_saved_bootstrap_settings_and_overrides_one_field. Includes raw immutability, old runs, invalid metadata, atomic save validation and one-case extraction."
   }
 }
