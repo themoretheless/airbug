@@ -65,7 +65,9 @@ cargo airbug-bench run --program "$EXE" --repetitions 20 \
 Start it as a background task; the interface keeps its process alive after the results are
 finalized, so a foreground call hangs until it is interrupted.
 
-- `--ui` forces the server without a TTY; `--no-open` prints the URL instead of launching a browser.
+- `--ui` forces the server without a TTY; `--no-open` prints the URL instead of launching a
+  browser. Both are bench flags, so they go **before** the bare `--` — after it they reach the
+  measured program, which exits on an unknown argument and never publishes a link.
 - `--output` names a directory that must not exist yet. Its sibling `<output>.live.json` appears
   as soon as the port is bound.
 - As soon as `Live benchmark: http://127.0.0.1:<port>/<token>/` appears — from the task's log or
@@ -114,5 +116,5 @@ finalized report.
 - `--dry-run` starts no server and writes nothing.
 - `git-compare` and `sessions`-driven flows call the runner repeatedly with no live UI attached.
   Offer `cargo airbug-bench serve <dir> --port 8787` afterwards instead of a link.
-- `airbug` unit tests have no live view at all, and hub signals go to a fixed address — see
-  `AGENTS.md`.
+- `cargo airbug test` and `airbug_report` publish live test history through the hub; see
+  `AGENTS.md` for the correct routes and root checks.
