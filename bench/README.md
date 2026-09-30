@@ -1874,5 +1874,10 @@ mod measurements {
 ```
 
 Для builder доступны `bootstrap_case`, `with_bootstrap_defaults` и
-`bootstrap_settings`. Настройки сохраняются в статистическом отчёте; восстановление
-их при отдельном анализе только `run.json` ещё требует доработки.
+`bootstrap_settings`. Прямой Cargo-запуск сохраняет настройки также в `run.json`, под ключом
+`airbug.analysis.bootstrap.v1`. `cargo airbug-bench analyze <run>` восстанавливает
+их; явные `--resamples`, `--confidence-level` и `--analysis-seed` меняют только
+соответствующее поле. Исходный файл не переписывается. Старые запуски без метаданных
+используют 10000 перевыборок, confidence 0.95 и seed 0. В библиотеке этому
+соответствуют `bootstrap::save_settings` и `bootstrap::analyze_saved`;
+`bootstrap::analyze` продолжает использовать явно переданную общую конфигурацию.
