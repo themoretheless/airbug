@@ -16,24 +16,6 @@
     <p class="lede" id="lede">Local developer hub — pick a category.</p>
     <div class="meta" id="meta">loading…</div>
 
-    <section class="panel" data-cat="launches" id="panel-launches" hidden>
-      <div class="runs-heading"><div><h2>Test &amp; benchmark runs</h2><p id="runs-connection" role="status">Updating every second</p></div>
-        <select id="runs-kind" aria-label="Run type"><option value="">All runs</option><option value="test">Tests</option><option value="bench">Benchmarks</option></select>
-      </div>
-      <div class="runs-layout">
-        <aside class="runs-history" id="runs-history" aria-label="Run history"></aside>
-        <div class="runs-main">
-          <div id="runs-summary"></div>
-          <div class="runs-toolbar">
-            <input id="runs-search" type="search" placeholder="Find a test or benchmark…" aria-label="Search cases">
-            <select id="runs-status" aria-label="Case status"><option value="">All statuses</option><option>failed</option><option>broken</option><option>running</option><option>queued</option><option>passed</option><option>ignored</option><option>cancelled</option></select>
-          </div>
-          <div class="runs-cases" id="runs-cases"></div>
-          <article id="runs-case-detail" class="runs-case-detail" aria-label="Case details"></article>
-        </div>
-      </div>
-    </section>
-
     <section class="panel atr" data-cat="now" id="panel-now" hidden>
       <div class="now-grid">
         <article class="now-card now-wide" id="now-live" aria-live="polite"></article>
@@ -149,6 +131,5 @@
   <div class="toast" id="toast" role="status"></div>
   <script src="/static/testrun.js"></script>
   <script src="/static/dashboard.js"></script>
-  <script src="/static/runs.js"></script>
 </body>
 </html>

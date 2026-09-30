@@ -122,7 +122,7 @@ cargo bench -p airbug-bench --features macros --bench attributed
 ```
 
 Cargo использует оптимизированный bench-профиль. Список не исполняет функции.
-Прямой `cargo bench` печатает результаты в терминал и записывает прогресс в `target/airbug-report/runs`. Откройте вкладку **Launch details** в hub этого workspace (`/#/launches`). Статусы записываются на границах кейсов, вне измеряемого участка; `AIRBUG_DASHBOARD=0` отключает запись для строгих измерений. `AIRBUG_DASHBOARD_ROOT` позволяет явно задать workspace.
+Прямой `cargo bench` печатает результаты в терминал и записывает прогресс в `target/airbug-report/runs`. Откройте вкладку **Runs** в hub этого workspace (`/#/runs`). Статусы записываются на границах кейсов, вне измеряемого участка; `AIRBUG_DASHBOARD=0` отключает запись для строгих измерений. `AIRBUG_DASHBOARD_ROOT` позволяет явно задать workspace.
 Существующие targets с `Suite::main()` также принимают фильтр по имени от Cargo.
 
 ### Группы и ignored-кейсы

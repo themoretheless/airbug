@@ -464,7 +464,7 @@ fn launch_history_updates_and_serves_only_registered_attachments() {
     let (status, body) = http(port, "GET", "/api/v1/runs?kind=test", None);
     assert_eq!(status, 200);
     let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(timeline["runs"][0]["href"], "#/launches/123-456");
+    assert_eq!(timeline["runs"][0]["href"], "#/tests/123-456");
     assert_eq!(timeline["runs"][0]["totals"]["total"], 1);
     assert_eq!(timeline["live"], 0); // Missing timestamps make this fixture stale.
     let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
@@ -503,6 +503,43 @@ fn launch_history_updates_and_serves_only_registered_attachments() {
         serde_json::from_str::<serde_json::Value>(&body).unwrap()["state"],
         "passed"
     );
+    let (status, body) = http(port, "GET", "/api/v1/runs/123-456", None);
+    assert_eq!(status, 200, "{body}");
+    let adapted: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(adapted["report"]["tests"][0]["name"], "example");
+    assert_eq!(adapted["report"]["tests"][0]["status"], "passed");
+    assert_eq!(adapted["report"]["suites"][0]["totals"]["passed"], 1);
+    assert_eq!(
+        adapted["report"]["tests"][0]["attachments"][0]["href"],
+        "/api/v1/launches/123-456/cases/0/attachments/attachment-1-1.bin"
+    );
+    assert_eq!(
+        adapted["report"]["diagnostics"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(adapted["rerun"]["supported"], false);
+    let (_, body) = http(port, "GET", "/api/v1/runs/latest?lite=1", None);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap()["run_id"],
+        "123-456"
+    );
+    let bench = root.join("target/airbug-report/runs/123-457");
+    std::fs::create_dir_all(&bench).unwrap();
+    let fixture = serde_json::json!({"version":1,"id":"123-457","kind":"bench","title":"direct cargo bench","state":"passed",
+        "tests":[{"suite":"demo","name":"sum","status":"passed","duration":0.2,"ns_per_op":42.5}]});
+    std::fs::write(bench.join("run.json"), fixture.to_string()).unwrap();
+    let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
+    let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(timeline["runs"][0]["href"], "#/tests/123-457");
+    let (status, body) = http(port, "GET", "/api/v1/runs/123-457", None);
+    assert_eq!(status, 200, "{body}");
+    let adapted: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(adapted["report"]["kind"], "bench");
+    assert_eq!(adapted["report"]["tests"][0]["ns_per_op"], 42.5);
+    assert_eq!(adapted["report"]["tests"][0]["duration_s"], 0.2);
+    let (_, html) = http(port, "GET", "/", None);
+    assert!(!html.contains("panel-launches"));
+    assert!(!html.contains("/static/runs.js"));
     drop(hub);
     std::fs::remove_dir_all(root).unwrap();
 }

@@ -11,7 +11,6 @@
     const CATS = [
       { id: "now", label: "Now" },
       { id: "runs", label: "Runs" },
-      { id: "launches", label: "Launch details" },
       { id: "tests", label: "Tests" },
       { id: "bench", label: "Bench" },
       { id: "issues", label: "Issues" },
@@ -21,12 +20,11 @@
     ];
     /** Old routes keep working: package tabs folded into System, overview became Now. */
     const ALIASES = {
-      overview: "now", unit: "tests", mon: "system", otel: "system", err: "system",
+      launches: "tests", overview: "now", unit: "tests", mon: "system", otel: "system", err: "system",
       collector: "system", apis: "system",
     };
     const CAT_LEDE = {
       now: "What is running, what just broke, and what changed since the last run.",
-      launches: "Per-case progress, steps and attachments from airbug_report and cargo bench.",
       runs: "Every test and bench run, newest first — live ones on top.",
       tests: "Per-test results from cargo airbug test: failures first, steps, diffs, history.",
       bench: "Live and finished bench runs (GUID sessions).",

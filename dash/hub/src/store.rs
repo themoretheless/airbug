@@ -225,7 +225,7 @@ fn case_runs(root: &Path) -> Vec<RunItem> {
                 state,
                 started_at_ms: run["created_ms"].as_u64().unwrap_or(0),
                 updated_at_ms,
-                href: format!("#/launches/{id}"),
+                href: format!("#/tests/{id}"),
                 git: None,
                 totals: Some(Totals {
                     total,
@@ -323,7 +323,22 @@ pub fn resolve_test_run(root: &Path, id: &str) -> Result<String> {
 /// command + status history of unstable tests. `lite` drops the per-test payload (for the
 /// "Now" page, which only needs totals, changes and the flaky list).
 pub fn test_run_detail(root: &Path, id: &str, lite: bool) -> Result<Value> {
-    let id = resolve_test_run(root, id)?;
+    let case_items = case_runs(root);
+    let requested = if id == "latest" {
+        test_runs(root, 1)
+            .into_iter()
+            .chain(case_items.iter().filter(|r| r.kind == "test").cloned())
+            .max_by_key(|r| r.started_at_ms)
+            .map(|r| r.run_id)
+            .unwrap_or_else(|| id.into())
+    } else {
+        id.into()
+    };
+    if let Some(item) = case_items.iter().find(|r| r.run_id == requested) {
+        return crate::test_runs::dashboard_detail(root, &requested, item, lite)
+            .map_err(Into::into);
+    }
+    let id = resolve_test_run(root, &requested)?;
     let dir = runs_dir(root).join(&id);
     let item = test_run_item(&dir).ok_or_else(|| HubError::msg("not found"))?;
     let manifest: Value = read(&dir.join("manifest.json")).unwrap_or(Value::Null);

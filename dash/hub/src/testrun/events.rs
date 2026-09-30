@@ -94,6 +94,33 @@ pub fn fold(collector: &mut Collector, dir: &Path) {
     fold_text(collector, &text);
 }
 
+/// Case-isolated reporter directories already identify the owning case.
+/// Normalize the owner so the same event parser serves both run formats.
+pub fn fold_case(test: &mut super::model::TestCase, events: &[serde_json::Value]) {
+    let mut collector = Collector::default();
+    collector.list_line("Running unittests src/lib.rs (target/debug/deps/case)");
+    collector.list_line("case: test");
+    let text = events
+        .iter()
+        .map(|event| {
+            let mut event = event.clone();
+            if let Some(raw) = event.as_object_mut() {
+                raw.insert("bin".into(), serde_json::json!("case"));
+                raw.insert("test".into(), serde_json::json!("case"));
+            }
+            event.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fold_text(&mut collector, &text);
+    if let Some(parsed) = collector.report.tests.into_iter().next() {
+        test.steps = parsed.steps;
+        test.comparisons = parsed.comparisons;
+        test.attachments = parsed.attachments;
+        test.flaky = parsed.flaky;
+    }
+}
+
 fn fold_text(collector: &mut Collector, text: &str) {
     let mut nodes: Vec<Node> = Vec::new();
     let mut by_id: HashMap<(u32, u64), usize> = HashMap::new();

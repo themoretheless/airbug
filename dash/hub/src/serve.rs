@@ -66,13 +66,6 @@ fn handle(stream: &mut TcpStream, app: &HubApp) -> std::io::Result<()> {
             "text/javascript; charset=utf-8",
             DASHBOARD_JS,
         ),
-        ("GET", "/static/runs.js") => http::respond(
-            stream,
-            "200 OK",
-            "text/javascript; charset=utf-8",
-            include_str!("../static/runs.js"),
-        ),
-
         ("GET", "/static/testrun.css") => {
             http::respond(stream, "200 OK", "text/css; charset=utf-8", TESTRUN_CSS)
         }

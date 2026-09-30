@@ -123,6 +123,93 @@ pub fn attachment(root: &Path, id: &str, index: usize, file: &str) -> io::Result
     read_bounded(&path, 1024 * 1024)
 }
 
+/// Adapt recorded case runs to the current dashboard report contract.
+pub fn dashboard_detail(
+    root: &Path,
+    id: &str,
+    item: &crate::store::RunItem,
+    lite: bool,
+) -> io::Result<Value> {
+    use crate::testrun::{events, model::TestCase};
+    let run = detail(root, id)?;
+    let mut tests = Vec::new();
+    let mut suites = std::collections::BTreeMap::<String, Value>::new();
+    let mut diagnostics = Vec::new();
+    if !lite {
+        for (index, raw) in run["tests"].as_array().unwrap().iter().enumerate() {
+            let mut test = TestCase {
+                id: format!("case-{index}"),
+                suite: raw["suite"].as_str().unwrap_or("Cases").into(),
+                name: raw["name"].as_str().unwrap_or("Unnamed case").into(),
+                status: serde_json::from_value(json!(match raw["status"]
+                    .as_str()
+                    .unwrap_or("queued")
+                {
+                    "broken" => "failed",
+                    "cancelled" => "not_run",
+                    "queued" | "running" => "pending",
+                    s => s,
+                }))?,
+                output: raw["output"].as_str().map(str::to_owned),
+                ..TestCase::default()
+            };
+            let case = case(root, id, index)?;
+            events::fold_case(&mut test, case["events"].as_array().unwrap());
+            diagnostics.extend(case["warnings"].as_array().into_iter().flatten().cloned());
+            let mut test = serde_json::to_value(test)?;
+            if raw["status"] == "running" {
+                test["status"] = json!("running");
+            }
+            let suite = suites.entry(test["suite"].as_str().unwrap().into()).or_insert_with(|| json!({
+                "id": test["suite"], "state": "done", "totals": {"total": 0, "passed": 0, "failed": 0, "ignored": 0, "not_run": 0, "completed": 0}
+            }));
+            let status = test["status"].as_str().unwrap();
+            suite["totals"]["total"] = json!(suite["totals"]["total"].as_u64().unwrap() + 1);
+            if matches!(status, "pending" | "running") {
+                suite["state"] = json!("running");
+            } else {
+                suite["totals"][status] = json!(suite["totals"][status].as_u64().unwrap_or(0) + 1);
+                suite["totals"]["completed"] =
+                    json!(suite["totals"]["completed"].as_u64().unwrap() + 1);
+            }
+            test["duration_s"] = raw["duration"].clone();
+            test["ns_per_op"] = raw["ns_per_op"].clone();
+            fn links(node: &mut Value, id: &str, index: usize) {
+                if let Some(attachments) = node["attachments"].as_array_mut() {
+                    for a in attachments {
+                        a["href"] = json!(format!(
+                            "/api/v1/launches/{id}/cases/{index}/attachments/{}",
+                            a["file"].as_str().unwrap_or("")
+                        ));
+                    }
+                }
+                for field in ["steps", "children"] {
+                    if let Some(children) = node[field].as_array_mut() {
+                        for child in children {
+                            links(child, id, index);
+                        }
+                    }
+                }
+            }
+            links(&mut test, id, index);
+            tests.push(test);
+        }
+    }
+    Ok(json!({
+        "run_id": id, "item": item,
+        "manifest": {"runner": if item.kind == "bench" {"cargo-bench"} else {"airbug_report"}},
+        "progress": {"duration_s": run["duration"]},
+        "report": if lite { Value::Null } else { json!({
+            "schema": "airbug.test-report/1", "run_id": id, "title": run["title"],
+            "kind": item.kind, "state": run["state"], "started_at_ms": run["created_ms"],
+            "duration_s": run["duration"], "totals": item.totals, "tests": tests,
+            "suites": suites.into_values().collect::<Vec<_>>(), "diagnostics": diagnostics,
+        }) },
+        "history": {"runs": [], "tests": {}}, "flaky": [],
+        "rerun": {"supported": false},
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

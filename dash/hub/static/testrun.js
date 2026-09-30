@@ -7,8 +7,8 @@
 (function (global) {
   "use strict";
 
-  const ORDER = { failed: 0, not_run: 1, pending: 2, passed: 3, ignored: 4 };
-  const LABEL = { failed: "failed", passed: "passed", ignored: "ignored", not_run: "not run", pending: "pending" };
+  const ORDER = { running: 2, failed: 0, not_run: 1, pending: 2, passed: 3, ignored: 4 };
+  const LABEL = { running: "running", failed: "failed", passed: "passed", ignored: "ignored", not_run: "not run", pending: "pending" };
   const FILTERS = [
     { id: "problems", label: "problems", test: t => t.status === "failed" || t.status === "not_run" },
     { id: "failed", label: "failed", test: t => t.status === "failed" },
@@ -235,7 +235,7 @@
       const activity = live && state.data.progress && state.data.progress.activity
         ? `<div class="atr-activity">${esc(state.data.progress.activity)}</div>` : "";
       const counter = t.total
-        ? `${t.completed}/${t.total} tests`
+        ? `${t.completed}/${t.total} ${r.kind === "bench" ? "benchmarks" : "tests"}`
         : (r.state === "building" ? "building…" : "no tests");
 
       const filters = allFilters();
@@ -417,7 +417,7 @@
       }
 
       const total = (r.tests || []).length;
-      countEl.textContent = shown === total ? `${total} tests` : `${shown} of ${total} tests`;
+      countEl.textContent = shown === total ? `${total} ${r.kind === "bench" ? "benchmarks" : "tests"}` : `${shown} of ${total} ${r.kind === "bench" ? "benchmarks" : "tests"}`;
       if (!groups.length) {
         const live = r.state === "running" || r.state === "building";
         el.innerHTML = `<div class="atr-empty">${
@@ -519,6 +519,8 @@
       const parts = [];
       if (t.ignore_reason) parts.push(`<div class="muted">ignored: ${esc(t.ignore_reason)}</div>`);
       if (t.flaky && t.flaky.length) parts.push(`<div class="muted">marked flaky: ${esc(t.flaky.join("; "))}</div>`);
+      if (t.duration_s != null) parts.push(`<div class="muted">duration: ${esc(fmtDuration(t.duration_s))}</div>`);
+      if (t.ns_per_op != null) parts.push(`<div class="muted">median: ${esc(t.ns_per_op)} ns/op</div>`);
       if (t.output) parts.push(`<div class="atr-block"><h3>output</h3><pre>${esc(t.output)}</pre></div>`);
       if (t.comparisons && t.comparisons.length) parts.push(t.comparisons.map(comparison).join(""));
       if (t.steps && t.steps.length) parts.push(`<div class="atr-block"><h3>steps</h3><ul class="atr-steps">${t.steps.map(step).join("")}</ul></div>`);
@@ -574,8 +576,8 @@
 
     function attachments(list) {
       return `<div class="atr-atts">${list.map(a => {
-        const href = files() + "events/" + encodeURIComponent(a.file);
-        const key = a.file;
+        const href = a.href || files() + "events/" + encodeURIComponent(a.file);
+        const key = a.href || a.file;
         const loaded = state.attachmentText.get(key);
         const view = isText(a.media_type)
           ? `<button type="button" data-view="${esc(key)}">${loaded != null ? "hide" : "view"}</button>` : "";
@@ -646,7 +648,7 @@
           paint();
           return;
         }
-        const href = files() + "events/" + encodeURIComponent(key);
+        const href = key.startsWith("/api/v1/launches/") ? key : files() + "events/" + encodeURIComponent(key);
         fetch(href, { cache: "no-store" })
           .then(res => (res.ok ? res.text() : Promise.reject(new Error(res.status))))
           .then(text => {

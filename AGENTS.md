@@ -106,7 +106,7 @@ Checks, in order:
 cargo run -p airbug --features json --bin airbug_report -- --all-features --locked --doc-tests
 ```
 
-The hub's `/#/launches` tab displays test and benchmark launch history, case progress,
+The hub's `/#/runs` tab displays test and benchmark launch history, case progress,
 output, steps, comparisons and attachments. Verify the hub's root before handing
 out its URL, as above. Test execution is sequential with one process per case;
 duration includes process startup. Doctests are an aggregate suite.
@@ -144,7 +144,7 @@ cargo airbug test -- --workspace --exclude airbug-mon   # anything after -- goes
   is the equivalent shell command — prefer running that yourself when you have a terminal.
 - Bench regressions at a glance: `GET /api/v1/bench/compare` compares the newest finished
   bench run with the previous one that has the same cases and environment (Now page).
-- `airbug_report` also records live case history at `/#/launches` and final snapshots at `/report/`.
+- `airbug_report` also records live case history at `/#/runs` and final snapshots at `/report/`.
 
 ## Deeper docs
 

@@ -465,7 +465,7 @@ cargo run -p airbug --features json --bin airbug_report -- --all-features --lock
 cargo run -p airbug --features json --bin airbug_report -- --filter checkout -- -p airbug --test reporting
 ```
 
-Open the hub's **Launch details** tab (`/#/launches`). Every launch has its own
+Open the hub's **Runs** tab (`/#/runs`). Every launch has its own
 `target/airbug-report/runs/<id>/run.json`; the hub polls it every second and keeps
 up to 100 recent launches visible. Existing `report.json` and `index.html` remain
 final snapshots for CI and `/report/`. An output directory outside the default
