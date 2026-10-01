@@ -1,0 +1,142 @@
+{
+  "upstream": "Criterion 0.8.2 src/bencher.rs",
+  "status": "source_mapping_with_focused_lifecycle_tests",
+  "methods": [
+    {
+      "owner": "Bencher",
+      "upstream": "iter",
+      "line": 83,
+      "airbug": "Suite::bench_measured",
+      "policy": "InsideTiming; Batches(1) gives one measurement start/end pair for the full iteration batch"
+    },
+    {
+      "owner": "Bencher",
+      "upstream": "iter_custom",
+      "line": 132,
+      "airbug": "Suite::bench_measured_custom",
+      "policy": "Caller returns typed batch total; independent wall scheduling"
+    },
+    {
+      "owner": "Bencher",
+      "upstream": "iter_with_setup",
+      "line": 143,
+      "airbug": "Suite::bench_measured_with_owned_input",
+      "policy": "OutsideTiming; PerIteration"
+    },
+    {
+      "owner": "Bencher",
+      "upstream": "iter_with_large_drop",
+      "line": 185,
+      "airbug": "Suite::bench_measured_with_input",
+      "policy": "Unit setup; OutsideTiming; SmallInput"
+    },
+    {
+      "owner": "Bencher",
+      "upstream": "iter_batched",
+      "line": 234,
+      "airbug": "Suite::bench_measured_with_owned_input",
+      "policy": "OutsideTiming; explicit BatchPolicy"
+    },
+    {
+      "owner": "Bencher",
+      "upstream": "iter_batched_ref",
+      "line": 322,
+      "airbug": "Suite::bench_measured_with_input",
+      "policy": "OutsideTiming; explicit BatchPolicy; input drop outside"
+    },
+    {
+      "owner": "Bencher",
+      "upstream": "to_async",
+      "line": 379,
+      "airbug": "Suite::bench_async_measured family",
+      "policy": "Executor factory initialized before custom and wall clocks"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter",
+      "line": 428,
+      "airbug": "Suite::bench_async_measured",
+      "policy": "InsideTiming; Batches(1) gives one measurement start/end pair for the full iteration batch"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter_custom",
+      "line": 484,
+      "airbug": "Suite::bench_async_measured_custom",
+      "policy": "Caller returns typed batch total; independent wall scheduling"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter_with_setup",
+      "line": 499,
+      "airbug": "Suite::bench_async_measured_with_owned_input",
+      "policy": "OutsideTiming; PerIteration"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter_with_large_drop",
+      "line": 543,
+      "airbug": "Suite::bench_async_measured_with_input",
+      "policy": "Unit setup; OutsideTiming; SmallInput"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter_with_large_setup",
+      "line": 552,
+      "airbug": "Suite::bench_async_measured_with_owned_input",
+      "policy": "OutsideTiming; Batches(1)"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter_batched",
+      "line": 604,
+      "airbug": "Suite::bench_async_measured_with_owned_input",
+      "policy": "OutsideTiming; explicit BatchPolicy"
+    },
+    {
+      "owner": "AsyncBencher",
+      "upstream": "iter_batched_ref",
+      "line": 700,
+      "airbug": "Suite::bench_async_measured_with_input",
+      "policy": "OutsideTiming; explicit BatchPolicy; input drop outside"
+    }
+  ],
+  "validation": {
+    "command": "cargo test --offline --locked -p airbug-bench --all-features --test measurements",
+    "passed": 24,
+    "failed": 0
+  },
+  "limitations": [
+    "Method-set equality is not full semantic equivalence",
+    "Batch selection must be explicit to reproduce upstream wave boundaries",
+    "Visual formatter and report-entrypoint review remain open"
+  ],
+  "timing_boundary_audit": {
+    "sources": [
+      "criterion-0.8.2/src/bencher.rs:83-96",
+      "criterion-0.8.2/src/bencher.rs:428-445",
+      "bench/src/suite.rs::bench_measured",
+      "bench/src/suite.rs::bench_async_measured_with_input"
+    ],
+    "correction": "Previous PerIteration mapping was incorrect: Criterion iter measures the whole loop once. Use Batches(1) for matching measurement-hook granularity.",
+    "evidence": "bench/tests/measurements.rs::plain_measured_single_batch_brackets_all_operations_and_output_drops checks sync and async paths: seven operations plus seven output drops yield one typed value per sample, twice.",
+    "native_difference": "Criterion AsyncBencher enters its executor once around the loop and starts measurement inside that future. Airbug async measured adapters enter the executor for each operation inside the measured batch. Executor construction remains outside timing. Hook granularity and destruction coverage do not imply identical executor overhead.",
+    "remaining": "Batch-size formulas now verified for all five policies. Exact async executor-overhead equivalence is not claimed; lifecycle and report acceptance remain tracked separately.",
+    "validation": "Focused sync/async integration test and measurement-test Clippy passed on macOS."
+  },
+  "batch_policy_audit": {
+    "source": "criterion-0.8.2/src/lib.rs:242-251",
+    "mapping": {
+      "SmallInput": "ceil(iterations / 10)",
+      "LargeInput": "ceil(iterations / 1000)",
+      "PerIteration": "1",
+      "NumBatches(n)": "BatchPolicy::Batches(n): ceil(iterations / n)",
+      "NumIterations(n)": "BatchPolicy::Iterations(n): n"
+    },
+    "contracts": "Final wave is capped to the remaining operations. All operations contribute to the typed batch total. Explicit count parameters use NonZeroU64.",
+    "native_difference": "Airbug div_ceil avoids the overflow possible in upstream (iterations + divisor - 1). Zero iterations are not a measured sample; calculated batch size is clamped to at least one.",
+    "test": "bench/tests/measurements.rs::measured_batch_policies_keep_remainders_and_total_work",
+    "coverage": "All five policies, non-divisible sizes, and a requested batch larger than the complete sample.",
+    "validation": "All 24 measurement integration tests and focused Clippy passed on macOS."
+  }
+}

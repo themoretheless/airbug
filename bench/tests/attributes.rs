@@ -2080,7 +2080,7 @@ fn registration_thread_matrix_replaces_defaults_with_truthful_names() {
         [3, 12]
     );
     assert!(suite.registration_threads(&[]).is_err());
-    assert!(suite.registration_threads(&[257]).is_err());
+    assert!(suite.registration_threads(&[257]).is_ok());
 }
 
 #[airbug_bench::bench(args = [f64::INFINITY, -10.0, f64::NEG_INFINITY, 0.0, 10.0])]
@@ -2536,4 +2536,785 @@ fn bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields()
             )
             .is_err()
     );
+}
+
+#[airbug_bench::group(threads = [1, 2], iterations = 3, samples = 1, warmup_ms = 0)]
+mod plain_worker_outputs {
+    use std::{
+        rc::Rc,
+        sync::atomic::{AtomicUsize, Ordering},
+        thread::ThreadId,
+    };
+    pub static DROPS: AtomicUsize = AtomicUsize::new(0);
+    pub struct Output {
+        owner: ThreadId,
+        _local: Rc<()>,
+    }
+    impl Drop for Output {
+        fn drop(&mut self) {
+            assert_eq!(self.owner, std::thread::current().id());
+            DROPS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    fn output() -> Output {
+        Output {
+            owner: std::thread::current().id(),
+            _local: Rc::new(()),
+        }
+    }
+    #[bench]
+    fn default_drop() -> Output {
+        output()
+    }
+    #[bench(drop_output = "outside")]
+    fn deferred_drop() -> Output {
+        output()
+    }
+}
+
+#[test]
+fn plain_threaded_cases_keep_non_send_outputs_on_their_worker() {
+    let mut suite = Suite::new("local-results");
+    plain_worker_outputs::__airbug_register_group(&mut suite);
+    assert_eq!(suite.list("").len(), 4);
+    assert_eq!(plain_worker_outputs::DROPS.load(Ordering::SeqCst), 0);
+    let run = suite.run("").unwrap();
+    assert_eq!(plain_worker_outputs::DROPS.load(Ordering::SeqCst), 18);
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        18
+    );
+}
+
+#[airbug_bench::group]
+mod imported_worker_defaults {
+    #[bench]
+    fn local_output() -> std::rc::Rc<()> {
+        std::rc::Rc::new(())
+    }
+    #[bench(threads = [3])]
+    fn override_workers() {}
+    #[bench(threads = false, args = [std::rc::Rc::new(())])]
+    fn stay_local(value: &std::rc::Rc<()>) {
+        assert_eq!(std::rc::Rc::strong_count(value), 1);
+    }
+}
+#[airbug_bench::group(groups = [crate::imported_worker_defaults], threads = [1, 2], samples = 1, iterations = 1, warmup_ms = 0)]
+mod importing_workers {}
+
+#[airbug_bench::group(groups = [crate::imported_worker_defaults], threads = false)]
+mod importing_sequential {}
+#[airbug_bench::group(groups = [crate::importing_sequential], threads = [2])]
+mod importing_nested_workers {}
+
+#[test]
+fn imported_worker_defaults_select_paths_and_restore_after_unwind() {
+    let mut suite = Suite::new("imported-workers");
+    importing_workers::__airbug_register_group(&mut suite);
+    let names = suite.list("");
+    assert_eq!(names.len(), 4, "{names:?}");
+    assert!(names.iter().any(|n| n.ends_with("local_output/threads=1")));
+    assert!(names.iter().any(|n| n.ends_with("local_output/threads=2")));
+    assert!(
+        names
+            .iter()
+            .any(|n| n.ends_with("override_workers/threads=3"))
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("stay_local") && !n.contains("threads="))
+    );
+    assert!(suite.inherited_thread_counts().is_none());
+    let run = suite.run("").unwrap();
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        7
+    );
+
+    suite.with_thread_defaults(Some(vec![2]), |suite| {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            suite.with_thread_defaults(None, |suite| {
+                assert!(suite.inherited_thread_counts().is_none());
+                panic!("restore thread defaults");
+            });
+        }));
+        assert!(result.is_err());
+        assert_eq!(suite.inherited_thread_counts(), Some(vec![2]));
+    });
+    assert!(suite.inherited_thread_counts().is_none());
+
+    let mut sequential = Suite::new("sequential-override");
+    importing_nested_workers::__airbug_register_group(&mut sequential);
+    let names = sequential.list("");
+    assert_eq!(names.len(), 3);
+    assert!(names.iter().any(|n| n.ends_with("local_output")));
+    assert!(
+        names
+            .iter()
+            .any(|n| n.ends_with("override_workers/threads=3"))
+    );
+
+    let mut overridden = Suite::new("runtime-workers");
+    overridden.registration_threads(&[4]).unwrap();
+    importing_workers::__airbug_register_group(&mut overridden);
+    let names = overridden.list("");
+    assert_eq!(names.len(), 3);
+    assert_eq!(names.iter().filter(|n| n.ends_with("threads=4")).count(), 2);
+}
+
+#[airbug_bench::group(samples = 1, iterations = 1, warmup_ms = 0)]
+mod imported_parameter_workers {
+    use std::{
+        rc::Rc,
+        sync::atomic::{AtomicUsize, Ordering},
+        thread::ThreadId,
+    };
+    pub static OUTPUTS: AtomicUsize = AtomicUsize::new(0);
+    pub static EXECUTORS: AtomicUsize = AtomicUsize::new(0);
+    pub struct LocalOutput(Rc<()>, ThreadId);
+    impl Drop for LocalOutput {
+        fn drop(&mut self) {
+            assert_eq!(self.1, std::thread::current().id());
+            assert_eq!(Rc::strong_count(&self.0), 1);
+            OUTPUTS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    pub struct LocalExecutor(Rc<()>, ThreadId);
+    impl airbug_bench::workloads::Executor for LocalExecutor {
+        fn block_on<F: std::future::Future>(&mut self, future: F) -> F::Output {
+            assert_eq!(self.1, std::thread::current().id());
+            assert_eq!(Rc::strong_count(&self.0), 1);
+            airbug_bench::workloads::LocalExecutor.block_on(future)
+        }
+    }
+    fn executor() -> LocalExecutor {
+        EXECUTORS.fetch_add(1, Ordering::SeqCst);
+        LocalExecutor(Rc::new(()), std::thread::current().id())
+    }
+    #[bench(args = [2usize, 3], drop_output = "outside")]
+    fn values(n: usize) -> LocalOutput {
+        assert!([2, 3].contains(&n));
+        LocalOutput(Rc::new(()), std::thread::current().id())
+    }
+    #[bench(args = [String::from("hello")])]
+    fn borrowed(value: &str) -> usize {
+        value.len()
+    }
+    #[bench(executor = executor(), args = [String::from("async")])]
+    async fn async_borrowed(value: &str) -> usize {
+        std::future::ready(value.len()).await
+    }
+    #[bench(executor = executor(), args = [1usize, 2])]
+    async fn async_values(value: usize) -> usize {
+        std::future::ready(value).await
+    }
+    #[bench(executor = executor(), drop_output = "outside")]
+    async fn asynchronous() -> LocalOutput {
+        let result = LocalOutput(Rc::new(()), std::thread::current().id());
+        let mut pending = true;
+        std::future::poll_fn(|cx| {
+            if std::mem::take(&mut pending) {
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            } else {
+                std::task::Poll::Ready(())
+            }
+        })
+        .await;
+        result
+    }
+}
+#[airbug_bench::group(groups = [crate::imported_parameter_workers], threads = [1, 2])]
+mod parameter_worker_parent {}
+#[airbug_bench::group(samples = 1, iterations = 1, warmup_ms = 0)]
+mod imported_unshareable_arguments {
+    #[bench(args = [std::rc::Rc::new(5)])]
+    fn local(value: &std::rc::Rc<i32>) -> i32 {
+        **value
+    }
+    #[bench(args = [std::rc::Rc::new(7)])]
+    async fn async_local(value: &std::rc::Rc<i32>) -> i32 {
+        std::future::ready(**value).await
+    }
+}
+#[airbug_bench::group]
+mod imported_async_unshareable_arguments {
+    #[bench(args = [std::rc::Rc::new(7)])]
+    async fn local(value: &std::rc::Rc<i32>) -> i32 {
+        std::future::ready(**value).await
+    }
+}
+#[test]
+fn imported_threads_cover_values_borrows_async_and_reject_unshareable_inputs_lazily() {
+    let mut suite = Suite::new("parameter-workers");
+    parameter_worker_parent::__airbug_register_group(&mut suite);
+    assert_eq!(suite.list("").len(), 14);
+    assert_eq!(
+        imported_parameter_workers::EXECUTORS.load(Ordering::SeqCst),
+        0
+    );
+    assert_eq!(
+        imported_parameter_workers::OUTPUTS.load(Ordering::SeqCst),
+        0
+    );
+    let run = suite.run("").unwrap();
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        21
+    );
+    assert_eq!(
+        imported_parameter_workers::EXECUTORS.load(Ordering::SeqCst),
+        12
+    );
+    assert_eq!(
+        imported_parameter_workers::OUTPUTS.load(Ordering::SeqCst),
+        9
+    );
+
+    let mut local = Suite::new("local");
+    imported_unshareable_arguments::__airbug_register_group(&mut local);
+    assert_eq!(local.run("").unwrap().observations.len(), 2);
+    let mut rejected = Suite::new("rejected");
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rejected.with_thread_defaults(
+            Some(vec![2]),
+            imported_unshareable_arguments::__airbug_register_group,
+        );
+    }))
+    .unwrap_err();
+    let message = error.downcast_ref::<String>().unwrap();
+    assert!(
+        message.contains("cannot share its arguments between workers"),
+        "{message}"
+    );
+    assert!(rejected.inherited_thread_counts().is_none());
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rejected.with_thread_defaults(
+            Some(vec![2]),
+            imported_async_unshareable_arguments::__airbug_register_group,
+        );
+    }))
+    .unwrap_err();
+    let message = error.downcast_ref::<String>().unwrap();
+    assert!(
+        message.contains("cannot share its arguments or executor factory"),
+        "{message}"
+    );
+    assert!(rejected.inherited_thread_counts().is_none());
+}
+
+#[airbug_bench::group(samples = 1, iterations = 3, warmup_ms = 0)]
+mod imported_setup_workers {
+    use std::{
+        rc::Rc,
+        sync::{
+            OnceLock,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread::ThreadId,
+    };
+    pub static COORDINATOR: OnceLock<ThreadId> = OnceLock::new();
+    pub static SYNC_SETUPS: AtomicUsize = AtomicUsize::new(0);
+    pub static ASYNC_SETUPS: AtomicUsize = AtomicUsize::new(0);
+    pub static ASYNC_DROPS: AtomicUsize = AtomicUsize::new(0);
+    pub static SYNC_CALLER: AtomicUsize = AtomicUsize::new(0);
+    pub static ASYNC_CALLER: AtomicUsize = AtomicUsize::new(0);
+    pub struct Input {
+        values: Vec<usize>,
+        origin: ThreadId,
+    }
+    fn input(n: usize) -> Input {
+        assert_eq!(COORDINATOR.get(), Some(&std::thread::current().id()));
+        SYNC_SETUPS.fetch_add(1, Ordering::SeqCst);
+        Input {
+            values: vec![n; n],
+            origin: std::thread::current().id(),
+        }
+    }
+    pub struct LocalInput {
+        value: Rc<usize>,
+        origin: ThreadId,
+    }
+    impl Drop for LocalInput {
+        fn drop(&mut self) {
+            assert_eq!(self.origin, std::thread::current().id());
+            ASYNC_DROPS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    fn local_input(n: usize) -> LocalInput {
+        if COORDINATOR.get() == Some(&std::thread::current().id()) {
+            ASYNC_CALLER.fetch_add(1, Ordering::SeqCst);
+        }
+        ASYNC_SETUPS.fetch_add(1, Ordering::SeqCst);
+        LocalInput {
+            value: Rc::new(n),
+            origin: std::thread::current().id(),
+        }
+    }
+    #[bench(args = [2usize, 5], setup = input, input_items = |i: &Input| i.values.len() as u64)]
+    fn borrowed(input: &mut Input) -> usize {
+        if input.origin == std::thread::current().id() {
+            SYNC_CALLER.fetch_add(1, Ordering::SeqCst);
+        }
+        input.values.len()
+    }
+    #[bench(args = [2usize, 5], setup = input, drop_output = "outside")]
+    fn owned(input: Input) -> Vec<usize> {
+        if input.origin == std::thread::current().id() {
+            SYNC_CALLER.fetch_add(1, Ordering::SeqCst);
+        }
+        input.values
+    }
+    #[bench(args = [2usize, 5], setup = local_input, input_items = |i: &LocalInput| *i.value as u64, drop_output = "outside")]
+    async fn async_borrowed(input: &mut LocalInput) -> Rc<usize> {
+        assert_eq!(input.origin, std::thread::current().id());
+        std::future::ready(input.value.clone()).await
+    }
+    #[bench(args = [2usize, 5], setup = local_input, drop_output = "outside")]
+    async fn async_owned(input: LocalInput) -> Rc<usize> {
+        assert_eq!(input.origin, std::thread::current().id());
+        std::future::ready(input.value.clone()).await
+    }
+}
+#[airbug_bench::group(groups = [crate::imported_setup_workers], threads = [1, 2])]
+mod imported_setup_parent {}
+#[airbug_bench::group(samples = 1, iterations = 1, warmup_ms = 0)]
+mod imported_setup_non_send {
+    #[bench(setup = || std::rc::Rc::new(1))]
+    fn local(input: &mut std::rc::Rc<i32>) -> std::rc::Rc<i32> {
+        input.clone()
+    }
+}
+#[test]
+fn inherited_setup_threads_preserve_preparation_location_and_non_send_local_cases() {
+    use imported_setup_workers as cases;
+    cases::COORDINATOR.set(std::thread::current().id()).unwrap();
+    let mut suite = Suite::new("setup-workers");
+    imported_setup_parent::__airbug_register_group(&mut suite);
+    assert_eq!(suite.list("").len(), 16);
+    assert_eq!(cases::SYNC_SETUPS.load(Ordering::SeqCst), 0);
+    assert_eq!(cases::ASYNC_SETUPS.load(Ordering::SeqCst), 0);
+    let run = suite.run("").unwrap();
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        72
+    );
+    assert_eq!(cases::SYNC_SETUPS.load(Ordering::SeqCst), 36);
+    assert_eq!(cases::ASYNC_SETUPS.load(Ordering::SeqCst), 36);
+    assert_eq!(cases::ASYNC_DROPS.load(Ordering::SeqCst), 36);
+    assert_eq!(cases::SYNC_CALLER.load(Ordering::SeqCst), 12);
+    assert_eq!(cases::ASYNC_CALLER.load(Ordering::SeqCst), 12);
+    for case in &run.cases {
+        assert_eq!(
+            case.contract["threads.execution"],
+            if case.contract["threads"] == "1" {
+                "caller"
+            } else {
+                "spawned"
+            }
+        );
+    }
+    assert_eq!(
+        run.observations
+            .iter()
+            .filter_map(|o| o.work_totals.get("items"))
+            .map(|n| n.parse::<u64>().unwrap())
+            .sum::<u64>(),
+        126
+    );
+
+    let mut local = Suite::new("non-send-setup");
+    imported_setup_non_send::__airbug_register_group(&mut local);
+    assert_eq!(local.run("").unwrap().observations.len(), 1);
+    let mut rejected = Suite::new("rejected-setup");
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rejected.with_thread_defaults(
+            Some(vec![2]),
+            imported_setup_non_send::__airbug_register_group,
+        );
+    }))
+    .unwrap_err();
+    assert!(
+        error
+            .downcast_ref::<String>()
+            .unwrap()
+            .contains("cannot transfer setup inputs or outputs")
+    );
+    assert!(rejected.inherited_thread_counts().is_none());
+}
+
+#[airbug_bench::bench(setup = || 1usize, input_items = {
+    let count = std::rc::Rc::new(std::cell::Cell::new(0u64));
+    move |_: &usize| { count.set(count.get() + 1); count.get() }
+}, samples = 1, iterations = 3, warmup_ms = 0)]
+async fn local_async_counter(input: &mut usize) -> usize {
+    *input
+}
+#[test]
+fn inherited_setup_support_keeps_local_async_counter_state_legal() {
+    let mut suite = Suite::new("local-counter");
+    register_local_async_counter(&mut suite);
+    let run = suite.run("").unwrap();
+    assert_eq!(run.observations[0].work_totals["items"], "6");
+}
+
+#[airbug_bench::group(samples = 1, iterations = 2, warmup_ms = 0)]
+mod runtime_thread_opt_in {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    pub static CALLS: AtomicUsize = AtomicUsize::new(0);
+    #[bench]
+    fn regular() {
+        CALLS.fetch_add(1, Ordering::SeqCst);
+    }
+    #[bench(setup = || std::rc::Rc::new(1))]
+    fn unshareable(input: &mut std::rc::Rc<i32>) -> i32 {
+        **input
+    }
+    #[bench(custom = true)]
+    fn custom(n: u64) -> std::time::Duration {
+        std::time::Duration::from_nanos(n)
+    }
+    #[bench(threads = false, args = [std::rc::Rc::new(1)])]
+    fn sequential(input: &std::rc::Rc<i32>) -> i32 {
+        **input
+    }
+}
+#[test]
+fn runtime_threads_opt_in_validate_only_selected_cases_and_respect_false() {
+    let mut suite = Suite::new("runtime");
+    suite.registration_threads(&[1, 3]).unwrap();
+    runtime_thread_opt_in::__airbug_register_group(&mut suite);
+    let names = suite.list("");
+    assert_eq!(names.len(), 6, "{names:?}");
+    assert_eq!(
+        names
+            .iter()
+            .filter(|n| n.contains("regular/threads="))
+            .count(),
+        2
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("sequential") && !n.contains("threads="))
+    );
+    assert!(suite.run("").is_err());
+    assert_eq!(runtime_thread_opt_in::CALLS.load(Ordering::SeqCst), 0);
+    let run = suite.run("regular").unwrap();
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        8
+    );
+    assert_eq!(runtime_thread_opt_in::CALLS.load(Ordering::SeqCst), 8);
+    assert!(
+        suite
+            .run("unshareable")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot transfer setup inputs")
+    );
+    assert!(
+        suite
+            .run("custom")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot enable threads at runtime")
+    );
+    assert!(suite.run("sequential").is_ok());
+
+    let mut disabled = Suite::new("disabled");
+    disabled.registration_threads(&[1, 3]).unwrap();
+    disabled.with_thread_defaults(None, runtime_thread_opt_in::__airbug_register_group);
+    assert_eq!(disabled.list("").len(), 4);
+    assert!(disabled.list("").iter().all(|n| !n.contains("threads=")));
+    assert!(disabled.run("unshareable").is_ok());
+    assert_eq!(disabled.inherited_thread_counts(), Some(vec![1, 3]));
+}
+
+static CONDITIONAL_IGNORE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+static CONDITIONAL_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+#[airbug_bench::group(ignore = crate::CONDITIONAL_IGNORE.load(Ordering::SeqCst))]
+mod conditional_ignore_group {
+    use super::*;
+    #[bench]
+    fn inherited() {
+        CONDITIONAL_CALLS.fetch_add(1, Ordering::SeqCst);
+    }
+    #[bench(ignore = 1 > 2)]
+    fn enabled() {}
+}
+
+#[test]
+fn computed_ignore_defaults_are_evaluated_at_registration_and_can_be_overridden() {
+    use airbug_bench::Selection;
+    CONDITIONAL_IGNORE.store(true, Ordering::SeqCst);
+    let mut skipped = Suite::new("conditional");
+    conditional_ignore_group::__airbug_register_group(&mut skipped);
+    assert_eq!(skipped.list(""), ["conditional/enabled"]);
+    assert_eq!(
+        skipped.list_selected(&Selection {
+            only_ignored: true,
+            ..Default::default()
+        }),
+        ["conditional/inherited"]
+    );
+    skipped.config(fast_config());
+    skipped.run("").unwrap();
+    assert_eq!(CONDITIONAL_CALLS.load(Ordering::SeqCst), 0);
+    CONDITIONAL_IGNORE.store(false, Ordering::SeqCst);
+    let mut enabled = Suite::new("conditional");
+    conditional_ignore_group::__airbug_register_group(&mut enabled);
+    assert_eq!(enabled.list("").len(), 2);
+    enabled.config(fast_config());
+    enabled.run("").unwrap();
+    assert!(CONDITIONAL_CALLS.load(Ordering::SeqCst) > 0);
+    // A registered suite retains its selection even if the condition changes later.
+    assert_eq!(skipped.list(""), ["conditional/enabled"]);
+}
+
+#[test]
+fn one_inherited_worker_accepts_local_arguments_and_rejects_later_parallel_override() {
+    for runtime in [false, true] {
+        let mut suite = Suite::new("one-local");
+        if runtime {
+            suite.registration_threads(&[1]).unwrap();
+            imported_unshareable_arguments::__airbug_register_group(&mut suite);
+        } else {
+            suite.with_thread_defaults(
+                Some(vec![1]),
+                imported_unshareable_arguments::__airbug_register_group,
+            );
+        }
+        assert_eq!(suite.list("").len(), 2);
+        let run = suite.run("").unwrap();
+        assert_eq!(run.observations.len(), 2);
+        for case in &run.cases {
+            assert!(case.id.ends_with("threads=1"));
+            assert_eq!(case.contract["threads.execution"], "caller");
+            assert_eq!(case.contract["threads.local_only"], "true");
+        }
+        assert!(run.observations.iter().all(|o| o.operations == 1));
+        assert!(
+            suite
+                .thread_count(2)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("requires one worker")
+        );
+        suite.thread_count(1).unwrap();
+        assert_eq!(suite.run("").unwrap().observations.len(), 2);
+    }
+}
+
+#[airbug_bench::group(samples = 1, iterations = 2, warmup_ms = 0)]
+mod local_setup_one {
+    #[bench(setup = || std::rc::Rc::new(5), drop_output = "outside")]
+    fn borrowed(input: &mut std::rc::Rc<i32>) -> std::rc::Rc<i32> {
+        input.clone()
+    }
+    #[bench(setup = || std::rc::Rc::new(7), drop_output = "outside")]
+    fn owned(input: std::rc::Rc<i32>) -> std::rc::Rc<i32> {
+        input
+    }
+}
+
+#[test]
+fn one_worker_setup_accepts_local_inputs_outputs_and_async_captures() {
+    use airbug_bench::{DropPolicy, Sampling, threads::*, workloads::LocalExecutor};
+    use std::{marker::PhantomData, rc::Rc};
+    let mut suite = Suite::new("local-setup");
+    suite.with_thread_defaults(Some(vec![1]), local_setup_one::__airbug_register_group);
+    let borrowed = inherited_async_setup(
+        PhantomData::<Rc<()>>,
+        || LocalExecutor,
+        || Rc::new(11),
+        async |input: &mut Rc<i32>| input.clone(),
+    );
+    (&borrowed).register_inherited_async_setup(
+        &mut suite,
+        "async-borrowed",
+        1,
+        DropPolicy::OutsideTiming,
+    );
+    suite.sampling(Sampling {
+        iterations: Some(2),
+        ..Default::default()
+    });
+    let owned = inherited_async_owned_setup(
+        PhantomData::<Rc<()>>,
+        || LocalExecutor,
+        || Rc::new(13),
+        async |input: Rc<i32>| input,
+    );
+    (&owned).register_inherited_async_owned_setup(
+        &mut suite,
+        "async-owned",
+        1,
+        DropPolicy::OutsideTiming,
+    );
+    suite.config(Config {
+        samples: 1,
+        warmup: Duration::ZERO,
+        ..Default::default()
+    });
+    suite.sampling(Sampling {
+        iterations: Some(2),
+        ..Default::default()
+    });
+    let run = suite.run("").unwrap();
+    assert_eq!(run.cases.len(), 4);
+    assert!(
+        run.cases
+            .iter()
+            .all(|c| c.contract["threads.local_only"] == "true")
+    );
+    assert_eq!(run.worker_timings.len(), 4);
+    assert!(
+        run.worker_timings
+            .iter()
+            .all(|w| w.worker == 0 && w.operations == 2)
+    );
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        8
+    );
+    assert!(suite.thread_count(2).is_err());
+    run.validate().unwrap();
+}
+
+#[airbug_bench::group(samples = 1, iterations = 2, warmup_ms = 0)]
+mod explicit_local_worker {
+    use std::rc::Rc;
+    #[bench(threads = 1, args = [Rc::new(1)])]
+    fn argument(v: &Rc<i32>) -> Rc<i32> {
+        v.clone()
+    }
+    #[bench(threads = [1], args = [Rc::new(2)])]
+    async fn async_argument(v: &Rc<i32>) -> Rc<i32> {
+        v.clone()
+    }
+    #[bench(threads = 1, setup = || Rc::new(3))]
+    fn borrowed(v: &mut Rc<i32>) -> Rc<i32> {
+        v.clone()
+    }
+    #[bench(threads = 1, setup = || Rc::new(4))]
+    fn owned(v: Rc<i32>) -> Rc<i32> {
+        v
+    }
+}
+#[test]
+fn explicit_single_worker_attributes_accept_local_inputs_and_cli_override_rejects_sharing() {
+    let mut suite = Suite::new("explicit-local");
+    explicit_local_worker::__airbug_register_group(&mut suite);
+    let run = suite.run("").unwrap();
+    assert_eq!(run.cases.len(), 4);
+    assert!(
+        run.cases
+            .iter()
+            .all(|c| c.contract["threads.local_only"] == "true")
+    );
+    assert_eq!(run.worker_timings.len(), 4);
+    assert!(
+        run.worker_timings
+            .iter()
+            .all(|w| w.worker == 0 && w.operations == 2)
+    );
+    assert_eq!(
+        run.observations.iter().map(|o| o.operations).sum::<u64>(),
+        8
+    );
+    let mut parallel = Suite::new("reject-sharing");
+    parallel.registration_threads(&[2]).unwrap();
+    explicit_local_worker::__airbug_register_group(&mut parallel);
+    assert!(
+        parallel
+            .run("")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot share")
+    );
+}
+
+#[airbug_bench::bench(threads = 2, setup = || 1usize, input_items = {
+    let counter = std::sync::atomic::AtomicU64::new(0);
+    move |_: &usize| counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+}, samples = 1, iterations = 3, warmup_ms = 0)]
+async fn constructed_shared_async_counter(input: &mut usize) -> usize {
+    *input
+}
+
+#[airbug_bench::bench(setup = || 1usize, input_items = {
+    let mut count = 0u64;
+    move |_: &usize| { count += 1; count }
+}, samples = 1, iterations = 3, warmup_ms = 0)]
+async fn constructed_mutable_async_counter(input: &mut usize) -> usize {
+    *input
+}
+
+#[test]
+fn constructed_async_counters_support_local_inheritance_and_explicit_workers() {
+    let mut shared = Suite::new("constructed-shared");
+    register_constructed_shared_async_counter(&mut shared);
+    let run = shared.run("").unwrap();
+    assert_eq!(run.observations[0].operations, 6);
+    assert_eq!(run.observations[0].work_totals["items"], "21");
+    assert_eq!(run.observations[0].worker_work_totals.len(), 2);
+    assert_eq!(run.cases[0].contract["threads.execution"], "spawned");
+    for register in [
+        register_constructed_mutable_async_counter,
+        register_local_async_counter,
+    ] {
+        let mut local = Suite::new("constructed-local");
+        local.with_thread_defaults(Some(vec![1]), register);
+        let run = local.run("").unwrap();
+        assert_eq!(run.observations[0].operations, 3);
+        assert_eq!(run.observations[0].work_totals["items"], "6");
+        assert_eq!(run.observations[0].worker_work_totals[&0]["items"], "6");
+        assert_eq!(run.cases[0].contract["threads.execution"], "caller");
+    }
+}
+
+#[airbug_bench::group(samples = 0, iterations = 1, warmup_ms = 0)]
+mod zero_sample_group {
+    #[bench]
+    fn disabled() {
+        panic!("zero sample budget executed");
+    }
+    #[bench(samples = 1)]
+    fn enabled() {}
+    #[bench(samples = 1, iterations = 0)]
+    fn zero_iterations() {
+        panic!("zero iteration budget executed");
+    }
+}
+
+#[test]
+fn zero_sampling_disables_cases_and_child_values_can_enable_them() {
+    let mut suite = Suite::new("zero-budget");
+    zero_sample_group::__airbug_register_group(&mut suite);
+    let selection = airbug_bench::Selection {
+        include_ignored: true,
+        ..Default::default()
+    };
+    assert_eq!(suite.list_selected(&selection), ["zero-budget/enabled"]);
+    let run = suite.run_selected(&selection).unwrap();
+    assert_eq!(run.cases.len(), 1);
+    assert_eq!(run.observations.len(), 1);
+    let mut disabled = Suite::new("zero-global");
+    disabled.config(Config {
+        samples: 0,
+        ..Default::default()
+    });
+    disabled.bench("never", || panic!("disabled global budget executed"));
+    assert!(disabled.run("").unwrap().observations.is_empty());
+    disabled.sampling(airbug_bench::Sampling {
+        samples: Some(1),
+        iterations: Some(1),
+        warmup: Some(std::time::Duration::ZERO),
+        ..Default::default()
+    });
+    assert_eq!(disabled.list(""), ["zero-global/never"]);
 }

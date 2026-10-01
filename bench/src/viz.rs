@@ -774,7 +774,7 @@ impl Plot {
                 y + 4.,
                 self.palette.ink,
                 self.y.label(v),
-                self.y_suffix
+                esc(&self.y_suffix)
             ));
         }
         for v in self.x.ticks(self.x_ticks) {
@@ -795,7 +795,7 @@ impl Plot {
                 self.height - 14.,
                 self.palette.ink,
                 self.x.label(v),
-                self.x_suffix
+                esc(&self.x_suffix)
             ));
         }
     }
@@ -952,6 +952,28 @@ pub mod charts {
         x_scale: AxisScale,
         y_scale: AxisScale,
     ) -> String {
+        scatter_scaled_with_point_labels(
+            title,
+            series,
+            max_points,
+            notes,
+            x_scale,
+            y_scale,
+            |_, _| String::new(),
+        )
+    }
+
+    /// Scatter with per-point identities. Labels are resolved from original
+    /// coordinates only for points retained after domain filtering and thinning.
+    pub fn scatter_scaled_with_point_labels(
+        title: &str,
+        series: &[Series],
+        max_points: usize,
+        notes: &str,
+        x_scale: AxisScale,
+        y_scale: AxisScale,
+        point_label: impl Fn(&str, (f64, f64)) -> String,
+    ) -> String {
         let clean: Vec<_> = series
             .iter()
             .map(|series| {
@@ -992,7 +1014,14 @@ pub mod charts {
         for (i, s) in series.iter().enumerate() {
             let stride = s.points.len().div_ceil(max_points.max(1)).max(1);
             let points: Vec<_> = s.points.iter().step_by(stride).copied().collect();
-            plot.points(&points, Palette::LIGHT.series(i), 2.3);
+            for point in points {
+                plot.points_labeled(
+                    &[point],
+                    Palette::LIGHT.series(i),
+                    2.3,
+                    &point_label(&s.label, point),
+                );
+            }
         }
         plot.figure()
     }
@@ -1006,6 +1035,21 @@ pub mod charts {
         notes: &str,
         x_scale: AxisScale,
         y_scale: AxisScale,
+    ) -> crate::Result<String> {
+        line_scaled_with_point_labels(title, series, notes, x_scale, y_scale, |label, _| {
+            label.into()
+        })
+    }
+
+    /// Numeric family lines with per-point identity supplied independently of
+    /// series labels. The callback receives original coordinates after sorting.
+    pub fn line_scaled_with_point_labels(
+        title: &str,
+        series: &[Series],
+        notes: &str,
+        x_scale: AxisScale,
+        y_scale: AxisScale,
+        point_label: impl Fn(&str, (f64, f64)) -> String,
     ) -> crate::Result<String> {
         let mut ordered = Vec::with_capacity(series.len());
         for row in series {
@@ -1047,7 +1091,9 @@ pub mod charts {
             if row.points.len() > 1 {
                 plot.path_labeled(&row.points, color, 1.5, &row.label);
             }
-            plot.points_labeled(&row.points, color, 3., &row.label);
+            for &point in &row.points {
+                plot.points_labeled(&[point], color, 3., &point_label(&row.label, point));
+            }
         }
         Ok(plot.figure())
     }
@@ -1758,6 +1804,58 @@ mod tests {
         let svg = charts::dot_plot("t", &[(0., 1.), (2., f64::NAN)], 100, "");
         assert_eq!(svg.matches("<circle").count(), 1);
         assert!(!svg.contains("NaN"));
+    }
+
+    #[test]
+    fn scatter_point_labels_survive_domain_filtering_and_thinning() {
+        let calls = std::cell::RefCell::new(Vec::new());
+        let svg = charts::scatter_scaled_with_point_labels(
+            "scatter",
+            &[charts::Series::new(
+                "family",
+                vec![(-1., 1.), (1., 10.), (2., 20.), (3., 30.), (4., 40.)],
+            )],
+            2,
+            "",
+            charts::AxisScale::Logarithmic,
+            charts::AxisScale::Linear,
+            |_, point| {
+                calls.borrow_mut().push(point);
+                format!("case <{}>&", point.0)
+            },
+        );
+        assert_eq!(*calls.borrow(), [(1., 10.), (3., 30.)]);
+        assert_eq!(svg.matches("<circle").count(), 2);
+        assert!(svg.contains("case &lt;1&gt;&amp;: x = 1, y = 10"));
+        assert!(svg.contains("case &lt;3&gt;&amp;: x = 3, y = 30"));
+        assert!(svg.contains("Omitted 1 points"));
+    }
+
+    #[test]
+    fn family_point_labels_follow_sorted_coordinates_and_escape_case_names() {
+        let svg = charts::line_scaled_with_point_labels(
+            "family",
+            &[charts::Series::new("family", vec![(8., 80.), (2., 20.)])],
+            "",
+            charts::AxisScale::Linear,
+            charts::AxisScale::Linear,
+            |_, (x, _)| format!("case <input-{x}>&"),
+        )
+        .unwrap();
+        assert!(svg.contains("case &lt;input-2&gt;&amp;: x = 2, y = 20"));
+        assert!(svg.contains("case &lt;input-8&gt;&amp;: x = 8, y = 80"));
+        assert!(!svg.contains("<input-"));
+        assert!(svg.find("input-2").unwrap() < svg.find("input-8").unwrap());
+    }
+
+    #[test]
+    fn axis_suffixes_are_escaped_as_text() {
+        let mut plot = Plot::new("custom units").suffixes(" <x&unit>", " <y&unit>");
+        let svg = plot.svg();
+        assert!(svg.contains("&lt;x&amp;unit&gt;"));
+        assert!(svg.contains("&lt;y&amp;unit&gt;"));
+        assert!(!svg.contains("<x&unit>"));
+        assert!(!svg.contains("<y&unit>"));
     }
 
     #[test]

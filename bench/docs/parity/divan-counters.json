@@ -1,0 +1,143 @@
+{
+  "upstream": "Divan 0.1.21 src/counter/mod.rs",
+  "status": "native_capabilities_mapped",
+  "methods": [
+    {
+      "owner": "BytesCount",
+      "upstream": "new",
+      "line": 128,
+      "airbug": "Suite::work_units(unit, count); named fixed counter attribute"
+    },
+    {
+      "owner": "BytesCount",
+      "upstream": "of",
+      "line": 135,
+      "airbug": "counters::bytes_of"
+    },
+    {
+      "owner": "BytesCount",
+      "upstream": "of_many",
+      "line": 142,
+      "airbug": "counters::bytes_of_many"
+    },
+    {
+      "owner": "BytesCount",
+      "upstream": "of_val",
+      "line": 152,
+      "airbug": "counters::bytes_of_val"
+    },
+    {
+      "owner": "BytesCount",
+      "upstream": "of_iter",
+      "line": 159,
+      "airbug": "counters::bytes_of_iter"
+    },
+    {
+      "owner": "BytesCount",
+      "upstream": "of_str",
+      "line": 174,
+      "airbug": "counters::bytes_of_str"
+    },
+    {
+      "owner": "BytesCount",
+      "upstream": "of_slice",
+      "line": 184,
+      "airbug": "counters::bytes_of_slice"
+    },
+    {
+      "owner": "CharsCount",
+      "upstream": "new",
+      "line": 222,
+      "airbug": "Suite::work_units(unit, count); named fixed counter attribute"
+    },
+    {
+      "owner": "CharsCount",
+      "upstream": "of_str",
+      "line": 228,
+      "airbug": "counters::chars_of_str"
+    },
+    {
+      "owner": "CyclesCount",
+      "upstream": "new",
+      "line": 236,
+      "airbug": "Suite::work_units(unit, count); named fixed counter attribute"
+    },
+    {
+      "owner": "ItemsCount",
+      "upstream": "new",
+      "line": 244,
+      "airbug": "Suite::work_units(unit, count); named fixed counter attribute"
+    },
+    {
+      "owner": "ItemsCount",
+      "upstream": "of_iter",
+      "line": 250,
+      "airbug": "counters::items_of_iter"
+    }
+  ],
+  "macro_generated_helpers": {
+    "f32": "counters::bytes_of_many::<f32>(count)",
+    "f64": "counters::bytes_of_many::<f64>(count)",
+    "i8": "counters::bytes_of_many::<i8>(count)",
+    "u8": "counters::bytes_of_many::<u8>(count)",
+    "i16": "counters::bytes_of_many::<i16>(count)",
+    "u16": "counters::bytes_of_many::<u16>(count)",
+    "i32": "counters::bytes_of_many::<i32>(count)",
+    "u32": "counters::bytes_of_many::<u32>(count)",
+    "i64": "counters::bytes_of_many::<i64>(count)",
+    "u64": "counters::bytes_of_many::<u64>(count)",
+    "i128": "counters::bytes_of_many::<i128>(count)",
+    "u128": "counters::bytes_of_many::<u128>(count)",
+    "isize": "counters::bytes_of_many::<isize>(count)",
+    "usize": "counters::bytes_of_many::<usize>(count)"
+  },
+  "conversion_contracts": [
+    "Counter is sealed upstream; users cannot introduce new Counter implementations. Airbug supports explicit unit strings and u64 counts.",
+    "IntoCounter allows user wrappers to convert into one of the built-in counter types. Airbug accepts the converted numeric count as an attribute expression or work_units argument; trait-name compatibility is not required.",
+    "CountUInt, AsCountUInt and MaxCountUInt are crate-visible reexports, not public exported trait names. Primitive counts and nested reference expressions can be converted explicitly in Airbug.",
+    "BytesCount helpers count in-memory element sizes, not recursively allocated heap storage. Both of_iter helpers consume the iterator. CharsCount counts Unicode scalar values.",
+    "BytesCount::of_many takes usize upstream and u64 in Airbug. Both implementations use checked multiplication and panic on overflow."
+  ],
+  "evidence": [
+    "bench/src/counters.rs tests::sizes_empty_inputs_unicode_and_iterators",
+    "bench/src/counters.rs tests::size_multiplication_never_wraps",
+    "bench/tests/contracts.rs::dynamic_work_totals_exclude_pilot_and_warmup_and_drive_throughput",
+    "bench/docs/parity/numeric-domains.json"
+  ],
+  "limits": [
+    "No compatibility aliases for concrete counter types or generated helper names",
+    "Complete option/report semantics and platform limitations remain tracked separately"
+  ],
+  "semantic_audit": {
+    "sources": [
+      "divan-0.1.21/src/counter/mod.rs:125-256",
+      "divan-0.1.21/src/counter/uint.rs",
+      "divan-0.1.21/src/counter/collection.rs:35-112",
+      "divan-0.1.21/src/benchmark/mod.rs:193-255"
+    ],
+    "contracts": [
+      "Bytes helpers measure shallow in-memory layout; string/slice helpers dereference AsRef before measuring; character helpers count Unicode scalar values.",
+      "Iterator helpers consume owned items and their destruction occurs while counting, outside the measured operation when used in setup.",
+      "Fixed counters replace the same unit without discarding other units. Input counters supersede fixed counts of their unit.",
+      "Input counters are evaluated during input preparation on the sample worker. Airbug excludes pilot and warmup counts from measured totals.",
+      "u64 counts and u128 accumulated totals preserve exact integers before rate conversion."
+    ],
+    "native_differences": [
+      "Divan exposes four sealed counter types; Airbug accepts explicit units including bytes, items, chars and cycles.",
+      "Divan mean_count divides the u128 sum by count using integer division. Airbug computes weighted rates from exact accumulated work and elapsed time without truncating the mean work count.",
+      "Airbug work_units leaves dynamic declarations authoritative; override_work_units explicitly replaces dynamic declarations across registered cases. API compatibility is not required."
+    ],
+    "evidence": [
+      "counters::tests::sizes_empty_inputs_unicode_and_iterators",
+      "counters::tests::byte_helpers_use_value_layout_and_consume_owned_iterator_items",
+      "counters::tests::size_multiplication_never_wraps",
+      "suite::tests::runtime_counter_replaces_only_its_unit_in_fixed_and_dynamic_cases",
+      "bench/tests/attributes.rs::simultaneous_counters_and_unit_replacement_preserve_rates",
+      "bench/tests/attributes.rs::imported_groups_preserve_false_zero_dynamic_counters_and_nearest_defaults",
+      "bench/tests/contracts.rs::dynamic_work_totals_exclude_pilot_and_warmup_and_drive_throughput",
+      "bench/tests/contracts.rs::associated_work_counts_follow_timing_order_not_counter_order",
+      "bench/tests/worker_timings.rs::dynamic_worker_counts_follow_coordinator_slots_across_waves_and_validate"
+    ],
+    "validation": "Five focused counter tests passed on macOS; library/tests Clippy with all features passed. Related integration evidence comes from the preceding 68 attribute and 67 contract tests."
+  }
+}

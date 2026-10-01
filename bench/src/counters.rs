@@ -63,10 +63,59 @@ mod tests {
         assert_eq!(calls, 4);
     }
     #[test]
+    fn byte_helpers_use_value_layout_and_consume_owned_iterator_items() {
+        use std::cell::Cell;
+        let text = String::from("e\u{301}🦀");
+        assert_eq!(bytes_of_val(&text), bytes_of::<String>());
+        assert_eq!(bytes_of_str(&text), 7);
+        assert_eq!(chars_of_str(&text), 3);
+        let strings = [text];
+        assert_eq!(bytes_of_slice(&strings), bytes_of::<String>());
+        let erased: &dyn AsRef<str> = &strings[0];
+        assert_eq!(bytes_of_str(erased), 7);
+
+        struct Item<'a>(&'a Cell<usize>);
+        impl Drop for Item<'_> {
+            fn drop(&mut self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+        let dropped = Cell::new(0);
+        let visited = Cell::new(0);
+        let items = (0..3).map(|_| {
+            visited.set(visited.get() + 1);
+            Item(&dropped)
+        });
+        assert_eq!(bytes_of_iter(items), bytes_of_many::<Item<'_>>(3));
+        assert_eq!(visited.get(), 3);
+        assert_eq!(dropped.get(), 3);
+    }
+    #[test]
     #[should_panic(expected = "byte counter overflow")]
     fn size_multiplication_never_wraps() {
         bytes_of_many::<u64>(u64::MAX);
     }
+}
+
+thread_local! {
+    static WORKER: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+pub(crate) struct WorkerScope(Option<u64>, std::marker::PhantomData<std::rc::Rc<()>>);
+impl WorkerScope {
+    pub(crate) fn enter(worker: u64) -> Self {
+        Self(
+            WORKER.with(|slot| slot.replace(Some(worker))),
+            std::marker::PhantomData,
+        )
+    }
+}
+impl Drop for WorkerScope {
+    fn drop(&mut self) {
+        WORKER.with(|slot| slot.set(self.0));
+    }
+}
+pub(crate) fn worker_slot() -> Option<u64> {
+    WORKER.with(|slot| slot.get())
 }
 
 /// Shared accumulator for actual work performed by prepared inputs. Record counts
@@ -77,6 +126,7 @@ pub struct InputCounters(std::sync::Arc<std::sync::Mutex<InputCounts>>);
 struct InputCounts {
     values: std::collections::BTreeMap<String, u128>,
     error: Option<&'static str>,
+    workers: std::collections::BTreeMap<u64, std::collections::BTreeMap<String, u128>>,
 }
 impl InputCounters {
     pub fn new(units: &[&str]) -> crate::Result<Self> {
@@ -94,6 +144,7 @@ impl InputCounters {
         Ok(Self(std::sync::Arc::new(std::sync::Mutex::new(
             InputCounts {
                 values,
+                workers: Default::default(),
                 error: None,
             },
         ))))
@@ -109,11 +160,65 @@ impl InputCounters {
             },
             None => state.error = Some("undeclared input counter unit"),
         }
+        if state.error.is_none() {
+            if let Some(worker) = worker_slot() {
+                if !state.workers.contains_key(&worker) {
+                    let zeroes = state.values.keys().map(|unit| (unit.clone(), 0)).collect();
+                    state.workers.insert(worker, zeroes);
+                }
+                let value = state
+                    .workers
+                    .get_mut(&worker)
+                    .unwrap()
+                    .get_mut(unit)
+                    .unwrap();
+                match value.checked_add(u128::from(count)) {
+                    Some(sum) => *value = sum,
+                    None => state.error = Some("worker input counter overflow"),
+                }
+            }
+        }
     }
     pub(crate) fn reset(&self) {
         let mut state = self.0.lock().unwrap();
         state.values.values_mut().for_each(|v| *v = 0);
         state.error = None;
+        state.workers.clear();
+    }
+    pub(crate) fn worker_snapshot(
+        &self,
+        count: u64,
+    ) -> crate::Result<std::collections::BTreeMap<u64, std::collections::BTreeMap<String, String>>>
+    {
+        let state = self.0.lock().unwrap();
+        if let Some(error) = state.error {
+            return Err(crate::error(error));
+        }
+        if state.workers.len() as u64 != count || state.workers.keys().any(|w| *w >= count) {
+            return Ok(Default::default());
+        }
+        for (unit, total) in &state.values {
+            let sum = state
+                .workers
+                .values()
+                .try_fold(0u128, |sum, values| sum.checked_add(values[unit]));
+            if sum != Some(*total) {
+                return Ok(Default::default());
+            }
+        }
+        Ok(state
+            .workers
+            .iter()
+            .map(|(worker, values)| {
+                (
+                    *worker,
+                    values
+                        .iter()
+                        .map(|(unit, value)| (unit.clone(), value.to_string()))
+                        .collect(),
+                )
+            })
+            .collect())
     }
     pub(crate) fn snapshot(&self) -> crate::Result<std::collections::BTreeMap<String, String>> {
         let state = self.0.lock().unwrap();
@@ -150,5 +255,34 @@ mod input_counter_tests {
         assert!(counts.snapshot().is_err());
         counts.reset();
         assert_eq!(counts.snapshot().unwrap()["bytes"], "0");
+    }
+}
+
+#[cfg(test)]
+mod worker_scope_tests {
+    use super::*;
+    #[test]
+    fn scopes_restore_on_unwind_and_unattributed_counts_stay_unknown() {
+        let counters = InputCounters::new(&["items"]).unwrap();
+        assert_eq!(worker_slot(), None);
+        {
+            let _outer = WorkerScope::enter(0);
+            counters.add("items", 2);
+            let _ = std::panic::catch_unwind(|| {
+                let _nested = WorkerScope::enter(1);
+                counters.add("items", 3);
+                panic!("test scope cleanup");
+            });
+            assert_eq!(worker_slot(), Some(0));
+        }
+        assert_eq!(worker_slot(), None);
+        let known = counters.worker_snapshot(2).unwrap();
+        assert_eq!(known[&0]["items"], "2");
+        assert_eq!(known[&1]["items"], "3");
+        counters.add("items", 1);
+        assert!(counters.worker_snapshot(2).unwrap().is_empty());
+        counters.reset();
+        assert!(counters.worker_snapshot(2).unwrap().is_empty());
+        assert_eq!(counters.snapshot().unwrap()["items"], "0");
     }
 }

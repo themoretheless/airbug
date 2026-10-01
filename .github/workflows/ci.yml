@@ -10,6 +10,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         toolchain: ['1.96.0', stable]
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal --component clippy --component rustfmt
@@ -19,10 +21,46 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast
       - run: cargo +${{ matrix.toolchain }} test --locked -p airbug --no-default-features
       - run: cargo +${{ matrix.toolchain }} test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast
+      - name: Check benchmark option domains
+        run: python bench/scripts/test-option-domains.py
+      - name: Native console policies
+        run: python bench/scripts/test-console-policy.py
+      - name: Native tree in a terminal
+        if: runner.os != 'Windows'
+        run: python bench/scripts/test-terminal-tree.py
+      - name: Check benchmark help and terminal width
+        run: python bench/scripts/test-help.py
+      - name: Check independent benchmark features
+        run: python bench/scripts/test-feature-matrix.py
       - name: Check cargo bench attribute harness
         run: python bench/scripts/test-cargo-bench.py
-        env:
-          RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
+      - name: Check worker sample budgets
+        run: python bench/scripts/test-worker-sample-budget.py
+      - name: Check persistent worker runtime isolation
+        run: python bench/scripts/test-worker-runtime.py
+      - name: Check threaded batch inheritance
+        run: python bench/scripts/test-thread-batches.py
+      - name: Check manual worker matrices
+        run: python bench/scripts/test-manual-thread-matrix.py
+      - name: Check multiple benchmark filters
+        run: python bench/scripts/test-selection.py
+      - name: Cargo relative baseline intervals
+        run: python bench/scripts/test-relative-cargo.py
+      - name: Cargo custom bootstrap formatters
+        run: python bench/scripts/test-formatted-bootstrap.py
+      - name: Cargo nonlinear statistical display
+        run: python bench/scripts/test-nonlinear-bootstrap.py
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest@0.9.146
+      - name: Check nextest benchmark integration
+        run: python bench/scripts/test-nextest.py
+      - name: Check Cargo test benchmark harness
+        run: python bench/scripts/test-cargo-test-benches.py
+      - name: Check allocated thread inheritance
+        run: python bench/scripts/test-allocated-thread-inheritance.py
+      - name: Check total measurement targets
+        run: python bench/scripts/test-measurement-target.py
       - run: cargo +${{ matrix.toolchain }} doc --locked --workspace --all-features --no-deps --exclude airbug-mon
         env:
           RUSTDOCFLAGS: -D warnings
@@ -32,6 +70,19 @@ jobs:
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- decline
       - run: cargo +${{ matrix.toolchain }} run --locked -p airbug --features macros --example checkout_pilot -- store-failure
       - run: cargo +${{ matrix.toolchain }} clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings
+
+  worker-pool-miri:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: nightly
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly --profile minimal --component miri --component rust-src
+      - name: Check borrowed worker callbacks and unwind cleanup
+        shell: bash
+        run: |
+          AIRBUG_MIRI_BIN="$(rustup which --toolchain nightly cargo-miri)"
+          "$AIRBUG_MIRI_BIN" miri test --locked -p airbug-bench --lib worker_pool::
 
   airbug-otel:
     runs-on: ubuntu-latest

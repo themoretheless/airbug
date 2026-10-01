@@ -36,6 +36,17 @@ pub struct SavedCases {
 pub struct Store {
     root: PathBuf,
 }
+pub(crate) fn validate_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+    {
+        return Err(error("baseline name: letters, digits, '-' or '_' only"));
+    }
+    Ok(())
+}
+
 impl Store {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
@@ -55,13 +66,7 @@ impl Store {
         Ok(lock)
     }
     fn path(&self, name: &str) -> Result<PathBuf> {
-        if name.is_empty()
-            || !name
-                .bytes()
-                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
-        {
-            return Err(error("baseline name: letters, digits, '-' or '_' only"));
-        }
+        validate_name(name)?;
         Ok(self.root.join("baselines").join(format!("{name}.json")))
     }
     pub fn has_case_manifest(&self, name: &str) -> Result<bool> {
@@ -225,6 +230,8 @@ impl Store {
             run.cases.retain(|case| ids.contains(&case.id.as_str()));
             run.observations.retain(|o| ids.contains(&o.case.as_str()));
             run.worker_allocations
+                .retain(|w| ids.contains(&w.case.as_str()));
+            run.worker_timings
                 .retain(|w| ids.contains(&w.case.as_str()));
             run.validate()?;
             runs.push(run);
@@ -459,6 +466,7 @@ fn split_cases(run: &Run) -> BTreeMap<String, Run> {
             snapshot.cases.retain(|c| c.id == case.id);
             snapshot.observations.retain(|o| o.case == case.id);
             snapshot.worker_allocations.retain(|w| w.case == case.id);
+            snapshot.worker_timings.retain(|w| w.case == case.id);
             (case.id.clone(), snapshot)
         })
         .collect()

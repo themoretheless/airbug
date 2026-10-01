@@ -1,0 +1,130 @@
+{
+  "upstream": "Criterion 0.8.2",
+  "scope": "Artifact content and generation conditions; native equivalents, not wire/file compatibility. Source mapping is not end-to-end completion proof.",
+  "status": "partial",
+  "sources": {
+    "src/analysis/mod.rs": "7195f628c52d0145838af0266c8db3a760a12718d0d788df62ed5068975e0cad",
+    "src/analysis/compare.rs": "ded20b92892ff1782634e0916a3d0d3c4d8575fb2582dc37ef8672b551183e3b",
+    "src/csv_report.rs": "5075dcc63bbe24dd3ced375ceba9dce33d0c90357a256a20f597885e732802a5",
+    "src/html/mod.rs": "cc653a15df5a978f70dda47f729bdff28f9f1a943904478008b952e40d001841"
+  },
+  "mapping": [
+    {
+      "upstream": "new/sample.json",
+      "content": "Sampling mode, paired iteration counts and measured batch totals",
+      "airbug": "run.json observations preserve exact value strings and operations; case contracts retain sampling policy",
+      "implementation": "bench/src/model.rs; bench/src/sampling.rs",
+      "limits": "Roundtrip and batch normalization covered; standard and quick sampling differences are documented in criterion-runner.json."
+    },
+    {
+      "upstream": "new/benchmark.json",
+      "content": "Benchmark identity, parameters and throughput declaration",
+      "airbug": "run.json cases contain IDs, parameter contracts and fixed/dynamic work counters",
+      "implementation": "bench/src/model.rs; bench/src/counters.rs",
+      "limits": "Different native schema; no filename or deserialization compatibility required."
+    },
+    {
+      "upstream": "new/estimates.json",
+      "content": "Mean, median, standard deviation, MAD and optional slope confidence estimates",
+      "airbug": "estimates.json bootstrap rows and per-process regressions; formatted-estimates.json for custom display units",
+      "implementation": "bench/src/bootstrap.rs; bench/src/suite.rs",
+      "limits": "Enabled by default for ordinary measurement, optional with --no-bootstrap; smoke/profile do not automatically analyze. Per-case and CLI overrides retained. Statistical semantics are separately labelled and audited."
+    },
+    {
+      "upstream": "new/tukey.json",
+      "content": "Four Tukey fences of normalized batch times",
+      "airbug": "estimates.json rows.outliers includes fences, quartiles, classified points and counts",
+      "implementation": "bench/src/outliers.rs; bench/src/bootstrap.rs",
+      "limits": "Multi-process bootstrap uses process medians, explicitly labelled; not a silent claim of identical statistical population."
+    },
+    {
+      "upstream": "new/raw.csv",
+      "content": "Machine-scaled measurement totals, iteration counts, group/function/value and work declaration",
+      "airbug": "Raw CSV includes measurement values, operation counts, descriptors and JSON case/work metadata. saved_report_csv powers direct Cargo formatted.csv and CLI formatted-csv, adding operations, pair, raw_value, raw_unit, case_contract, work_totals and worker_work_totals alongside saved machine values.",
+      "implementation": "bench/cli/src/artifacts.rs; bench/src/measurement.rs",
+      "limits": "Machine values for batch totals are per-operation and labelled normalized_per_operation; original raw totals and units are included separately. No identical upstream schema claim.",
+      "evidence": [
+        "cli::csv_export_retains_parameters_and_exact_worker_work passed: embedded quotes/newlines, totals larger than u64, worker identity, original artifact unchanged",
+        "saved_report_restores_formatter_snapshot_and_rejects_stale_values passed with u64::MAX operations, larger work totals, pair identity, escaped contract and stale-data rejection.",
+        "dynamic_formatter_matches_work_by_identity_and_invalidates_saved_work passed with reversed raw order, different operation counts and exact work association.",
+        "test-formatted-bootstrap.py passed actual Cargo outputs and saved-baseline reanalysis; csv.DictReader checks original counters despite current registration override, operations, original totals and per-operation marker."
+      ]
+    },
+    {
+      "upstream": "change/estimates.json",
+      "content": "Relative mean and median confidence estimates",
+      "airbug": "relative-distributions.json for named comparisons and comparison.json relative summaries in automatic history",
+      "implementation": "bench/src/relative.rs; bench/src/history.rs; bench/src/suite.rs",
+      "limits": "Single-process comparisons use normalized observations with an exploratory warning; multiple processes use process medians. Fixed-work custom throughput formatter results persist for the exact baseline/candidate/config; mismatches report unavailable or stale instead of substituting another formula.",
+      "evidence": [
+        "bench/scripts/test-formatted-bootstrap.py: direct named baseline, automatic history, standalone compare/report, source/config mismatch handling",
+        "bench/docs/parity/criterion-extensions.json: formatter and measurement boundaries"
+      ]
+    },
+    {
+      "upstream": "baseline directory copies",
+      "content": "Saved sample, estimates, fences, identity and CSV for later comparison",
+      "airbug": "Immutable run directories referenced by hashed named baselines; analysis settings persisted for reanalysis",
+      "implementation": "bench/src/baseline.rs; bench/src/bootstrap.rs",
+      "limits": "Baseline references require original source to remain available; source mutation is rejected."
+    },
+    {
+      "upstream": "report/index.html and per-case/group report/index.html",
+      "content": "Navigable final index, benchmark reports, group summaries and SVG plots",
+      "airbug": "Self-contained report.html with contents, case table, search and embedded SVG; estimates and comparison pages linked",
+      "implementation": "bench/src/report.rs; bench/src/report-template.html; bench/src/hypothesis_plot.rs",
+      "limits": "Plot-family and visual verification tracked in plots.json; thumbnail/resource-policy audit remains incomplete."
+    }
+  ],
+  "next_required": [
+    "Complete visual/plot entrypoint audit in plots.json."
+  ],
+  "raw_only_direct_harness": {
+    "flag": "--no-html",
+    "scope": "Direct Suite::main / cargo bench artifact policy; machine-readable data and baseline/history remain enabled. Separate process-runner commands retain their existing explicit output-format APIs.",
+    "validation": "test-formatted-bootstrap.py passed on macOS ARM64 with named/automatic comparisons, saved reanalysis, explicit and automatic output folders, custom JSON/CSV, bootstrap and hypothesis distribution capture; no HTML files and no BENCH_REPORT line for automatic output. Default HTML and no-plots behavior also passed.",
+    "source_sha256": "65d6620ea75581891307eea6c0bcdcf61a575085f863179c2a2d4812b5969bac",
+    "clippy": "airbug-bench all-target/all-feature Clippy passed",
+    "limitations": "Verified on macOS and Linux ARM64 through the complete external Cargo formatter fixture; Windows runtime remains unverified."
+  },
+  "current_formatter_artifact_validation": {
+    "command": "python3 bench/scripts/test-formatted-bootstrap.py",
+    "exit_code": 0,
+    "coverage": [
+      "direct Cargo custom JSON/CSV and statistical estimates",
+      "saved-baseline reanalysis preserving source counters",
+      "named and automatic custom throughput comparison",
+      "standalone compare/report with saved settings and filtering",
+      "linear/logarithmic axes and SVG XML validity",
+      "no-plots numerical HTML and no-html machine-only artifacts",
+      "stale snapshots and mismatched baseline/settings handling"
+    ],
+    "limits": "Functional file/content checks on macOS; no browser rendering or interaction validation."
+  },
+  "linux_formatter_artifact_validation": {
+    "command": "python3 bench/scripts/test-formatted-bootstrap.py",
+    "platform": "Linux ARM64",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "exit_code": 0,
+    "log": ".airbug/validation/parity-current/linux-formatted.log",
+    "script_sha256": "685982367c8e2f9375360c930e1c3a29e471cc15e03b6494ce2ae158f0de8ad6",
+    "coverage": [
+      "direct Cargo custom JSON/CSV and statistical estimates",
+      "saved-baseline reanalysis preserving source counters",
+      "named and automatic custom throughput comparison",
+      "standalone compare/report with saved settings and filtering",
+      "linear/logarithmic axes and SVG XML validity",
+      "no-plots numerical HTML and no-html machine-only artifacts",
+      "stale snapshots and mismatched baseline/settings handling"
+    ],
+    "limits": "Functional content and SVG XML validation; no browser visual or interaction acceptance."
+  },
+  "output_preflight": {
+    "status": "verified_native_cargo_harness",
+    "source": "bench/src/suite.rs::main",
+    "behavior": "Existing output paths fail before timers, setup, profiling hooks, workload and live history creation. symlink_metadata also treats dangling links as occupied. Exclusive creation remains the write-time race guard.",
+    "validation": "Expanded test-console-policy.py passed: occupied directory and file, workload guard, unchanged previous result, dry-run still succeeds. All-target/all-feature library Clippy passed.",
+    "log": ".airbug/validation/parity-current/output-preflight.log",
+    "limits": "Focused macOS validation; latest platform gates predate this runtime change."
+  }
+}

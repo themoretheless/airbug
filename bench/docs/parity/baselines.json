@@ -52,5 +52,43 @@
     "Single-run runner operations do not pool multi-source baselines; use report or direct load-baseline for those.",
     "Statistics, report formatting and platform support have separate parity requirements.",
     "Snapshots may remain unreferenced if publication fails; no old artifact is overwritten."
-  ]
+  ],
+  "cli_validation_followup": {
+    "result": "263 combined option checks, 7 baseline library tests and 3 profiling integration tests passed on macOS ARM64; all-target/all-feature Clippy passed",
+    "name_policy": "Nonempty ASCII letters/digits/hyphen/underscore. Native identifiers, not upstream arbitrary path/name compatibility. Same pure validator used by Store paths and direct harness before preview/list/execution.",
+    "fix": "Previously --dry-run accepted invalid baseline names that ordinary execution rejected later. Empty, traversal/separator, dotted, spaced and non-ASCII names now fail preview without storage access.",
+    "tested_flags": [
+      "--save-baseline",
+      "--replace-baseline",
+      "--retain-baseline",
+      "--baseline",
+      "--baseline-lenient",
+      "--load-baseline"
+    ],
+    "storage_laziness": "Valid names can be previewed against nonexistent storage without creating it. Ordinary strict comparison/load of missing names fails before workload or history writes. Existence/integrity checks remain part of normal execution, not lazy preview.",
+    "profiling": "Preview accepts positive decimal millisecond durations including 1 ns; zero, negative, nonfinite and host-clock-unrepresentable Duration::MAX fail. Conflicts with test, explicit bootstrap, adaptive quick, overhead subtraction, throughput formatting, save/load/compare baseline and discard all reject before execution. Existing integration tests verify actual timing and profiler lifecycle.",
+    "limits": "Filesystem path-length/permission behavior is host dependent. Windows runtime and full public-API configuration review remain separate.",
+    "script": "bench/scripts/test-option-domains.py",
+    "logs": ".airbug/validation/baseline-profile-options",
+    "source_hashes": {
+      "bench/src/baseline.rs": "a2d794acf8bf9337773061bded873ba2d2335f5dedc03eca2654bfd035b160d1",
+      "bench/src/suite.rs": "3b4a1865a934969d42218a2e2321bebd798603475ba3b6b40994e29b15051a88",
+      "bench/src/profiling.rs": "78de6cd5aa8efd169b7b8621a66f29b24d5d80461a908ae059aa964e6a4c503a"
+    }
+  },
+  "source_semantic_followup": {
+    "sources": [
+      "criterion-0.8.2/src/lib.rs:669-684",
+      "criterion-0.8.2/src/lib.rs:1147-1151",
+      "criterion-0.8.2/src/analysis/mod.rs:50-81",
+      "criterion-0.8.2/src/analysis/mod.rs:240-260"
+    ],
+    "verified": "Save replaces baseline after comparison; strict comparison checks baseline existence before sampling; loading saved samples bypasses measurement. Retained comparison leaves the baseline unchanged while results may still be saved separately.",
+    "native_differences": [
+      "Airbug validates all selected strict references before any workload, uses immutable sources and atomically publishes a case manifest.",
+      "Airbug --save-baseline is create-only; --replace-baseline supplies upstream overwrite capability; comparison and replacement are explicit independent flags.",
+      "Airbug retain operation fills missing cases and is distinct from Criterion retain_baseline. Names use a restricted native identifier domain."
+    ],
+    "validation": "All seven baseline library tests passed with --offline --locked --all-features on macOS; recent test-relative-cargo.py passed actual saved-baseline lazy reanalysis and comparison output."
+  }
 }

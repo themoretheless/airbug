@@ -94,6 +94,7 @@ impl Recorder {
             .entry((case.into(), metric.into()))
             .or_default();
         self.run.observations.push(Observation {
+            worker_work_totals: Default::default(),
             work_totals: Default::default(),
             case: case.into(),
             metric: metric.into(),

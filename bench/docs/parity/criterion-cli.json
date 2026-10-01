@@ -1,0 +1,244 @@
+{
+  "upstream": "Criterion 0.8.2",
+  "source_file": "src/lib.rs::Criterion::configure_from_args",
+  "source_sha256": "5d673f670c9d6233980f905ec707fa0ebbb05c247c8ac57cf28cc163f8d32ad9",
+  "status": "exact_inventory_mapped_not_full_semantic_verification",
+  "argument_count": 31,
+  "arguments": [
+    {
+      "upstream": "FILTER",
+      "status": "mapped",
+      "airbug": "--filter/positional, --regex",
+      "notes": "Criterion CLI treats filter as regex; Airbug requires --regex for regex semantics.",
+      "source_line": 765
+    },
+    {
+      "upstream": "color",
+      "status": "mapped",
+      "airbug": "--color auto|always|never",
+      "notes": "Native spelling; aliases are not required.",
+      "source_line": 768
+    },
+    {
+      "upstream": "verbose",
+      "status": "mapped",
+      "airbug": "--verbose",
+      "notes": "Detailed environment/contracts; full statistical field mapping remains under output.",
+      "source_line": 775
+    },
+    {
+      "upstream": "quiet",
+      "status": "mapped",
+      "airbug": "--quiet",
+      "notes": "Suppresses progress and detailed tables.",
+      "source_line": 780
+    },
+    {
+      "upstream": "noplot",
+      "status": "implemented_with_end_to_end_validation",
+      "airbug": "--no-html; --no-plots for numerical HTML without SVG",
+      "notes": "Criterion without_plots disables its HTML reporter. Native --no-html preserves raw JSON, CSV, bootstrap estimates, comparison distributions and baselines while skipping HTML and BENCH_REPORT output. Verified through real Cargo for explicit/automatic output, named/history comparisons and loaded baselines, including custom metrics and captured distributions. test-formatted-bootstrap.py passed; default HTML/no-plots paths remain covered by the same fixture.",
+      "source_line": 785
+    },
+    {
+      "upstream": "save-baseline",
+      "status": "mapped",
+      "airbug": "--save-baseline / --replace-baseline",
+      "notes": "Explicit creation/replacement instead of implicit overwrite.",
+      "source_line": 790
+    },
+    {
+      "upstream": "discard-baseline",
+      "status": "mapped",
+      "airbug": "--discard",
+      "notes": "Executes without saved results or history.",
+      "source_line": 795
+    },
+    {
+      "upstream": "baseline",
+      "status": "mapped",
+      "airbug": "--baseline",
+      "notes": "Strict named comparison.",
+      "source_line": 800
+    },
+    {
+      "upstream": "baseline-lenient",
+      "status": "mapped",
+      "airbug": "--baseline-lenient",
+      "notes": "Compare available cases, report missing ones.",
+      "source_line": 805
+    },
+    {
+      "upstream": "list",
+      "status": "mapped",
+      "airbug": "--list",
+      "notes": "Lazy listing.",
+      "source_line": 809
+    },
+    {
+      "upstream": "format",
+      "status": "native_equivalent",
+      "airbug": "--list / --output-format tree",
+      "notes": "Flat names or hierarchy; Criterion pretty/terse textual compatibility not required.",
+      "source_line": 814
+    },
+    {
+      "upstream": "ignored",
+      "status": "mapped",
+      "airbug": "--ignored",
+      "notes": "Airbug supports real ignored cases; Criterion currently rejects all.",
+      "source_line": 821
+    },
+    {
+      "upstream": "exact",
+      "status": "mapped",
+      "airbug": "--exact",
+      "notes": "Exact case match.",
+      "source_line": 825
+    },
+    {
+      "upstream": "profile-time",
+      "status": "mapped",
+      "airbug": "--profile-time-ms",
+      "notes": "Native millisecond units; profiler lifecycle covered separately.",
+      "source_line": 829
+    },
+    {
+      "upstream": "load-baseline",
+      "status": "mapped",
+      "airbug": "--load-baseline",
+      "notes": "Reanalysis without workload; native baseline options.",
+      "source_line": 834
+    },
+    {
+      "upstream": "sample-size",
+      "status": "mapped",
+      "airbug": "--samples",
+      "notes": "Criterion sample count, not operations per sample.",
+      "source_line": 839
+    },
+    {
+      "upstream": "warm-up-time",
+      "status": "implemented_with_focused_validation",
+      "airbug": "--warmup-ms",
+      "notes": "Native decimal millisecond CLI accepts all nonnegative Duration values to nanosecond precision without f64 rounding; positive total measurement required. Same environment parser and CLI precedence. No scientific notation; users express equivalent duration as decimal. Dry-run preserves fractional/large values as exact strings. test-measurement-target.py and 14 sampling tests passed.",
+      "source_line": 843
+    },
+    {
+      "upstream": "measurement-time",
+      "status": "implemented_with_focused_validation",
+      "airbug": "--measurement-ms",
+      "notes": "Native decimal millisecond CLI accepts all nonnegative Duration values to nanosecond precision without f64 rounding; positive total measurement required. Same environment parser and CLI precedence. No scientific notation; users express equivalent duration as decimal. Dry-run preserves fractional/large values as exact strings. test-measurement-target.py and 14 sampling tests passed.",
+      "source_line": 847
+    },
+    {
+      "upstream": "nresamples",
+      "status": "mapped",
+      "airbug": "--resamples",
+      "notes": "Absolute bootstrap resample count.",
+      "source_line": 851
+    },
+    {
+      "upstream": "noise-threshold",
+      "status": "mapped",
+      "airbug": "--noise-threshold-percent",
+      "notes": "Explicit conversion from fractional upstream units.",
+      "source_line": 855
+    },
+    {
+      "upstream": "confidence-level",
+      "status": "mapped",
+      "airbug": "--confidence-level",
+      "notes": "Fractional absolute confidence level.",
+      "source_line": 859
+    },
+    {
+      "upstream": "significance-level",
+      "status": "mapped",
+      "airbug": "--significance-level",
+      "notes": "Fractional significance threshold.",
+      "source_line": 863
+    },
+    {
+      "upstream": "quick",
+      "status": "mapped",
+      "airbug": "--quick",
+      "notes": "Adaptive quick sampling semantics audited in criterion-runner.json; retains real observations, caps iterations and separates residual target from significance.",
+      "source_line": 867
+    },
+    {
+      "upstream": "test",
+      "status": "mapped",
+      "airbug": "--test",
+      "notes": "Explicit one-operation correctness run exists.",
+      "source_line": 872
+    },
+    {
+      "upstream": "bench",
+      "status": "implemented_with_end_to_end_validation",
+      "airbug": "Attribute suites select Cargo harness mode when cfg(test); --bench selects measurement, absence selects smoke; Suite::cargo_harness for manual harnesses",
+      "notes": "Debug and release cargo test --benches checked through real Cargo. Direct harness executables require --bench to measure. Protocol runner sets AIRBUG_BENCH_RUNNER=1 for workers; explicit --test wins. Normal Suite::main executables retain measurement default.",
+      "source_line": 878
+    },
+    {
+      "upstream": "plotting-backend",
+      "status": "capability_audit_required",
+      "airbug": "Built-in SVG",
+      "notes": "No external backend dependency. All upstream rendering capabilities still require verification.",
+      "source_line": 882
+    },
+    {
+      "upstream": "output-format",
+      "status": "native_equivalent",
+      "airbug": "--output-format table|tree; --json",
+      "notes": "Bencher textual compatibility not required by user; numerical field completeness tracked under output.",
+      "source_line": 886
+    },
+    {
+      "upstream": "nocapture",
+      "status": "compatibility_only",
+      "airbug": "Workload output is not captured",
+      "notes": "Upstream no-op; spelling compatibility not required.",
+      "source_line": 891
+    },
+    {
+      "upstream": "show-output",
+      "status": "compatibility_only",
+      "airbug": "Workload output is not captured",
+      "notes": "Upstream no-op; spelling compatibility not required.",
+      "source_line": 896
+    },
+    {
+      "upstream": "include-ignored",
+      "status": "mapped",
+      "airbug": "--include-ignored",
+      "notes": "Airbug implements selection; upstream hidden no-op.",
+      "source_line": 901
+    },
+    {
+      "upstream": "version",
+      "status": "implemented_with_focused_validation",
+      "airbug": "--version / -V",
+      "notes": "Suite::main_registered returns before registration and environment parsing; Suite::main returns before environment parsing. Prints the benchmark library version without measurement. Real debug Cargo harness returned airbug-bench 0.9.0 despite invalid sample/thread environment values and setup/workload guards.",
+      "source_line": 906
+    }
+  ],
+  "cargo_test_probe": {
+    "command": "AIRBUG_DASHBOARD=0 AIRBUG_BENCH_HISTORY=0 cargo test --offline -p airbug-bench --bench attributed -- collections/sum --exact --json --samples 1 --iterations 2 --warmup-ms 0",
+    "exit_code": 1,
+    "observed": "benchmarks require an optimized build; use cargo run --release or cargo bench",
+    "required": "cargo test --benches should run each selected case once without benchmark analysis, in debug and release profiles. Direct executable/process-runner measurement behavior must remain explicit and tested."
+  },
+  "cargo_test_resolution": {
+    "evidence": "bench/scripts/test-cargo-test-benches.py passed",
+    "coverage": [
+      "debug/release default smoke with automatic history enabled but no history/reports created",
+      "exact filter and lazy list/version",
+      "cargo bench measurements and explicit --test",
+      "direct executable smoke vs --bench",
+      "real protocol runner measurement and explicit --test precedence"
+    ],
+    "validation": "68 attribute tests passed; library/macros/CLI all-target Clippy passed",
+    "platform_limits": "Current macOS host verified; CI matrix contains the new script but Linux/Windows not executed here."
+  }
+}

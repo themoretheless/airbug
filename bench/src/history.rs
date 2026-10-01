@@ -94,6 +94,9 @@ pub struct PreviousCase {
     pub status: PreviousStatus,
     pub reason: Option<String>,
     pub comparisons: Vec<Comparison>,
+    /// Relative estimates for automatic history; resample draws are not retained.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relative: Vec<crate::relative::Comparison>,
     #[serde(default)]
     pub config: ComparisonConfig,
 }
@@ -160,6 +163,32 @@ impl History {
         export: Option<&Path>,
         plots: bool,
     ) -> Result<HistoryReport> {
+        self.record_with_analysis(
+            &mut run.clone(),
+            config,
+            overrides,
+            (export, plots, None),
+            |_, _, _, _| Ok(()),
+        )
+    }
+
+    /// Enrich relative estimates and candidate provenance on a temporary copy
+    /// before exporting and committing history. The callback must preserve raw
+    /// observations and contracts. Failure leaves the caller and previous entry intact.
+    pub(crate) fn record_with_analysis(
+        &self,
+        run: &mut Run,
+        config: ComparisonConfig,
+        overrides: &BTreeMap<String, ComparisonOptions>,
+        output: (Option<&Path>, bool, Option<&Path>),
+        mut format: impl FnMut(
+            &Run,
+            &mut Run,
+            &crate::bootstrap::Config,
+            &mut [crate::relative::Comparison],
+        ) -> Result<()>,
+    ) -> Result<HistoryReport> {
+        let (export, plots, run_export) = output;
         validate_overrides(run, config, overrides)?;
         config.validate()?;
         run.validate()?;
@@ -213,9 +242,35 @@ impl History {
                 break;
             }
         }
-        let report = compare_cases(run, &previous, config, overrides)?;
+        let mut persisted = run.clone();
+        let mut report = compare_cases(run, &previous, config, overrides)?;
+        for case in &mut report.cases {
+            if matches!(case.status, PreviousStatus::Compared) {
+                if let Some(old) = previous.get(&case.case) {
+                    let settings = crate::bootstrap::Config {
+                        resamples: case.config.hypothesis.resamples,
+                        seed: case.config.hypothesis.seed,
+                        confidence_level: (1. - case.config.significance_level)
+                            .clamp(f64::EPSILON, 1. - f64::EPSILON),
+                    };
+                    case.relative =
+                        crate::relative::compare_runs(old, &one_case(run, &case.case), &settings)?;
+                    format(old, &mut persisted, &settings, &mut case.relative)?;
+                    crate::relative_format::save(old, &mut persisted, &settings, &case.relative)?;
+                    for row in &mut case.relative {
+                        if let Some(report) = &mut row.report {
+                            report.mean.draws_percent.clear();
+                            report.median.draws_percent.clear();
+                        }
+                    }
+                }
+            }
+        }
         if let Some(path) = export {
             report.export_with_plots(path, plots)?;
+        }
+        if let Some(path) = run_export {
+            crate::model::write_new(path, &persisted)?;
         }
         fs::create_dir_all(&self.directory)?;
         // Generated ID rather than run.id: caller-supplied IDs are data, never paths.
@@ -226,7 +281,7 @@ impl History {
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         fs::create_dir(&destination)?;
-        crate::model::write_new(&destination.join("run.json"), run)?;
+        crate::model::write_new(&destination.join("run.json"), &persisted)?;
         crate::model::write_new(&destination.join("comparison.json"), &report)?;
         crate::model::write_new(
             &destination.join("COMMITTING"),
@@ -240,6 +295,7 @@ impl History {
             destination.join("COMMITTING"),
             destination.join("COMMITTED"),
         )?;
+        *run = persisted;
         Ok(report)
     }
 }
@@ -324,6 +380,7 @@ fn compare_cases(
             status: PreviousStatus::FirstRun,
             reason: None,
             comparisons: vec![],
+            relative: vec![],
         };
         if let Some(old) = previous.get(&case.id) {
             row.previous_run = Some(old.id.clone());
@@ -379,6 +436,7 @@ pub(crate) fn one_case(run: &Run, id: &str) -> Run {
     }
     selected.observations.retain(|o| o.case == id);
     selected.worker_allocations.retain(|w| w.case == id);
+    selected.worker_timings.retain(|w| w.case == id);
     selected
 }
 impl HistoryReport {
@@ -416,6 +474,12 @@ impl HistoryReport {
         Ok(())
     }
     pub fn markdown(&self) -> String {
+        self.markdown_impl(true)
+    }
+    pub(crate) fn concise_markdown(&self) -> String {
+        self.markdown_impl(false)
+    }
+    fn markdown_impl(&self, include_relative: bool) -> String {
         let mut output = format!(
             "## Previous run comparison\n\nNoise threshold: {}%; family significance level: {}.\n\n",
             self.config.noise_threshold_percent, self.config.significance_level
@@ -429,6 +493,9 @@ impl HistoryReport {
             output.push_str("\n\n");
             if !case.comparisons.is_empty() {
                 output.push_str(&crate::report::comparison(&case.comparisons));
+            }
+            if include_relative && !case.relative.is_empty() {
+                output.push_str(&crate::relative::markdown(&case.relative));
             }
         }
         output
@@ -452,6 +519,67 @@ mod tests {
         }
         recorder.finish().unwrap()
     }
+    #[test]
+    fn relative_formatter_failure_does_not_publish_or_advance_history() {
+        let root = tempfile::tempdir().unwrap();
+        let history = History::new(root.path().join("history"), "formatter");
+        let first = run(&[("a", 10)]);
+        history.record(&first).unwrap();
+        let output = root.path().join("comparison.json");
+        let mut candidate = run(&[("a", 20)]);
+        let original = serde_json::to_vec(&candidate).unwrap();
+        let result = history.record_with_analysis(
+            &mut candidate,
+            ComparisonConfig::default(),
+            &BTreeMap::new(),
+            (Some(&output), false, None),
+            |_, candidate, _, _| {
+                candidate
+                    .provenance
+                    .insert("partial-display".into(), "uncommitted".into());
+                Err(error("formatter failed"))
+            },
+        );
+        assert!(result.unwrap_err().to_string().contains("formatter failed"));
+        assert_eq!(original, serde_json::to_vec(&candidate).unwrap());
+        assert!(!output.exists());
+        let next = history.record(&run(&[("a", 30)])).unwrap();
+        assert_eq!(
+            next.cases[0].previous_run.as_deref(),
+            Some(first.id.as_str())
+        );
+    }
+
+    #[test]
+    fn run_export_failure_does_not_advance_history_or_mutate_caller() {
+        let root = tempfile::tempdir().unwrap();
+        let history = History::new(root.path().join("history"), "run-export");
+        let first = run(&[("a", 10)]);
+        history.record(&first).unwrap();
+        let mut candidate = run(&[("a", 20)]);
+        let original = serde_json::to_vec(&candidate).unwrap();
+        let output = root.path().join("run.json");
+        std::fs::write(&output, "existing artifact").unwrap();
+        let result = history.record_with_analysis(
+            &mut candidate,
+            ComparisonConfig::default(),
+            &BTreeMap::new(),
+            (None, false, Some(&output)),
+            |_, _, _, _| Ok(()),
+        );
+        assert!(result.is_err());
+        assert_eq!(original, serde_json::to_vec(&candidate).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(output).unwrap(),
+            "existing artifact"
+        );
+        let next = history.record(&run(&[("a", 30)])).unwrap();
+        assert_eq!(
+            next.cases[0].previous_run.as_deref(),
+            Some(first.id.as_str())
+        );
+    }
+
     #[test]
     fn html_export_failure_preserves_history_and_existing_artifact() {
         let root = tempfile::tempdir().unwrap();
@@ -688,6 +816,69 @@ mod tests {
             compare_case_baselines(&current, &BTreeMap::from([("absent".into(), old_a)])).is_err()
         );
     }
+    #[test]
+    fn automatic_history_retains_relative_summaries_without_draws() {
+        let root = tempfile::tempdir().unwrap();
+        let history = History::new(root.path(), "relative");
+        let mut baseline = run(&[("a", 10)]);
+        baseline.cases[0]
+            .contract
+            .insert("work.counter.items".into(), "2".into());
+        let mut observation = baseline.observations[0].clone();
+        observation.sequence = 1;
+        baseline.observations.push(observation);
+        let settings = ComparisonConfig {
+            significance_level: 0.1,
+            hypothesis: crate::hypothesis::Config {
+                resamples: 64,
+                seed: 7,
+            },
+            ..Default::default()
+        };
+        assert!(
+            history
+                .record_with_config(&baseline, settings)
+                .unwrap()
+                .cases[0]
+                .relative
+                .is_empty()
+        );
+        let mut candidate = baseline.clone();
+        candidate.id = "next".into();
+        for observation in &mut candidate.observations {
+            observation.value = Some("20".into());
+        }
+        let report = history.record_with_config(&candidate, settings).unwrap();
+        let row = &report.cases[0].relative[0];
+        let estimate = row.report.as_ref().unwrap();
+        assert_eq!(estimate.mean.point_percent, Some(100.));
+        assert_eq!(estimate.mean.interval_percent, Some((100., 100.)));
+        assert_eq!(estimate.config.confidence_level, 0.9);
+        assert_eq!((estimate.config.resamples, estimate.config.seed), (64, 7));
+        assert_eq!(row.throughput[0].point_percent, Some(-50.));
+        assert!(estimate.mean.draws_percent.is_empty());
+        assert!(report.markdown().contains("Relative bootstrap estimates"));
+        let encoded = serde_json::to_string(&report).unwrap();
+        assert!(!encoded.contains("draws_percent"));
+        let restored: HistoryReport = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(
+            restored.cases[0].relative[0].report.as_ref().unwrap().mean,
+            estimate.mean
+        );
+        let mut legacy = serde_json::to_value(&report).unwrap();
+        legacy["cases"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("relative");
+        assert!(
+            serde_json::from_value::<HistoryReport>(legacy)
+                .unwrap()
+                .cases[0]
+                .relative
+                .is_empty()
+        );
+    }
+
     #[test]
     fn previous_is_per_case_and_does_not_skip_incompatible_latest_results() {
         let root = tempfile::tempdir().unwrap();

@@ -18,6 +18,7 @@ fn paired(n: u32, factor: f64) -> Run {
     for p in 0..n {
         for (i, v, f) in [(0, "baseline", 1.0), (1, "candidate", factor)] {
             r.observations.push(Observation {
+                worker_work_totals: Default::default(),
                 work_totals: Default::default(),
                 case: "case".into(),
                 metric: "latency".into(),
@@ -162,6 +163,16 @@ fn invalid_config_and_empty_filter() {
     assert!(s.run("no match").is_err());
     s.config(Config {
         samples: 0,
+        ..Config::default()
+    });
+    let disabled = s.run("").unwrap();
+    assert!(disabled.observations.is_empty());
+    disabled.validate().unwrap();
+    let mut missing_reason = disabled.clone();
+    missing_reason.provenance.clear();
+    assert!(missing_reason.validate().is_err());
+    s.config(Config {
+        max_iterations: 0,
         ..Config::default()
     });
     assert!(s.run("").is_err());
@@ -959,6 +970,87 @@ fn time_budget_distinguishes_reported_intervals_from_full_workload_calls() {
 }
 
 #[test]
+fn zero_maximum_time_disables_work_and_positive_override_reenables_it() {
+    let calls = AtomicUsize::new(0);
+    let mut suite = Suite::new("zero-maximum");
+    suite.bench_custom("work", |_| {
+        calls.fetch_add(1, Ordering::SeqCst);
+        Duration::from_nanos(1)
+    });
+    let disabled = Sampling {
+        samples: Some(1),
+        iterations: Some(1),
+        warmup: Some(Duration::ZERO),
+        max_time: Some(Duration::ZERO),
+        exclude_external_time: Some(true),
+        ..Default::default()
+    };
+    suite.sampling(disabled.clone());
+    assert!(suite.list("").is_empty());
+    assert!(suite.run("").unwrap().observations.is_empty());
+    assert!(
+        suite
+            .test_selected(&Selection {
+                include_ignored: true,
+                ..Default::default()
+            })
+            .unwrap()
+            .observations
+            .is_empty()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    suite.sampling(Sampling {
+        max_time: Some(Duration::from_nanos(1)),
+        ..disabled
+    });
+    assert_eq!(suite.list(""), ["zero-maximum/work"]);
+    assert_eq!(suite.run("").unwrap().observations.len(), 1);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn zero_duration_measured_budgets_make_progress_without_changing_observations() {
+    for (maximum, expected) in [(None, 3), (Some(Duration::from_nanos(2)), 2)] {
+        let calls = AtomicUsize::new(0);
+        let mut suite = Suite::new("zero-budget");
+        suite.bench_custom("zero", |_| {
+            let count = calls.fetch_add(1, Ordering::SeqCst) + 1;
+            assert!(
+                count <= 8,
+                "zero durations must not produce an unbounded sample loop"
+            );
+            Duration::ZERO
+        });
+        suite.sampling(Sampling {
+            iterations: Some(1),
+            samples: Some(1),
+            warmup: Some(Duration::ZERO),
+            min_time: Some(Duration::from_nanos(3)),
+            max_time: maximum,
+            exclude_external_time: Some(true),
+            ..Default::default()
+        });
+        let run = suite.run("").unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), expected);
+        assert_eq!(run.observations.len(), expected);
+        assert!(
+            run.observations
+                .iter()
+                .all(|o| o.value.as_deref() == Some("0"))
+        );
+        assert_eq!(
+            run.cases[0].contract["sampling.zero_duration_budget_floor_ns"],
+            "1"
+        );
+        assert!(
+            run.notes
+                .iter()
+                .any(|note| note.contains("1 ns progress floor"))
+        );
+    }
+}
+
+#[test]
 fn calibration_and_warmup_consume_the_time_budget() {
     for fixed in [false, true] {
         let calls = AtomicUsize::new(0);
@@ -1698,6 +1790,9 @@ fn declared_summary_families_persist_and_connect_only_related_inputs() {
     let html = airbug_bench::report::parameter_charts(&restored, &config).unwrap();
     assert!(html.contains("Lines connect observed estimates"));
     assert!(html.contains("family families/sort / candidate"));
+    for size in [1, 10, 100] {
+        assert!(html.contains(&format!("case families/sort/{size}: x = {size}, y = 10")));
+    }
     assert!(html.contains("family families/other/sort / candidate"));
     assert!(!html.contains("line summary unavailable"));
     let mut missing = restored.clone();
@@ -1711,6 +1806,10 @@ fn declared_summary_families_persist_and_connect_only_related_inputs() {
     assert!(gap.contains("no line crosses an unavailable case"));
     assert!(!gap.contains("Lines connect observed estimates"));
     assert_eq!(gap.matches("<circle").count(), 3);
+    for size in [1, 100] {
+        assert!(gap.contains(&format!("case families/sort/{size}: x = {size}, y = 10")));
+    }
+    assert!(!gap.contains("case families/sort/10: x ="));
     let mut duplicate = restored.clone();
     duplicate.cases[0]
         .contract
@@ -1766,6 +1865,9 @@ fn throughput_input_lines_use_equal_process_weights_and_separate_units() {
     assert_eq!(html.matches("<svg").count(), 2);
     assert!(html.contains("Lines connect observed estimates"));
     assert!(html.contains("1.50e9"));
+    for size in [1, 10] {
+        assert!(html.contains(&format!("case rates/case/{size}: x = {size}, y =")));
+    }
     for o in &mut run.observations {
         o.value = Some("0".into());
     }
@@ -1969,4 +2071,188 @@ fn source_sort_infers_implicit_groups_and_preserves_equal_location_order() {
         suite.list_selected(&selection),
         ["root/unknown/case", "root/middle", "root/implicit/late"]
     );
+}
+
+#[test]
+fn global_builder_counter_override_preserves_other_units_and_is_lazy() {
+    let calls = AtomicUsize::new(0);
+    let counters = counters::InputCounters::new(&["items", "bytes"]).unwrap();
+    let collected = counters.clone();
+    let mut suite = Suite::new("global-counters");
+    suite
+        .bench_custom("dynamic", |n| {
+            calls.fetch_add(n as usize, Ordering::SeqCst);
+            collected.add("items", 2 * n);
+            collected.add("bytes", 4 * n);
+            Duration::from_secs(n)
+        })
+        .input_counters(counters);
+    suite.sampling(Sampling {
+        samples: Some(1),
+        iterations: Some(3),
+        warmup: Some(Duration::ZERO),
+        ..Default::default()
+    });
+    suite
+        .bench_custom("fixed", Duration::from_secs)
+        .work_units("items", 1)
+        .work_units("bytes", 9);
+    suite.sampling(Sampling {
+        samples: Some(1),
+        iterations: Some(3),
+        warmup: Some(Duration::ZERO),
+        ..Default::default()
+    });
+    suite
+        .override_work_units("items", 7)
+        .override_work_units("chars", 0);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let run = suite.run("").unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    for case in &run.cases {
+        assert_eq!(case.contract["work.counter.items"], "7");
+        assert_eq!(case.contract["work.counter.chars"], "0");
+        assert!(!case.contract.contains_key("work.input.items"));
+    }
+    let dynamic = run
+        .observations
+        .iter()
+        .find(|r| r.case.ends_with("dynamic"))
+        .unwrap();
+    assert_eq!(dynamic.work_totals["bytes"], "12");
+    assert!(!dynamic.work_totals.contains_key("items"));
+    let rates = report::throughput(&run).unwrap();
+    for row in rates.iter().filter(|r| r.unit == "items") {
+        assert_eq!(row.values, [7.0]);
+    }
+    assert_eq!(rates.iter().filter(|r| r.unit == "items").count(), 2);
+    assert!(
+        rates
+            .iter()
+            .filter(|r| r.unit == "chars")
+            .all(|r| r.values == [0.0])
+    );
+}
+
+#[test]
+fn total_measurement_time_drives_flat_and_linear_collection() {
+    for mode in [SamplingMode::Flat, SamplingMode::Linear] {
+        let mut suite = Suite::new("total-target");
+        suite.bench_custom("work", |n| Duration::from_nanos(n * 100));
+        suite.sampling(Sampling {
+            samples: Some(3),
+            warmup: Some(Duration::ZERO),
+            measurement_time: Some(Duration::from_nanos(900)),
+            mode: Some(mode),
+            ..Default::default()
+        });
+        let run = suite.run("").unwrap();
+        assert_eq!(
+            run.cases[0].contract["sampling.measurement_target_ns"],
+            "900"
+        );
+        let ops: Vec<_> = run.observations.iter().map(|o| o.operations).collect();
+        assert_eq!(
+            ops,
+            if mode == SamplingMode::Flat {
+                vec![3, 3, 3]
+            } else {
+                vec![2, 4, 6]
+            }
+        );
+        assert_eq!(
+            run.observations
+                .iter()
+                .map(|o| o.value.as_ref().unwrap().parse::<u128>().unwrap())
+                .sum::<u128>(),
+            if mode == SamplingMode::Flat {
+                900
+            } else {
+                1200
+            }
+        );
+    }
+}
+
+#[test]
+fn multiple_inclusive_patterns_union_before_exclusions_and_execute_once() {
+    let calls = AtomicUsize::new(0);
+    let mut suite = Suite::new("s");
+    for name in ["parse/2", "parse/12", "тест/42", "other"] {
+        suite.bench(name, || {
+            calls.fetch_add(1, Ordering::SeqCst);
+        });
+    }
+    let mut selection = Selection {
+        patterns: vec!["parse".into(), "тест".into(), "parse/2".into()],
+        exclude_exact: vec!["s/parse/12".into()],
+        ..Default::default()
+    };
+    assert_eq!(suite.list_selected(&selection), ["s/parse/2", "s/тест/42"]);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let run = suite.test_selected(&selection).unwrap();
+    assert_eq!(run.cases.len(), 2);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    selection.patterns = vec!["s/parse/2".into(), "s/тест/42".into()];
+    selection.exact = true;
+    assert_eq!(suite.list_selected(&selection), ["s/parse/2", "s/тест/42"]);
+    selection.exact = false;
+    selection.glob = true;
+    selection.patterns = vec!["s/parse/?".into(), "s/тест/*".into()];
+    assert_eq!(suite.list_selected(&selection), ["s/parse/2", "s/тест/42"]);
+    let mut regexes = Selection::default()
+        .with_regexes(&[r"^s/parse/\d+$", r"^s/тест/"])
+        .unwrap();
+    regexes.skip_regex("/12$").unwrap();
+    assert_eq!(suite.list_selected(&regexes), ["s/parse/2", "s/тест/42"]);
+    assert!(Selection::default().with_regexes(&["valid", "["]).is_err());
+}
+
+#[test]
+fn groups_keep_shared_borrowed_inputs_lazy_and_select_by_full_identity() {
+    use std::cell::Cell;
+    // Neither cloning nor a 'static input is needed for shared-input benchmarks.
+    struct Input {
+        calls: Cell<usize>,
+    }
+    let input = Input {
+        calls: Cell::new(0),
+    };
+    let borrowed = &input;
+    let address = std::ptr::from_ref(borrowed);
+    let mut suite = Suite::new("inputs");
+    for group in ["first", "second"] {
+        suite.group(group, |suite| {
+            suite.bench("read/7", move || {
+                assert_eq!(std::ptr::from_ref(borrowed), address);
+                borrowed.calls.set(borrowed.calls.get() + 1);
+            });
+            suite.parameter("size", 7);
+        });
+    }
+    suite.validate_registration().unwrap();
+    assert_eq!(input.calls.get(), 0);
+    assert_eq!(
+        suite.list(""),
+        ["inputs/first/read/7", "inputs/second/read/7"]
+    );
+    let selection = Selection {
+        pattern: "second".into(),
+        ..Default::default()
+    };
+    assert_eq!(suite.list_selected(&selection), ["inputs/second/read/7"]);
+    assert_eq!(input.calls.get(), 0);
+    let run = suite.test_selected(&selection).unwrap();
+    assert_eq!(run.cases.len(), 1);
+    assert_eq!(run.cases[0].id, "inputs/second/read/7");
+    assert_eq!(input.calls.get(), 1);
+    suite.group("second", |suite| {
+        suite.bench("read/7", || panic!("validation must not execute work"));
+    });
+    let error = suite.validate_registration().unwrap_err().to_string();
+    assert!(
+        error.contains("duplicate benchmark ID: inputs/second/read/7"),
+        "{error}"
+    );
+    assert_eq!(input.calls.get(), 1);
 }

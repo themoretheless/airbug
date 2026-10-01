@@ -1,0 +1,226 @@
+{
+  "scope": "Exact Cargo feature inventory for pinned upstream releases. Flags that bundle capabilities or change implementation are classified separately from missing user capabilities. This is not complete parity proof.",
+  "status": "mapped_with_explicit_gaps",
+  "crates": {
+    "criterion": {
+      "version": "0.8.2",
+      "manifest_sha256": "058e4ce4a339af60716255c0d662c3efe6efac9da0905371c7f3ff3019822352",
+      "features": {
+        "async": {
+          "enables": [],
+          "status": "native",
+          "airbug": "Core Executor and async builders are available without an optional runtime; tests/executors.rs and tests/measurements.rs."
+        },
+        "async_futures": {
+          "enables": [
+            "dep:futures",
+            "async"
+          ],
+          "status": "tested_independently",
+          "airbug": "async-futures / FuturesExecutor; tests/executors.rs."
+        },
+        "async_smol": {
+          "enables": [
+            "dep:smol",
+            "async"
+          ],
+          "status": "tested_independently",
+          "airbug": "async-smol / SmolExecutor; tests/executors.rs."
+        },
+        "async_tokio": {
+          "enables": [
+            "dep:tokio",
+            "async"
+          ],
+          "status": "tested_independently",
+          "airbug": "async-tokio / Runtime and Handle adapters; tests/executors.rs."
+        },
+        "cargo_bench_support": {
+          "enables": [],
+          "status": "upstream_no_source_gate",
+          "airbug": "No source reference to this feature in the pinned Criterion src tree. Airbug Cargo harness behavior is checked by test-cargo-test-benches.py and test-cargo-bench.py."
+        },
+        "csv_output": {
+          "enables": [
+            "dep:csv"
+          ],
+          "status": "native",
+          "airbug": "Raw report CSV and saved machine-formatted custom CSV are built in. See artifacts.json; no matching Cargo feature name required."
+        },
+        "default": {
+          "enables": [
+            "rayon",
+            "plotters",
+            "cargo_bench_support"
+          ],
+          "status": "bundle",
+          "airbug": "Airbug defaults to macros and parallel-analysis; individual capabilities are mapped separately."
+        },
+        "html_reports": {
+          "enables": [],
+          "status": "upstream_no_source_gate",
+          "airbug": "No source reference to this feature in the pinned Criterion src tree. Built-in HTML/SVG and --no-html control Airbug artifact generation; visual audit remains open."
+        },
+        "plotters": {
+          "enables": [
+            "dep:plotters"
+          ],
+          "status": "native_with_remaining_audit",
+          "airbug": "Built-in SVG instead of selectable Plotters/Gnuplot. Plot families tracked in plots.json; backend format/capability and visual audit remain open."
+        },
+        "rayon": {
+          "enables": [
+            "dep:rayon"
+          ],
+          "status": "native_parallel_analysis_with_focused_validation",
+          "airbug": "Default parallel-analysis feature covers descriptive, regression, relative and pooled-null hypothesis bootstrap plus Gaussian KDE. Tests preserve sequential RNG/order, non-Send transform callbacks and every density coordinate; see parallel-analysis.json for policies and measured examples. Scoped OS threads are independent of benchmark workers and Rayon. This does not prove every upstream scheduling/performance behavior or all platforms."
+        },
+        "real_blackbox": {
+          "enables": [],
+          "status": "upstream_no_source_gate",
+          "airbug": "No source reference to this feature in the pinned Criterion src tree. Airbug reexports std::hint::black_box and implements black_box_drop; tests/contracts.rs."
+        },
+        "stable": {
+          "enables": [
+            "csv_output",
+            "html_reports",
+            "async_futures",
+            "async_smol",
+            "async_tokio"
+          ],
+          "status": "bundle",
+          "airbug": "Enables CSV, HTML and three async adapters in Criterion; native capabilities mapped individually, spelling compatibility is outside user requirements."
+        }
+      }
+    },
+    "divan": {
+      "version": "0.1.21",
+      "manifest_sha256": "a5e4af2ac643a7fba3cee610fd5f572e5fc1b65ee83c0435d4c522652b25840c",
+      "features": {
+        "default": {
+          "enables": [
+            "wrap_help"
+          ],
+          "status": "bundle",
+          "airbug": "Enables wrap_help upstream; Airbug help is built in."
+        },
+        "dyn_thread_local": {
+          "enables": [],
+          "status": "native_strategy",
+          "airbug": "Divan switches away from its reserved macOS x86_64 TLS slot to pthread TLS. Airbug allocation tracking uses standard thread_local! with try_with; no reserved TLS slot. tests/thread_allocations.rs checks worker isolation and cross-thread frees. Does not establish identical tracking overhead."
+        },
+        "help": {
+          "enables": [
+            "clap/help"
+          ],
+          "status": "native",
+          "airbug": "Built-in --help and --help-all; no optional help dependency gate."
+        },
+        "internal_benches": {
+          "enables": [],
+          "status": "upstream_internal",
+          "airbug": "Adds Divan self-benchmarks in alloc/time/thread_pool modules. Not a consumer benchmarking capability or required compatibility API."
+        },
+        "wrap_help": {
+          "enables": [
+            "help",
+            "clap/wrap_help"
+          ],
+          "status": "implemented_with_terminal_validation",
+          "airbug": "--help/--help-all detect terminal width; COLUMNS overrides, fallback 80. Word wrapping preserves commands, option tokens and paths. Help returns before benchmark registration/environment parsing. Two unit tests and test-help.py passed: 24 width/entrypoint combinations plus actual POSIX PTY width 40 on macOS. Windows runtime terminal detection remains unverified."
+        }
+      }
+    }
+  },
+  "validation": {
+    "command": "python3 bench/scripts/test-feature-matrix.py --offline",
+    "status": "passed: 31 test executions across seven independent feature configurations; exit 0",
+    "scope": "No defaults; independent Futures/Smol/Tokio, memory/thread allocation, and serial versus parallel statistical kernels. Does not cover every possible feature subset.",
+    "ci": "Same script added to existing OS/toolchain matrix; remote execution remains unverified.",
+    "host": "macOS ARM64",
+    "log": ".airbug/validation/features-current/tests.log",
+    "log_sha256": "852662abfd176a7a2fe20984dad04d9278f08eb62357478d7c9d267dd3cbfc0a"
+  },
+  "completion_validation": {
+    "configurations": 7,
+    "test_executions": 31,
+    "command": "python3 bench/scripts/test-feature-matrix.py --offline",
+    "exit_code": 0,
+    "log": ".airbug/validation/features-current/final-tests.log",
+    "sha256": "037ec505f0dc646ae1b4224894a7a94a1a7f263e5d3156f41d413bb8e7791332"
+  },
+  "latest_validation": {
+    "command": "python3 bench/scripts/test-feature-matrix.py --offline",
+    "configurations": 7,
+    "passed": 35,
+    "failed": 0,
+    "exit_code": 0,
+    "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22",
+    "scope": "Current scale_intervals source: seven independent configurations; focused tests, not exhaustive feature combinations.",
+    "log": ".airbug/validation/parity-current/interval-features-linux.log",
+    "sha256": "e1e24fe083f4c1870831e9409b23e1dc82b3c6a85946ed78ccec3385422775da",
+    "platform": "Linux ARM64",
+    "ignored": 0
+  },
+  "historical_validation_before_formatter_snapshots": {
+    "command": "python3 bench/scripts/test-feature-matrix.py --offline",
+    "configurations": 7,
+    "passed": 35,
+    "failed": 0,
+    "exit_code": 0,
+    "source_fingerprint_sha256": "4fa2903f75ad0e1df661d7defdd96e55762db854c360b0a07deb656f50628801",
+    "scope": "Current source: seven configurations, no defaults / async-futures / async-smol / async-tokio / memory / serial analysis / parallel analysis. 35 focused test executions on macOS; not an exhaustive feature powerset.",
+    "log": ".airbug/validation/parity-current/features.log",
+    "sha256": "86dd51050dab0f4c9595c993ddc2bf8079917497688c31e79b5c82a76e12eb35"
+  },
+  "historical_validation_before_terminal": {
+    "command": "python3 bench/scripts/test-feature-matrix.py --offline",
+    "configurations": 7,
+    "passed": 35,
+    "failed": 0,
+    "exit_code": 0,
+    "source_fingerprint_sha256": "4fa2903f75ad0e1df661d7defdd96e55762db854c360b0a07deb656f50628801",
+    "scope": "Current source: seven configurations, no defaults / async-futures / async-smol / async-tokio / memory / serial analysis / parallel analysis. 35 focused test executions on macOS; not an exhaustive feature powerset.",
+    "log": ".airbug/validation/parity-current/features.log",
+    "sha256": "86dd51050dab0f4c9595c993ddc2bf8079917497688c31e79b5c82a76e12eb35"
+  },
+  "latest_msrv_feature_validation": {
+    "toolchain": "1.96.0",
+    "platform": "macOS ARM64 Rust 1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 python3 bench/scripts/test-feature-matrix.py --offline",
+    "configurations": 7,
+    "passed": 35,
+    "failed": 0,
+    "ignored": 0,
+    "exit_code": 0,
+    "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22",
+    "log": ".airbug/validation/parity-current/interval-features-msrv.log",
+    "sha256": "0a597e090c75d243608e8413ff712167da13e4843aade080e52eb195dd29c2ac",
+    "scope": "Current scale_intervals source: seven independent configurations; focused tests, not exhaustive feature combinations."
+  },
+  "historical_latest_validation_before_intervals": {
+    "command": "python3 bench/scripts/test-feature-matrix.py",
+    "configurations": 7,
+    "passed": 35,
+    "failed": 0,
+    "exit_code": 0,
+    "source_fingerprint_sha256": "2be7cc8d8a1dc1ff112a1a6d4539f85089fb52913be3872a1347ea390de79e52",
+    "scope": "Linux ARM64 independent no-defaults, Futures, Smol, Tokio, memory, serial and parallel statistical configurations. Focused tests, not exhaustive feature combinations.",
+    "log": ".airbug/validation/parity-current/terminal-features.log",
+    "sha256": "b12e6a14d7a1664f8a724a2fec2624e11713224926637141cb27cfd62767ebd4"
+  },
+  "historical_latest_msrv_feature_validation_before_intervals": {
+    "toolchain": "1.96.0",
+    "platform": "macOS ARM64",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 python3 bench/scripts/test-feature-matrix.py --offline",
+    "configurations": 7,
+    "passed": 35,
+    "failed": 0,
+    "ignored": 0,
+    "exit_code": 0,
+    "source_fingerprint_sha256": "2be7cc8d8a1dc1ff112a1a6d4539f85089fb52913be3872a1347ea390de79e52",
+    "log": ".airbug/validation/parity-current/msrv-features-current.log",
+    "sha256": "185f96482bd63984e8aeea57292b5bf83e1d5113c3671b4c31a45290a5b81186",
+    "scope": "Independent no-defaults, async-futures, async-smol, async-tokio, memory, serial and parallel statistical configurations; focused tests, not every feature subset."
+  }
+}

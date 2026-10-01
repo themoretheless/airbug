@@ -15,7 +15,9 @@ COMMAND = [
 
 
 history = tempfile.TemporaryDirectory(prefix="airbug-bench-history-")
-environment = dict(os.environ, AIRBUG_BENCH_HISTORY="0", AIRBUG_DASHBOARD_ROOT=history.name, AIRBUG_TEST_NO_SETUP="1", AIRBUG_TEST_NO_EXECUTION="1")
+# This fixture explicitly tests history before testing the opt-out below.
+# A caller's strict-measurement environment must not disable that first check.
+environment = dict(os.environ, AIRBUG_BENCH_HISTORY="0", AIRBUG_DASHBOARD="1", AIRBUG_DASHBOARD_ROOT=history.name, AIRBUG_TEST_NO_SETUP="1", AIRBUG_TEST_NO_EXECUTION="1")
 
 
 def run(*args, success=True):
@@ -25,6 +27,14 @@ def run(*args, success=True):
     assert (result.returncode == 0) == success, result.stdout + result.stderr
     return result.stdout + result.stderr
 
+
+# Version queries are independent of measurement configuration and never execute work.
+for version_flag in ["--version", "-V"]:
+    version = subprocess.run([*COMMAND, "--", version_flag], cwd=ROOT, capture_output=True, text=True,
+        env=dict(environment, AIRBUG_BENCH_SAMPLES="invalid", AIRBUG_BENCH_THREADS="invalid"))
+    assert version.returncode == 0, version.stdout + version.stderr
+    assert version.stdout.strip().startswith("airbug-bench "), version.stdout
+    assert "BENCH_RESULT" not in version.stdout and "collections/" not in version.stdout
 
 listed = run("--", "--list")
 assert "collections/sort" in listed and "collections/sum" in listed, listed
@@ -48,6 +58,48 @@ with tempfile.TemporaryDirectory(prefix="airbug-preview-") as directory:
     assert not destination.exists()
     run("--", "--list", "--output", str(destination))
     assert not destination.exists()
+# Long measurements must be accepted without executing work or truncating durations.
+for milliseconds in [60_001, 3_600_000, 2**64 - 1]:
+    preview = run("collections/sum", "--", "--exact", "--dry-run", "--sample-ms", str(milliseconds), "--warmup-ms", str(milliseconds))
+    planned, _ = json.JSONDecoder().raw_decode(preview.lstrip())
+    assert planned["target_sample_ms"] == milliseconds
+    assert planned["warmup_ms"] == milliseconds
+    total = planned["samples"] * milliseconds
+    assert planned["target_measured_ms_per_case"] == (total if total <= 2**64 - 1 else str(total))
+    assert planned["cases"][0]["contract"]["sample_target_ns"] == str(milliseconds * 1_000_000)
+    assert planned["cases"][0]["contract"]["warmup_ns"] == str(milliseconds * 1_000_000)
+print("cargo bench: long duration previews retain exact values without executing workloads")
+# Sample counts use the full u64 domain, including exact totals beyond JSON u64.
+for samples in [100_001, 2**32, 2**64 - 1]:
+    preview = run("collections/sum", "--", "--exact", "--dry-run", "--samples", str(samples))
+    planned, _ = json.JSONDecoder().raw_decode(preview.lstrip())
+    assert planned["samples"] == samples
+    assert planned["cases"][0]["contract"]["samples"] == str(samples)
+    total = samples * planned["target_sample_ms"]
+    assert planned["target_measured_ms_per_case"] == (total if total <= 2**64 - 1 else str(total))
+assert json.JSONDecoder().raw_decode(run("--", "--samples", "0", "--dry-run").lstrip())[0]["cases"] == []
+print("cargo bench: sample counts above 100000 and u32 retain their exact u64 values")
+# Bootstrap configuration has no arbitrary upper resample ceiling.
+run("collections/sum", "--", "--exact", "--dry-run", "--resamples", "1000001")
+print("cargo bench: bootstrap accepts more than one million resamples in lazy preview")
+for count in [1, 1000001]:
+    run("collections/sum", "--", "--exact", "--dry-run", "--hypothesis-resamples", str(count))
+print("cargo bench: hypothesis resample counts include one and more than one million")
+
+# Fixed iteration counts are limited by exact worker-total representation.
+for count in [1048577, 2**32 - 1, 2**64 - 1]:
+    preview = run("collections/sum", "--", "--exact", "--dry-run", "--iterations", str(count))
+    planned, _ = json.JSONDecoder().raw_decode(preview.lstrip())
+    assert planned["cases"][0]["contract"]["sampling.iterations"] == str(count)
+run("collections/sum", "--", "--threads", "2", "--iterations", str((2**64 - 1) // 2), "--dry-run")
+assert "iterations must be" in run("collections/sum", "--", "--threads", "2", "--iterations", str((2**64 - 1) // 2 + 1), "--dry-run", success=False)
+print("cargo bench: u64 iterations preview exactly and worker multiplication overflow fails before work")
+# Ordinary attributed functions opt into threading directly from Cargo flags.
+preview = run("collections/sum", "--", "--threads", "1,2", "--dry-run")
+planned, _ = json.JSONDecoder().raw_decode(preview.lstrip())
+assert {case["id"] for case in planned["cases"]} == {"collections/sum/threads=1", "collections/sum/threads=2"}
+print("cargo bench: runtime thread matrices opt ordinary functions in before selection")
+
 # Timer parsing and preview must remain lazy, even for unavailable hardware.
 for clock in ["os", "cpu"]:
     preview = run("collections/sum", "--", "--exact", "--timer", clock, "--dry-run")
@@ -68,8 +120,10 @@ measured = run("collections/sum", "--", "--exact", "--profile", "quick", "--json
 assert "BENCH_RESULT=" in measured and "collections/sum" in measured, measured
 assert "collections/sort" not in measured, measured
 
-duplicate = run("sort", "--", "--filter", "sum", success=False)
-assert "filter specified twice" in duplicate, duplicate
+multiple = run("collections/sort", "--", "--filter", "collections/sum", "--exact", "--list")
+assert set(line for line in multiple.splitlines() if line.startswith("collections/")) == {"collections/sort", "collections/sum"}
+excluded = run("--", "--filter", "collections/sort", "--filter", "collections/sum", "--exact", "--exclude-exact", "collections/sort", "--list")
+assert set(line for line in excluded.splitlines() if line.startswith("collections/")) == {"collections/sum"}
 
 unknown = run("--", "--unknown-option", success=False)
 assert "unknown argument" in unknown, unknown
@@ -83,14 +137,17 @@ assert report["state"] == "passed" and report["kind"] == "bench", report
 assert len(report["tests"]) == 1 and report["tests"][0]["name"] == "collections/sum", report
 assert report["tests"][0]["ns_per_op"] is not None, report
 print("cargo bench: dashboard history and case metric passed")
-run("collections/sum", "--", "--profile", "quick", "--output", history.name, success=False)
+saved_history = {path: path.read_bytes() for path in reports}
+environment["AIRBUG_TEST_NO_EXECUTION"] = "1"
+rejected = run("collections/sum", "--", "--profile", "quick", "--output", history.name, success=False)
+assert "output path already exists" in rejected, rejected
+environment.pop("AIRBUG_TEST_NO_EXECUTION")
 reports = sorted(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))
-assert len(reports) == 2, reports
-assert json.loads(reports[-1].read_text())["state"] == "failed"
+assert {path: path.read_bytes() for path in reports} == saved_history
 environment["AIRBUG_DASHBOARD"] = "0"
 run("collections/sum", "--", "--profile", "quick")
-assert len(list(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))) == 2
-print("cargo bench: artifact failure and dashboard opt-out passed")
+assert len(list(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))) == 1
+print("cargo bench: occupied-output preflight preserves history; dashboard opt-out passed")
 with tempfile.TemporaryDirectory(prefix="airbug-previous-run-") as directory:
     history_root = pathlib.Path(directory) / "history"
     environment["AIRBUG_BENCH_HISTORY"] = "1"
@@ -231,7 +288,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     hypothesis = configured_report["report"]["cases"][0]["comparisons"][0]["hypothesis"]["test"]
     assert hypothesis["resamples"] == 128 and hypothesis["seed"] == 73
     assert hypothesis["p_value"] is None and hypothesis["candidate_units"] == 1
-    for flags in [["--summary-scale", "logarithmic"], ["--summary-parameter", "size"], ["--summary-scale", "invalid"], ["--hypothesis-resamples", "1"], ["--hypothesis-resamples", "1000001"], ["--hypothesis-seed", "1", "--hypothesis-seed", "2"], ["--hypothesis-seed"], ["--significance-level", "0"], ["--significance-level", "NaN"], ["--noise-threshold-percent", "inf"], ["--noise-threshold-percent", "-1"], ["--significance-level", "0.1", "--significance-level", "0.2"]]:
+    for flags in [["--summary-scale", "logarithmic"], ["--summary-parameter", "size"], ["--summary-scale", "invalid"], ["--hypothesis-resamples", "0"], ["--hypothesis-seed", "1", "--hypothesis-seed", "2"], ["--hypothesis-seed"], ["--significance-level", "0"], ["--significance-level", "NaN"], ["--noise-threshold-percent", "inf"], ["--noise-threshold-percent", "-1"], ["--significance-level", "0.1", "--significance-level", "0.2"]]:
         invalid = run("collections/unselected", "--", *common, *flags, success=False)
         assert "unselected setup ran" not in invalid, invalid
     import copy
@@ -240,6 +297,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
         independent["id"] = baseline_name
         for case in independent["cases"]:
             case["contract"]["param.size"] = "10"
+            case["contract"]["work.counter.items"] = "2"
         observations = []
         for process in range(12):
             for original in independent["observations"]:
@@ -269,7 +327,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     assert "Iteration time comparison" in summary_html
     assert "baseline /" in summary_html and "candidate /" in summary_html
     plain_output = store / "plain-comparison-export"
-    run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--output", str(plain_output))
+    run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--no-bootstrap", "--output", str(plain_output))
     assert "Iteration time comparison" in (plain_output / "report.html").read_text()
     assert not (plain_output / "estimates.json").exists()
     tables_output = store / "tables-comparison-export"
@@ -280,6 +338,22 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     assert (tables_output / "estimates.json").is_file()
     assert (tables_output / "relative-distributions.json").is_file()
     assert not (tables_output / "comparison.html").exists()
+    relative_tables = (tables_output / "regression-comparison.html").read_text()
+    assert "Relative bootstrap estimates" in relative_tables
+    assert "throughput inverse mean duration (items/s)" in relative_tables
+    assert "12 / 12" in relative_tables
+    rates = json.loads((tables_output / "relative-distributions.json").read_text())[0]
+    duration_change = rates["report"]["mean"]["point_percent"]
+    assert abs(rates["throughput"][0]["point_percent"] + duration_change / (100 + duration_change) * 100) < 1e-10
+    text_common = [flag for flag in common if flag != "--json"]
+    for quiet in [False, True]:
+        text_output = store / ("relative-quiet" if quiet else "relative-text")
+        text = run("collections/sum", "--", *text_common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--resamples", "128", "--no-plots", "--output", str(text_output), *(["--quiet"] if quiet else []))
+        assert ("Relative bootstrap estimates" in text) == (not quiet), text
+        if not quiet:
+            assert "throughput inverse mean duration (items/s)" in text
+        assert "Relative bootstrap estimates" in (text_output / "regression-comparison.html").read_text()
+
 
 
     assert "0 series omitted" in summary_html
@@ -435,13 +509,15 @@ with tempfile.TemporaryDirectory(prefix="airbug-summary-") as directory:
     assert summary[0]["operations"] == "100", summary
     assert summary[0]["operation_weighted_mean"] == stats["mean"], summary
     assert json.loads((destination / "summary.json").read_text()) == summary
-    assert "BENCH_ESTIMATES=" not in output
+    assert "BENCH_ESTIMATES=" in output
+    assert (destination / "estimates.json").exists()
 text_summary = run("collections/sum", "--", "--exact", "--test")
 assert "Descriptive statistics" in text_summary and "Scaled MAD" in text_summary, text_summary
 
 # Profiling uses the same Cargo harness, but emits only profiling artifacts.
 with tempfile.TemporaryDirectory(prefix="airbug-profile-cli-") as directory:
     destination = pathlib.Path(directory) / "session"
+    history_before_profile = len(list(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json")))
     for mode in ["--list", "--dry-run"]:
         preview = run("collections/sum", "--", "--exact", "--profile-time-ms", "3",
                       "--output", str(destination), mode)
@@ -465,16 +541,19 @@ with tempfile.TemporaryDirectory(prefix="airbug-profile-cli-") as directory:
     assert json.loads((destination / case["directory"] / "summary.json").read_text()) == case
     assert not (destination / "report.json").exists()
     profile_history = sorted(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))
-    assert len(profile_history) == 3, profile_history
+    assert len(profile_history) == history_before_profile + 1, profile_history
     recorded = json.loads(profile_history[-1].read_text())
     assert recorded["state"] == "passed" and len(recorded["tests"]) == 1, recorded
     assert recorded["tests"][0]["ns_per_op"] is None, recorded
 
-    run("collections/sum", "--", "--exact", "--profile-time-ms", "3",
-        "--output", str(destination), success=False)
+    saved_profile_history = {path: path.read_bytes() for path in profile_history}
+    environment["AIRBUG_TEST_NO_EXECUTION"] = "1"
+    rejected = run("collections/sum", "--", "--exact", "--profile-time-ms", "3",
+                   "--output", str(destination), success=False)
+    environment.pop("AIRBUG_TEST_NO_EXECUTION")
+    assert "output path already exists" in rejected, rejected
     profile_history = sorted(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))
-    assert len(profile_history) == 4, profile_history
-    assert json.loads(profile_history[-1].read_text())["state"] == "failed"
+    assert {path: path.read_bytes() for path in profile_history} == saved_profile_history
     environment["AIRBUG_DASHBOARD"] = "0"
 
 for options in [("0",), ("1", "--test"), ("1", "--profile-time-ms", "2"),
@@ -573,10 +652,10 @@ for case in ["threaded_sort/8/threads=2", "contended/threads=2"]:
                               "--iterations", "3", "--samples", "1", "--warmup-ms", "0")
     assert all(o["operations"] == 12 for o in overridden["observations"]), overridden
     del environment["AIRBUG_BENCH_THREADS"]
-assert "workers must be 1..256" in run("--", "--threads", "257", "--list", success=False)
+assert "threads=257" in run("collections/contended/", "--", "--threads", "257", "--list")
 automatic = run("collections/contended/", "--", "--threads", "0", "--dry-run")
 auto_case = json.JSONDecoder().raw_decode(automatic.lstrip())[0]["cases"][0]
-assert 1 <= int(auto_case["contract"]["threads"]) <= 256, auto_case
+assert 1 <= int(auto_case["contract"]["threads"]), auto_case
 matrix = measured_run("collections/contended/", "--", "--threads", "1,2", "--threads", "2,3", "--iterations", "3", "--samples", "1", "--warmup-ms", "0")
 assert [c["id"] for c in matrix["cases"]] == [f"collections/contended/threads={n}" for n in [1, 2, 3]], matrix
 assert [o["operations"] for o in matrix["observations"]] == [3, 6, 9], matrix
@@ -584,7 +663,7 @@ environment["AIRBUG_BENCH_THREADS"] = "2,1,2"
 listed_matrix = run("collections/contended/", "--", "--list")
 assert [line for line in listed_matrix.splitlines() if line.startswith("collections/")] == ["collections/contended/threads=2", "collections/contended/threads=1"], listed_matrix
 del environment["AIRBUG_BENCH_THREADS"]
-for invalid_threads in ["", "1,", "1,-2", "1,257"]:
+for invalid_threads in ["", "1,", "1,-2", "one"]:
     assert run("--", "--threads", invalid_threads, "--list", success=False)
 print("cargo bench: runtime worker overrides, wave normalization and CLI/environment precedence passed")
 for mode in ["linear", "auto"]:
@@ -597,8 +676,10 @@ for mode in ["linear", "auto"]:
         assert operations == [operations[0] * i for i in range(1, 5)], sampled
 invalid = run("collections/sum", "--", "--exact", "--iterations", "3", "--sampling", "linear", success=False)
 assert "fixed iterations cannot be combined" in invalid, invalid
-invalid = run("collections/sum", "--", "--exact", "--max-time-ms", "0", success=False)
-assert "max_time exhausted" in invalid, invalid
+environment["AIRBUG_TEST_NO_EXECUTION"] = "1"
+disabled = measured_run("collections/sum", "--", "--exact", "--max-time-ms", "0")
+environment.pop("AIRBUG_TEST_NO_EXECUTION")
+assert disabled["cases"] == [] and disabled["observations"] == [], disabled
 for accounting, expected in [("--exclude-external-time", "measured"), ("--include-external-time", "workload_wall")]:
     preview = run("collections/sum", "--", "--exact", "--dry-run", "--iterations", "10",
                   "--min-time-ms", "20", "--max-time-ms", "50", accounting)
@@ -830,7 +911,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
             env["QUICK_MUST_NOT_RUN"] = "1"
         return subprocess.run(["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags], cwd=ROOT, capture_output=True, text=True, env=env)
     preserved_source = (fixture / "benches/imported.rs").read_text()
-    for option in ["threads = 2", "executor = missing_executor()", "allocator = &MISSING_ALLOCATOR", 'setup_thread = "worker"', "input_bytes = |v| v.len() as u64", "input_items = |v| 1", "input_chars = |v| 1", "input_cycles = |v| 1"]:
+    for option in ["executor = missing_executor()", "allocator = &MISSING_ALLOCATOR", 'setup_thread = "worker"', "input_bytes = |v| v.len() as u64", "input_items = |v| 1", "input_chars = |v| 1", "input_cycles = |v| 1"]:
         (fixture / "benches/imported.rs").write_text(f'#[ab::suite(groups = [external_fixture::cases], {option})] mod rejected {{}}')
         rejected = quick_run("--list")
         assert rejected.returncode != 0, option
@@ -1077,10 +1158,12 @@ mod measured {
     assert "└── measured" in tree.stdout and "└── work" in tree.stdout
     assert "work_units [candidate process 0]: median 3 units/op" in tree.stdout
     assert "| Case" not in tree.stdout
+    assert "95.00% interval" in tree.stdout or "confidence estimate unavailable" in tree.stdout
     tree_list = quick_run("--list", "--output-format", "tree")
     assert tree_list.returncode == 0 and tree_list.stdout.strip() == "└── measured\n    └── work"
     quiet_tree = quick_run(*console_flags, "--output-format", "tree", "--quiet")
     assert quiet_tree.returncode == 0 and "└── measured" in quiet_tree.stdout and "bench: " not in quiet_tree.stderr
+    assert "95.00% interval" not in quiet_tree.stdout
     tree_json = quick_run(*console_flags, "--output-format", "tree", "--json")
     assert tree_json.returncode == 0 and "BENCH_RESULT=" in tree_json.stdout and "└──" not in tree_json.stdout
     assert quick_run("--list", "--output-format", "unknown").returncode != 0
@@ -1197,7 +1280,7 @@ assert "Bootstrap estimates" in text_report and "unavailable" in text_report, te
 for flags in [["--bootstrap-distributions"], ["--bootstrap-distributions", "--json", "--test"], ["--bootstrap-distributions", "--json", "--bootstrap-distributions"]]:
     invalid = run("collections/unselected", "--", *flags, success=False)
     assert "unselected setup ran" not in invalid
-for option, value in [("--resamples", "1"), ("--confidence-level", "1"), ("--confidence-level", "NaN")]:
+for option, value in [("--resamples", "0"), ("--confidence-level", "1"), ("--confidence-level", "NaN")]:
     run("--", "--list", option, value, success=False)
 print("cargo bench: bootstrap CLI configuration, JSON artifact, text output and validation passed")
 regression_dir = pathlib.Path(history.name) / "regression-export"
@@ -1227,6 +1310,16 @@ assert "chart unavailable" not in regression_html
 assert "bootstrap slope" in regression_html and "ns/operation" in regression_html
 assert regression_html.count("Bootstrap confidence interval") == 5
 print("cargo bench: regression JSON retains exact paired batches and HTML includes slope confidence geometry")
+single_dir = pathlib.Path(history.name) / "single-resample"
+single_output = run("collections/sum", "--", "--exact", "--sampling", "linear", "--samples", "3", "--sample-ms", "1", "--warmup-ms", "0", "--resamples", "1", "--bootstrap-distributions", "--json", "--output", str(single_dir))
+single = json.loads(next(line.removeprefix("BENCH_ESTIMATES=") for line in single_output.splitlines() if line.startswith("BENCH_ESTIMATES=")))
+assert single == json.loads((single_dir / "estimates.json").read_text())
+assert single["rows"][0]["estimates"]["mean"]["standard_error"] is None
+assert single["rows"][0]["regressions"][0]["fit"]["slope"]["standard_error"] is None
+assert len(single["rows"][0]["distributions"]["mean"]) == 1
+assert "Standard error is unavailable" in (single_dir / "estimates.html").read_text()
+print("cargo bench: single bootstrap draw persists null standard errors in estimates and regression")
+
 unicode = measured_run("collections/unicode_text/", "--", "--test")
 assert len(unicode["cases"]) == 2, unicode
 assert [(c["contract"]["work.counter.bytes"], c["contract"]["work.counter.chars"]) for c in unicode["cases"]] == [("0", "0"), ("6", "2")], unicode
@@ -1285,3 +1378,144 @@ with tempfile.TemporaryDirectory(prefix="airbug-bootstrap-options-") as director
         else:
             assert all("distributions" not in row for row in report["rows"])
     print("cargo bench: imported bootstrap defaults and per-field CLI overrides passed")
+
+# Imported thread defaults also cross a separately compiled library boundary.
+with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory:
+    fixture = pathlib.Path(directory)
+    (fixture / "src").mkdir()
+    (fixture / "benches").mkdir()
+    (fixture / "Cargo.toml").write_text(
+        '[package]\nname = "imported-threads-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
+        '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ' }\n'
+        '[[bench]]\nname = "cases"\nharness = false\n'
+    )
+    (fixture / "src/lib.rs").write_text(
+        '#[airbug_bench::group] pub mod imported { '
+        '#[bench] fn work() -> std::rc::Rc<()> { std::rc::Rc::new(()) } '
+        '#[bench(args = [1usize, 2])] fn input(n: usize) -> usize { n } '
+        '#[bench(args = [String::from("hello")])] async fn borrowed(s: &str) -> usize { std::future::ready(s.len()).await } '
+        '#[bench(args = [2usize], setup = |n| vec![n; n])] fn prepared(v: &mut [usize]) -> usize { v.len() } '
+        '#[bench(setup = || std::rc::Rc::new(3usize))] async fn async_prepared(v: std::rc::Rc<usize>) -> std::rc::Rc<usize> { std::future::ready(v).await } '
+        '#[bench(threads = false)] fn local() {} }'
+    )
+    (fixture / "benches/cases.rs").write_text(
+        '#[airbug_bench::suite(groups = [imported_threads_fixture::imported], threads = [1, 2])] mod cases {}'
+    )
+    completed = subprocess.run(
+        ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--test", "--json", "--no-history"],
+        cwd=ROOT, capture_output=True, text=True,
+        env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in completed.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    assert {c["id"] for c in result["cases"]} == {"cases/imported/work/threads=1", "cases/imported/work/threads=2", "cases/imported/local", "cases/imported/input/1/threads=1", "cases/imported/input/1/threads=2", "cases/imported/input/2/threads=1", "cases/imported/input/2/threads=2", 'cases/imported/borrowed/"hello"/threads=1', 'cases/imported/borrowed/"hello"/threads=2', 'cases/imported/prepared/2/threads=1', 'cases/imported/prepared/2/threads=2', 'cases/imported/async_prepared/threads=1', 'cases/imported/async_prepared/threads=2'}
+    assert sum(o["operations"] for o in result["observations"]) == 19
+    print("cargo bench: thread defaults cross a library boundary and preserve sequential opt-out")
+
+    # Remove attribute threading: CLI alone must select concurrent registration.
+    (fixture / "benches/cases.rs").write_text(
+        '#[airbug_bench::suite(groups = [imported_threads_fixture::imported])] mod cases {}'
+    )
+    completed = subprocess.run(
+        ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--threads", "2,3", "--test", "--json", "--no-history"],
+        cwd=ROOT, capture_output=True, text=True,
+        env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in completed.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+    assert len(result["cases"]) == 13
+    assert all(c["id"].endswith(("threads=2", "threads=3", "/local")) for c in result["cases"])
+    assert sum(o["operations"] for o in result["observations"]) == 31
+    print("cargo bench: CLI alone enables sync/async/input worker matrices across crates")
+
+    # Full Duration domain retains nanosecond precision in decimal milliseconds.
+    (fixture / "benches/cases.rs").write_text(
+        'fn main() -> airbug_bench::Result<()> { '
+        'let mut suite = airbug_bench::Suite::new("huge-plan"); '
+        'suite.config(airbug_bench::Config { samples: u64::MAX, warmup: std::time::Duration::MAX, sample_time: std::time::Duration::MAX, ..Default::default() }); '
+        'suite.bench("must_not_run", || panic!("preview executed workload")); suite.main() }'
+    )
+    completed = subprocess.run(
+        ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--dry-run"],
+        cwd=ROOT, capture_output=True, text=True,
+        env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    preview = json.loads(completed.stdout)
+    assert preview["samples"] == 2**64 - 1
+    assert preview["target_sample_ms"] == str((2**64 - 1) * 1000 + 999) + ".999999", preview
+    assert preview["warmup_ms"] == preview["target_sample_ms"], preview
+    assert preview["target_measured_ms_per_case"] is None
+    print("cargo bench: builder Duration::MAX and u64::MAX samples preview without overflow or work")
+
+# Local one-worker fallback must survive an exported group across a crate boundary.
+with tempfile.TemporaryDirectory(prefix="airbug-local-worker-") as directory:
+    fixture = pathlib.Path(directory)
+    (fixture / "src").mkdir()
+    (fixture / "benches").mkdir()
+    (fixture / "Cargo.toml").write_text(
+        '[package]\nname = "local-worker-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
+        '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ' }\n'
+        '[[bench]]\nname = "cases"\nharness = false\n'
+    )
+    (fixture / "src/lib.rs").write_text('''
+#[airbug_bench::group(samples = 1, iterations = 2, warmup_ms = 0)]
+pub mod imported {
+    use std::rc::Rc;
+    #[bench(args = [Rc::new(1)])]
+    fn argument(v: &Rc<i32>) -> Rc<i32> { v.clone() }
+    #[bench(args = [Rc::new(2)])]
+    async fn async_argument(v: &Rc<i32>) -> Rc<i32> { std::future::ready(v.clone()).await }
+    #[bench(setup = || Rc::new(3), drop_output = "outside")]
+    fn borrowed(v: &mut Rc<i32>) -> Rc<i32> { v.clone() }
+    #[bench(setup = || Rc::new(4), drop_output = "outside")]
+    fn owned(v: Rc<i32>) -> Rc<i32> { v }
+    #[bench(setup = || Rc::new(5), drop_output = "outside")]
+    async fn async_borrowed(v: &mut Rc<i32>) -> Rc<i32> { std::future::ready(v.clone()).await }
+    #[bench(setup = || Rc::new(6), drop_output = "outside")]
+    async fn async_owned(v: Rc<i32>) -> Rc<i32> { std::future::ready(v).await }
+}
+''')
+    library_source = (fixture / "src/lib.rs").read_text()
+    for mode in ["inherited", "cli", "explicit"]:
+        inherited = mode == "inherited"
+        (fixture / "src/lib.rs").write_text(
+            library_source.replace("#[bench(", "#[bench(threads = 1, ") if mode == "explicit" else library_source
+        )
+        (fixture / "benches/cases.rs").write_text(
+            '#[airbug_bench::suite(groups = [local_worker_fixture::imported]'
+            + (', threads = [1]' if inherited else '') + ')] mod cases {}'
+        )
+        flags = ["--threads", "1"] if mode == "cli" else []
+        for smoke in [True, False]:
+            numerical = mode == "explicit" and smoke
+            report_dir = fixture / "numerical-report"
+            report_flags = ["--no-plots", "--output", str(report_dir)] if numerical else []
+            completed = subprocess.run(
+                ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", *flags, *report_flags,
+                 *(["--test"] if smoke else []), "--json", "--no-history"],
+                cwd=ROOT, capture_output=True, text=True,
+                env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
+            )
+            assert completed.returncode == 0, completed.stdout + completed.stderr
+            result = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in completed.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
+            assert len(result["cases"]) == 6, result
+            assert all(c["id"].endswith("threads=1") and c["contract"]["threads.execution"] == "caller" for c in result["cases"])
+            assert sum(o["operations"] for o in result["observations"]) == (6 if smoke else 12), result
+            assert len(result["worker_timings"]) == 6, result
+            assert sum(w["operations"] for w in result["worker_timings"]) == (6 if smoke else 12), result
+            assert all(w["worker"] == 0 and w["wave"] == 0 for w in result["worker_timings"]), result
+            if numerical:
+                report_html = (report_dir / "report.html").read_text()
+                assert 'id="worker-timings"' in report_html
+                assert "Case contracts" in report_html
+                assert "<svg" not in report_html and "worker-distributions" not in report_html
+        if mode == "cli":
+            rejected = subprocess.run(
+                ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--threads", "2", "--test", "--no-history"],
+                cwd=ROOT, capture_output=True, text=True,
+                env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
+            )
+            assert rejected.returncode != 0
+            assert "cannot share" in rejected.stdout + rejected.stderr
+    print("cargo bench: exported local Rc arguments and setup support inherited/CLI/explicit one-worker smoke and fixed sampling")

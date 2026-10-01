@@ -30,7 +30,7 @@
     {
       "feature": "Regression plot with slope confidence interval and baseline overlay",
       "status": "partial",
-      "implementation": "ProcessRegression retains original paired batches with serde-default legacy support. bootstrap::html renders per-process scatter, through-origin fit and slope confidence wedge. regression::comparison_figure overlays independently fitted series on shared axes with distinct labels and confidence wedges. compare --html analyzes compatible saved runs and overlays each process with a baseline/candidate label. Regression points, lines and wedges carry escaped series labels in SVG tooltips. Unified report --baseline retains the validated baseline snapshot for HTML regression overlays. Direct Cargo --baseline --resamples --output exports regression-comparison.html before baseline promotion.",
+      "implementation": "ProcessRegression retains original paired batches with serde-default legacy support. bootstrap::html renders per-process scatter, through-origin fit and slope confidence wedge. regression::comparison_figure overlays independently fitted series on shared axes with distinct labels and confidence wedges. compare --html analyzes compatible saved runs and overlays each process with a baseline/candidate label. Regression points, lines and wedges carry escaped series labels in SVG tooltips. Unified report --baseline retains the validated baseline snapshot for HTML regression overlays. Direct Cargo --baseline --resamples --output exports regression-comparison.html before baseline promotion. Native nonlinear displays now persist for named and automatic comparisons and restore through standalone compare/report; measurement.json records current evidence.",
       "remaining": "Full HTML visual inspection remains. Colors repeat after six series in static print; SVG tooltips retain series identity.",
       "evidence": [
         "regression::tests::chart_and_paired_samples_roundtrip_with_legacy_fallback",
@@ -80,7 +80,7 @@
       "feature": "Relative bootstrap distributions",
       "status": "partial",
       "implementation": "relative::bootstrap independently resamples baseline/candidate populations and retains relative mean/median percentage changes. Undefined ratios remain null; any undefined draw suppresses a conditional-on-finite interval. relative::compare_runs shares existing run compatibility checks, uses normalized per-process medians and marks missing/insufficient independent units unavailable. Runner compare --json --relative-distributions exports a comparisons/relative envelope with seeded draws and per-statistic confidence levels; ordinary JSON and --check decisions remain unchanged. relative::charts and density::relative_figure render mean/median densities, bootstrap intervals, original point estimates, zero lines and symmetric practical noise regions. compare --html includes these for independent runs. Undefined ratios suppress the whole density rather than silently plotting finite subsets; constants remain point masses. Unified report --baseline renders relative charts from validated run snapshots. Direct Cargo named-baseline bootstrap exports per-case charts and relative-distributions.json before baseline promotion, with identical case-contract normalization to history comparison.",
-      "remaining": "Full HTML visual inspection; audit group bootstrap configuration and complete report artifact mapping.",
+      "remaining": "Full HTML visual inspection and final report artifact acceptance remain. Saved per-case bootstrap settings and custom fixed-work relative rates have external Cargo and standalone compare/report evidence.",
       "evidence": [
         "relative::tests::independent_resamples_match_two_point_oracle_and_scale",
         "relative::tests::undefined_ratios_are_preserved_without_biased_intervals",
@@ -97,7 +97,7 @@
       "feature": "Time-vs-input line comparison",
       "status": "partial",
       "implementation": "parameter_charts provides numeric-contract scatter, median of process medians, shared axes and separate metric contracts; direct Cargo and report CLI integration charts::line_scaled provides explicitly declared family line rendering on shared linear/log axes, sorts numeric inputs, preserves individual estimates, rejects duplicate inputs and invalid axis values, and labels lines as connections rather than fitted models. Suite::summary_family assigns group-scoped presentation identities persisted in run provenance. parameter_charts restores families and connects numeric input estimates within each metric contract and variant, leaving unassigned cases as separate points and rejecting duplicate inputs explicitly. Process-runner consensus now carries family identities across independent worker processes. Conflicts or legacy omissions suppress only automatic family joining, remain sticky, and add one note without rejecting measurements. summary_family attributes on bench/group/suite inherit through inline and imported groups with explicit child precedence and group-scoped identities. Scalar args use existing param.arg numeric labels for line inputs. Numeric time summaries now use complete per-case/metric/variant populations; unavailable observations invalidate the estimate. A missing input or unavailable member breaks automatic family joining, preserving remaining points without connecting across the gap.",
-      "remaining": "Per-point case tooltips, group scale configuration and mean/median estimator parity; full HTML visual inspection.",
+      "remaining": "Full HTML visual inspection and remaining report-entrypoint combinations. Mean-estimator source semantics and nonlinear aggregate formatter order have source/test evidence; no remaining known mean-estimator implementation gap.",
       "evidence": [
         "viz::tests::numeric_family_lines_sort_and_reject_ambiguous_or_invalid_inputs",
         "contracts::declared_summary_families_persist_and_connect_only_related_inputs: scoped identities, JSON restoration, line export and duplicate-input refusal",
@@ -108,14 +108,15 @@
         "bench/scripts/test-cargo-bench.py: cross-crate inherited family attribute, argument-dependent bytes, exact saved durations, two line summaries and persisted family identities; complete script passed",
         "report::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches: unavailable process suppresses estimate instead of finite-only reduction",
         "contracts::declared_summary_families_persist_and_connect_only_related_inputs: unavailable middle case preserves three valid points with no connecting line",
-        "summary::tests::arithmetic_mean_uses_normalized_batches_and_preserves_missing_populations: [2,4,12] mean 6, distinct from median and operation-weighted ratio"
+        "summary::tests::arithmetic_mean_uses_normalized_batches_and_preserves_missing_populations: [2,4,12] mean 6, distinct from median and operation-weighted ratio",
+        "Final source audit: Criterion 0.8.2 plot/plotters_backend/summary.rs:135,156 averages samples before scale callback with shared maximum; Airbug summary::mean_estimates/mean_throughput and parameter_formatter_transforms_estimates_after_aggregation_on_shared_scale cover this ordering. Linux ARM64 512-test gate includes those oracles."
       ]
     },
     {
       "feature": "Throughput-vs-input line comparison",
       "status": "partial",
       "implementation": "throughput_process_medians reuses batch-rate calculation per independent process with fixed units. throughput_parameter_charts plots the median of process median rates against numeric input, groups declared families by variant and complete wall metric contract, and separates counter units. Existing parameter summary exports include throughput charts. Incomplete/nonpositive wall populations and ambiguous inputs do not produce misleading lines. Family membership is checked before joining throughput points, including cases producing no rates at all. Missing, unavailable, zero-duration and nonnumeric-input members retain valid points but suppress connecting family lines with an explicit note.",
-      "remaining": "Estimator parity with upstream summary semantics, per-point case tooltips and group scale configuration; full HTML visual inspection.",
+      "remaining": "Full HTML visual inspection and remaining report-entrypoint combinations. Mean-estimator source semantics and nonlinear aggregate formatter order have source/test evidence; no remaining known mean-estimator implementation gap.",
       "evidence": [
         "contracts::throughput_input_lines_use_equal_process_weights_and_separate_units: 5:1 batch imbalance, numeric process medians, separate items/chars curves and zero-duration suppression",
         "report::summary_plot_tests: existing numeric parameter and metric scope regressions pass",
@@ -123,7 +124,8 @@
         "bench/scripts/test-cargo-bench.py: cross-crate inherited family attribute, argument-dependent bytes, exact saved durations, two line summaries and persisted family identities; complete script passed",
         "contracts::throughput_families_disconnect_zero_missing_and_unavailable_members: four gap modes retain two circles and no data-line path",
         "cli::report_restores_families_and_plots_dynamic_throughput_with_gaps: real report command, per-batch bytes/items totals, 5:1 process batch imbalance, fixed MiB conversion, preserved source bytes and missing-middle-input line suppression",
-        "summary::tests::arithmetic_mean_uses_normalized_batches_and_preserves_missing_populations: fixed and varying work ratio-of-means oracles, MiB conversion, zero counters, zero duration and missing observations"
+        "summary::tests::arithmetic_mean_uses_normalized_batches_and_preserves_missing_populations: fixed and varying work ratio-of-means oracles, MiB conversion, zero counters, zero duration and missing observations",
+        "Final source audit: Criterion 0.8.2 plot/plotters_backend/summary.rs:135,156 averages samples before scale callback with shared maximum; Airbug summary::mean_estimates/mean_throughput and parameter_formatter_transforms_estimates_after_aggregation_on_shared_scale cover this ordering. Linux ARM64 512-test gate includes those oracles."
       ]
     },
     {
@@ -202,7 +204,7 @@
       "remaining": "Full report visual audit remains tracked in the chart requirements; no remaining known enable/disable feature gap in the audited direct Cargo and saved-report entrypoints."
     }
   ],
-  "next_implementation": "Audit full HTML presentation, navigation/thumbnail equivalents and report resource limits; complete statistical custom-formatter integration and entrypoint coverage.",
+  "next_implementation": "Complete report resource/navigation acceptance and remaining custom-statistic comparison semantics. Native nonlinear regression persistence is implemented and verified separately.",
   "completion": "Incomplete. Density, regression, iteration overlays, absolute/relative distributions, family lines, throughput curves and violin summaries have implementations and focused evidence. Full HTML visual inspection, report-entrypoint/resource-policy audit and custom-formatter coverage remain.",
   "summary_estimator_audit": {
     "criterion_version": "0.8.2",
@@ -216,7 +218,13 @@
       "bench/src/report.rs::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches (5:1 process batches: default 55 ns, mean 25 ns, mean throughput 80000000 items/s)",
       "bench/cli/tests/cli.rs::report_summary_parameter_and_scale_reach_html (mean CLI route and missing parameter rejection)",
       "bench/scripts/test-cargo-bench.py (cross-crate direct Cargo mean time and dynamic-byte throughput report captions, full script passed)"
-    ]
+    ],
+    "current_review": {
+      "finding": "Pinned Plotters line_comparison_series_data takes sample mean before formatter scaling. Airbug mean estimator covers normalized-batch arithmetic mean; process-median remains a labelled native default.",
+      "open_implementation": "Custom fixed-work parameter throughput now supports live and saved formatters. Dynamic custom-measurement throughput is an explicit extension; browser and remaining report-combination review remain unverified.",
+      "next": "Add formatter-aware parameter summaries with tests that scale the aggregated estimate, preserve shared scales and keep raw artifacts unchanged; saved-report behavior must be explicit.",
+      "external_validation": "core.json external_gate passed after point-label changes; this does not prove custom formatter summary support."
+    }
   },
   "current_validation": {
     "commands": [
@@ -228,5 +236,154 @@
       ".airbug/runs/e5211b9b-ca38-44c5-be5b-f814efb384c7/index.html",
       ".airbug/runs/941e4329-c7e7-4bff-8319-87ab54219f28/index.html"
     ]
+  },
+  "report_navigation": {
+    "status": "implemented_not_browser_verified",
+    "implementation": "Shared offline HTML template builds searchable contents from heading levels 1-6 and figure captions. Links clear row/outcome filters, open ancestor details and focus the target; bookmarked fragments reveal collapsed ancestors. Generated IDs avoid collisions, labels use textContent and IDs are fragment-encoded. Contents are hidden in print. Markdown renderer now preserves heading levels 1-6 instead of rendering ##/### as paragraphs. Standalone Welch comparison HTML now uses the same offline template, includes the numerical comparison table, and preserves the requested escaped title. Runner compare and captured history exports therefore share contents/search/print controls.",
+    "remaining": "Browser interaction and visual review; thumbnail equivalents and non-benchmark templates still need audit.",
+    "validation": "Embedded JavaScript passes node --check. Heading test checks all supported levels, HTML escaping and invalid heading prefixes. Two hypothesis_plot tests passed (.airbug/runs/411433c9-62f5-4f1d-b9f9-fe004ff53a99), including shared controls, one HTML document, table presence and user text/title escaping. Three runner compare tests passed (.airbug/runs/34c22a85-4a78-4437-a57c-7af0b627499b), plus library/CLI all-target Clippy. Browser interaction remains unverified."
+  },
+  "exported_svg_validation": {
+    "evidence": "measurement.json::exported_svg_validation",
+    "status": "passed_structural_not_visual",
+    "scope": "Real Cargo custom-unit export; every generated SVG well-formed and special characters preserved as text. Existing CI script now includes this regression check."
+  },
+  "family_point_labels": {
+    "status": "implemented_for_line_and_scatter_summaries_not_browser_verified",
+    "behavior": "Numeric metric-family lines and throughput summaries include individual case identity in each SVG point title. Labels follow original x coordinates after sorting and remain separated by metric contract. Series/path labels retain family identity. User labels are XML-escaped.",
+    "validation": [
+      "182 library tests passed, including sorted/escaped per-point labels",
+      "66 contract tests passed, including every named parameter point and both throughput units",
+      "All-target/all-feature library Clippy passed"
+    ],
+    "logs": ".airbug/validation/family-point-labels",
+    "remaining": "Browser interaction and visual review remain unverified."
+  },
+  "scatter_point_labels": {
+    "behavior": "Scatter-only numeric parameter summaries retain case identity, including incomplete families without connecting across gaps. Callback observes original coordinates only after domain filtering and thinning; labels are escaped. Existing scatter_scaled API keeps its previous output for other consumers.",
+    "validation": [
+      "183 library tests passed",
+      "66 contract tests passed",
+      "3 summary tests passed after removing redundant case prefix",
+      "All-target/all-feature library Clippy passed"
+    ],
+    "logs": ".airbug/validation/scatter-point-labels",
+    "scope": "Structural SVG assertions; no browser tooltip interaction claim."
+  },
+  "formatted_parameter_summaries": {
+    "status": "implemented_live_and_saved_snapshot_not_browser_verified",
+    "api": [
+      "report::parameter_charts_with_formatters",
+      "report::html_run_with_summary_formatters",
+      "Suite::html_with_summary"
+    ],
+    "integration": "Direct cargo bench summary options use Suite callbacks, including loaded baselines with matching contracts. Original observations and raw artifacts remain unchanged.",
+    "contracts": [
+      "Format aggregate estimates, not each observation before aggregation",
+      "Shared typical maximum per raw metric contract",
+      "Reject mismatched contracts, missing formatter in a shared contract, invalid output cardinality/nonfinite/negative value and inconsistent display units"
+    ],
+    "validation": [
+      "Nonlinear oracle: mean of 1/3 squared is 4, not mean of squares 5; second case maps mean 4 to 16; same typical 4 and unchanged Run bytes",
+      "21 measurement and 66 contract tests passed",
+      "Real cargo bench saved-baseline summary renders groups<&> units and expected scaled point; SVG XML and no-html checks passed",
+      "All-target/all-feature library Clippy passed"
+    ],
+    "logs": ".airbug/validation/summary-formatters",
+    "remaining": "Dynamic custom-measurement throughput summaries remain an explicit extension; browser and complete report-combination review remain unverified.",
+    "snapshot": {
+      "schema": "airbug.presentation.parameter-summary.v1",
+      "storage": "Run provenance; numeric conversions, units, metric contracts, requested parameter/estimator and SHA-256 of cases/observations; no HTML or callback code",
+      "behavior": "Direct Cargo records before writing run.json; standalone report re-renders from validated numeric conversions. Stale sources, another parameter/estimator, incompatible/missing conversions and nondeterministic identical inputs are rejected. Axis changes do not require new conversions.",
+      "validation": [
+        "JSON roundtrip restores nonlinear mean conversions and escaped units without live callbacks",
+        "Modified source values and a different estimator rejected",
+        "Real cargo bench followed by standalone report restores custom parameter summary",
+        "21 measurement and 66 contract tests passed; library/CLI all-target/all-feature Clippy passed",
+        "invalid_summary_formatters_preserve_the_previous_snapshot: 13 failures covering missing registration, inconsistent/empty units, wrong cardinality, NaN, negative values and callback errors across value/throughput formatting preserve byte-identical Run and restored chart",
+        "External cargo bench named-baseline comparison followed by standalone report with baseline restores custom summary points and throughput on linear and logarithmic axes without executing workloads",
+        "Standalone report rejects stale summary source hash and preserves an existing HTML output byte-for-byte; all produced SVG fragments parse as XML"
+      ],
+      "logs": ".airbug/validation/summary-snapshots"
+    },
+    "throughput": {
+      "status": "fixed_work_live_and_saved",
+      "behavior": "ValueFormatter::scale_throughputs transforms each raw aggregate estimate using the case fixed work count and shared typical value. Counter units and metric contracts stay separate. Missing counters or unavailable family members prevent lines crossing gaps. Dynamic work produces an explicit unavailable message.",
+      "snapshot": "Conversions include work amount/unit in their lookup key; older snapshots without matching rate conversions request regeneration.",
+      "validation": [
+        "Nonlinear work / mean^2 oracle: case estimates 2/4 and counts 8/16 become rates 2/1; JSON roundtrip preserves both",
+        "Real cargo bench loaded baseline and standalone report recover items/unit rate 2, custom units and valid SVG XML",
+        "21 measurement and 66 contract tests passed; library/CLI all-target/all-feature Clippy passed"
+      ],
+      "logs": ".airbug/validation/summary-throughput"
+    }
+  },
+  "backend_capability_audit": {
+    "sources": [
+      "criterion-0.8.2/src/plot/mod.rs::Plotter",
+      "criterion-0.8.2/src/plot/plotters_backend",
+      "criterion-0.8.2/src/html/mod.rs::final_summary",
+      "bench/cli/src/experiment_report.rs"
+    ],
+    "scope": "Native output capabilities, not renderer-library selection or pixel equivalence.",
+    "plot_methods": {
+      "pdf": "density::figure_with_outliers; pdf denotes probability density, not a PDF document export",
+      "regression": "regression::figure/comparison_figure; saved nonlinear ComparisonPresentation",
+      "iteration_times": "report::iteration_comparison",
+      "abs_distributions": "bootstrap::html with retained distributions; statistic_format display",
+      "rel_distributions": "relative::charts",
+      "line_comparison": "report parameter/family and throughput charts",
+      "violin": "bootstrap::violin_charts_with_case_scales",
+      "t_test": "hypothesis_plot::fragment",
+      "wait": "Synchronous SVG generation returns completed content; no plotting subprocess to wait for"
+    },
+    "final_summary": "Criterion scans existing benchmark IDs, groups/sorts them and writes report/index.html; it does not rerun measurements. Native report on a directory discovers saved runs, sorts entries by outcome/label and generates one aggregate report. Direct Suite reports cover the current run. Aggregate discovery is an explicit CLI entrypoint.",
+    "evidence": [
+      "experiment_reports_preserve_failures_and_family_uncertainty covers a directory with paired, failed, unsupported, malformed and unfinished runs",
+      "report_baselines_match_paths_and_expose_missing_targets covers multiple target directories and unmatched added/removed targets",
+      "test-nonlinear-bootstrap.py covers shared-scale regression output/restoration for named and automatic comparisons"
+    ],
+    "remaining": "Full rendered HTML navigation/layout/hover, thumbnail-equivalent usability and large-collection resource policy remain unverified. Chart family inventory alone is not visual acceptance."
+  },
+  "collection_resource_audit": {
+    "status": "source_verified_limits_not_full_large_report_acceptance",
+    "source": "bench/cli/src/experiment_report.rs files/build/HTML rendering; bench/src/report.rs comparison_charts",
+    "limits": [
+      "Discovery rejects more than 20000 visited directories or depth above 12.",
+      "Discovery rejects more than 256 saved runs.",
+      "Collection build rejects total source input above 128 MiB.",
+      "Process overview charts have a collection budget of 64 and a per-run allocation.",
+      "Effect forest displays at most 32 finite intervals; its visible note says all decisions remain in tables."
+    ],
+    "remaining": "These are distinct limits, not a global SVG/analysis budget. Other chart families, large-case populations and actual rendered usability need separate acceptance. No large-report or browser success claim.",
+    "boundary_validation": {
+      "status": "passed_macos_cli",
+      "test": "bench/cli/tests/cli.rs::collection_chart_budget_preserves_rows_and_run_limit_rejects_atomically",
+      "coverage": [
+        "65 saved runs: exactly 64 process-median series and all 65 run cards/case identities retained",
+        "256 saved runs: all JSON observations retained with exact values",
+        "257 saved runs: explicit limit error and existing output bytes unchanged"
+      ],
+      "log": ".airbug/validation/parity-current/collection-limits.log",
+      "limits": "Checks process-median chart budget and run-count boundary. Not a global chart/memory/time budget or browser visual acceptance."
+    }
+  },
+  "html_plot_policy_audit": {
+    "sources": [
+      "criterion-0.8.2/src/lib.rs:647-665",
+      "bench/src/suite.rs::main"
+    ],
+    "upstream": "with_plots installs the HTML report backend when available and not managed by cargo-criterion; without_plots removes the HTML reporter.",
+    "native_mapping": {
+      "HTML and graphs": "default; Suite::plots(true) / --plots",
+      "disable all HTML": "--no-html",
+      "numerical HTML without SVG": "Suite::plots(false) / --no-plots"
+    },
+    "evidence": [
+      "bench/scripts/test-formatted-bootstrap.py passed on macOS and Linux ARM64: default/without-SVG/without-HTML artifacts, named and automatic history, standalone report/compare",
+      "bench/scripts/test-nonlinear-bootstrap.py passed with no-plots and no-html alongside nonlinear/signed display",
+      "bench/scripts/test-option-domains.py rejects explicit --plots with --no-html in either order"
+    ],
+    "limits": "Artifact and source semantics verified. Browser rendering, interaction and complete visual acceptance remain open."
   }
 }

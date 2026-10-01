@@ -1,5 +1,5 @@
 use crate::{
-    Result, Run,
+    Metric, Result, Run,
     analysis::{Comparison, median},
     viz::{self, charts},
 };
@@ -211,6 +211,19 @@ pub fn markdown(run: &Run) -> Result<String> {
 pub fn markdown_with_bytes_format(run: &Run, format: BytesFormat) -> Result<String> {
     markdown_impl(run, Some(format))
 }
+pub(crate) fn display_throughput(value: f64, unit: &str) -> (f64, String) {
+    if unit != "cycles" {
+        return (value, format!("{unit}/s"));
+    }
+    let units = ["Hz", "kHz", "MHz", "GHz", "THz", "PHz", "EHz"];
+    let mut scaled = value;
+    let mut index = 0;
+    while index + 1 < units.len() && scaled >= 1000.0 {
+        scaled /= 1000.0;
+        index += 1;
+    }
+    (scaled, units[index].into())
+}
 fn markdown_impl(run: &Run, format: Option<BytesFormat>) -> Result<String> {
     run.validate()?;
     let mut out = format!(
@@ -270,12 +283,13 @@ fn markdown_impl(run: &Run, format: Option<BytesFormat>) -> Result<String> {
         Some(format) => throughput_with_format(run, format)?,
         None => throughput_display(run)?,
     } {
+        let (value, unit) = display_throughput(median(&s.values), &s.unit);
         rates.push_str(&format!(
-            "| {} [{}] | {:.4} | {}/s |\n",
+            "| {} [{}] | {:.4} | {} |\n",
             escape(&s.case),
             escape(&s.variant),
-            median(&s.values),
-            escape(&s.unit)
+            value,
+            escape(&unit)
         ));
     }
     if !rates.is_empty() {
@@ -391,8 +405,12 @@ pub fn html_fragment(markdown: &str) -> String {
                 body.push_str("</tbody></table></div>");
                 table = false;
             }
-            if let Some(h) = line.strip_prefix("# ") {
-                body.push_str(&format!("<h1>{}</h1>", html_escape(h)));
+            let level = line.bytes().take_while(|byte| *byte == b'#').count();
+            if (1..=6).contains(&level) && line.as_bytes().get(level) == Some(&b' ') {
+                body.push_str(&format!(
+                    "<h{level}>{}</h{level}>",
+                    html_escape(&line[level + 1..])
+                ));
             } else if !line.trim().is_empty() {
                 body.push_str(&format!("<p>{}</p>", html_escape(line)));
             }
@@ -426,6 +444,36 @@ pub struct SummaryPlot<'a> {
 
 /// Standard run report with optional input-size summaries.
 pub fn html_run_with_summary(run: &Run, summary: Option<SummaryPlot<'_>>) -> Result<String> {
+    render_run(run, summary, true, &[])
+}
+
+/// Numerical run report with context and worker tables, without chart computation.
+pub fn html_run_without_plots(run: &Run) -> Result<String> {
+    render_run(run, None, false, &[])
+}
+
+/// Registered case/metric contracts and their live formatting callbacks.
+pub type SummaryFormatters<'a> = [(
+    &'a str,
+    &'a Metric,
+    &'a dyn crate::measurement::ValueFormatter,
+)];
+
+/// Format aggregate parameter estimates using live callbacks, preserving raw data.
+pub fn html_run_with_summary_formatters(
+    run: &Run,
+    summary: Option<SummaryPlot<'_>>,
+    formatters: &SummaryFormatters<'_>,
+) -> Result<String> {
+    render_run(run, summary, true, formatters)
+}
+
+fn render_run(
+    run: &Run,
+    summary: Option<SummaryPlot<'_>>,
+    plots: bool,
+    formatters: &SummaryFormatters<'_>,
+) -> Result<String> {
     let mut text = markdown(run)?;
     text.push_str("\n# Measurement context\n");
     for (k, v) in &run.environment {
@@ -448,8 +496,13 @@ pub fn html_run_with_summary(run: &Run, summary: Option<SummaryPlot<'_>>) -> Res
         details.push_str("</dl></details>");
     }
     details.push_str("</section>");
+    details.push_str(&worker_timing_html(run)?);
     result = result.replace("<!--DETAILS-->", &details);
+    if !plots {
+        return Ok(result.replace("<!--CHARTS-->", ""));
+    }
     let mut plots = raw_charts(run)?;
+    plots.push_str(&worker_timing_charts(run)?);
     match crate::measurement::charts(run) {
         Ok(formatted) => plots.push_str(&formatted),
         Err(err) => plots.push_str(&format!(
@@ -458,15 +511,100 @@ pub fn html_run_with_summary(run: &Run, summary: Option<SummaryPlot<'_>>) -> Res
         )),
     }
     if let Some(summary) = summary {
-        plots.push_str(&parameter_charts(run, &summary)?);
+        plots.push_str(&if formatters.is_empty() {
+            parameter_charts(run, &summary)?
+        } else {
+            parameter_charts_with_formatters(run, &summary, formatters)?
+        });
     }
     result = result.replace("<!--CHARTS-->", &plots);
     Ok(result)
 }
 
+/// Per-process complete worker-slot sample distributions.
+/// Concurrent workers are not treated as independent process repetitions.
+pub fn worker_timing_charts(run: &Run) -> Result<String> {
+    let samples = run.worker_slot_samples()?;
+    let mut groups: BTreeMap<(&str, &str, u32), Vec<f64>> = BTreeMap::new();
+    for worker in &samples {
+        groups
+            .entry((&worker.case, &worker.variant, worker.process))
+            .or_default()
+            .push(worker.wall_ns.parse::<u128>()? as f64 / worker.operations as f64);
+    }
+    if groups.is_empty() {
+        return Ok(String::new());
+    }
+    let mut html = String::from(
+        "<section id=\"worker-distributions\"><h2>Worker timing distributions</h2><p>Each plot contains complete worker-slot samples from one process, with time and operations summed across waves before normalization. Curves describe observed values; they do not imply independent process repetitions or individual-operation latency.</p>",
+    );
+    for ((case, variant, process), values) in groups {
+        let title = format!("{case} / {variant} / process {process}");
+        html.push_str(&crate::density::figure_with_outliers(
+            &[crate::density::Series {
+                label: "worker samples",
+                values: &values,
+            }],
+            &title,
+            "ns/op",
+        )?);
+    }
+    html.push_str("</section>");
+    Ok(html)
+}
+
+fn worker_timing_html(run: &Run) -> Result<String> {
+    let rows = descriptive(run)?;
+    let mut body = String::new();
+    let mut counters = String::new();
+    for row in rows {
+        for (unit, counts) in &row.worker_associated_counters {
+            counters.push_str(&format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{:.4}</td><td>{:.4}</td><td>{:.4}</td><td>{:.4}</td></tr>", html_escape(&row.case), html_escape(&row.variant), row.process, html_escape(unit), counts.fastest, counts.slowest, counts.median, counts.operation_mean));
+        }
+        let summary = row.worker_wall_per_operation.as_ref().or_else(|| {
+            row.worker_allocations
+                .as_ref()
+                .and_then(|w| w.wall_per_operation.as_ref())
+        });
+        if let Some(summary) = summary {
+            body.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{:.4}</td><td>{:.4}</td><td>{:.4}</td><td>{:.4}</td></tr>",
+                html_escape(&row.case), html_escape(&row.variant), row.process, summary.count,
+                summary.minimum, summary.maximum, summary.mean, summary.median));
+        }
+    }
+    if body.is_empty() {
+        return Ok(String::new());
+    }
+    let counters = if counters.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<section id=\"worker-counters\"><h2>Worker work counts associated with timing</h2><p>Known counts per operation, paired with complete worker-slot samples. Missing units are unknown, not zero.</p><div style=\"overflow-x:auto\"><table><thead><tr><th>Case</th><th>Variant</th><th>Process</th><th>Unit</th><th>Fastest</th><th>Slowest</th><th>Median-time samples</th><th>Operation mean</th></tr></thead><tbody>{counters}</tbody></table></div></section>"
+        )
+    };
+    Ok(format!(
+        "<section id=\"worker-timings\"><h2>Worker wall time per operation</h2><p>Time and operations summed across all waves of each worker-slot sample, then normalized in ns/op. Rows are separated by process. These batches are not independent process repetitions or individual-operation latency samples.</p><div style=\"overflow-x:auto\"><table><thead><tr><th>Case</th><th>Variant</th><th>Process</th><th>Worker samples</th><th>Min (ns/op)</th><th>Max (ns/op)</th><th>Mean (ns/op)</th><th>Median (ns/op)</th></tr></thead><tbody>{body}</tbody></table></div></section>{counters}"
+    ))
+}
+
 /// Plot medians of independent process medians against an explicit numeric input.
 /// Metric contracts are kept separate, including unit, scope, phase and statistic.
 pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
+    if let Some(saved) = crate::summary_format::charts(run, config)? {
+        return Ok(saved);
+    }
+    parameter_charts_with_formatters(run, config, &[])
+}
+
+/// Apply each formatter to the aggregated estimate, using one typical value per
+/// raw metric contract. A group must have complete, unit-consistent formatting.
+pub fn parameter_charts_with_formatters(
+    run: &Run,
+    config: &SummaryPlot<'_>,
+    formatters: &SummaryFormatters<'_>,
+) -> Result<String> {
+    let mut point_cases = BTreeMap::new();
     run.validate()?;
     let means: BTreeMap<_, _> = if config.estimator == crate::summary::Estimator::Mean {
         crate::summary::mean_estimates(run)?
@@ -480,6 +618,7 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
     let families = crate::presentation::load_families(run)?;
     let key = format!("param.{}", config.parameter);
     let mut groups: BTreeMap<String, (String, Vec<charts::Series>)> = BTreeMap::new();
+    let mut rate_sources = BTreeMap::new();
     let mut skipped = 0;
     let mut incomplete = std::collections::BTreeSet::new();
     let mut unavailable = String::new();
@@ -521,6 +660,23 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
         }
     }
 
+    let mut typical: BTreeMap<String, f64> = BTreeMap::new();
+    for ((case_id, metric_id, variant), processes) in &values {
+        if processes.is_empty() {
+            continue;
+        }
+        let case = run.cases.iter().find(|c| c.id == *case_id).unwrap();
+        let metric = case.metrics.iter().find(|m| m.id == *metric_id).unwrap();
+        let estimate = if config.estimator == crate::summary::Estimator::Mean {
+            means[&(case_id.clone(), metric_id.clone(), variant.clone())]
+        } else {
+            median(&processes.values().copied().collect::<Vec<_>>())
+        };
+        typical
+            .entry(serde_json::to_string(metric)?)
+            .and_modify(|v| *v = v.max(estimate))
+            .or_insert(estimate);
+    }
     for ((case_id, metric_id, variant), processes) in values {
         let case = run.cases.iter().find(|case| case.id == case_id).unwrap();
         let Some(x) = case
@@ -553,10 +709,99 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
         } else {
             median(&ys)
         };
+        let contract = serde_json::to_string(metric)?;
+        let registered = formatters
+            .iter()
+            .find(|(id, m, _)| *id == case_id && m.id == metric.id);
+        let raw_estimate = estimate;
+        let (estimate, unit) = if let Some((_, expected, formatter)) = registered {
+            if *expected != metric {
+                return Err(crate::error("summary formatter metric contract mismatch"));
+            }
+            let scaled = formatter.scale_values(typical[&contract], &[estimate])?;
+            if scaled.values.len() != 1
+                || scaled.unit.is_empty()
+                || !scaled.values[0].is_finite()
+                || scaled.values[0] < 0.
+            {
+                return Err(crate::error("invalid summary formatter output"));
+            }
+            (scaled.values[0], scaled.unit)
+        } else {
+            if formatters.iter().any(|(_, m, _)| *m == metric) {
+                return Err(crate::error(
+                    "summary formatter missing for a case sharing the metric contract",
+                ));
+            }
+            (estimate, metric.unit.clone())
+        };
         let label = format!(
             "{} vs {} ({}; {}; {}; {})",
-            config.parameter, metric.id, metric.unit, metric.scope, metric.phase, metric.statistic
+            config.parameter, metric.id, unit, metric.scope, metric.phase, metric.statistic
         );
+        if groups
+            .get(&contract)
+            .is_some_and(|(existing, _)| *existing != label)
+        {
+            return Err(crate::error(
+                "summary formatters must select one shared unit",
+            ));
+        }
+        if let Some((_, _, formatter)) = registered {
+            let series_label = families
+                .get(&case_id)
+                .map(|family| format!("family {family} / {variant}"))
+                .unwrap_or_else(|| format!("case {case_id} / {variant}"));
+            for (counter, count) in work_counters(case)? {
+                let Some(count) = count else {
+                    unavailable.push_str(&format!(
+                        "<p>{}: dynamic {} work has no fixed-work formatter summary.</p>",
+                        escape(&case_id),
+                        escape(counter)
+                    ));
+                    continue;
+                };
+                let rate = formatter.scale_throughputs(
+                    typical[&contract],
+                    count as f64,
+                    counter,
+                    &[raw_estimate],
+                )?;
+                if rate.values.len() != 1
+                    || rate.unit.is_empty()
+                    || !rate.values[0].is_finite()
+                    || rate.values[0] < 0.
+                {
+                    return Err(crate::error("invalid summary throughput formatter output"));
+                }
+                let rate_key = serde_json::to_string(&(contract.as_str(), counter))?;
+                let title = format!(
+                    "{} vs {} / {} throughput ({})",
+                    config.parameter, metric.id, counter, rate.unit
+                );
+                let group = groups
+                    .entry(rate_key.clone())
+                    .or_insert_with(|| (title.clone(), vec![]));
+                if group.0 != title {
+                    return Err(crate::error(
+                        "summary throughput formatters must select one shared unit",
+                    ));
+                }
+                if let Some(series) = group.1.iter_mut().find(|s| s.label == series_label) {
+                    series.points.push((x, rate.values[0]));
+                } else {
+                    group.1.push(charts::Series::new(
+                        &series_label,
+                        vec![(x, rate.values[0])],
+                    ));
+                }
+                point_cases.insert(
+                    (rate_key.clone(), series_label.clone(), x.to_bits()),
+                    case_id.clone(),
+                );
+                rate_sources.insert(rate_key, contract.clone());
+            }
+        }
         let group = groups
             .entry(serde_json::to_string(metric)?)
             .or_insert_with(|| (label, vec![]));
@@ -564,12 +809,26 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
             .get(&case_id)
             .map(|family| format!("family {family} / {variant}"))
             .unwrap_or_else(|| format!("case {case_id} / {variant}"));
+        point_cases.insert(
+            (serde_json::to_string(metric)?, label.clone(), x.to_bits()),
+            case_id.clone(),
+        );
         if let Some(series) = group.1.iter_mut().find(|s| s.label == label) {
             series.points.push((x, estimate));
         } else {
             group
                 .1
                 .push(charts::Series::new(label, vec![(x, estimate)]));
+        }
+    }
+    for (rate_key, source_key) in &rate_sources {
+        for rate in &groups[rate_key].1 {
+            let source = groups[source_key].1.iter().find(|s| s.label == rate.label);
+            if source.is_none_or(|s| s.points.len() != rate.points.len())
+                || incomplete.contains(&(source_key.clone(), rate.label.clone()))
+            {
+                incomplete.insert((rate_key.clone(), rate.label.clone()));
+            }
         }
     }
     let estimator_label = match config.estimator {
@@ -601,12 +860,24 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
             })
             .collect();
         if series.iter().any(|s| s.points.len() > 1) {
-            match charts::line_scaled(
+            match charts::line_scaled_with_point_labels(
                 &label,
                 &series,
                 "Metric contracts are kept separate. Batch totals are normalized per operation.",
                 config.scale,
                 config.scale,
+                |series, (x, _)| {
+                    point_cases
+                        .get(&(contract.clone(), series.to_owned(), x.to_bits()))
+                        .map(|case| {
+                            if series.starts_with("family ") {
+                                format!("{series} / case {case}")
+                            } else {
+                                series.to_owned()
+                            }
+                        })
+                        .unwrap_or_else(|| series.to_owned())
+                },
             ) {
                 Ok(chart) => output.push_str(&chart),
                 Err(err) => output.push_str(&format!(
@@ -617,13 +888,25 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
             }
             continue;
         }
-        output.push_str(&charts::scatter_scaled(
+        output.push_str(&charts::scatter_scaled_with_point_labels(
             &label,
             &series,
             1000,
             "Metric contracts are not pooled. Batch totals are normalized per operation.",
             config.scale,
             config.scale,
+            |series, (x, _)| {
+                point_cases
+                    .get(&(contract.clone(), series.to_owned(), x.to_bits()))
+                    .map(|case| {
+                        if series.starts_with("family ") {
+                            format!("{series} / case {case}")
+                        } else {
+                            series.to_owned()
+                        }
+                    })
+                    .unwrap_or_else(|| series.to_owned())
+            },
         ));
     }
     output.push_str("</section>");
@@ -633,6 +916,7 @@ pub fn parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
 
 /// Throughput versus numeric input, using equal weights for independent processes.
 pub fn throughput_parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Result<String> {
+    let mut point_cases = BTreeMap::new();
     let families = crate::presentation::load_families(run)?;
     let key = format!("param.{}", config.parameter);
     let mut values: BTreeMap<(String, String, String), Vec<f64>> = BTreeMap::new();
@@ -709,6 +993,10 @@ pub fn throughput_parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Resul
             .get(&case_id)
             .map(|f| format!("family {f} / {variant}"))
             .unwrap_or_else(|| format!("case {case_id} / {variant}"));
+        point_cases.insert(
+            (serde_json::to_string(metric)?, label.clone(), x.to_bits()),
+            case_id.clone(),
+        );
         let series = groups
             .entry((serde_json::to_string(metric)?, unit))
             .or_default();
@@ -761,12 +1049,24 @@ pub fn throughput_parameter_charts(run: &Run, config: &SummaryPlot<'_>) -> Resul
             output.push_str("<p>Incomplete throughput families are shown as separate points; no line crosses an unavailable case.</p>");
         }
         let title = format!("{} vs throughput ({unit}/s)", config.parameter);
-        match charts::line_scaled(
+        match charts::line_scaled_with_point_labels(
             &title,
             &series,
             "Fixed unit scaling; work counters are not pooled across units.",
             config.scale,
             config.scale,
+            |series, (x, _)| {
+                point_cases
+                    .get(&(contract.clone(), series.to_owned(), x.to_bits()))
+                    .map(|case| {
+                        if series.starts_with("family ") {
+                            format!("{series} / case {case}")
+                        } else {
+                            series.to_owned()
+                        }
+                    })
+                    .unwrap_or_else(|| series.to_owned())
+            },
         ) {
             Ok(chart) => output.push_str(&chart),
             Err(err) => output.push_str(&format!(
@@ -1229,6 +1529,59 @@ fn associated_counters(
     Ok(result)
 }
 
+fn worker_counter_summary(
+    all: &[crate::WorkerSlotSample],
+    case: &str,
+    variant: &str,
+    process: u32,
+) -> Result<BTreeMap<String, AssociatedCounter>> {
+    let mut samples = all
+        .iter()
+        .filter(|s| s.case == case && s.variant == variant && s.process == process)
+        .map(|s| Ok((s.wall_ns.parse::<u128>()? as f64 / s.operations as f64, s)))
+        .collect::<Result<Vec<_>>>()?;
+    samples.sort_by(|a, b| {
+        a.0.total_cmp(&b.0)
+            .then_with(|| (a.1.sequence, a.1.worker).cmp(&(b.1.sequence, b.1.worker)))
+    });
+    let Some((_, first)) = samples.first() else {
+        return Ok(BTreeMap::new());
+    };
+    let operations: f64 = samples.iter().map(|(_, s)| s.operations as f64).sum();
+    let mut result = BTreeMap::new();
+    for unit in first.work_totals.keys() {
+        if samples
+            .iter()
+            .any(|(_, s)| !s.work_totals.contains_key(unit))
+        {
+            continue;
+        }
+        let values = samples
+            .iter()
+            .map(|(_, s)| Ok(s.work_totals[unit].parse::<u128>()? as f64 / s.operations as f64))
+            .collect::<Result<Vec<_>>>()?;
+        let middle = values.len() / 2;
+        result.insert(
+            unit.clone(),
+            AssociatedCounter {
+                fastest: values[0],
+                slowest: *values.last().unwrap(),
+                median: if values.len().is_multiple_of(2) {
+                    values[middle - 1] / 2.0 + values[middle] / 2.0
+                } else {
+                    values[middle]
+                },
+                operation_mean: values
+                    .iter()
+                    .zip(&samples)
+                    .map(|(v, (_, s))| v * (s.operations as f64 / operations))
+                    .sum(),
+            },
+        );
+    }
+    Ok(result)
+}
+
 /// Allocation metrics paired with samples selected by normalized wall time.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AssociatedAllocation {
@@ -1386,16 +1739,21 @@ fn associated_allocations(
     Ok(result)
 }
 
-/// Identity of one measured worker wave; slots are not persistent threads.
+/// Identity of one measured worker wave. Slots are process-local identifiers;
+/// thread reuse is described by the saved case executor contract.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct WorkerSampleRef {
     pub sequence: u64,
     pub wave: u64,
-    pub worker: u32,
+    pub worker: u64,
 }
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct WorkerAllocationSummary {
     pub samples: usize,
+    /// Raw wall nanoseconds per operation for individual worker waves.
+    /// These are normalized batches, not independent process repetitions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wall_per_operation: Option<crate::bootstrap::Summary>,
     pub fastest: WorkerSampleRef,
     pub slowest: WorkerSampleRef,
     pub median_samples: Vec<WorkerSampleRef>,
@@ -1438,6 +1796,7 @@ fn worker_allocation_summary(
                 .map(|(id, value)| (id.as_str(), value)),
         ) {
             view.observations.push(crate::Observation {
+                worker_work_totals: Default::default(),
                 work_totals: BTreeMap::new(),
                 case: case.id.clone(),
                 metric: metric.into(),
@@ -1459,6 +1818,12 @@ fn worker_allocation_summary(
     };
     Ok(Some(WorkerAllocationSummary {
         samples: workers.len(),
+        wall_per_operation: Some(crate::bootstrap::describe(
+            &workers
+                .iter()
+                .map(|w| Ok(w.wall_ns.parse::<u128>()? as f64 / w.operations as f64))
+                .collect::<Result<Vec<_>>>()?,
+        )?),
         fastest: identity(workers[0]),
         slowest: identity(workers[workers.len() - 1]),
         median_samples,
@@ -1481,9 +1846,20 @@ pub struct DescriptiveRow {
     pub operation_weighted_mean: Option<f64>,
     pub unavailable: usize,
     pub associated_counters: BTreeMap<String, AssociatedCounter>,
+    /// Known work per operation associated with complete worker-slot timing samples.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub worker_associated_counters: BTreeMap<String, AssociatedCounter>,
     pub associated_allocations: BTreeMap<String, Option<AssociatedAllocation>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worker_allocations: Option<WorkerAllocationSummary>,
+    /// Distribution of complete worker-slot samples in ns/op, per process.
+    /// Each sample sums all component waves before normalization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_wall_per_operation: Option<crate::bootstrap::Summary>,
+    /// Sum of complete worker-slot durations divided by their total operations.
+    /// Distinct from aggregate wall time, which uses each wave's slowest worker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_operation_weighted_mean: Option<f64>,
     pub summary: Option<crate::bootstrap::Summary>,
 }
 pub fn descriptive(run: &Run) -> Result<Vec<DescriptiveRow>> {
@@ -1494,7 +1870,7 @@ pub fn descriptive(run: &Run) -> Result<Vec<DescriptiveRow>> {
         missing: usize,
         operations: u128,
     }
-    run.validate()?;
+    let worker_samples = run.worker_slot_samples()?;
     let mut result = Vec::new();
     for case in &run.cases {
         for metric in &case.metrics {
@@ -1567,10 +1943,63 @@ pub fn descriptive(run: &Run) -> Result<Vec<DescriptiveRow>> {
                     } else {
                         BTreeMap::new()
                     },
+                    worker_associated_counters: if metric.id == "wall" {
+                        worker_counter_summary(&worker_samples, &case.id, variant, process)?
+                    } else {
+                        BTreeMap::new()
+                    },
                     associated_allocations: if metric.id == "wall" {
                         associated_allocations(run, case, variant, process)?
                     } else {
                         BTreeMap::new()
+                    },
+                    worker_wall_per_operation: if metric.id == "wall" {
+                        let values = worker_samples
+                            .iter()
+                            .filter(|w| {
+                                w.case == case.id && w.variant == variant && w.process == process
+                            })
+                            .map(|w| Ok(w.wall_ns.parse::<u128>()? as f64 / w.operations as f64))
+                            .collect::<Result<Vec<_>>>()?;
+                        if values.is_empty() {
+                            None
+                        } else {
+                            Some(crate::bootstrap::describe(&values)?)
+                        }
+                    } else {
+                        None
+                    },
+                    worker_operation_weighted_mean: if metric.id == "wall" {
+                        let selected: Vec<_> = worker_samples
+                            .iter()
+                            .filter(|worker| {
+                                worker.case == case.id
+                                    && worker.variant == variant
+                                    && worker.process == process
+                            })
+                            .collect();
+                        let operations = selected.iter().try_fold(0u128, |total, worker| {
+                            total
+                                .checked_add(worker.operations as u128)
+                                .ok_or_else(|| crate::error("worker operation total overflow"))
+                        })?;
+                        if operations == 0 {
+                            None
+                        } else {
+                            Some(
+                                selected
+                                    .iter()
+                                    .map(|worker| {
+                                        Ok(worker.wall_ns.parse::<u128>()? as f64
+                                            / operations as f64)
+                                    })
+                                    .collect::<Result<Vec<_>>>()?
+                                    .iter()
+                                    .sum(),
+                            )
+                        }
+                    } else {
+                        None
                     },
                     worker_allocations: if metric.id == "wall" {
                         worker_allocation_summary(run, case, variant, process)?
@@ -1628,10 +2057,28 @@ pub fn descriptive_markdown(rows: &[DescriptiveRow]) -> String {
             ));
         }
     }
-    if rows.iter().any(|row| !row.associated_counters.is_empty()) {
-        text.push_str("\n### Work counts associated with timing\n\nCounts per operation, selected by normalized duration.\n\n| Case / variant | Process | Unit | Fastest | Slowest | Median-time samples | Operation mean |\n|---|---:|---|---:|---:|---:|---:|\n");
+    for workers in [false, true] {
+        if !rows.iter().any(|row| {
+            if workers {
+                !row.worker_associated_counters.is_empty()
+            } else {
+                !row.associated_counters.is_empty()
+            }
+        }) {
+            continue;
+        }
+        let title = if workers {
+            "Worker work counts associated with timing"
+        } else {
+            "Work counts associated with timing"
+        };
+        text.push_str(&format!("\n### {title}\n\nKnown counts per operation, selected by normalized duration. Missing worker units are unknown, not zero.\n\n| Case / variant | Process | Unit | Fastest | Slowest | Median-time samples | Operation mean |\n|---|---:|---|---:|---:|---:|---:|\n"));
         for row in rows {
-            for (unit, counts) in &row.associated_counters {
+            for (unit, counts) in if workers {
+                &row.worker_associated_counters
+            } else {
+                &row.associated_counters
+            } {
                 text.push_str(&format!(
                     "| {} / {} | {} | {} | {:.4} | {:.4} | {:.4} | {:.4} |\n",
                     escape(&row.case),
@@ -1681,6 +2128,31 @@ pub fn descriptive_markdown(rows: &[DescriptiveRow]) -> String {
                 } else {
                     text.push_str(&format!("| {} / {} | {} | {} | n/a | n/a | n/a | n/a | incomplete sample pairing |\n", escape(&row.case), escape(&row.variant), row.process, escape(metric)));
                 }
+            }
+        }
+    }
+    let worker_summary = |row: &DescriptiveRow| {
+        row.worker_wall_per_operation.clone().or_else(|| {
+            row.worker_allocations
+                .as_ref()
+                .and_then(|w| w.wall_per_operation.clone())
+        })
+    };
+    if rows.iter().any(|row| worker_summary(row).is_some()) {
+        text.push_str("\n### Worker wall time per operation\n\nDescriptive distribution of complete worker-slot samples in ns/op. Time and operations are summed across waves before normalization; concurrent workers are not independent process repetitions.\n\n| Case / variant | Process | Worker samples | Min | Max | Mean | Median |\n|---|---:|---:|---:|---:|---:|---:|\n");
+        for row in rows {
+            if let Some(summary) = worker_summary(row) {
+                text.push_str(&format!(
+                    "| {} / {} | {} | {} | {:.4} | {:.4} | {:.4} | {:.4} |\n",
+                    escape(&row.case),
+                    escape(&row.variant),
+                    row.process,
+                    summary.count,
+                    summary.minimum,
+                    summary.maximum,
+                    summary.mean,
+                    summary.median
+                ));
             }
         }
     }
@@ -1807,7 +2279,7 @@ mod summary_plot_tests {
         };
         let html = parameter_charts(&run, &config).unwrap();
         // Process medians are 10 and 100 ns/op, so the summary is 55, not 10.
-        let expected = charts::scatter_scaled(
+        let expected = charts::scatter_scaled_with_point_labels(
             "size vs wall (ns; process; measurement; batch_total)",
             &[charts::Series::new(
                 format!("input / {}", run.observations[0].variant),
@@ -1817,6 +2289,7 @@ mod summary_plot_tests {
             "Metric contracts are not pooled. Batch totals are normalized per operation.",
             charts::AxisScale::Linear,
             charts::AxisScale::Linear,
+            |_, _| format!("case input / {}", run.observations[0].variant),
         );
         assert!(html.contains(&expected));
         assert_eq!(html.matches("<circle").count(), 1);
@@ -1825,13 +2298,14 @@ mod summary_plot_tests {
             ..config
         };
         let mean_html = parameter_charts(&run, &mean_config).unwrap();
-        let mean_expected = charts::scatter_scaled(
+        let mean_expected = charts::scatter_scaled_with_point_labels(
             "size vs wall (ns; process; measurement; batch_total)",
             &[charts::Series::new("mean", vec![(16., 25.)])],
             1000,
             "Metric contracts are not pooled. Batch totals are normalized per operation.",
             charts::AxisScale::Linear,
             charts::AxisScale::Linear,
+            |_, _| format!("case input / {}", run.observations[0].variant),
         );
         assert!(mean_html.contains(&mean_expected));
         assert!(mean_html.contains("arithmetic mean of normalized observations"));
@@ -1901,6 +2375,49 @@ mod summary_plot_tests {
 mod bit_rate_tests {
     use super::*;
     #[test]
+    fn cycle_throughput_displays_frequency_without_changing_machine_units() {
+        for (rate, expected) in [
+            (0.0, (0.0, "Hz")),
+            (999.0, (999.0, "Hz")),
+            (1000.0, (1.0, "kHz")),
+            (1e6, (1.0, "MHz")),
+            (2.5e9, (2.5, "GHz")),
+        ] {
+            assert_eq!(
+                display_throughput(rate, "cycles"),
+                (expected.0, expected.1.into())
+            );
+        }
+        assert_eq!(
+            display_throughput(1000.0, "items"),
+            (1000.0, "items/s".into())
+        );
+        let mut recorder = crate::Recorder::new();
+        recorder
+            .case(crate::Case {
+                id: "frequency".into(),
+                contract: [("work.counter.cycles".into(), "2500000000".into())].into(),
+                metrics: vec![crate::Metric::duration("wall", "fixture", "batch_total")],
+            })
+            .unwrap();
+        recorder
+            .observe("frequency", "wall", 1_000_000_000)
+            .unwrap();
+        let run = recorder.finish().unwrap();
+        let original = serde_json::to_vec(&run).unwrap();
+        let raw = throughput(&run).unwrap();
+        assert_eq!(raw[0].unit, "cycles");
+        assert_eq!(raw[0].values, [2.5e9]);
+        assert!(markdown(&run).unwrap().contains("2.5000 | GHz"));
+        assert!(
+            markdown_with_bytes_format(&run, BytesFormat::Decimal)
+                .unwrap()
+                .contains("2.5000 | GHz")
+        );
+        assert!(html_run(&run).unwrap().contains("GHz"));
+        assert_eq!(serde_json::to_vec(&run).unwrap(), original);
+    }
+    #[test]
     fn bit_display_prefixes_use_decimal_boundaries_and_one_series_scale() {
         for (rate, unit, expected) in [
             (0.0, "bits", 0.0),
@@ -1929,5 +2446,22 @@ mod bit_rate_tests {
         }]);
         assert_eq!(scaled[0].unit, "kbit");
         assert_eq!(scaled[0].values, [1.0, 3.0]);
+    }
+}
+
+#[cfg(test)]
+mod heading_tests {
+    #[test]
+    fn report_sections_keep_heading_levels_and_escape_titles() {
+        let source = "# Report\n## Summary <script>\n### Workers & counts\n#### Detail\n##### More\n###### Note\n####### Literal\n##not a heading";
+        let html = super::html_fragment(source);
+        assert!(html.contains("<h2>Summary &lt;script&gt;</h2>"));
+        assert!(html.contains("<h3>Workers &amp; counts</h3>"));
+        for (level, title) in [(1, "Report"), (4, "Detail"), (5, "More"), (6, "Note")] {
+            assert!(html.contains(&format!("<h{level}>{title}</h{level}>")));
+        }
+        assert!(html.contains("<p>####### Literal</p>"));
+        assert!(html.contains("<p>##not a heading</p>"));
+        assert!(!html.contains("<script>"));
     }
 }

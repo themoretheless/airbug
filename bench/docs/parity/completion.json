@@ -1,0 +1,262 @@
+{
+  "objective": "Все основные возможности Criterion 0.8.2 и Divan 0.1.21 нативно в Airbug; совместимость API не требуется",
+  "status": "open",
+  "rules": [
+    "Не считать количество тестов доказательством полного покрытия",
+    "Не добавлять в обязательный объём комбинации Airbug, которых нет у сравниваемых библиотек",
+    "Новую найденную проблему привязывать к одному из шести пунктов с воспроизведением",
+    "Закрывать пункт только по актуальным доказательствам"
+  ],
+  "items": [
+    {
+      "id": "api_semantics",
+      "title": "Сверить поведение всех уже сопоставленных публичных API",
+      "status": "open",
+      "sources": [
+        "bench/docs/parity/criterion-bencher.json",
+        "bench/docs/parity/criterion-extensions.json",
+        "bench/docs/parity/criterion-groups.json",
+        "bench/docs/parity/criterion-runner.json",
+        "bench/docs/parity/divan-bencher.json",
+        "bench/docs/parity/divan-counters.json",
+        "bench/docs/parity/divan-runner.json"
+      ],
+      "acceptance": "Для каждого сопоставленного API: конкретный поведенческий тест либо документированное нативное различие, сохраняющее возможность пользователя. Отдельно проверить бюджет измерения, batching/drop, groups и profiler.",
+      "current": "Проверены семантика расширений, регистрация групп, счётчики, baseline, standard/quick sampling и выбор случаев. Описаны нативные различия. Нужна итоговая сверка оставшихся строк публичной карты, включая статистику и форматирование."
+    },
+    {
+      "id": "report_matrix",
+      "title": "Завершить матрицу отчётов",
+      "status": "open",
+      "sources": [
+        "bench/docs/parity/plots.json",
+        "bench/docs/parity/measurement.json",
+        "bench/docs/parity/artifacts.json"
+      ],
+      "acceptance": "Проверить direct Cargo, standalone report/compare и history: raw/custom metrics, baseline, saved settings, filters, no-html/no-plots, linear/log axes; для каждой комбинации указать поддерживаемое поведение и проверку.",
+      "current": "Named/automatic statistical and regression snapshots, output/archive equivalence and standalone restoration are verified, including nonmonotone regression interval images supplied by ValueFormatter::scale_intervals. Collection limits and terminal depth have focused tests. Remaining report work includes final source review, navigation and browser visual acceptance."
+    },
+    {
+      "id": "console_policy",
+      "title": "Проверить вывод и удобство CLI",
+      "status": "open",
+      "sources": [
+        "bench/docs/parity/output.json",
+        "bench/docs/parity/option-modes.json",
+        "bench/docs/parity/numeric-domains.json"
+      ],
+      "acceptance": "Сопоставить default/quiet/verbose/JSON у прямого harness и process runner; проверить глубокое дерево и длинные имена в терминале.",
+      "current": "Console policy Cargo fixture and Linux ARM64 PTY listing/results at 40/80/120 columns passed. Deep indentation adapts to terminal width, full pipe identity preserved. Actual terminal-emulator visual acceptance and Windows console remain unverified."
+    },
+    {
+      "id": "visual_acceptance",
+      "title": "Просмотреть реальные HTML-отчёты",
+      "status": "open",
+      "sources": [
+        "bench/docs/parity/plots.json"
+      ],
+      "acceptance": "Проверить графики, подписи, hover, навигацию, длинные имена, большие наборы и читаемость на двух размерах окна; сохранить перечень просмотренных артефактов.",
+      "current": "Предыдущий доступ браузера к локальным файлам был отклонён; не обходить отказ альтернативным маршрутом. Нужен разрешённый доступ или проверка пользователем."
+    },
+    {
+      "id": "platform_acceptance",
+      "title": "Подтвердить текущий код на оставшихся платформах",
+      "status": "open",
+      "sources": [
+        "bench/docs/parity/platforms.json",
+        "bench/docs/parity/features.json"
+      ],
+      "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
+      "current": "Current scale_intervals source: macOS ARM64 Rust 1.96 and Linux ARM64 full gates each 537 passed; Windows MSVC all-target compile passed. Independent Linux/MSRV feature matrices each 35 passed across seven configurations on the same fingerprint. Windows runtime and current complete Linux x86_64 runtime remain unverified; QEMU one-codegen-unit retry repeated the child-spawn stall."
+    },
+    {
+      "id": "final_gate",
+      "title": "Финальная приёмка зафиксированного набора изменений",
+      "status": "open",
+      "sources": [
+        "bench/docs/parity/requirements.json",
+        "bench/docs/parity/validation.json"
+      ],
+      "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
+      "current": "Свежие локальные проверки фиксируются с областью покрытия. Полная приёмка зависит от предыдущих пяти пунктов; коммит/публикация не входят в авторизацию."
+    }
+  ],
+  "latest_evidence": {
+    "upstream_inventory": "Current pinned inventory verifier passed after runner status reconciliation: 253/244 declarations, 24/23 managers, 14/10 benchers, 15 group/identity methods, four extension traits, 57 CLI arguments, 17 features, counter helpers, seven rejected invalid inputs. This proves inventory consistency, not semantic or visual equivalence.",
+    "feature_matrix": "Current seven configurations: 35 focused test executions passed, no failures; features.json latest_validation.",
+    "summary_estimator": "Criterion averages samples before formatter; Airbug mean mode and nonlinear aggregate test match; plots.json mappings 5/6",
+    "msrv": "Current Rust 1.96.0 macOS full gate: 527 passed, 0 failed, 0 ignored.",
+    "cargo_fixture": "Full test-cargo-bench.py passed, exit 0; .airbug/validation/cargo-point-labels/final-tests.log",
+    "linux_x86": "511 passed, one test interrupted after QEMU compiler-spawn stall; one-job retry also stalled. Both processes stopped. Current full gate not passed.",
+    "relative_fixture": "test-relative-cargo.py passed: named/automatic baselines, intervals, rates, quiet/JSON, lazy reanalysis",
+    "profiler": "Native profiling extension semantics verified against pinned Criterion source; four integration tests cover hooks, selection, wall deadline, errors, panic cleanup and profiler reuse.",
+    "executors": "Custom mutable borrowed executor, borrowed output and Pending/wake verified; 8 all-feature and 2 no-default-feature tests passed on macOS.",
+    "measurements": "22 integration tests passed; typed accumulation, setup/drop boundaries, async completion and conversion failure recovery verified. Signed-domain equivalence remains unclaimed; criterion-extensions.json records the boundary.",
+    "current_local_gate": {
+      "toolchain": "1.96.0",
+      "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+      "exit_code": 0,
+      "passed_failed_ignored": [
+        527,
+        0,
+        0
+      ],
+      "log": ".airbug/validation/parity-current/tests.log",
+      "sha256": "f35003e7b95db87cf03d29d7eaf75212930bb7107f60231db14565fff4105acf",
+      "source_fingerprint_sha256": "4fa2903f75ad0e1df661d7defdd96e55762db854c360b0a07deb656f50628801",
+      "scope": "Current macOS all-feature benchmark package tests after nonlinear formatter/history persistence and no-plots validation fix; does not prove other platform runtime or browser behavior.",
+      "checks": [
+        "All-target/all-feature Clippy for all three benchmark packages passed; .airbug/validation/parity-current/clippy.log",
+        "cargo fmt --all --check",
+        "git diff --check"
+      ]
+    },
+    "group_registration": "Shared borrowed input, lazy selection and full identity validation verified by a new integration test. 68 attribute and 67 contract tests passed. Criterion registration timing differences documented in criterion-groups.json.",
+    "divan_counters": "Pinned source semantics audited; corrected upstream checked-overflow claim. New shallow-layout, borrowed AsRef and owned-iterator destruction test passed; all five counter tests and library/test Clippy passed. divan-counters.json records rate aggregation differences.",
+    "tree_labels": "Fixed control characters breaking console tree rows; Unicode and long names remain intact, raw identity unchanged. Seven console tests and library/test Clippy passed.",
+    "console_modes": "Expanded real cargo bench baseline fixture passed table/tree × default/quiet, automatic quiet tree and JSON with forced color. Every machine stdout record parsed; full saved reports retain detail. output.json records harness/parent-runner policy.",
+    "criterion_iter": "Corrected iter mapping from PerIteration to Batches(1), verified sync/async full-batch hooks and output drops with a new integration test. Executor-entry timing difference documented explicitly in criterion-bencher.json.",
+    "batch_policies": "All five Criterion batch-size formulas matched to native policies and tested through actual custom measurement waves, remainders and oversized requested batches. All 24 measurement tests passed; focused Clippy passed.",
+    "standard_sampling": "Criterion standard sampling/calibration source audit complete with explicit cost-estimation/default/cap differences. Twelve sampling tests passed. Quick stopping remains separate; criterion-runner.json.",
+    "quick_sampling": "Pinned Criterion quick algorithm audited against Airbug; residual, elapsed boundaries, real sample retention, iteration caps and independent deviation threshold documented. Seven quick integration tests passed.",
+    "divan_selection": "Pinned selection rules audited; real Cargo selection fixture passed. Documented upstream list_benches Action::Test anomaly while preserving nonexecuting Airbug list, regex error handling and empty-selection behavior.",
+    "baseline_lifecycle": "Pinned save/retain/load semantics audited. Corrected manager map: upstream overwrite uses replace; upstream retain uses strict/lenient comparison, not fill-missing retain. Seven baseline tests passed.",
+    "current_formatter_artifacts": "Expanded test-formatted-bootstrap.py passed current tree. Removed stale missing-feature claims for saved settings/custom throughput; visual and remaining report acceptance remain open.",
+    "windows_compile": "Current-source all-target/all-feature Windows MSVC cargo check passed; no linking/runtime proof.",
+    "significance": "Source audit records exact p-value tail/correction and decision-policy differences. Three hypothesis integration tests passed; inferential process units and effective family alpha preserved.",
+    "descriptive_estimates": "Matched mean/median/sample SD/scaled MAD and percentile formulas to pinned Criterion source; 12 bootstrap tests passed. Numeric stability and statistical-population differences explicit in significance.json.",
+    "regression": "Pinned slope/bootstrap formulas audited; upstream R-squared accumulation anomaly documented. Eight regression tests passed for independent residual/paired-resampling oracles.",
+    "outliers": "Pinned Tukey formulas and strict boundary classification matched; no trimming before estimation. Two focused tests passed; source audit in significance.json.",
+    "core_summary_reconciliation": "core.json now references the latest 521-test MSRV gate; historical 506-test evidence retained explicitly. Removed stale current-success claim for x86/QEMU and stale standard-sampling audit gap. README links the six-item completion checklist.",
+    "linux_arm": "Current Linux ARM64 gate: 527 passed, 0 failed, 0 ignored, exit 0; platforms.json latest_linux_arm_gate.",
+    "group_acceptance": "Closed native group registration/inheritance requirement against mapped upstream options, focused current tests and both external imported-group fixtures. Additional Airbug extensions and plot acceptance remain explicit separate items.",
+    "configuration_acceptance": "Current 263 native option checks passed. Closed configuration requirement using pinned CLI/manager inventory, semantic audits and external Cargo precedence/entrypoint evidence. Plot capabilities and platform execution remain separate requirements.",
+    "formatter_domain_gap": "Increasing/decreasing, offset and signed displays have numerical and Cargo evidence. Nonmonotone statistics use transformed bootstrap percentiles; regression interval images use the optional scale_intervals contract. Named/automatic history and standalone restoration are verified in measurement.json. Browser acceptance and remaining platform runtime gates stay open.",
+    "formatter_graph_semantics": "Nonlinear model curves and bounds are transformed separately from raw fit; shared-scale named/automatic snapshots restore in standalone compare/report. Current Cargo fixture and focused tests recorded in measurement.json.",
+    "historical_local_gate_516": {
+      "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+      "platform": "macOS",
+      "passed": 516,
+      "failed": 0,
+      "ignored": 0,
+      "exit_code": 0,
+      "log": ".airbug/validation/final-local/tests.log",
+      "sha256": "f7e67a771adcaa77281c22d1baa6eae29651135e6dcdb3d20dc7de52e94cb714",
+      "checks": [
+        "cargo fmt --all -- --check",
+        "cargo clippy --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features -- -D warnings",
+        "git diff --check"
+      ],
+      "scope": "Current local test gate after compare settings, profiler and executor changes; does not close upstream semantics, visual or cross-platform acceptance."
+    },
+    "plot_backend_audit": "Mapped all eight pinned Plotter graph families plus synchronous wait and aggregate saved-directory final summary; actual HTML visual/navigation acceptance remains open.",
+    "no_plots_followup": "Removed SVG generation from snapshot validation. ComparisonPresentation validates source/coordinates/range numerically; new pre-render range rejection test is included in current 527-test gate.",
+    "upstream_inventory_log": {
+      "path": ".airbug/validation/parity-current/current-surface.log",
+      "sha256": "fa533f5fea135394b589870e52993cec7a6ba1f01767d759cbd090e5bbf66e5f"
+    },
+    "source_reference_audit": {
+      "references": 237,
+      "result": "Every distinct bench/**/*.rs::symbol reference in parity JSON points to an existing file containing the named declaration or reexport.",
+      "scope": "Checks leaf declaration names in the specified file, including test modules and public types. Does not prove module-path resolution, runtime execution, semantic coverage or visual acceptance.",
+      "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22"
+    }
+  },
+  "time_budget_followup": {
+    "status": "macos_gate_passed",
+    "changes": [
+      "Zero measured durations advance budget by 1 ns without modifying observations.",
+      "Zero maximum disables the case before execution."
+    ],
+    "gate_scope": "Current macOS all-feature tests passed. Linux and Windows gates predate these changes.",
+    "validation": {
+      "tests": 529,
+      "failed": 0,
+      "ignored": 0,
+      "summaries": 27,
+      "log": ".airbug/validation/parity-current/time-budget-tests.log",
+      "option_domain_checks": 263,
+      "clippy": "passed for airbug-bench and cargo-airbug-bench, all targets/features",
+      "source_sha256": "3a1709888d04341d876f01e81032cd40e04c0ec77dc0549c7aae89b20c8915bb"
+    }
+  },
+  "statistics_configuration_followup": {
+    "status": "verified_native_semantics",
+    "scope": "Criterion nresamples, confidence_level, noise_threshold and significance_level",
+    "evidence": "significance.json::configuration_semantic_audit",
+    "validation": "196 library tests and library all-target Clippy passed; this adds one test to the preceding 529-test full gate without changing runtime code."
+  },
+  "registration_selection_followup": {
+    "status": "verified_native_semantics",
+    "scope": [
+      "with_filter",
+      "with_benchmark_filter",
+      "bench_function",
+      "bench_with_input"
+    ],
+    "evidence": "criterion-runner.json::registration_selection_semantic_audit",
+    "correction": "with_filter maps to regex selection; native substring matching is separate."
+  },
+  "current_platform_followup": {
+    "status": "available_platform_gates_passed",
+    "macos_msrv_tests": 530,
+    "linux_arm_tests": 530,
+    "failed": 0,
+    "ignored": 0,
+    "windows": "MSVC all-target/all-feature cargo check passed; runtime unverified",
+    "evidence": "platforms.json latest_msrv_gate, latest_linux_arm_gate, latest_windows_compile_gate",
+    "inventory": "Pinned source inventory test passed: 253 Criterion and 244 Divan declarations; exact manager, bencher, group, CLI, feature and counter mappings. This is declaration coverage, not semantic completeness."
+  },
+  "linux_report_matrix_followup": {
+    "status": "both_external_cargo_fixtures_passed",
+    "linear": "artifacts.json::linux_formatter_artifact_validation",
+    "nonlinear": "measurement.json::linux_nonlinear_validation",
+    "remaining": "Visual/browser acceptance and unsupported transform/overlay behavior remain separately open."
+  },
+  "decreasing_display_followup": {
+    "status": "statistics_and_regression_focused_validation_passed",
+    "evidence": [
+      "measurement.json::decreasing_statistical_display",
+      "measurement.json::decreasing_regression_display"
+    ],
+    "gate_scope": "Previous 530-test platform gates predate these formatter edits; current measurement/regression tests, external Cargo fixture and Clippy passed."
+  },
+  "sampling_and_html_policy_followup": {
+    "status": "source_and_behavior_verified",
+    "scope": [
+      "sample_size",
+      "warm_up_time",
+      "with_plots",
+      "without_plots"
+    ],
+    "evidence": [
+      "criterion-runner.json::sample_warmup_configuration_audit",
+      "plots.json::html_plot_policy_audit"
+    ],
+    "validation": "69 contracts and 68 attribute tests passed; existing macOS/Linux external report fixtures prove HTML artifact policies."
+  },
+  "transformed_statistic_snapshot_followup": {
+    "status": "implemented_and_focused_verified",
+    "evidence": "measurement.json::transformed_statistic_overlay::saved_comparison",
+    "scope": "Named/automatic direct reports and standalone compare/report restore shared-scale distribution snapshots; source/settings guards and legacy snapshot loading verified.",
+    "limits": "Numerical common-scale oracle and visual acceptance remain open; previous complete platform gates predate these runtime edits."
+  },
+  "statistical_overlay_oracle_followup": {
+    "status": "passed",
+    "evidence": "measurement.json::transformed_statistic_overlay::joint_scale_oracle",
+    "linux_all_feature_tests": 532,
+    "remaining": "Visual acceptance and other unrelated open scope remain; latest macOS MSRV and Windows compile records predate runtime changes."
+  },
+  "reconciled_current_gates": {
+    "macos_msrv": 532,
+    "linux_arm64": 532,
+    "windows": "all-target/all-feature cargo check passed; not runtime",
+    "inventory": "Pinned public declaration/method/CLI/feature/counter inventory passed",
+    "evidence": "platforms.json latest gates and .airbug/validation/parity-current/reconciled-inventory.log"
+  },
+  "collection_limit_followup": {
+    "status": "focused_cli_boundary_test_passed",
+    "evidence": "plots.json::collection_resource_audit::boundary_validation",
+    "scope": "65-run chart budget, all numeric results, 256/257 run boundary and atomic refusal. Remaining large-report requirements and visual behavior stay open."
+  }
+}

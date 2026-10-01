@@ -20,7 +20,7 @@
       "id": "groups",
       "requirement": "Nested modules, groups, inherited defaults, group names",
       "upstream": "C:BenchmarkGroup;D:bench_group",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
         "bench/scripts/test-cargo-bench.py",
@@ -32,9 +32,13 @@
         "bench/tests/attributes.rs::imported_drop_defaults_reach_plain_and_async_cases_and_restore_parent",
         "bench/tests/attributes.rs::imported_batch_defaults_bound_outputs_and_preserve_async_borrows_and_overrides",
         "python3 bench/scripts/test-cargo-bench.py passed after batch inheritance; /tmp/airbug-imported-batch-recovered.log",
-        "bench/docs/parity/groups.json: source-level Divan/ Criterion group option audit"
+        "bench/docs/parity/groups.json: source-level Divan/ Criterion group option audit",
+        "Shared exact decimal duration parser now supports fractional suite/group/bench settings; imported external Cargo fixture and integer-domain regression previews passed.",
+        "bench/docs/parity/groups.json::threaded_batch_policies.inherited_validation: 496 all-feature tests and external Cargo inheritance fixture passed; Linux ARM64 validation in platforms.json.",
+        "criterion-groups.json: 13 BenchmarkGroup methods and two BenchmarkId constructors mapped with exact pinned method-set equality; all 68 attribute integration tests passed, including constructed async counters and imported group defaults.",
+        "groups.json acceptance_evidence: current external imported allocation/thread and batch inheritance fixtures both passed; criterion-groups.json semantic audit documents native registration differences."
       ],
-      "remaining": "Imported group thread defaults remain incomplete. Per-group absolute bootstrap settings now support attributes, CLI precedence and saved-run reanalysis. Numeric domains remain tracked under samples. Imported executor/allocator/input-counter/custom-measurement defaults remain Airbug extensions in groups.json."
+      "remaining": "No remaining gap in this requirement for nested modules, group names and inherited upstream settings. Plot presentation and additional Airbug extension combinations remain tracked separately."
     },
     {
       "id": "external_modules",
@@ -125,7 +129,8 @@
       "evidence": [
         "bench/tests/contracts.rs::selection_exact_glob_tags_and_exclusions",
         "bench/tests/contracts.rs::regex_selection_and_exact_exclusions_are_lazy_and_unicode_aware",
-        "bench/scripts/test-cargo-bench.py"
+        "bench/scripts/test-cargo-bench.py",
+        "bench/docs/parity/divan-cli.json: all 26 source CLI declarations mapped; multiple inclusive filters implemented and tested in native CLI/library. Nextest discovery remains an explicit integration gap."
       ],
       "remaining": ""
     },
@@ -238,7 +243,8 @@
         "bench/src/suite_measure.rs::batch_tests::panic_drops_retained_outputs_and_every_prepared_input_once",
         "bench/tests/zero_sized_outputs.rs::zero_sized_results_are_destroyed_once_across_samples_and_worker_waves",
         "bench/tests/zero_sized_outputs.rs::async_output_drop_respects_the_reported_timer_boundary",
-        "bench/tests/zero_sized_outputs.rs::threaded_destructor_intervals_respect_the_shared_timer_boundary"
+        "bench/tests/zero_sized_outputs.rs::threaded_destructor_intervals_respect_the_shared_timer_boundary",
+        "bench/tests/attributes.rs::plain_threaded_cases_keep_non_send_outputs_on_their_worker: default/deferred outputs containing Rc, 1/2 workers, exact drop count and destructor thread identity"
       ],
       "comparison": "Criterion 0.8.2 Bencher/AsyncBencher::iter_with_large_drop delegates to batched unit input with SmallInput. Airbug supports the same batching choice and explicit outside drop for plain/setup sync/async work. Divan 0.1.21 lib.rs Drop documentation and benchmark/mod.rs defer output destruction, including zero-sized outputs, until after synchronized timers stop. Airbug verifies this for coordinator/local/async workers; it defaults to inside drop, offers bounded waves, and cleans retained values on unwind. API/default compatibility is not required."
     },
@@ -429,23 +435,30 @@
       "evidence": [
         "bench/docs/parity/measurement.json (method-level audit against Criterion 0.8.2 measurement.rs and current Suite/timing/report code)",
         "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock",
-        "bench/scripts/test-cargo-bench.py (external custom measurement, baseline reload and normalized reports)"
+        "bench/scripts/test-cargo-bench.py (external custom measurement, baseline reload and normalized reports)",
+        "criterion-bencher.json: all 14 sync/async Bencher declarations mapped to typed native APIs; 20 current measurement integration tests passed. Method equality checked by test-upstream-surface.py; full semantic parity remains unproven."
       ],
-      "remaining": "Typed sync/async and attribute registration, human/machine/text formatting, dynamic throughput, persisted snapshots and process-runner propagation implemented with focused evidence in measurement.json. Threaded combinations, full statistical graph formatter integration and complete upstream semantic audit remain."
+      "remaining": "Custom summaries, relative rates, regression and statistical distribution snapshots restore through named/automatic reports and standalone compare/report. Increasing/decreasing and signed display have numerical and external Cargo evidence in measurement.json. Nonmonotone regression interval images are supported through scale_intervals, with public-path and external Cargo evidence in measurement.json. Full visual acceptance remains open. Extra Airbug thread/custom-measurement combinations are not automatically upstream requirements."
     },
     {
       "id": "samples",
       "requirement": "Sample count and warmup/time configuration at all scopes",
       "upstream": "C:sample_size,warm_up_time;D:sample_count",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/src/sampling.rs::tests::linear_and_auto_schedules_use_cost_and_respect_caps",
         "bench/src/sampling.rs::tests::budgets_distinguish_external_time_and_maximum_wins",
         "bench/tests/attributes.rs::imported_groups_inherit_sampling_per_field_with_nearest_override",
         "bench/src/sampling.rs::environment_tests::environment_sampling_precedence_and_errors",
-        "bench/scripts/test-cargo-bench.py (environment sampling and per-field CLI precedence)"
+        "bench/scripts/test-cargo-bench.py (environment sampling and per-field CLI precedence)",
+        "bench/src/sampling.rs::tests::sample_counts_cover_u64_without_planner_overflow",
+        "bench/src/sampling.rs::tests::collection_and_minimum_time_can_cross_one_hundred_thousand_samples",
+        "bench/docs/parity/numeric-domains.json",
+        "bench/docs/parity/thread-sampling.json::population_audit (145 current tests and both actual Cargo sampling scripts passed)",
+        "bench/tests/worker_timings.rs::worker_slot_samples_sum_unequal_waves_before_normalization (aggregate/bootstrap populations remain distinct from waves and worker slots)"
       ],
-      "remaining": "Core schedules, budgets and inherited configuration implemented. Airbug currently caps samples at 100000, per-worker operations at 1048576 and individual sample/warmup times at 60s; upstream numeric-domain and threaded sample aggregation differences still require an explicit audit. Per-group absolute bootstrap settings now exist separately from hypothesis settings, with attributes and CLI precedence; independent saved-run restoration is implemented (groups.json)."
+      "remaining": "",
+      "comparison": "Airbug supports suite/group/case/CLI/environment sample counts, warmup, per-sample and total measurement budgets, worker-count budgeting and explicit iterations. Native zero-count disabling, ceil-rounded complete worker batches, final-calibration cost, bounded input waves and labelled aggregate versus worker populations differ from upstream. See population_audit for evidence and limits. This verifies the sampling configuration requirement, not full Criterion/Divan equivalence; configurable threaded batch policies and imported/local propagation now have evidence in groups.json."
     },
     {
       "id": "sample_size",
@@ -530,8 +543,12 @@
       "evidence": [
         "bench/src/bootstrap.rs::tests",
         "bench/tests/contracts.rs::bootstrap_uses_process_units_and_normalizes_batch_totals",
-        "bench/scripts/test-cargo-bench.py (bootstrap CLI and estimates.json)"
-      ]
+        "bench/scripts/test-cargo-bench.py (bootstrap CLI and estimates.json)",
+        "bench/docs/parity/numeric-domains.json",
+        "bench/src/bootstrap.rs::tests::one_resample_preserves_draws_and_marks_standard_error_unavailable",
+        "bench/cli/tests/cli.rs::analyze_saved_run_exports_distributions_without_mutating_source"
+      ],
+      "comparison": "Positive usize resample domain matches Criterion nresamples, including one draw and counts above one million. One draw yields an explicit unavailable standard error (JSON null, text unavailable), preserves percentile endpoints/draws, and carries an uncertainty explanation. Old numeric standard errors deserialize; custom formatting preserves absence and source immutability. Impossible capacities return errors."
     },
     {
       "id": "regression_analysis",
@@ -644,7 +661,8 @@
         "bench/cli/tests/cli.rs::report_summary_parameter_and_scale_reach_html (report --summary-parameter/--summary-scale, HTML integration and invalid combinations)",
         "bench/scripts/test-cargo-bench.py (direct Cargo loaded-baseline report.html with numeric parameter and logarithmic summary; invalid option preflight)",
         "bench/src/report.rs::summary_plot_tests::parameter_summary_weights_processes_equally_and_normalizes_batches (unbalanced 5:1 process batches yield 55 ns/op, not pooled 10; unavailable process excluded)",
-        "bench/docs/parity/plots.json (Plotter surface audit against local Criterion 0.8.2 sources)"
+        "bench/docs/parity/plots.json (Plotter surface audit against local Criterion 0.8.2 sources)",
+        "hypothesis_plot::html now shares the standard report template and numerical comparison table. Two library and three runner comparison tests passed; navigation markup/escaping verified, browser interactions still unverified."
       ],
       "remaining": "See plots.json: graph families and scale inheritance are implemented with focused evidence; full HTML visual inspection, navigation/thumbnail equivalents, resource limits, report-entrypoint audit and custom-formatter integration remain incomplete."
     },
@@ -659,15 +677,26 @@
         "bench/src/console.rs::tests::terminal_policy_and_styling_preserve_plain_text",
         "bench/scripts/test-cargo-bench.py (forced/auto/never color and JSON/artifact isolation)",
         "bench/src/console.rs::tree_tests (hierarchy/order/prefix cases, separate processes and unavailable values)",
-        "bench/scripts/test-cargo-bench.py (tree results/list, quiet tree, JSON)"
+        "bench/scripts/test-cargo-bench.py (tree results/list, quiet tree, JSON)",
+        "bench/src/console.rs::tree_tests: hierarchical rows now include normalized min/max/sample mean, available sample count and exact decimal operation count; tests cover separate processes, unavailable rows and counts beyond u64.",
+        "bench/docs/parity/output.json: Divan console field mapping; tree now renders timing-associated throughput and allocation rows with explicit peak units and unavailable pairing.",
+        "bench/docs/parity/output.json: Criterion 0.8.2 measurement_complete fields audited against pinned source hash; R-squared endpoint implementation verified, missing fields explicitly recorded.",
+        "bootstrap::markdown now reports outlier class percentages with population and resampling-unit labels; 11 bootstrap tests passed after the change.",
+        "bootstrap throughput estimates transform fixed work counts and mean/median/slope duration bounds; 13 bootstrap tests and direct Cargo console verification passed. See output.json for remaining formatter/entrypoint scope.",
+        "relative::markdown and CLI compare text/HTML/no-plots verification now cover relative mean/median intervals and population labels while preserving JSON/check decisions; direct named-baseline Cargo integration added but end-to-end assertion pending.",
+        "relative::Comparison.throughput now represents equal-fixed-work rate changes with reversed bounds; focused relative tests and runner CLI test passed. Undefined ratios/zero work are explicit and incompatible contracts are rejected.",
+        "test-relative-cargo.py passed: single-process Cargo named-baseline relative mean/median and rate intervals, exploratory batch-population labels, no-plots HTML, quiet/JSON isolation and lazy reanalysis.",
+        "Automatic history now exports compact relative summaries using effective per-case comparison settings. 12 history tests and expanded real-Cargo named/automatic baseline fixture passed, including quiet/JSON isolation and main HTML output.",
+        "Custom formatted fixed-throughput point/CI verified through actual Cargo save/load workflow with source-counter precedence, JSON/text and HTML with/without plots: test-formatted-bootstrap.py.",
+        "test-help.py: 24 short/full help and width/entrypoint combinations plus POSIX PTY width 40 passed; help works before registration and invalid environment parsing. All-target/all-feature Clippy passed."
       ],
-      "remaining": "Quiet/normal/verbose, stdout color and tree/table layouts implemented. Full upstream output-field mapping and visual terminal review remain incomplete."
+      "remaining": "Direct harness default/quiet/verbose, color, JSON and plain artifacts verified in output.json::console_policy_audit. Process-runner interface differences documented. Large/deep terminal review and browser report acceptance remain open."
     },
     {
       "id": "configuration",
       "requirement": "CLI and environment overrides with documented precedence",
       "upstream": "C:configure_from_args;D:config_with_args",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/src/sampling.rs::environment_args",
         "bench/scripts/test-cargo-bench.py (environment sampling and per-field CLI precedence)",
@@ -682,9 +711,20 @@
         "bench/tests/attributes.rs::registration_thread_matrix_replaces_defaults_with_truthful_names: passed; lazy registration, replacement rather than cross product, exact actual calls and operation totals",
         "bench/scripts/test-cargo-bench.py: full script passed with comma-separated/repeated thread flags, environment lists, precedence, deduplication, truthful names and per-case normalized operation counts",
         "bench/scripts/test-cargo-bench.py: full script passed; manual main rejects repeated distinct worker counts and mismatched registered matrices before execution, while single override remains valid",
-        "bench/scripts/test-cargo-bench.py: full script passed with --bits-count overriding dynamic bits and invalid env, plus AIRBUG_BENCH_BITS_COUNT=0 dry-run"
+        "bench/scripts/test-cargo-bench.py: full script passed with --bits-count overriding dynamic bits and invalid env, plus AIRBUG_BENCH_BITS_COUNT=0 dry-run",
+        "bench/src/suite.rs::Suite::thread_matrix: callback-based manual worker families honor pre-registration runtime choices",
+        "bench/scripts/test-manual-thread-matrix.py: default counts, deduplication, lazy dry-run, repeated CLI flags, environment and CLI precedence passed",
+        "suite::counter_override_tests::manual_thread_matrix_is_lazy_distinct_and_runtime_overridable: exact execution/normalization and distinct names passed",
+        "bench/docs/parity/divan-runner.json: all 23 pub fn declarations from pinned src/divan.rs mapped one-to-one to current Airbug APIs/flags and evidence files; exact set equality checked. Mapping is not full semantic verification.",
+        "bench/docs/parity/criterion-runner.json: exact inventory of 24 Criterion manager methods mapped to native APIs and focused audits; measurement total target, backend capabilities and aggregate artifacts remain explicit semantic-review items.",
+        "bench/docs/parity/criterion-cli.json: all 31 configure_from_args arguments mapped with exact source-set equality; cargo test --benches failure reproduced, version query and time-domain differences recorded.",
+        "bench/docs/parity/divan-cli.json: all 26 source CLI declarations mapped; multiple inclusive filters implemented and tested in native CLI/library. Nextest discovery was subsequently verified; see nextest_benchmark_discovery and divan-cli.json.",
+        "numeric-domains.json::scalar_cli_followup: 123 real-Cargo numeric boundary/precedence checks passed with exact dry-run counter/duration values, invalid-value rejection and no execution/history writes.",
+        "option-modes.json: 190 combined domain/mode/conflict checks passed; silent no-html/plot contradictions fixed. Existing full artifact fixture and all-target/all-feature Clippy passed.",
+        "baselines.json::cli_validation_followup: 263 option checks plus 7 baseline and 3 profiling tests passed; pure baseline name validation now applies to dry-run, and missing baseline fails before workload.",
+        "Current test-option-domains.py: 263 checks passed without workload/history writes. Exact inventory verifies 57 CLI arguments; criterion/divan runner semantic audits cover sampling, selection, groups, counters, baselines, quick and profiler; real Cargo fixtures cover saved settings and native entrypoints."
       ],
-      "remaining": "Runtime thread lists, repeated flags, zero/automatic selection and matrix replacement are implemented for attributed concurrent cases via main_registered. Sequential-case opt-in and complete upstream option-domain mapping remain incomplete. Already-registered manual builder cases support a single worker override; arbitrary builder closures cannot yet be expanded into matrices."
+      "remaining": "Native configuration capability verified against the pinned CLI/manager inventory with explicit domain/precedence differences. Rendering capabilities belong to plots/output; Windows execution remains a platform requirement. No exhaustive flag cross-product claim."
     },
     {
       "id": "artifacts",
@@ -696,9 +736,11 @@
         "bench/tests/hypothesis.rs (summary/export equivalence and exact JSON distribution roundtrip)",
         "bench/scripts/test-cargo-bench.py (hypothesis-distribution console/file equality and reconstructing exported p-value)",
         "bench/src/history.rs::tests::comparison_export_failure_does_not_advance_history",
-        "bench/cli/tests/cli.rs::compare_exports_seeded_null_draws_and_portable_html"
+        "bench/cli/tests/cli.rs::compare_exports_seeded_null_draws_and_portable_html",
+        "bench/docs/parity/artifacts.json: hashed Criterion 0.8.2 source audit of raw samples, identity, estimates, fences, CSV, relative estimates, baselines and HTML; CSV metadata/normalization gap identified.",
+        "Native --no-html preserves JSON/CSV/statistics/history while skipping HTML. Real Cargo named/automatic/loaded-baseline cases including distribution capture passed in test-formatted-bootstrap.py; artifacts.json::raw_only_direct_harness."
       ],
-      "remaining": "Library, direct Cargo and runner compare export raw hypothesis distributions. Complete Criterion report artifact mapping remains."
+      "remaining": "Raw and machine-formatted CSV context is covered in artifacts.json; ordinary measurements now generate statistical artifacts by default; complete plot/visual entrypoint verification remains open."
     },
     {
       "id": "black_box",
@@ -715,8 +757,14 @@
       "id": "platforms",
       "requirement": "Supported platforms/toolchains and runtime failure behavior",
       "upstream": "C/D:package features and cfg",
-      "status": "pending",
-      "evidence": []
+      "status": "partial",
+      "evidence": [
+        "bench/docs/parity/platforms.json",
+        ".github/workflows/ci.yml",
+        "platforms.json::linux_latest_validation: current source 506-test gate passed in native Linux ARM64 container with source hashes and durable log; initial disk-full linker failure resolved by rebuilding dedicated cache without debug symbols.",
+        "platforms.json::linux_x86_latest_validation: current source 506-test all-feature library/macros/CLI/doctest gate passed under QEMU, source hashes and complete log retained."
+      ],
+      "remaining": "Current macOS Rust 1.96.0 and Linux ARM64 all-feature gates: 532 passed each. Current Windows MSVC all-target/all-feature compile check passed. Windows execution and complete current Linux x86_64 runtime remain unverified; QEMU compiler-spawn blocker is documented. Remote CI has not run."
     },
     {
       "id": "audit",
@@ -725,9 +773,50 @@
       "status": "partial",
       "evidence": [
         "bench/docs/parity/upstream-surface.json",
-        "bench/scripts/audit-upstream-surface.py"
+        "bench/scripts/audit-upstream-surface.py",
+        "bench/docs/parity/divan-runner.json: all 23 pub fn declarations from pinned src/divan.rs mapped one-to-one to current Airbug APIs/flags and evidence files; exact set equality checked. Mapping is not full semantic verification.",
+        "bench/docs/parity/criterion-runner.json: exact inventory of 24 Criterion manager methods mapped to native APIs and focused audits; measurement total target, backend capabilities and aggregate artifacts remain explicit semantic-review items.",
+        "bench/docs/parity/criterion-cli.json: all 31 configure_from_args arguments mapped with exact source-set equality; cargo test --benches failure reproduced, version query and time-domain differences recorded.",
+        "bench/docs/parity/divan-cli.json: all 26 source CLI declarations mapped; multiple inclusive filters implemented and tested in native CLI/library. Nextest discovery remains an explicit integration gap.",
+        "features.json: exact set equality for all 12 Criterion and 5 Divan Cargo features, source-gate inspection, native mapping and explicit parallel-analysis/help-wrapping gaps; five no-default-feature configurations passed.",
+        "parallel-analysis.json: descriptive bootstrap parallelized; exact sequential distributions preserved including rejection sampling. Regression/comparison/KDE parallel execution remains open.",
+        "parallel-analysis.json::regression_followup: regression bootstrap parallelized, all slope draws match a serial oracle; 179 all-feature library tests and Clippy passed. Relative/hypothesis/KDE parallel work remains open.",
+        "parallel-analysis.json::relative_followup: parallel relative bootstrap preserves sequential RNG and stateful non-Send formatter order/errors. 180 all-feature library tests and Clippy passed; hypothesis/KDE parallel work remains open.",
+        "parallel-analysis.json::hypothesis_followup: pooled-null Welch parallelized with exact draw order/counts/p-value and no resample-sized buffer in no-capture mode; 181 all-feature library tests and Clippy passed. KDE remains sequential.",
+        "parallel-analysis.json::kde_followup: density grids parallelized with bit-exact coordinates at normal/extreme scales; 182 all-feature library tests and Clippy passed. All identified upstream statistical kernel families now have native parallel execution.",
+        "inventory-validation.json: pinned source/archive integrity, unchanged 253/244 declaration inventory, exact 24/23 manager method mappings, and seven invalid-input rejection cases passed.",
+        "divan-bencher.json: all 10 exported Bencher methods mapped, eight internal method declarations explicitly excluded using type/module visibility. Complete file method-set equality checked by test-upstream-surface.py; 70 contract/fresh-input/local-closure tests passed.",
+        "criterion-extensions.json: all members of four public extension traits (Measurement, ValueFormatter, AsyncExecutor, Profiler) mapped; pinned trait boundaries and exact ordered member sets checked by test-upstream-surface.py. Existing current all-feature gates exercise custom values, runtime adapters and profiler lifecycle; semantic differences remain explicit.",
+        "features.json current validation: 31 tests across seven no-default feature configurations passed, including serial/parallel exact statistical oracles. Expanded existing CI script; remote matrix not executed.",
+        "divan-counters.json: counter constructors/size/iterator/string helpers mapped, including 14 macro-generated primitive byte helpers omitted by plain declaration scans; exact source method/macro lists checked by test-upstream-surface.py. Conversion/sealed-trait visibility and count-domain differences documented."
       ],
-      "remaining": "Versioned public declarations captured; detailed mapping of each API, CLI flag, feature flag and report remains incomplete."
+      "remaining": "Public declaration inventory and manager method mappings are verified; full public API reachability and detailed API/option/report semantics remain incomplete. Native parallel statistical analysis and terminal help wrapping have focused validation. Visual reporting and current-code platform execution remain open."
+    },
+    {
+      "id": "cargo_test_benches",
+      "requirement": "Standard cargo test --benches validates benchmarks once in debug and release builds",
+      "upstream": "C:configure_from_args test_mode defaults when --bench is absent",
+      "status": "verified",
+      "evidence": [
+        "bench/scripts/test-cargo-test-benches.py passed: real Cargo debug/release default smoke, exact selection, list/version laziness, no automatic artifacts/history, measurement entrypoints and explicit test precedence",
+        "68 attribute tests passed (.airbug/runs/76757801-ada2-483d-966d-74bb91c053e0)",
+        "All-target Clippy passed for library, macros and CLI"
+      ],
+      "remaining": "",
+      "comparison": "Attribute suites use Cargo harness convention in test-target builds. Manual suites opt in with cargo_harness(); normal standalone Suite::main keeps its measurement default. Protocol runner explicitly requests measurement mode in the worker environment. Platform coverage remains tracked separately."
+    },
+    {
+      "id": "nextest_benchmark_discovery",
+      "requirement": "Benchmark discovery and one-operation execution under cargo-nextest",
+      "upstream": "Divan 0.1.21 src/cli.rs format and src/divan.rs run_tree_list",
+      "status": "verified",
+      "evidence": [
+        "bench/scripts/test-nextest.py passed using real nextest 0.9.146 on macOS: discovery JSON, parameterized names, ignored status, selected once-only execution and failure propagation",
+        "Suite CLI terse-list routing and unsupported-mode validation"
+      ],
+      "remaining": "",
+      "comparison": "Native case IDs are preserved; each discovered case is executed in Cargo smoke mode. Actual cross-platform runner checks are configured in CI but remain unverified under platforms."
     }
-  ]
+  ],
+  "completion_checklist": "bench/docs/parity/completion.json"
 }

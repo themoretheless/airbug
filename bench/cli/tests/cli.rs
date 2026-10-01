@@ -470,6 +470,76 @@ fn forma_import_preserves_scope_and_rejects_missing_rows() {
 }
 
 #[test]
+fn init_finds_parent_package_but_respects_explicit_manifest() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project with 'quotes'");
+    let nested = root.join("src/nested");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(root.join("src/lib.rs"), "").unwrap();
+    let manifest = root.join("Cargo.toml");
+    fs::write(
+        &manifest,
+        "[package]\nname='nested-init'\nversion='0.1.0'\nedition='2021'\n[workspace]\n",
+    )
+    .unwrap();
+    let original = fs::read_to_string(&manifest).unwrap();
+    let missing = Command::new(env!("CARGO_BIN_EXE_cargo-airbug-bench"))
+        .current_dir(&nested)
+        .args(["init", "--manifest-path", "missing.toml"])
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert_eq!(fs::read_to_string(&manifest).unwrap(), original);
+    assert!(!root.join("benches").exists());
+    let output = Command::new(env!("CARGO_BIN_EXE_cargo-airbug-bench"))
+        .current_dir(&nested)
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(root.join("benches/bench.rs").is_file());
+    assert!(!nested.join("Cargo.toml").exists());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // Execute the printed command from the original directory: paths with shell
+    // metacharacters must remain a single literal argument.
+    let command = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("List cases: "))
+        .unwrap();
+    #[cfg(windows)]
+    let mut shell = {
+        let mut shell = Command::new("powershell.exe");
+        shell.args(["-NoProfile", "-NonInteractive", "-Command"]);
+        shell
+    };
+    #[cfg(not(windows))]
+    let mut shell = {
+        let mut shell = Command::new("sh");
+        shell.arg("-c");
+        shell
+    };
+    let listed = shell
+        .arg(command.replacen("cargo bench", "cargo bench --offline", 1))
+        .current_dir(&nested)
+        .env(
+            "CARGO_TARGET_DIR",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/init-smoke"),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        listed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&listed.stderr)
+    );
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("example/sort/32"));
+}
+
+#[test]
 fn init_discovery_preserves_manifest_and_refuses_overwrite() {
     let dir = tempfile::tempdir().unwrap();
     let manifest = dir.path().join("Cargo.toml");
@@ -516,6 +586,41 @@ fn init_discovery_preserves_manifest_and_refuses_overwrite() {
             .success()
     );
     assert_eq!(content, fs::read_to_string(&manifest).unwrap());
+    assert!(!dir.path().join("bench.json").exists());
+    fs::write(dir.path().join("bench.json"), "user configuration").unwrap();
+    let added = cli(&[
+        "init",
+        "--manifest-path",
+        manifest.to_str().unwrap(),
+        "--name",
+        "sort",
+    ]);
+    assert!(
+        added.status.success(),
+        "{}",
+        String::from_utf8_lossy(&added.stderr)
+    );
+    assert!(dir.path().join("benches/sort.rs").is_file());
+    assert_eq!(
+        source,
+        fs::read_to_string(dir.path().join("benches/bench.rs")).unwrap()
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("bench.json")).unwrap(),
+        "user configuration"
+    );
+    let updated = fs::read_to_string(&manifest).unwrap();
+    for name in ["../escape", "", "sort"] {
+        let invalid = cli(&[
+            "init",
+            "--manifest-path",
+            manifest.to_str().unwrap(),
+            "--name",
+            name,
+        ]);
+        assert!(!invalid.status.success());
+        assert_eq!(updated, fs::read_to_string(&manifest).unwrap());
+    }
 }
 #[test]
 fn retention_protects_case_baseline_artifacts_and_checks_hashes() {
@@ -1493,6 +1598,16 @@ fn protocol_preserves_worker_allocations_across_processes_and_variants() {
         .filter(|o| o.metric == "wall")
     {
         o.work_totals.insert("items".into(), "42".into());
+        o.worker_work_totals = std::collections::BTreeMap::from([
+            (
+                0,
+                std::collections::BTreeMap::from([("items".into(), "10".into())]),
+            ),
+            (
+                1,
+                std::collections::BTreeMap::from([("items".into(), "32".into())]),
+            ),
+        ]);
     }
     let metric = fixture.cases[0]
         .metrics
@@ -1609,6 +1724,22 @@ fn protocol_preserves_worker_allocations_across_processes_and_variants() {
         .insert("items".into(), "43".into());
     assert!(airbug_bench::measurement::load_formatted(&changed).is_err());
     assert_eq!(run.worker_allocations.len(), 8);
+    let slots = run.worker_slot_samples().unwrap();
+    assert_eq!(slots.len(), 8);
+    for slot in &slots {
+        assert_eq!(
+            slot.work_totals["items"],
+            if slot.worker == 0 { "10" } else { "32" }
+        );
+    }
+    assert_eq!(
+        slots
+            .iter()
+            .map(|s| (s.variant.as_str(), s.process))
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        4
+    );
     let identities: std::collections::BTreeSet<_> = run
         .worker_allocations
         .iter()
@@ -1676,6 +1807,24 @@ fn compare_exports_seeded_null_draws_and_portable_html() {
         String::from_utf8_lossy(&first.stderr)
     );
     assert_eq!(first.stdout, cli(&args).stdout);
+    let mut one_args = args;
+    one_args[6] = "1";
+    let one = cli(&one_args);
+    assert!(
+        one.status.success(),
+        "{}",
+        String::from_utf8_lossy(&one.stderr)
+    );
+    let single: serde_json::Value = serde_json::from_slice(&one.stdout).unwrap();
+    assert_eq!(
+        single[0]["hypothesis"]["null_distribution"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(single[0]["hypothesis"]["test"]["resamples"], 1);
+    assert_eq!(single[0]["hypothesis"]["test"]["p_value"], 1.0);
     let rows: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
     assert_eq!(
         rows[0]["hypothesis"]["null_distribution"]
@@ -1704,7 +1853,7 @@ fn compare_exports_seeded_null_draws_and_portable_html() {
     assert!(document.contains("<svg ") && document.contains("128 null draws"));
     assert!(!cli(&["compare", path, "--json", "--html"]).status.success());
     assert!(
-        !cli(&["compare", path, "--hypothesis-resamples", "1"])
+        !cli(&["compare", path, "--hypothesis-resamples", "0"])
             .status
             .success()
     );
@@ -2089,10 +2238,33 @@ fn analyze_saved_run_exports_distributions_without_mutating_source() {
     assert_eq!(fs::read(&html_path).unwrap(), html);
     assert_eq!(fs::read(path.join("run.json")).unwrap(), original_bytes);
     assert!(
-        !cli(&["analyze", path.to_str().unwrap(), "--resamples", "1"])
+        !cli(&["analyze", path.to_str().unwrap(), "--resamples", "0"])
             .status
             .success()
     );
+    let single = cli(&[
+        "analyze",
+        path.to_str().unwrap(),
+        "--resamples",
+        "1",
+        "--bootstrap-distributions",
+    ]);
+    assert!(
+        single.status.success(),
+        "{}",
+        String::from_utf8_lossy(&single.stderr)
+    );
+    let single: serde_json::Value = serde_json::from_slice(&single.stdout).unwrap();
+    assert!(single["rows"][0]["estimates"]["mean"]["standard_error"].is_null());
+    assert!(single["rows"][0]["regressions"][0]["fit"]["slope"]["standard_error"].is_null());
+    assert_eq!(
+        single["rows"][0]["distributions"]["mean"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(fs::read(path.join("run.json")).unwrap(), original_bytes);
     let ordinary = cli(&["analyze", path.to_str().unwrap(), "--resamples", "128"]);
     assert!(ordinary.status.success());
     assert!(!String::from_utf8_lossy(&ordinary.stdout).contains("slope_distribution"));
@@ -2103,6 +2275,9 @@ fn compare_relative_export_preserves_process_units_and_check_decisions() {
     let t = tempfile::tempdir().unwrap();
     let mut run = simple_run(&t.path().join("source"));
     run.cases[0].metrics[0].statistic = "batch_total".into();
+    run.cases[0]
+        .contract
+        .insert("work.counter.items".into(), "2".into());
     let original = run.observations[0].clone();
     run.observations.clear();
     for (process, count, value) in [(0, 5, 2), (1, 1, 4)] {
@@ -2135,6 +2310,31 @@ fn compare_relative_export_preserves_process_units_and_check_decisions() {
         "7",
     ];
     let ordinary = cli(&args);
+    let text_args: Vec<_> = args
+        .iter()
+        .copied()
+        .filter(|arg| *arg != "--json")
+        .collect();
+    let text = cli(&text_args);
+    assert_eq!(ordinary.status.code(), text.status.code());
+    let text = String::from_utf8(text.stdout).unwrap();
+    assert!(text.contains("Relative bootstrap estimates"));
+    assert!(text.contains("mean | 100.000000"));
+    assert!(text.contains("median | 100.000000"));
+    assert!(text.contains("2 / 2"));
+    assert!(text.contains("throughput inverse mean duration (items/s) | -50.000000"));
+    for plots in [true, false] {
+        let mut html_args = text_args.clone();
+        html_args.push("--html");
+        if !plots {
+            html_args.push("--no-plots");
+        }
+        let html = cli(&html_args);
+        assert_eq!(ordinary.status.code(), html.status.code());
+        let html = String::from_utf8(html.stdout).unwrap();
+        assert!(html.contains("Relative bootstrap estimates"));
+        assert_eq!(html.contains("<svg"), plots);
+    }
     let mut extended = args.to_vec();
     extended.push("--relative-distributions");
     let captured = cli(&extended);
@@ -2146,6 +2346,7 @@ fn compare_relative_export_preserves_process_units_and_check_decisions() {
     let relative = &data["relative"][0];
     assert_eq!(relative["baseline_units"], 2);
     assert_eq!(relative["candidate_units"], 2);
+    assert_eq!(relative["throughput"][0]["point_percent"], -50.0);
     let reference = airbug_bench::relative::bootstrap(
         &[2., 4.],
         &[4., 8.],
@@ -2347,6 +2548,21 @@ fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
     use airbug_bench::measurement::{FormattedMetric, FormattedObservation, save_formatted};
     let t = tempfile::tempdir().unwrap();
     let mut run = simple_run(&t.path().join("source"));
+    run.cases[0].contract.extend([
+        (
+            "param.input".into(),
+            "commas, quotes \" and newline\n".into(),
+        ),
+        ("work.input.items".into(), "batch_total".into()),
+        ("threads".into(), "1".into()),
+    ]);
+    run.observations[0].operations = u64::MAX;
+    run.observations[0].pair = Some(7);
+    run.observations[0]
+        .work_totals
+        .insert("items".into(), "184467440737095516160".into());
+    let work = run.observations[0].work_totals.clone();
+    run.observations[0].worker_work_totals.insert(0, work);
     let case = &run.cases[0];
     let metric = case.metrics[0].clone();
     let rows: Vec<_> = run
@@ -2391,6 +2607,14 @@ fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
     assert!(csv_text.contains("custom-display"));
     assert!(csv_text.contains("normalized_per_operation"));
     assert!(!csv_text.contains("custom text"));
+    assert!(csv_text.lines().next().unwrap().ends_with(
+        "operations,pair,raw_value,raw_unit,case_contract,work_totals,worker_work_totals"
+    ));
+    assert!(csv_text.contains("\"18446744073709551615\",\"7\",\"42\",\"ns\""));
+    assert!(csv_text.contains(r#""{""items"":""184467440737095516160""}""#));
+    assert!(csv_text.contains(r#""{""0"":{""items"":""184467440737095516160""}}""#));
+    assert_eq!(csv_text.lines().count(), 2);
+
     let html = t.path().join("formatted.html");
     let result = cli(&[
         "report",
@@ -2422,6 +2646,7 @@ fn saved_report_restores_formatter_snapshot_and_rejects_stale_values() {
     );
     let plot_html = fs::read_to_string(plotted).unwrap();
     assert!(plot_html.contains("formatted observations (custom-display)"));
+    assert!(plot_html.contains("formatted observations — distribution (custom-display)"));
     assert!(plot_html.contains("Saved formatter output"));
     assert_eq!(original, fs::read(source.join("run.json")).unwrap());
     run.observations[0].value = Some("99999".into());
@@ -2558,4 +2783,414 @@ fn analyze_restores_saved_bootstrap_settings_and_overrides_one_field() {
         );
     }
     assert_eq!(bytes, fs::read(path.join("run.json")).unwrap());
+}
+
+fn protocol_fixture_program(directory: &Path) -> std::path::PathBuf {
+    let source = directory.join("protocol_fixture.rs");
+    let program = directory.join(format!("protocol_fixture{}", std::env::consts::EXE_SUFFIX));
+    fs::write(
+        &source,
+        r#"fn main() {
+        let path = std::env::args_os().nth(1).expect("payload path");
+        let data = std::fs::read(path).unwrap();
+        std::io::Write::write_all(&mut std::io::stdout().lock(), &data).unwrap();
+    }"#,
+    )
+    .unwrap();
+    let result = Command::new("rustc")
+        .arg(&source)
+        .arg("-o")
+        .arg(&program)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    program
+}
+
+#[test]
+fn protocol_preserves_intentionally_disabled_runs() {
+    let _guard = RUNNER_TEST.lock().unwrap();
+    let mut suite = airbug_bench::Suite::new("disabled-protocol");
+    suite.bench("case", || panic!("disabled case executed"));
+    suite.config(airbug_bench::Config {
+        samples: 0,
+        ..Default::default()
+    });
+    let fixture = suite.run("").unwrap();
+    let t = tempfile::tempdir().unwrap();
+    let program = protocol_fixture_program(t.path());
+    let payload = t.path().join("disabled.txt");
+    fs::write(
+        &payload,
+        format!(
+            "BENCH_RESULT={}\n",
+            serde_json::to_string(&fixture).unwrap()
+        ),
+    )
+    .unwrap();
+    let output = t.path().join("run");
+    let result = cli(&[
+        "run",
+        "--program",
+        program.to_str().unwrap(),
+        "--repetitions",
+        "2",
+        "--protocol",
+        "--no-ui",
+        "--output",
+        output.to_str().unwrap(),
+        "--",
+        payload.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let run = airbug_bench::Run::load(&output).unwrap();
+    assert!(run.cases.is_empty() && run.observations.is_empty());
+    assert_eq!(
+        run.provenance["sampling.disabled_cases"],
+        "[\"disabled-protocol/case\"]"
+    );
+    assert_eq!(run.status, airbug_bench::Status::Complete);
+}
+
+#[test]
+fn protocol_rejects_changed_disabled_case_sets() {
+    let _guard = RUNNER_TEST.lock().unwrap();
+    let t = tempfile::tempdir().unwrap();
+    let program = protocol_fixture_program(t.path());
+    let mut payloads = Vec::new();
+    for name in ["first", "second"] {
+        let mut suite = airbug_bench::Suite::new("disabled-changes");
+        suite.bench(name, || ());
+        suite.config(airbug_bench::Config {
+            samples: 0,
+            ..Default::default()
+        });
+        let fixture = suite.run("").unwrap();
+        let path = t.path().join(format!("{name}.txt"));
+        fs::write(
+            &path,
+            format!(
+                "BENCH_RESULT={}\n",
+                serde_json::to_string(&fixture).unwrap()
+            ),
+        )
+        .unwrap();
+        payloads.push(path);
+    }
+    let plan = t.path().join("plan.json");
+    fs::write(
+        &plan,
+        serde_json::to_vec(&serde_json::json!({
+            "candidate": {"path":program, "args":[payloads[0]]},
+            "baseline": {"path":program, "args":[payloads[1]]},
+            "repetitions":1, "protocol":true
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let output = t.path().join("run");
+    let result = cli(&[
+        "run",
+        "--plan",
+        plan.to_str().unwrap(),
+        "--no-ui",
+        "--output",
+        output.to_str().unwrap(),
+    ]);
+    assert!(!result.status.success());
+    assert!(
+        String::from_utf8_lossy(&result.stderr).contains("disabled cases changed"),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+#[test]
+fn csv_export_retains_parameters_and_exact_worker_work() {
+    let t = tempfile::tempdir().unwrap();
+    let mut run = simple_run(&t.path().join("original"));
+    run.cases[0].contract.extend([
+        (
+            "param.label".into(),
+            "quoted \"value\", with newline\nnext".into(),
+        ),
+        ("work.input.items".into(), "batch_total".into()),
+        ("threads".into(), "1".into()),
+    ]);
+    let total = "184467440737095516160";
+    run.observations[0]
+        .work_totals
+        .insert("items".into(), total.into());
+    let totals = run.observations[0].work_totals.clone();
+    run.observations[0].worker_work_totals.insert(0, totals);
+    let source = t.path().join("source");
+    run.save_new(&source).unwrap();
+    let before = fs::read(source.join("run.json")).unwrap();
+    let output = t.path().join("export.csv");
+    let result = cli(&[
+        "export",
+        source.to_str().unwrap(),
+        "--format",
+        "csv",
+        "-o",
+        output.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let csv = fs::read_to_string(output).unwrap();
+    assert!(
+        csv.lines()
+            .next()
+            .unwrap()
+            .ends_with("availability,case_contract,work_totals,worker_work_totals")
+    );
+    // JSON embedded in CSV doubles its quotes; integers remain decimal strings.
+    assert!(csv.contains(r#""{""items"":""184467440737095516160""}""#));
+    assert!(csv.contains(r#""{""0"":{""items"":""184467440737095516160""}}""#));
+    let contract = serde_json::to_string(&run.cases[0].contract).unwrap();
+    assert!(csv.contains(&format!("\"{}\"", contract.replace('"', "\"\""))));
+    assert_eq!(csv.lines().count(), 2);
+    assert_eq!(before, fs::read(source.join("run.json")).unwrap());
+}
+
+#[test]
+fn compare_restores_case_bootstrap_settings_and_overrides_only_explicit_fields() {
+    let root = tempfile::tempdir().unwrap();
+    let mut recorder = airbug_bench::Recorder::new();
+    for id in ["a", "b"] {
+        recorder
+            .case(airbug_bench::Case {
+                id: id.into(),
+                contract: Default::default(),
+                metrics: vec![airbug_bench::Metric::duration(
+                    "wall",
+                    "process",
+                    "batch_total",
+                )],
+            })
+            .unwrap();
+        recorder.observe(id, "wall", 2).unwrap();
+        recorder.observe(id, "wall", 4).unwrap();
+    }
+    let before = recorder.finish().unwrap();
+    let mut after = before.clone();
+    for observation in &mut after.observations {
+        observation.value = Some("8".into());
+    }
+    let config = airbug_bench::bootstrap::Config {
+        resamples: 32,
+        seed: 5,
+        confidence_level: 0.9,
+    };
+    let special = airbug_bench::bootstrap::Config {
+        resamples: 64,
+        seed: 9,
+        confidence_level: 0.8,
+    };
+    airbug_bench::bootstrap::save_settings(
+        &mut after,
+        &config,
+        &[("b".into(), special)].into_iter().collect(),
+    )
+    .unwrap();
+    let a = root.path().join("a");
+    let b = root.path().join("b");
+    before.save_new(&a).unwrap();
+    after.save_new(&b).unwrap();
+    for flags in [vec![], vec!["--hypothesis-seed", "17"]] {
+        let mut args = vec![
+            "compare",
+            a.to_str().unwrap(),
+            b.to_str().unwrap(),
+            "--json",
+            "--relative-distributions",
+        ];
+        args.extend(flags.iter().copied());
+        let result = cli(&args);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let data: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        for row in data["relative"].as_array().unwrap() {
+            let special = row["case"] == "b";
+            let settings = &row["report"]["config"];
+            assert_eq!(settings["resamples"], if special { 64 } else { 32 });
+            assert_eq!(
+                settings["confidence_level"],
+                if special { 0.8 } else { 0.9 }
+            );
+            assert_eq!(
+                settings["seed"],
+                if !flags.is_empty() {
+                    17
+                } else if special {
+                    9
+                } else {
+                    5
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn compare_raw_json_ignores_unused_bootstrap_settings_and_explains_empty_selection() {
+    let root = tempfile::tempdir().unwrap();
+    let mut recorder = airbug_bench::Recorder::new();
+    recorder
+        .case(airbug_bench::Case {
+            id: "sample".into(),
+            contract: Default::default(),
+            metrics: vec![airbug_bench::Metric::duration(
+                "wall",
+                "process",
+                "batch_total",
+            )],
+        })
+        .unwrap();
+    recorder.observe("sample", "wall", 2).unwrap();
+    recorder.observe("sample", "wall", 4).unwrap();
+    let before = recorder.finish().unwrap();
+    let mut after = before.clone();
+    after.provenance.insert(
+        "airbug.analysis.bootstrap.v1".into(),
+        "invalid saved settings".into(),
+    );
+    let a = root.path().join("before");
+    let b = root.path().join("after");
+    before.save_new(&a).unwrap();
+    after.save_new(&b).unwrap();
+    let base = [
+        "compare",
+        a.to_str().unwrap(),
+        b.to_str().unwrap(),
+        "--json",
+        "--hypothesis-resamples",
+        "8",
+    ];
+    let result = cli(&base);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&result.stdout)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let mut relative = base.to_vec();
+    relative.push("--relative-distributions");
+    assert!(!cli(&relative).status.success());
+    for filter in ["--filter", "--metric"] {
+        let mut selected = base.to_vec();
+        selected.extend([filter, "absent", "--check"]);
+        let result = cli(&selected);
+        assert!(!result.status.success());
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("no benchmark cases or metrics match")
+        );
+        assert!(result.stdout.is_empty());
+    }
+}
+
+#[test]
+fn collection_chart_budget_preserves_rows_and_run_limit_rejects_atomically() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("runs");
+    fs::create_dir(&source).unwrap();
+    let add_run = |index: usize| {
+        let id = format!("case-{index:03}");
+        let mut recorder = airbug_bench::Recorder::new();
+        recorder
+            .case(airbug_bench::Case {
+                id: id.clone(),
+                contract: Default::default(),
+                metrics: vec![airbug_bench::Metric::duration(
+                    "wall",
+                    "test",
+                    "batch_total",
+                )],
+            })
+            .unwrap();
+        recorder.observe(&id, "wall", index as u128 + 1).unwrap();
+        recorder
+            .finish()
+            .unwrap()
+            .save_new(source.join(format!("run-{index:03}")))
+            .unwrap();
+    };
+    for index in 0..65 {
+        add_run(index);
+    }
+    let html = temp.path().join("collection.html");
+    let result = cli(&[
+        "report",
+        source.to_str().unwrap(),
+        "--output",
+        html.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let page = fs::read_to_string(&html).unwrap();
+    assert_eq!(page.matches("— process medians (ns)</summary>").count(), 64);
+    assert_eq!(page.matches("class=\"run-card\"").count(), 65);
+    for index in 0..65 {
+        assert!(page.contains(&format!("case-{index:03}")));
+    }
+    assert!(page.contains("Charts show at most 64 series"));
+    for index in 65..256 {
+        add_run(index);
+    }
+    let json = temp.path().join("collection.json");
+    let result = cli(&[
+        "report",
+        source.to_str().unwrap(),
+        "--output",
+        json.to_str().unwrap(),
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let data: serde_json::Value = serde_json::from_slice(&fs::read(&json).unwrap()).unwrap();
+    let entries = data["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 256);
+    for (index, entry) in entries.iter().enumerate() {
+        assert_eq!(
+            entry["run"]["observations"][0]["value"],
+            (index + 1).to_string()
+        );
+    }
+    add_run(256);
+    let old = fs::read(&json).unwrap();
+    let rejected = cli(&[
+        "report",
+        source.to_str().unwrap(),
+        "--output",
+        json.to_str().unwrap(),
+    ]);
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("limited to 256 runs"));
+    assert_eq!(fs::read(json).unwrap(), old);
 }

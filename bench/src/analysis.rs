@@ -475,6 +475,16 @@ pub fn compare_multi(
             }
             .into();
         }
+        pair.worker_timings
+            .retain(|w| w.variant == reference || w.variant == *name);
+        for w in &mut pair.worker_timings {
+            w.variant = if w.variant == reference {
+                "baseline"
+            } else {
+                "candidate"
+            }
+            .into();
+        }
         for comparison in compare(&pair, None, threshold, alpha / (names.len() - 1) as f64)? {
             result.push(MultiComparison {
                 reference: reference.into(),

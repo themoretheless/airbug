@@ -28,13 +28,196 @@
     {
       "command": "cargo fmt --all -- --check",
       "result": "passed"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench -p airbug-bench-macros --all-features",
+      "result": "414 passed, including doctests. After Cargo harness, nextest, tree, filters, fractional times, readable errors and R-squared endpoint changes; before outlier percentage formatting.",
+      "report": ".airbug/runs/90e8c6a5-d13a-418c-b15e-6646c6be827e/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --lib bootstrap::tests",
+      "result": "11 passed after outlier percentage formatting",
+      "report": ".airbug/runs/10e20eda-910d-46c5-84ae-7ef5e438a833/index.html"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-cargo-bench.py",
+      "result": "passed full script after correcting stale Duration::MAX decimal-millisecond expectation. Includes named-baseline relative text, quiet, JSON rate oracle and no-plots HTML. Precedes subsequent single-process fallback.",
+      "log": "/tmp/airbug-cargo-parity-current.log"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-relative-cargo.py",
+      "result": "passed after single-process fallback; accompanying 5 relative tests and all-target library/CLI Clippy passed"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-formatted-bootstrap.py",
+      "result": "passed current worktree: custom rate scale/text, exact point/bounds, source counters on reanalysis, raw preservation, HTML with/without plots. No browser visual claim."
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+      "result": "475 passed; 3 local TCP listener tests denied by sandbox. Before short-help and CSV metadata changes.",
+      "report": ".airbug/runs/c0308df1-df50-495c-95e1-3dbf48ae1ae0/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p cargo-airbug-bench --all-features --bin cargo-airbug-bench hub::tests; separately web_ui::tests",
+      "result": "3 hub tests and 8 web UI tests passed with local listeners permitted; all three sandbox failures resolved.",
+      "reports": [
+        ".airbug/runs/44101cc1-b948-4eab-8cee-a834cd5ef0d1/index.html",
+        ".airbug/runs/af63066c-a33a-4fd6-8182-1df459fa1d40/index.html"
+      ]
+    },
+    {
+      "command": "python3 -u bench/scripts/test-cargo-bench.py",
+      "result": "Full script passed after fractional attributes, relative/automatic-history estimates, formatter bootstrap rates, shared HTML template and short-help changes; before CSV metadata addition.",
+      "log": "/tmp/airbug-parity-cargo-oct01.log"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p cargo-airbug-bench --test cli csv_export_retains_parameters_and_exact_worker_work",
+      "result": "Passed after raw CSV metadata addition.",
+      "report": ".airbug/runs/42d63cbf-46b6-4cf5-9674-3dbc22c5ea22/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --test measurements",
+      "result": "19 passed after enriched machine CSV; includes dynamic work matching with reordered observations.",
+      "report": ".airbug/runs/bf16a216-0a60-40d4-a847-4db90e0c1d1b/index.html"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-formatted-bootstrap.py; CLI saved_report_restores_formatter_snapshot_and_rejects_stale_values",
+      "result": "Passed enriched CSV via real Cargo, saved baseline reanalysis and CLI. Older formatter snapshots use original raw operations/contracts without schema migration; stale observations rejected.",
+      "report": ".airbug/runs/42e1ca1a-624c-4040-a67a-90b719bfe623/index.html",
+      "log": "/tmp/airbug-formatted-csv.log"
+    },
+    {
+      "command": "cargo clippy --offline -p airbug-bench -p cargo-airbug-bench --all-targets --all-features -- -D warnings",
+      "result": "Passed after saved_report_csv implementation; later changes were test assertions/docs only.",
+      "log": "/tmp/airbug-formatted-csv-clippy.log"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-selection.py",
+      "result": "Passed default 95%/10000/seed0 estimates, linked JSON/HTML, --no-bootstrap output, conflicting explicit settings rejected before setup; existing selection/help tests passed.",
+      "log": "/tmp/airbug-default-statistics.log"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --test attributes",
+      "result": "68 passed. Includes restored constructed-counter behavior after unsuccessful autoref experiments; no expanded constructed async counter support claimed.",
+      "report": ".airbug/runs/932b3e6b-5eb9-4c22-9966-4123a9a0d5a4/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --lib bootstrap::tests::report_capture_uses_process_units_and_reads_legacy_json",
+      "result": "Passed compact console mean/interval display, ns/op labels, process_median population, per-case confidence and one-resample warning.",
+      "report": ".airbug/runs/256b819a-b65d-4e9b-a31e-298093b08924/index.html"
+    },
+    {
+      "command": "cargo clippy --offline -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features -- -D warnings",
+      "result": "Passed automatic bootstrap and tree/quiet presentation changes; later edits add test assertions only.",
+      "log": "/tmp/airbug-default-statistics-final-clippy.log"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-cargo-bench.py",
+      "result": "Full script passed after automatic bootstrap and compact tree/quiet fixes. Includes smoke/profiling exclusion, default and disabled estimates, named and automatic baselines, custom formatters, tree/quiet/JSON, per-case overrides and imported groups.",
+      "log": "/tmp/airbug-default-statistics-cargo.log"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --lib console::",
+      "result": "6 passed: includes worker timing population, weighted throughput, exact values, raw preservation and legacy summary behavior.",
+      "report": ".airbug/runs/6b474fd6-890c-4aea-8e85-2e638c3b628a/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --test worker_timings",
+      "result": "9 passed with process-separated worker weighted means.",
+      "report": ".airbug/runs/a6d32b7a-3782-44aa-9ba5-f739fa996406/index.html"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-allocated-thread-inheritance.py",
+      "result": "Passed expanded actual Cargo tree output assertions for worker timing, rates, allocations and distinct wave peaks.",
+      "log": "/tmp/airbug-worker-tree-cargo.log"
+    },
+    {
+      "command": "cargo clippy --offline -p airbug-bench -p cargo-airbug-bench --all-targets --all-features -- -D warnings",
+      "result": "Passed worker console changes.",
+      "log": "/tmp/airbug-worker-tree-clippy.log"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --test measurements",
+      "result": "20 passed with custom nonlinear relative rate estimator, source preservation, fixed counter validation and sampling-unit equivalence.",
+      "report": ".airbug/runs/ffba2591-aa53-4fee-be91-1461fbf98e15/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --lib relative::",
+      "result": "5 passed after extracting comparison populations and generic estimate-pair transformation.",
+      "report": ".airbug/runs/29b707b8-1212-4c65-b0ec-b8c2b86a9ecd/index.html"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench --lib history::",
+      "result": "13 passed, including formatter callback failure before export/publication and preserved previous baseline.",
+      "report": ".airbug/runs/6598c37a-384a-40b7-b799-7fe8a751ea80/index.html"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-formatted-bootstrap.py; python3 -u bench/scripts/test-relative-cargo.py",
+      "result": "Both passed after custom relative rates joined named and automatic history. Custom point/bounds oracle, source-unit preservation, committed comparison equivalence, ordinary relative output, quiet/JSON, no-plots and lazy reanalysis checked.",
+      "logs": [
+        "/tmp/airbug-relative-formatter-cargo.log",
+        "/tmp/airbug-relative-formatter-ordinary.log"
+      ]
+    },
+    {
+      "command": "cargo clippy --offline -p airbug-bench -p cargo-airbug-bench --all-targets --all-features -- -D warnings",
+      "result": "Passed final custom relative rate/history integration.",
+      "log": "/tmp/airbug-relative-formatter-clippy.log"
+    },
+    {
+      "command": "cargo airbug test -- --offline -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+      "result": "482 passed, 0 failed, 0 ignored, including all local TCP listener tests. Current changes include default bootstrap, worker tree, enriched CSV and custom relative formatter history.",
+      "report": ".airbug/runs/0b13bdc1-9772-49f6-882f-f44fc2b3d795/index.html"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-cargo-test-benches.py",
+      "result": "Passed debug/release default smoke, filters, lazy list/version, explicit measurement, direct executable and protocol runner.",
+      "log": "/tmp/airbug-core-smoke-gate.log"
+    },
+    {
+      "command": "python3 -u bench/scripts/test-cargo-bench.py",
+      "result": "Full external Cargo gate passed after default statistics, worker tree and custom relative formatter changes; numerical artifacts and native entrypoints covered, no rendered-browser claim.",
+      "log": "/tmp/airbug-core-cargo-gate.log"
     }
   ],
   "limits": [
     "Current host only; cross-platform behavior remains unverified",
     "Does not complete the requirement-by-requirement upstream audit",
     "Full rendered HTML visual verification remains incomplete",
-    "Reports are local; port 8790 belongs to a different project"
+    "Reports are local; no hub was listening on port 8790 during this gate."
   ],
-  "verified_changes": "Current gate includes runtime counters, thread matrices and preflight, custom typed caller totals, shared-slice setup, imported-default diagnostics, console modes and infinity-aware ordering."
+  "verified_changes": "Current gate includes runtime counters, thread matrices and preflight, custom typed caller totals, shared-slice setup, imported-default diagnostics, console modes and infinity-aware ordering.",
+  "external_cargo_revalidation": {
+    "command": "python3 -u bench/scripts/test-cargo-bench.py",
+    "result": "passed",
+    "execution_session": 30477,
+    "scope": "Complete external Cargo integration script after total measurement targets and inherited sync/async allocated setup changes.",
+    "covered": [
+      "Cargo argument forwarding, lazy list/dry-run, selection and ordering",
+      "History, automatic comparison, named baselines, corruption and artifact failures",
+      "Cross-crate registration, renamed dependencies, inherited options and CLI precedence",
+      "Sync/async inputs, typed custom measurement, caller-defined totals and formatter outputs",
+      "Bootstrap, regression, one-resample uncertainty, machine CSV and HTML artifacts",
+      "Runtime worker matrices, local Rc one-worker execution and unsupported-matrix diagnostics",
+      "Zero sample count dry-run and full-width numeric configuration previews"
+    ],
+    "limitations": [
+      "Assertions inspect artifacts and numeric behavior; no browser rendering verified.",
+      "Does not prove feature parity, arbitrary manual-builder worker matrices, or cross-platform support.",
+      "Temporary fixture artifacts are removed by the script."
+    ],
+    "log": "/tmp/airbug-cargo-current.log"
+  },
+  "library_all_features_revalidation": {
+    "command": "cargo airbug test -- --offline -p airbug-bench -p airbug-bench-macros --all-features",
+    "result": "408 passed; 0 failed; 0 ignored",
+    "report": ".airbug/runs/e73c24cd-51ad-45a6-97c1-5b79259c8c98/report.json",
+    "scope": "Library, macros, integration tests and doctests with all features after total measurement targets and inherited sync/async allocation setup; includes 26 allocation integration tests.",
+    "limits": [
+      "Current host only; does not prove cross-platform behavior.",
+      "CLI package tests are not part of this command.",
+      "No HTML browser visual verification.",
+      "Full API/CLI semantic audit remains incomplete."
+    ]
+  }
 }

@@ -1,0 +1,340 @@
+{
+  "upstream": "Criterion 0.8.2",
+  "source": "https://docs.rs/criterion/0.8.2/criterion/struct.Criterion.html",
+  "scope": "Criterion manager methods in pinned src/lib.rs lines 457..1243; includes hidden source methods and excludes separate BenchmarkGroup/BenchmarkId/helper declarations.",
+  "status": "mapped_not_full_parity_proof",
+  "method_count": 24,
+  "methods": [
+    {
+      "upstream": "with_measurement",
+      "source_line": 457,
+      "airbug": "Suite::bench_measured and variants",
+      "audit": "measurement.json",
+      "status": "mapped",
+      "notes": "Per-case typed Measurement and formatter; full graph/entrypoint audit remains."
+    },
+    {
+      "upstream": "with_profiler",
+      "source_line": 479,
+      "airbug": "Suite::profiler; profile_selected",
+      "audit": "criterion-extensions.json",
+      "status": "verified_native_semantics",
+      "notes": "Profiling-only hooks, wall deadline, cleanup and reuse verified; adaptive scheduling differs from Criterion one-batch duration estimate."
+    },
+    {
+      "upstream": "plotting_backend",
+      "source_line": 493,
+      "airbug": "Built-in SVG renderer",
+      "audit": "plots.json",
+      "status": "mapped_native_output_capabilities_visual_acceptance_open",
+      "notes": "Pinned Plotter method and final_summary source audit in plots.json backend_capability_audit. Native chart families and aggregate saved-directory report are mapped; rendering/navigation/resource acceptance remains separate."
+    },
+    {
+      "upstream": "sample_size",
+      "source_line": 518,
+      "airbug": "Config::samples / Sampling::samples; --samples",
+      "audit": "sample_warmup_configuration_audit in this file",
+      "status": "verified_native_sample_warmup_configuration",
+      "notes": "u64 domain; Airbug also permits 1..9 and zero disables."
+    },
+    {
+      "upstream": "warm_up_time",
+      "source_line": 531,
+      "airbug": "Config::warmup / Sampling::warmup; --warmup-ms",
+      "audit": "sample_warmup_configuration_audit in this file",
+      "status": "verified_native_sample_warmup_configuration",
+      "notes": "Duration builder; Airbug permits zero to skip warmup."
+    },
+    {
+      "upstream": "measurement_time",
+      "source_line": 549,
+      "airbug": "Sampling::measurement_time; measurement_ms attribute; --measurement-ms; AIRBUG_BENCH_MEASUREMENT_MS",
+      "audit": "numeric-domains.json",
+      "status": "implemented_with_focused_validation",
+      "notes": "Total target divided by effective sample count with nanosecond ceiling for calibration; linear/auto use the original total. Nearest per-sample/total setting wins across imported groups. Explicit CLI overrides either environment alternative; specifying both flags is rejected. Fixed iterations and adaptive quick keep their own schedules; resource caps can change achieved duration.",
+      "evidence": [
+        "sampling::tests::total_measurement_target_preserves_precision_and_nearest_time_override",
+        "contracts::total_measurement_time_drives_flat_and_linear_collection",
+        "156 library/macro unit tests and focused integration test passed; all-target Clippy passed",
+        "bench/scripts/test-measurement-target.py passed: real external Cargo crate, imported defaults and child override, CLI/environment precedence, profile reset, invalid/conflicting settings, exact u64::MAX preview and collected 2 ms samples for a 6 ms total across 3 samples."
+      ]
+    },
+    {
+      "upstream": "nresamples",
+      "source_line": 568,
+      "airbug": "bootstrap::Config::resamples; --resamples",
+      "audit": "significance.json::configuration_semantic_audit",
+      "status": "verified_native_statistics_configuration",
+      "notes": "Positive usize; one draw gives unavailable standard error."
+    },
+    {
+      "upstream": "noise_threshold",
+      "source_line": 591,
+      "airbug": "history::ComparisonConfig::noise_threshold_percent",
+      "audit": "significance.json::configuration_semantic_audit",
+      "status": "verified_native_statistics_configuration",
+      "notes": "Airbug uses percentage points rather than a fraction; compare 1.0 with Criterion 0.01."
+    },
+    {
+      "upstream": "confidence_level",
+      "source_line": 607,
+      "airbug": "bootstrap::Config::confidence_level; per-case Options",
+      "audit": "significance.json::configuration_semantic_audit",
+      "status": "verified_native_statistics_configuration",
+      "notes": "Absolute interval confidence; comparison configuration is separately audited."
+    },
+    {
+      "upstream": "significance_level",
+      "source_line": 638,
+      "airbug": "history::ComparisonConfig::significance_level",
+      "audit": "significance.json::configuration_semantic_audit",
+      "status": "verified_native_statistics_configuration",
+      "notes": "Independent significance and practical effect thresholds."
+    },
+    {
+      "upstream": "with_plots",
+      "source_line": 647,
+      "airbug": "Suite::plots(true); --plots",
+      "audit": "plots.json::html_plot_policy_audit",
+      "status": "verified_native_artifact_policy",
+      "notes": "Native HTML/SVG enabled by default; Suite::plots(true)/--plots enables graphs. Explicit --plots conflicts with --no-html. No external renderer dependency."
+    },
+    {
+      "upstream": "without_plots",
+      "source_line": 662,
+      "airbug": "--no-html disables HTML reports; --no-plots is an additional numerical-HTML mode",
+      "audit": "plots.json::html_plot_policy_audit",
+      "status": "verified_native_artifact_policy",
+      "notes": "Pinned Criterion clears report.html entirely. Airbug --no-html preserves machine artifacts and suppresses all HTML; --no-plots preserves numerical HTML while skipping SVG."
+    },
+    {
+      "upstream": "save_baseline",
+      "source_line": 669,
+      "airbug": "--replace-baseline NAME; optionally --baseline-lenient NAME to compare before updating",
+      "audit": "baselines.json",
+      "status": "verified_native_lifecycle",
+      "notes": "Criterion save overwrites the selected case baseline. Airbug replace upserts selected cases; save is create-only. Existing unselected case references are preserved. Detailed evidence in baselines.json."
+    },
+    {
+      "upstream": "retain_baseline",
+      "source_line": 677,
+      "airbug": "--baseline NAME / --baseline-lenient NAME",
+      "audit": "baselines.json",
+      "status": "verified_native_lifecycle",
+      "notes": "Strict comparison requires coverage; lenient comparison permits missing cases. Neither updates the baseline. Airbug --retain-baseline is a separate fill-missing operation, not this mapping."
+    },
+    {
+      "upstream": "with_filter",
+      "source_line": 692,
+      "airbug": "Selection::with_regex; --regex with a positional filter",
+      "audit": "registration_selection_semantic_audit in this file",
+      "status": "verified_native_registration_selection",
+      "notes": "Criterion with_filter is regex, not substring. Airbug plain positional filters remain substring; explicit --regex preserves the regex capability."
+    },
+    {
+      "upstream": "with_benchmark_filter",
+      "source_line": 708,
+      "airbug": "Selection exact/regex/exclusions; CLI selectors",
+      "audit": "registration_selection_semantic_audit in this file",
+      "status": "verified_native_registration_selection",
+      "notes": "Airbug-native selection object; no Criterion type compatibility."
+    },
+    {
+      "upstream": "with_output_color",
+      "source_line": 717,
+      "airbug": "Suite::console_color; --color",
+      "audit": "output.json::console_policy_audit",
+      "status": "verified_native_console_policy",
+      "notes": "Auto/always/never; saved artifacts and machine output uncolored."
+    },
+    {
+      "upstream": "output_directory",
+      "source_line": 725,
+      "airbug": "--output; Run::save_new",
+      "audit": "artifacts.json::output_preflight",
+      "status": "verified_native_immutable_output_preflight",
+      "notes": "Explicit output path is checked before timers/setup/work. Existing files/directories fail with a recovery hint and remain untouched; preview remains read-only. Actual directory creation still rejects races."
+    },
+    {
+      "upstream": "profile_time",
+      "source_line": 734,
+      "airbug": "Suite::profile_selected; --profile-time-ms",
+      "audit": "criterion-extensions.json",
+      "status": "verified_native_semantics",
+      "notes": "Profiling-only hooks, wall deadline, cleanup and reuse verified; adaptive scheduling differs from Criterion one-batch duration estimate."
+    },
+    {
+      "upstream": "final_summary",
+      "source_line": 745,
+      "airbug": "Suite::main automatic reports; report module",
+      "audit": "plots.json",
+      "status": "mapped_native_output_capabilities_visual_acceptance_open",
+      "notes": "Pinned Plotter method and final_summary source audit in plots.json backend_capability_audit. Native chart families and aggregate saved-directory report are mapped; rendering/navigation/resource acceptance remains separate."
+    },
+    {
+      "upstream": "configure_from_args",
+      "source_line": 762,
+      "airbug": "Suite::main / main_registered",
+      "audit": "requirements.json",
+      "status": "verified_native_configuration_precedence",
+      "notes": "Native CLI parsed with environment and explicit per-field precedence.",
+      "focused_validation": "Current full external Cargo fixture passed on Linux ARM64: environment defaults, explicit per-field CLI overrides, imported group sampling/comparison/timer/overhead/bootstrap inheritance, runtime worker registration and invalid settings."
+    },
+    {
+      "upstream": "benchmark_group",
+      "source_line": 1175,
+      "airbug": "Suite::group / group_with_defaults; #[group]",
+      "audit": "criterion-groups.json",
+      "status": "verified_registration_semantics",
+      "notes": "Lazy scoped registration, borrowed input and full identities verified; report presentation remains separate."
+    },
+    {
+      "upstream": "bench_function",
+      "source_line": 1212,
+      "airbug": "Suite::bench; #[bench]",
+      "audit": "registration_selection_semantic_audit in this file",
+      "status": "verified_native_registration_selection",
+      "notes": "Register lazy benchmark operation."
+    },
+    {
+      "upstream": "bench_with_input",
+      "source_line": 1243,
+      "airbug": "Captured borrowed input or parameterized attributes",
+      "audit": "registration_selection_semantic_audit in this file",
+      "status": "verified_native_registration_selection",
+      "notes": "Stable reusable argument is distinct from fresh setup outside timing."
+    }
+  ],
+  "remaining": [
+    "Standard and quick sampling policies audited with explicit native differences; platform/runtime acceptance remains separate.",
+    "BenchmarkGroup and feature/CLI method inventories now have automated exact-set checks; detailed runtime semantics and report behavior still require their respective evidence.",
+    "Backend capabilities and final summary source mapping are recorded in plots.json; visual/report acceptance remains open."
+  ],
+  "sampling_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/routine.rs:149-213",
+      "criterion-0.8.2/src/routine.rs:279-305",
+      "criterion-0.8.2/src/lib.rs:1378-1474",
+      "bench/src/sampling.rs::Schedule",
+      "bench/src/suite.rs::run_selected_live"
+    ],
+    "capabilities": [
+      "Flat collection repeats a fixed operation count; linear collection increases count by a fixed step.",
+      "Total measurement target excludes warmup and calibration. Counts round upward to whole operations; actual duration can exceed the target.",
+      "Auto chooses linear when its minimum increasing sequence fits within twice the target, otherwise flat; Airbug also requires the sequence to fit its iteration cap.",
+      "Per-case settings inherit by field and explicit CLI options override them. Fixed operation counts skip calibration.",
+      "Airbug min/max workload budgets include calibration and warmup; optional external-time exclusion changes budget accounting, not custom measurement values."
+    ],
+    "native_differences": [
+      "Criterion doubles warmup batches and estimates operation cost from cumulative elapsed wall time divided by cumulative iterations. Airbug doubles calibration batches to the per-sample target/cap, uses the final calibrated raw interval, then warms up that batch.",
+      "Criterion defaults to auto sampling. Airbug defaults to flat; auto is explicit.",
+      "Airbug exact integer scheduling and explicit iteration caps replace upstream floating-point planning without an iteration cap.",
+      "Airbug rejects exhausted calibration budgets and records achieved sample counts. Neither library promises a hard interruption inside a user operation.",
+      "Quick adaptive sampling is a separate policy and is not covered by this audit."
+    ],
+    "evidence": [
+      "sampling::tests::linear_and_auto_schedules_use_cost_and_respect_caps",
+      "sampling::tests::total_measurement_target_preserves_precision_and_nearest_time_override",
+      "sampling::tests::target_counts_round_up_and_bound_without_saturation",
+      "sampling::tests::budgets_distinguish_external_time_and_maximum_wins",
+      "bench/tests/contracts.rs::total_measurement_time_drives_flat_and_linear_collection",
+      "bench/tests/contracts.rs::calibration_and_warmup_consume_the_time_budget",
+      "bench/scripts/test-measurement-target.py"
+    ],
+    "validation": "All 12 sampling unit tests passed with --offline --locked --all-features on macOS. Integration and external Cargo evidence is referenced individually; this is not a fresh platform-wide gate."
+  },
+  "quick_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/routine.rs:94-145",
+      "bench/src/quick.rs::QuickConfig::stop",
+      "bench/src/suite.rs::run_selected_live"
+    ],
+    "shared_capabilities": [
+      "Starts with one operation and doubles successive batches without a separate warmup phase.",
+      "Stops after minimum elapsed time when adjacent-batch residual falls below a relative target, or at maximum elapsed time.",
+      "A user operation is allowed to finish; maximum time is checked between batches rather than interrupting work."
+    ],
+    "native_differences": [
+      "Airbug generalizes the residual formula to the actual count ratio, so it also works after reaching its iteration cap.",
+      "Airbug keeps every real batch; Criterion keeps only the last pair. For a first batch exceeding the deadline, Airbug retains one sample; Criterion duplicates it with next_up for plotting.",
+      "Criterion uses configured Measurement values for residual stability. Airbug uses the reported wall-duration channel, keeping custom metric values independent.",
+      "Airbug quick relative-deviation is independent from hypothesis significance; Criterion uses significance_level as the stopping target.",
+      "Airbug uses inclusive min/max boundaries and supports separate workload min/max budgets, with maximum budget taking precedence."
+    ],
+    "interpretation": "Residual stability is an adaptive stopping heuristic, not confidence or significance evidence. Stored sampling.mode identifies quick_adaptive; no exact sampling-distribution equivalence is claimed.",
+    "evidence": [
+      "bench/tests/quick.rs::quick_grows_real_batches_without_warmup_and_stops_on_stability",
+      "bench/tests/quick.rs::quick_respects_iteration_cap_and_retains_single_slow_sample",
+      "bench/tests/quick.rs::quick_time_budgets_gate_stability_and_maximum_takes_precedence",
+      "bench/tests/quick.rs::quick_conflicts_in_later_cases_are_rejected_before_any_work",
+      "bench/tests/quick.rs::disabling_quick_after_execution_removes_stale_contract_and_resets_sampling"
+    ],
+    "validation": "All seven quick integration tests passed with --offline --locked --all-features on macOS."
+  },
+  "registration_selection_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/lib.rs:332-341,692-712,1136-1142,1212-1265",
+      "criterion-0.8.2/src/benchmark_group.rs:249-311",
+      "bench/src/convenience.rs::Selection",
+      "bench/tests/contracts.rs::groups_keep_shared_borrowed_inputs_lazy_and_select_by_full_identity"
+    ],
+    "capabilities": [
+      "Register plain operations and shared borrowed inputs without requiring Clone or static lifetime.",
+      "Match full identities with regex or exact selectors; empty selection accepts all eligible cases.",
+      "Reject duplicate identities before work. Listing and preview do not execute workload or setup."
+    ],
+    "native_differences": [
+      "Criterion bench_function/bench_with_input execute through group run_bench immediately. Airbug registration is lazy and execution happens through Suite::main/run_selected.",
+      "Criterion with_filter replaces the current filter and parses regex. Airbug ordinary filters are substrings; Selection::with_regex and CLI --regex provide regex matching. Multiple CLI positive filters form a union, then exclusions apply.",
+      "Reject-all is expressible as an exclusion matching every case. Airbug measurement reports an empty-selection error; list/dry-run allow no cases.",
+      "Criterion parameter identity uses BenchmarkId; Airbug uses full slash paths and parameter metadata, retaining shared-input and fresh-setup distinctions."
+    ],
+    "evidence": [
+      "bench/tests/contracts.rs::registration_and_list_do_not_execute",
+      "bench/tests/contracts.rs::groups_keep_shared_borrowed_inputs_lazy_and_select_by_full_identity",
+      "bench/tests/contracts.rs::multiple_inclusive_patterns_union_before_exclusions_and_execute_once",
+      "bench/scripts/test-selection.py"
+    ],
+    "validation": "69 all-feature contract tests passed on macOS; test-selection.py passed real Cargo regex/exact/glob union and exclusions, lazy invalid and empty selection, single execution, help and default statistics. Logs: .airbug/validation/parity-current/registration-contracts.log and selection-current.log."
+  },
+  "sample_warmup_configuration_audit": {
+    "sources": [
+      "criterion-0.8.2/src/lib.rs:421-423,518-535",
+      "bench/src/suite.rs::Config::default",
+      "bench/src/suite.rs::run_selected_live",
+      "bench/src/sampling.rs::Sampling::disabled"
+    ],
+    "contracts": [
+      "Sample count controls collected observations; calibration and warmup calls do not become sample observations or throughput work totals.",
+      "Warmup runs against wall elapsed time; zero skips warmup. General min/max budgets account for calibration and warmup as separately documented.",
+      "Per-field group/case inheritance and explicit overrides preserve zero/false values. Zero samples disables a case before workload execution."
+    ],
+    "native_differences": [
+      "Criterion sample_size accepts usize >= 10; Airbug uses u64 and supports 1..9, with zero disabling a case. Airbug defaults to 30 samples versus Criterion 100.",
+      "Criterion requires nonzero warmup and defaults to 3 seconds. Airbug permits zero and defaults to 50 milliseconds.",
+      "Neither warmup duration nor sample count alone establishes measurement accuracy. The default policies trade collection time differently; use explicit settings for matched experiments.",
+      "Airbug calibration precedes its warmup and uses the final calibrated interval; Criterion derives cost from cumulative warmup. Scheduling differences are recorded in sampling_semantic_audit."
+    ],
+    "evidence": [
+      "contracts::dynamic_work_totals_exclude_pilot_and_warmup_and_drive_throughput",
+      "contracts::calibration_and_warmup_consume_the_time_budget",
+      "attributes::fixed_sampling_inherits_options_and_obeys_measured_time_limits",
+      "attributes::imported_groups_inherit_sampling_per_field_with_nearest_override",
+      "attributes::zero_sampling_disables_cases_and_child_values_can_enable_them",
+      "bench/scripts/test-option-domains.py"
+    ],
+    "validation": "Fresh macOS all-feature contracts (69) and attributes (68) passed, exit 0. Log: .airbug/validation/parity-current/sampling-semantics.log. CLI numeric domains previously passed 263 checks."
+  },
+  "latest_configuration_validation": {
+    "script": "bench/scripts/test-cargo-bench.py",
+    "exit_code": 0,
+    "platform": "Linux ARM64",
+    "log": ".airbug/validation/parity-current/cargo-precedence-linux-current.log",
+    "sha256": "8188a5ebbdcdbd3564631a06d562cf379208a7defb4d51ea74b22ac5f4527f6b",
+    "corrected_stale_expectations": [
+      "Occupied output paths are rejected before workload or history mutation, including profiling.",
+      "Zero maximum time disables cases and produces no observations."
+    ],
+    "limits": "Native field precedence and Cargo behavior verified; no API signature compatibility or visual/platform-wide equivalence claim."
+  }
+}

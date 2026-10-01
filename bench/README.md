@@ -1,14 +1,118 @@
 # bench
 
-Своя Rust benchmark-библиотека и runner: короткие операции, отдельные процессы и сценарии приложения в одном формате наблюдений. Реализован рабочий прототип 0.1.0; полная приёмка и переносимость ещё проверяются.
-
-Новые удобства: **init, обнаружение workspace targets, именованные baseline, прогресс/ETA, матрицы параметров, проверка результата, HTML-таблицы, бюджеты и Forma golden-сценарии**. [Полный рабочий процесс](docs/USABILITY.md).
-
-Добавлены ещё [20 возможностей рабочего цикла](docs/NEXT20.md): профили, Git-сравнение, `last`, dry-run, фильтры/теги, fixtures/фазы, throughput, seed, история, графики, экспорт/bundle, заметки и CI-политика.
-
-Реализована и третья партия — [ещё 20 функций рабочего цикла](docs/FINAL20.md): приватность, диагностика нестабильности, pilot, A/B/C, атрибуты `#[bench]`, async/threads/pipeline, cold-прогоны, фазы аллокаций, Forma GPU/окно, матрицы аргументов, profiler replay, resume, retention и bisect.
+Бенчмарки Rust через `#[bench]` и `cargo bench`, с HTML-отчётами и автоматическим сравнением запусков. Для отдельных процессов и сценариев приложения есть дополнительный runner.
 
 ## Быстрый запуск
+
+В существующем Cargo package, если CLI уже установлен:
+
+```sh
+cargo airbug-bench init
+cargo bench
+```
+
+Откройте созданный `benches/bench.rs` и замените пример своей функцией.
+`init` сам добавляет зависимость и `harness = false` в `Cargo.toml`.
+Дополнительный конфигурационный файл не нужен. Для нового набора бенчей:
+
+```sh
+cargo airbug-bench init --name sort
+cargo bench --bench sort
+```
+
+Существующие файлы сохраняются; при занятом имени выберите другое `--name`.
+Команда `init` работает и из вложенного каталога: Cargo находит ближайший
+`Cargo.toml`. Для другого package укажите `--manifest-path`; для virtual
+workspace выберите manifest нужного участника. После создания выводятся готовые
+команды запуска, проверки одним вызовом и просмотра списка кейсов.
+
+Каждый запуск печатает результат и путь к HTML-отчёту; начиная со второго,
+сравнивает с предыдущим успешным запуском автоматически.
+Обычное измерение также рассчитывает 95%-е доверительные интервалы
+(10 000 bootstrap-перевыборок) после завершения замера и сохраняет
+`estimates.json` / `estimates.html`. Для быстрого просмотра только исходных
+результатов используйте `cargo bench -- --no-bootstrap`. Уровень доверия и число
+перевыборок меняются через `--confidence-level` и `--resamples`.
+Проверка `--test` и профилирование не включают этот анализ автоматически.
+Интервалы одного процесса описывают выборку его батчей; они не доказывают
+воспроизводимость результата между независимыми процессами.
+
+
+| Задача | Команда |
+|---|---|
+| Запустить все бенчи | `cargo bench` |
+| Запустить только сортировку | `cargo bench sort` |
+| Выбрать несколько семейств | `cargo bench -- sort parse` |
+| Быстро попробовать изменение | `cargo bench -- --quick` |
+| Проверить кейсы по одному вызову | `cargo test --benches` |
+| Посмотреть список без измерений | `cargo bench -- --list` |
+| Короткая справка | `cargo bench -- --help` |
+| Все настройки | `cargo bench -- --help-all` |
+| Версия библиотеки без запуска | `cargo bench -- --version` |
+
+Справка переносит строки по ширине терминала. `COLUMNS` задаёт ширину явно;
+без терминала используется 80 колонок. Длинные имена опций и пути не разрываются.
+`--help` и `--help-all` доступны даже при ошибочных настройках окружения;
+в атрибутных suite и `main_registered` они не запускают регистрацию бенчмарков.
+
+Пример созданного файла — `benches/bench.rs`:
+
+```rust
+#[airbug_bench::suite]
+mod example {
+    #[bench(args = [32usize, 128, 512], setup = |n| (0..n).rev().collect::<Vec<_>>())]
+    fn sort(values: &mut [usize]) {
+        values.sort_unstable();
+    }
+}
+```
+
+`args` задаёт размеры, `setup` готовит свежие данные вне измерения.
+Время измеряется для тела `sort`. Замените его своим кодом и снова выполните
+`cargo bench`. Ручная регистрация функций не нужна.
+Если фильтр не нашёл ни одного кейса, Airbug показывает доступные имена и команду
+просмотра списка до начала измерений и создания отчёта.
+
+<details>
+<summary>Дополнительно: несколько targets, nextest и точные настройки времени</summary>
+
+Для package с несколькими benchmark targets добавьте `--bench ИМЯ` перед `--`.
+Атрибутные suites поддерживают `cargo test --benches` и `cargo test --release --benches`:
+каждый выбранный кейс выполняется один раз на worker, без прогрева и калибровки.
+`cargo bench -- --test` также запускает такую проверку. Измерения выполняет `cargo bench`.
+Если запускаете скомпилированный bench executable напрямую, передайте `--bench`
+для измерений; без этого флага Cargo harness выполняет однократную проверку.
+Protocol runner Airbug выбирает измерения автоматически; явный `--test` имеет приоритет.
+Для ручного `Suite` включите `suite.cargo_harness()` перед `main()` или
+`main_registered()`, если этот executable используется как Cargo bench target.
+Обычные executable с `Suite::main()` сохраняют режим измерений по умолчанию.
+
+Атрибутные бенчи также обнаруживаются и проверяются через nextest:
+
+```sh
+cargo nextest list --benches
+cargo nextest run --benches
+```
+
+Nextest видит каждый параметризованный кейс отдельно, учитывает `ignore` и
+передаёт ошибку бенча как провал теста. Для этой интеграции доступен
+`--list --format terse`; обычный `--list` сохраняет короткий список имён.
+
+
+Подключение вручную без CLI показано ниже. Дополнительные сценарии:
+[рабочий процесс](docs/USABILITY.md), [история и CI](docs/NEXT20.md),
+[профилирование и матрицы](docs/FINAL20.md).
+
+Временные флаги `cargo bench -- --…-ms` принимают десятичные миллисекунды:
+например, `--warmup-ms 0.125` и `--measurement-ms 2.5`. Минимальный шаг настройки —
+`0.000001` мс (1 нс); это точность записи настройки, а не гарантия точности таймера.
+Соответствующие переменные окружения принимают тот же формат. Значения меньше
+наносекунды, отрицательные значения, NaN и переполнение отклоняются. Экспоненциальная
+запись не используется. В `--dry-run` дробные и слишком большие миллисекунды
+представлены точными строками; целые значения в пределах u64 остаются числами.
+
+
+</details>
 
 ### Как `cargo test`: функции с атрибутом и `cargo bench`
 
@@ -157,6 +261,13 @@ mod benches {
 `#[group(...)]` наследуются; значение на кейсе переопределяет соответствующий
 параметр. `ignore = true` можно задать всей группе, а `ignore = false` — отдельному
 кейсу. `#[ignore]` также поддерживается.
+`ignore` принимает любое булево выражение, например
+`#[bench(ignore = !cfg!(feature = "expensive"))]` или вызов функции конфигурации.
+Условие вычисляется при регистрации (также при `--list`), поэтому оно должно быть
+дешёвым и без побочных эффектов. Значение сохраняется на время запуска;
+`--include-ignored` и `--ignored` позволяют явно запустить такие кейсы.
+Нулевые `samples` и `iterations` остаются ошибкой конфигурации.
+
 
 ```sh
 cargo bench -- --include-ignored  # все выбранные кейсы
@@ -173,6 +284,20 @@ cargo bench -- --test            # одна операция на worker, без
 самой функцией является частью её работы. `drop_output = "outside"` откладывает
 только уничтожение возвращённого результата. Вход по владению поддерживается также
 для async и потоковых кейсов.
+
+Настройки `threads` пересекают границу импортированной группы для обычных и
+параметризованных sync/async функций, включая `setup` с передачей входа по владению
+или ссылке. `threads = false` у дочерней группы или кейса
+оставляет их последовательными; явное число потоков у кейса переопределяет родительское.
+Аргументы потоковых кейсов должны допускать совместное использование между worker;
+executor, future и результат могут содержать `Rc`, если создаются и остаются на worker.
+Обычные последовательные кейсы не получают дополнительных требований `Send/Sync`.
+У sync-кейсов `setup` по умолчанию выполняется на координаторе: вход и выход
+передаются между потоками и должны быть `Send`. У async-кейсов setup выполняется
+на worker и допускает `!Send`-значения.
+Для custom measurement, allocator, batch и async-счётчиков, создаваемых выражением
+с собственным состоянием, пока задавайте настройки потоков на самой импортированной
+группе; допустимость сочетаний опций проверяется отдельно.
 
 ### Типы, async, потоки и своё время
 
@@ -286,8 +411,8 @@ async fn work(input: &mut std::rc::Rc<u64>) -> u64 {
 до завершения последнего. Создание и join потоков исключены, пробуждение и
 планировщик включены. Число операций равно `итерации × workers`; ns/op — величина,
 обратная общей пропускной способности, а не latency отдельного worker.
-`threads` или `threads = true` выбирает доступный параллелизм хоста (не более
-256 workers; если ОС не сообщает значение — один). `threads = 4` задаёт одно
+`threads` или `threads = true` выбирает доступный параллелизм хоста
+(если ОС не сообщает значение — один). `threads = 4` задаёт одно
 число; `threads = [1, 2, 4]`, диапазон или срез задают несколько кейсов.
 Ноль в таком списке означает автоматический выбор. Одинаковые итоговые числа
 объединяются, сохраняя порядок, поэтому `[0, 4]` не создаёт два одинаковых кейса
@@ -295,7 +420,7 @@ async fn work(input: &mut std::rc::Rc<u64>) -> u64 {
 Литерал `threads = false` отключает унаследованную параллельность и выбирает
 локальное выполнение, в том числе с аргументами без `Send`/`Sync`.
 Для ручной регистрации доступно `airbug_bench::threads::available()`.
-Явные числа workers должны быть в пределах 1..256. С `setup` измерение разбивается на
+Явные числа workers — положительные `usize`; реальный запуск ограничен ресурсами ОС. С `setup` измерение разбивается на
 волны до 64 операций на worker; длительности волн суммируются. Входы и отложенные
 outputs освобождаются после завершения всех workers. По умолчанию setup работает
 на координаторе, поэтому входы и результаты должны быть `Send`.
@@ -496,9 +621,20 @@ CLI предоставляет `--iterations`, `--sampling`, `--min-time-ms`, `-
 Максимум имеет приоритет над минимумом. Проверка происходит между вызовами:
 начатая операция не прерывается и может превысить максимум. Если бюджет исчерпан
 до первого sample, запуск возвращает ошибку. Минимум может увеличить число samples
-(до защитного предела 100000); linear при продлении повторяет последний размер.
+в пределах счётчика `u64`; linear при продлении повторяет последний размер.
+`--samples` принимает положительный `u64`, включая значения больше 100000 и `u32::MAX`.
+В builder API поля `Config::samples` и `Sampling::samples` также используют `u64`.
+Сырые observations сохраняются для каждого sample, поэтому объём результата растёт
+с числом samples. В `--dry-run` длительности больше `u64` выводятся десятичной строкой;
+если суммарная длительность не помещается даже в `u128`, её оценка равна `null`.
 Фиксированные iterations несовместимы с linear и ограничены допустимым размером
-нагрузки конкретного кейса. `--test` выполняет один вызов, независимо от лимитов.
+нагрузки конкретного кейса. Общего лимита 1048576 больше нет: `--iterations`
+принимает положительный `u64`. Для потокового кейса произведение iterations и
+числа workers должно помещаться в `u64`; builder `Config::max_iterations` может
+задать меньший предел. Автоматическая калибровка соблюдает те же ограничения.
+Обычная подготовка входов обрабатывает их порциями до 64; явно увеличенная
+batch policy требует соответствующего объёма памяти.
+`--test` выполняет один вызов на worker, независимо от лимитов.
 
 ### Выбор кейсов через регулярные выражения
 
@@ -681,8 +817,11 @@ cargo bench --bench attributed -- --bytes-format binary --json --output target/r
 
 `decimal` использует B/KB/MB/GB… с основанием 1000; `binary` — B/KiB/MiB/GiB…
 с основанием 1024. Префикс выбирается по медиане серии и применяется ко всем её
-значениям. Нулевой поток отображается в B/s. Число операций, символов и циклов
-сохраняет свои единицы.
+значениям. Нулевой поток отображается в B/s. В таблицах Markdown/HTML счётчик
+`cycles` отображается как Hz/kHz/MHz/GHz… с основанием 1000. Это частота
+объявленных пользователем циклов работы, а не измерение тактовой частоты CPU.
+Машинные серии сохраняют циклы в секунду; число операций и символов сохраняет
+свои единицы.
 
 При `--json` добавляется `BENCH_THROUGHPUT=`; с `--output` сохраняется
 `throughput.json`. Форматирование не меняет `run.json` и контракты сравнения.
@@ -984,10 +1123,10 @@ explicit child, then importing parent, then suite defaults; CLI overrides win.
 This includes sample count, warmup/sample durations, iterations, sampling mode,
 time limits and external-time accounting. `Suite::group_with_sampling` exposes
 this fallback behavior for manual registration. Unrelated cases are unaffected.
-Imported lifecycle defaults (`threads`, `executor`, `allocator`, `setup_thread`) and dynamic input counters must currently be declared on
+Imported lifecycle defaults (`executor`, `allocator`, `setup_thread`) and dynamic input counters must currently be declared on
 the imported group itself. Putting these defaults on an importing suite/group
 produces a compile error listing the unsupported options, so they cannot silently
-change what is measured. Full inheritance remains under the parity audit.
+change what is measured. Threads cross imported groups for ordinary and setup-based sync/async cases, subject to the input-transfer rules above. Full inheritance remains under the parity audit.
 
 Imported groups also inherit missing `ignore` and fixed bytes/items/chars/cycles
 counters. Explicit child `ignore = false` and zero counters override parents;
@@ -1064,6 +1203,11 @@ It also measures 100 black-box loops of 10,000 iterations
 and retains the smallest batch interval. The ratio `loop_batch_ns / loop_iterations`
 represents the per-iteration estimate without rounding sub-nanosecond costs to zero.
 These diagnostics do not change raw observations. Optional compensation is described below.
+On Linux ARM64, CPU timing uses the architectural counter frequency. Its elapsed
+time can differ from `Instant` when Linux adjusts the system monotonic clock.
+The frequency test therefore brackets it with `CLOCK_MONOTONIC_RAW`, which is
+not subject to those adjustments; it retains the same 1% tolerance.
+
 Backward/wrapped CPU timestamps return an error. CPU ticks are converted with
 integer arithmetic into nanoseconds. A start timestamp can be shared by workers;
 this does not guarantee synchronization on every host or virtual machine.
@@ -1486,6 +1630,10 @@ Throughput в этом режиме — средняя работа / средн
 Выбор влияет только на сводный график, не на решения о регрессиях.
 Опция доступна и в `cargo bench -- …`, и в `cargo airbug-bench report …`.
 
+Имена baseline непустые и состоят из латинских букв, цифр, `-` и `_`.
+`--dry-run` проверяет имя без чтения хранилища. При обычной загрузке наличие
+и целостность baseline проверяются до запуска бенчмарка.
+
 При именованном сравнении `cargo bench -- --baseline NAME --output NEW_DIRECTORY`
 основной `report.html` также показывает замеры baseline и candidate на общих осях.
 Каждый процесс — отдельная серия; этот график не требует `--resamples`.
@@ -1494,7 +1642,32 @@ Throughput в этом режиме — средняя работа / средн
 Чтобы сохранить численные отчёты без генерации графиков, используйте
 `cargo bench -- --no-plots`. Флаг действует на основной HTML, bootstrap-оценки
 и сравнения с baseline. JSON и явно запрошенные распределения сохраняются;
-`--no-plots` несовместим с настройками `--summary-*`.
+`--no-plots` и `--no-html` несовместимы с настройками `--summary-*`.
+Явные `--plots` и `--no-html` также конфликтуют: выберите HTML с графиками
+или сохранение данных без HTML.
+
+Feature `parallel-analysis` включён по умолчанию: описательные bootstrap-оценки, коэффициенты регрессии, относительные сравнения
+и проверка гипотез для 32 и более наблюдений и 2048 и более повторов считаются максимум в восьми
+потоках (в пределах доступного параллелизма). Расчёт идёт после измерения;
+seed, порядок и значения распределений совпадают с последовательным режимом.
+Для отключения используйте `default-features = false, features = ["macros"]`
+у зависимости `airbug-bench` и добавьте нужные async/memory features отдельно.
+Параллельный режим использует дополнительные временные буферы; малые выборки
+остаются последовательными. При сравнении порог относится к сумме размеров
+двух выборок; пользовательские форматтеры выполняются в исходном порядке
+в вызывающем потоке. Проверка гипотез без сохранения распределения не
+выделяет буфер на каждый повтор: потоки возвращают только счётчики.
+KDE распределяет точки кривой между потоками при наличии минимум 64 точек
+и 262144 вычислений ядра (`число точек × число наблюдений`). Порядок суммирования
+внутри каждой точки сохраняется. Используется не больше восьми потоков и
+не меньше 32 точек на поток.
+
+Для сохранения данных без HTML используйте `cargo bench -- --no-html`.
+JSON/CSV, bootstrap-оценки, история и именованные baseline продолжают сохраняться.
+Флаг действует и при `--output DIR`, и для автоматической папки результатов,
+и при повторном анализе `--load-baseline`. В JSON-выводе ссылка `BENCH_REPORT`
+не печатается. `--no-plots` по-прежнему оставляет HTML-таблицы;
+`--discard` отключает сохранение результатов целиком.
 
 В builder API задайте `suite.plots(false)` перед `suite.main()`, чтобы отключить
 графики по умолчанию. CLI `--plots` включает их обратно, `--no-plots` явно
@@ -1595,10 +1768,34 @@ throughput также требует совпадающих счётчиков. 
 Графики пользовательского форматтера включают throughput каждого счётчика,
 в том числе счётчиков подготовленных входов. Сохранённые строки группируются
 по единице и процессу/варианту; разные единицы получают отдельные графики.
+Для каждой группы показаны точки по номеру выборки и распределение (KDE)
+в единицах форматтера. Одинаковые значения отмечаются точечной массой;
+пропуски исключаются, выбросы отмечаются и остаются в распределении.
 При сравнении с именованным baseline форматтер заново обрабатывает обе выборки
 совместно, включая throughput. `--no-plots` сохраняет таблицы без графиков.
 
 ### Sampling через окружение
+
+Общее целевое время сбора одного кейса задаётся так:
+
+```sh
+cargo bench -- --measurement-ms 5000 --samples 100
+```
+
+Атрибут — `measurement_ms = 5000`; builder —
+`Sampling { measurement_time: Some(Duration::from_secs(5)), ..Default::default() }`;
+переменная окружения — `AIRBUG_BENCH_MEASUREMENT_MS=5000`.
+Время делится на фактическое число выборок для калибровки; linear/auto используют
+исходный общий target. Warmup и калибровка добавляют время сверх него.
+Это ориентир: стоимость операций, округление и лимиты итераций влияют на результат.
+Явные `iterations` и адаптивный `quick` сохраняют свои расписания.
+
+`sample_ms` и `measurement_ms` — альтернативы. Локальная настройка заменяет
+унаследованную; CLI заменяет оба варианта из атрибутов и окружения.
+Одновременные `--sample-ms` и `--measurement-ms` отклоняются.
+`--profile` сбрасывает оба унаследованных варианта; явный временной флаг уточняет
+профиль. В `--dry-run` точный общий target записан в контракте кейса как
+`sampling.measurement_target_ns`, а target одной выборки — `sample_target_ns`.
 
 Для запуска из CI или общей настройки нескольких targets можно задать:
 
@@ -1711,9 +1908,19 @@ CLI переопределяет соответствующее поле. Нап
 заданное фиксированное значение. Сохранённые baseline не переписываются;
 изменённый контракт счётчика учитывается при проверке сопоставимости запусков.
 
+В builder API тот же механизм доступен после регистрации кейсов:
+
+```rust
+suite.override_work_units("items", 100).override_work_units("bytes", 4096);
+```
+
+Вызов меняет все уже зарегистрированные кейсы и сохраняет остальные счётчики.
+При `main_registered` разместите его в конце callback регистрации. Кейсы,
+добавленные позже, не меняются; явные параметры CLI имеют приоритет при запуске.
+
 ### Число потоков без перекомпиляции
 
-Для атрибутных кейсов, объявленных с `threads`, можно выбрать новую матрицу:
+Для обычных атрибутных кейсов потоки можно включить командой, без изменения кода:
 
 ```sh
 cargo bench -- --threads 1,2,4,8
@@ -1724,14 +1931,53 @@ AIRBUG_BENCH_THREADS=1,2,4 cargo bench
 `#[suite]` строит матрицу до регистрации: кейсы получают фактические имена
 `threads=1`, `threads=2` и так далее, поэтому фильтры и отчёты соответствуют
 запущенной конфигурации. Повторы удаляются с сохранением порядка. Явные флаги
-заменяют переменную окружения. `0` выбирает доступный параллелизм хоста
-(не более 256 работников); явное число — от 1 до 256. Последовательные кейсы
-сохраняют свой режим выполнения.
+заменяют переменную окружения. `0` выбирает доступный параллелизм хоста;
+явное число — положительный `usize`, без прежнего ограничения 256. Возможность реального запуска зависит от ресурсов ОС; ошибка выделения служебных буферов или создания потоков возвращается вызывающему коду. Один worker выполняет setup и операции в вызывающем потоке, без создания дополнительного потока; несколько workers запускаются параллельно. Поле контракта `threads.execution` сохраняет этот выбор. Для обычных sync/async-кейсов с аргументами явный или унаследованный один worker и CLI `--threads 1` допускают локальные `Rc`-аргументы и входы/результаты `setup`; последующее переключение такого кейса на несколько workers отклоняется. `threads = false` на кейсе
+или группе сохраняет последовательный режим. Обычные sync/async-кейсы, аргументы
+и setup включаются в матрицу автоматически. Если выбранный кейс нельзя выполнить
+с этими потоками, ошибка возникает до измерений; несовместимые кейсы вне фильтра
+не мешают запуску. Например, `cargo bench sort -- --threads 1,2,4` выбирает только
+сортировки. Бенчи с allocator без `setup`, включая sync/async-параметры,
+тоже поддерживают унаследованную матрицу. Sync-бенчи с allocator и обычным
+`setup` также наследуют потоки: подготовка свежих входов выполняется на основном
+потоке и исключается из измеряемых аллокаций. Неразделяемые аргументы, например `Rc`,
+допустимы при одном worker; выбранный многопоточный вариант отклоняется до измерения.
+Async-бенчи с allocator и `setup` также наследуют матрицу; их входы создаются
+на каждом worker и могут содержать `Rc`. Заимствование входа сохраняется через
+`await`; счётчики `input_bytes` вычисляются вне измеряемых аллокаций.
+Для sync-подготовки на workers укажите `setup_thread = "worker"` рядом с `setup`.
+Число потоков можно задать в родительской группе или через `--threads 1,2,4`;
+без матрицы используется обычный последовательный режим. Это работает с allocator
+и без него, включая входы `Rc` и счётчики размера входа.
+Для custom timing, Measurement, batch и сложных async-счётчиков
+пока требуется явная поддерживаемая конфигурация в атрибутах.
 
 При ручном подключении атрибутных групп используйте
 `suite.main_registered(register_group)` вместо регистрации перед `suite.main()`.
 Для программного выбора матрицы вызовите `suite.registration_threads(&[1, 2, 4])?`
 до регистрации групп. Это не запускает setup или тело бенча.
+
+Для builder API задайте семейство через `thread_matrix`:
+
+```rust
+fn main() -> airbug_bench::Result<()> {
+    airbug_bench::Suite::new("collections").main_registered(|suite| {
+        suite.thread_matrix("sort", [1usize, 2, 4], |suite, id, workers| {
+            suite.bench_threads(id, workers, || {
+                let mut data = std::hint::black_box([3, 1, 2]);
+                data.sort_unstable();
+                data
+            });
+        }).unwrap();
+    })
+}
+```
+
+`cargo bench -- --threads 2,8` заменит значения по умолчанию и зарегистрирует
+`collections/sort/threads=2` и `collections/sort/threads=8`. Callback получает
+готовое имя и число workers для выбранного threaded API. Он создаёт отдельный
+кейс для каждого значения, поэтому захваченное состояние не обязано быть `Clone`.
+`--list` и `--dry-run` выполняют регистрацию, но не операции бенча.
 
 Для уже зарегистрированных builder-кейсов `suite.thread_count(4)?` меняет число
 работников существующих многопоточных кейсов. Их имена сохраняются; фактическое
@@ -1859,6 +2105,16 @@ fn decode(packet: &mut [u8]) { /* ... */ }
 или некорректная конфигурация вызывает ошибку. Старые отчёты без `case_configs`
 продолжают использовать общий `config`.
 
+Bootstrap принимает любое положительное число `resamples` типа `usize` без
+верхнего лимита в миллион. Буферы распределений выделяются с проверкой:
+невозможный размер возвращает ошибку. При одном повторе стандартная ошибка
+недоступна: `Estimate::standard_error` имеет тип `Option<f64>`, JSON записывает
+`null`, текст и HTML — `unavailable`. Границы интервала отражают единственный
+повтор, о чём отчёт сообщает отдельно. Старые JSON с числовой стандартной ошибкой
+читаются как прежде. `hypothesis_resamples` настраивает отдельный анализ и также
+принимает положительный `usize`. При `N` повторах минимальное положительное
+p-value с поправкой Monte Carlo составляет `1 / (N + 1)`.
+
 Атрибуты `#[suite]`, `#[group]` и `#[bench]` принимают `resamples`,
 `confidence_level` и `analysis_seed`. Поля наследуются независимо, включая импортированные
 группы; явное значение дочернего кейса имеет приоритет. `--resamples`,
@@ -1881,3 +2137,251 @@ mod measurements {
 используют 10000 перевыборок, confidence 0.95 и seed 0. В библиотеке этому
 соответствуют `bootstrap::save_settings` и `bootstrap::analyze_saved`;
 `bootstrap::analyze` продолжает использовать явно переданную общую конфигурацию.
+
+У обычных `#[bench(threads = [...])]` без setup результат может быть `!Send`,
+например содержать `Rc`. Он создаётся и уничтожается на том worker, который
+выполняет кейс, в том числе при `drop_output = "outside"`. Отложенное уничтожение
+происходит после измерения очередного batch этого worker.
+
+### Распределение времени workers в отчётах аллокаций
+
+`report::descriptive` сохраняет `worker_allocations.wall_per_operation`: статистику
+сырых длительностей каждой worker-волны, делённых на её число операций (`ns/op`).
+Markdown показывает минимум, максимум, среднее и медиану; JSON также содержит
+стандартное отклонение и MAD. Для старых сериализованных сводок поле может отсутствовать.
+Это распределение нормализованных batch-интервалов внутри процесса. Оно отличается
+от общей пропускной способности и не является набором независимых запусков процесса.
+Эта сводка волн относится к worker-записям аллокаций. Общая таблица worker-времён
+ниже использует целые выборки и работает также без аллокатора.
+
+`Run::worker_timings` отдельно сохраняет время workers без аллокатора: case,
+variant, process, sample (`sequence`), wave, worker, operations и сырые/скорректированные
+наносекунды. Сбор подключён к обычным sync/async threaded API, их вариантам с входами
+по ссылке и по владению, а также к локальным путям одного worker.
+Ручной `bench_threads` и локальный путь одного worker сохраняют один суммарный
+интервал на sample; исполнители с волнами сохраняют интервалы каждой волны. При нескольких волнах общий
+wall-интервал равен сумме максимумов волн; `Run::validate` проверяет эту связь,
+число операций, полноту и уникальность записей. Выбор кейсов и сохранение baseline
+сохраняют соответствующие записи. `report::descriptive` сначала суммирует время и
+операции всех волн каждого worker-слота внутри sample, затем выводит статистику
+целых выборок в `worker_wall_per_operation`,
+а Markdown — в таблицу worker-времён отдельно для каждого процесса.
+HTML-отчёт также содержит таблицу worker-времён с количеством записей и
+min/max/mean/median в `ns/op` отдельно по case, variant и process.
+При отсутствии обычных worker-записей интервалы worker-аллокаций объединяются
+таким же способом. Короткая последняя волна не получает вес целой выборки.
+
+HTML также показывает распределение worker-времён: отдельный KDE-график
+с отметками наблюдений для каждой комбинации case/variant/process. Одинаковые
+значения отображаются как точечная масса. Если доступны оба вида worker-записей,
+используются обычные timing-записи, без удвоения выборки. Для сохранённых запусков
+графики доступны через `report::worker_timing_charts`.
+
+При прямом `cargo bench -- --no-plots --output DIR` HTML сохраняет таблицу
+worker-времён, контекст измерения и контракты кейсов, но не вычисляет графики.
+Библиотечный эквивалент — `report::html_run_without_plots`.
+
+`run.worker_slot_samples()?` combines timing waves for each
+`(case, variant, process, sequence, worker)` slot. Normalize its total `wall_ns`
+by its total `operations` when comparing complete samples: a short final wave
+then contributes only its actual time and operations. `waves` records the number
+of combined intervals. Adjusted time is present only if every interval has it.
+A slot may use different OS threads across waves; these samples retain the
+existing timer boundaries and do not count as independent process repetitions.
+Ordinary timings take priority over allocation records for each case/variant/process.
+Reports use these complete samples; the raw `worker_timings` array remains available.
+
+### Counting samples across workers
+
+By default `samples` counts complete batches, each running every worker.
+Use `#[bench(samples = 100, sample_count_unit = "workers", threads = 4)]`
+to request 100 worker samples: this collects 25 batches. The option also works
+on groups, in `Sampling::sample_count_unit` (`SampleCountUnit::Workers`), and as
+`cargo bench -- --samples 100 --sample-count-unit workers`.
+`AIRBUG_BENCH_SAMPLE_COUNT_UNIT=workers` sets the runtime default; the CLI overrides it.
+Use `batches` to restore the default counting unit.
+
+All workers in the last batch finish, so a request of 5 with 3 workers collects
+6 worker samples in 2 batches. Runtime thread overrides update this calculation.
+The case contract records `sampling.count_unit`, `sampling.requested_samples`
+and the planned batch count in `samples`. Minimum/maximum time limits keep their
+existing precedence; adaptive quick mode uses its convergence rule, and smoke
+mode executes one batch. Multiple internal waves still form one sample per slot.
+
+### Worker timer boundaries
+
+`#[bench(threads = 4, worker_start = "local")]` starts each worker's timer
+after the ready barrier, immediately before its measured callback. Setup and
+wakeup before that timestamp are excluded; scheduling during the callback is
+still measured. Sync, async, coordinator-input and worker-local-input executors
+use the same policy, including allocation capture and overhead correction.
+
+The default `worker_start = "shared"` uses one common timestamp and includes
+wakeup delay. Select either policy on a group, with
+`Sampling { worker_start: Some(timer::WorkerStart::Local), ..Default::default() }`,
+via `--worker-start local`, or with `AIRBUG_BENCH_WORKER_START=local`.
+An explicit CLI value overrides the environment and attributes.
+
+The report records `threads.timer_start` and the metric scope. In local mode,
+the aggregate is the sum of each wave's maximum worker duration; it is not
+elapsed time from one common start to the last completion. Per-worker records
+retain their own intervals. Worker-slot samples can still span multiple waves
+and OS threads, so this option alone does not make the sampling lifecycle
+identical to another harness.
+
+`WorkerSlotSample::work_totals` contains exact known logical work for each slot,
+encoded as decimal integers. Fixed per-operation counters are multiplied by that
+slot's total operation count using `u128`. A dynamic input counter replaces the
+same fixed unit. `InputCounters` captures actual values for each worker slot during
+coordinator or worker-local input preparation, across all waves of a sample.
+`Observation::worker_work_totals` preserves those exact totals. Validation checks
+slot identities, units and equality with the aggregate input totals. Old runs or
+counts from user-created threads without a worker scope have no worker attribution;
+their aggregate total is never divided between workers. Absence means
+unknown; a declared zero counter is preserved as `"0"`.
+
+`DescriptiveRow::worker_associated_counters` pairs known counters with complete
+worker-slot timing samples, separately by case, variant and process. JSON,
+Markdown and HTML include fastest/slowest/median-time associations and the
+operation-weighted mean. The aggregate `associated_counters` remains separate.
+
+HTML reports using the shared report template include **Report contents**, with
+search across section headings and chart captions. A link opens enclosing
+collapsed details and clears case/outcome filters so its target is visible.
+Chart links can be bookmarked within the saved HTML. The contents panel is
+omitted when printing; it needs no network connection.
+
+Async input counters constructed in expression blocks can use mutable or `Rc`
+state with an inherited single worker. Registration keeps that state local and
+preserves its actual input totals. Constructed counters with inherited counts
+above one still require explicit worker configuration with a shareable counter;
+automatic multi-worker selection for these expressions remains unsupported.
+
+A zero `samples` or fixed `iterations` value disables a case before setup,
+validation callbacks, timer calibration and measurement. This applies to
+attributes, inherited groups, `Sampling`/`Config`, environment and CLI settings.
+Disabled cases are omitted from listing and dry-run selection; `--include-ignored`
+does not enable them. A positive child or runtime override can enable them again.
+If all matching cases are disabled, a completed run has no measurements and records
+their names in `sampling.disabled_cases` provenance. Other invalid configuration
+values still fail validation. Zero resamples remains invalid.
+
+
+### Несколько фильтров
+
+`cargo bench -- sort parse` выбирает кейсы, подходящие хотя бы под один фильтр.
+Можно повторять `--filter`: `cargo bench -- --filter sort --filter parse`.
+Режимы `--exact`, `--glob` и `--regex` применяются ко всем положительным фильтрам;
+исключения сохраняют приоритет. Один кейс выполняется один раз независимо от числа
+совпадений. В API используйте `Selection::patterns` или `Selection::with_regexes`.
+
+
+В `--output-format tree` под кейсом выводятся throughput и аллокации, связанные
+с самым быстрым, медленным и медианным замером. `aggregate` — отношение суммарной
+работы к суммарному времени. Единицы байтов выбирает `--bytes-format decimal|binary`;
+циклы отображаются в Hz. Пик памяти за sample и его значение на операцию подписаны
+отдельно. Неполная пара времени и аллокаций помечается `unavailable`.
+
+### Интервалы пропускной способности
+
+Bootstrap-отчёт (`--resamples N`) включает скорость и доверительный интервал для
+фиксированных счётчиков работы: объём работы делится на среднее время, медиану
+или наклон регрессии. Границы интервала времени обращаются в обратном порядке.
+Это скорость из соответствующей оценки времени; среднее отдельных скоростей
+может отличаться. В отчёте указаны исходная оценка и единица работы в секунду.
+Нулевые границы времени, переполнение и динамические счётчики дают явное
+`unavailable`, поскольку такое преобразование для них неприменимо.
+
+### Относительные статистические оценки
+
+`cargo airbug-bench compare BASELINE CANDIDATE` показывает изменения среднего и
+медианы независимых медиан процессов с bootstrap-интервалами, числом процессов,
+seed и доверительным уровнем. Эта таблица также доступна в HTML с графиками и
+с `--no-plots`. Интервалы отдельных статистик не заменяют решение о регрессии
+с практическим порогом и поправкой на множественные сравнения.
+При недостаточных данных выводится причина недоступности.
+
+Для именованного baseline в `cargo bench` таблица включается вместе с
+bootstrap-анализом (`--resamples N`) и сохраняется в отчёте сравнения.
+`--quiet` скрывает её в терминале; JSON сохраняет машинный формат.
+
+При одинаковом фиксированном объёме работы сравнительная таблица также показывает
+изменение пропускной способности из среднего времени и медианы. Уменьшение времени
+на 50% даёт рост скорости на 100%; границы интервала обращаются в обратном порядке.
+Нулевой объём работы, динамические счётчики и неопределённые отношения времени
+помечаются как недоступные. Проценты скорости не меняют решение `--check`, которое
+по-прежнему использует исходную метрику и её пороги.
+
+Если baseline и candidate содержат по одному процессу, относительный bootstrap
+использует нормализованные батчи каждого запуска. Отчёт помечает такое сравнение
+как предварительное: автокорреляция батчей может нарушать оценку неопределённости,
+а повторяемость между процессами не проверяется. Для нескольких процессов
+сохраняются равные веса медиан процессов. Однопроцессные и многопроцессные выборки
+не смешиваются; правила решения о регрессии остаются прежними.
+
+Автоматическое сравнение со следующим `cargo bench` также включает относительные
+оценки: отдельный именованный baseline и `--resamples` для этого не нужны.
+Число bootstrap-повторов и seed берутся из `--hypothesis-resamples` и
+`--hypothesis-seed`, доверительный уровень равен `1 - significance_level`
+для данного кейса. Это интервалы отдельных статистик, без поправки на семейство.
+История сохраняет оценки и границы без массивов случайных повторов. Обычный вывод
+и `report.html` показывают таблицу; в `--quiet` она скрыта, в JSON доступна в
+`cases[].relative`. Отсутствие предыдущего совместимого запуска указывается явно.
+
+Для пользовательского `Measurement` bootstrap-интервалы фиксированного throughput
+проходят через `ValueFormatter::scale_throughputs` и `format_throughput`.
+Форматтер получает исходные значения измерения; число единиц работы берётся из
+сохранённого отчёта. Числовые границы и пользовательские подписи сохраняются отдельно,
+HTML экранирует текст. Перевёрнутые границы и нечисловые результаты отклоняются.
+Старые отчёты без сведений о счётчиках читаются, но такие интервалы не восстанавливаются
+по текущим настройкам программы.
+
+Параметры времени в `#[suite]`, `#[group]` и `#[bench]` также принимают дробные
+миллисекунды: `warmup_ms = 0.125`, `sample_ms = 0.5`, `measurement_ms = 2.5`.
+Работают числовые выражения и точные десятичные строки, например
+`warmup_ms = "0.000001"`. Правила совпадают с CLI: неотрицательное значение,
+точность до наносекунды, ошибка при лишней ненулевой дробной части или переполнении.
+Для вычислений с плавающей точкой учитывается их фактическая десятичная запись;
+строки позволяют задать точное значение без ошибки округления вычислений.
+
+### Custom units in parameter summaries
+
+Direct `cargo bench -- --summary-parameter size --summary-estimator mean` applies
+registered metric formatters after computing each summary estimate. Cases sharing
+a metric contract receive one common typical value and must use consistent display
+units. `Suite::html_with_summary` exposes the same rendering for manual callers.
+Raw observations remain unchanged. Direct Cargo saves numeric aggregate conversions
+in `run.json`, so a standalone report restores the requested parameter and estimator
+without callback code. Changing the axis scale is allowed; another parameter or
+estimator requires regenerating the snapshot with live formatters. Changed cases or
+observations invalidate the snapshot explicitly. Older runs without a snapshot keep
+raw-unit summaries.
+
+Fixed work counters also produce custom throughput parameter summaries through
+`ValueFormatter::scale_throughputs`, applied to the raw aggregate estimate. These
+conversions are saved with the work amount and unit. Dynamic input work is reported
+as unavailable for custom-metric summary throughput; ordinary wall-time throughput
+charts continue to support it. Snapshots created before throughput capture need
+regeneration with live formatters when those conversions are requested.
+
+Saved named-baseline comparisons also retain custom formatter throughput in
+`run.json` (`airbug.presentation.relative-throughput.v1`). Standalone `compare`
+restores these rates when the baseline, metric observations and bootstrap settings
+match. Case/metric filtering is supported. A different baseline or bootstrap
+configuration reports the custom rates as unavailable and requests regeneration
+with live formatters; changed candidate observations reject the stale snapshot.
+Automatic-history archives and the ordinary `--output/run.json` both persist
+the same enriched run. A failed run export does not advance history.
+
+Standalone `report` restores saved bootstrap settings, including per-case
+resample counts, seeds and confidence levels. The candidate settings are used for
+both sides of relative comparisons. Custom throughput is included in Markdown
+and HTML with or without plots. The report's `--alpha` remains the significance
+setting for hypothesis decisions; saved descriptive bootstrap confidence levels
+are preserved separately.
+
+Standalone `compare` also restores candidate bootstrap settings for relative
+estimates and absolute comparison plots, including per-case overrides. Explicit
+`--hypothesis-resamples`, `--hypothesis-seed` and `--alpha` override only the
+corresponding saved relative settings. Hypothesis decisions retain defaults of
+10000 resamples, seed 0 and alpha 0.05 when their flags are omitted.

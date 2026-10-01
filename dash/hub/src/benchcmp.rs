@@ -256,6 +256,7 @@ mod tests {
                     sequence,
                     value: Some(value.to_string()),
                     operations: 1,
+                    worker_work_totals: Default::default(),
                     work_totals: BTreeMap::new(),
                     availability: Availability::Available,
                 });

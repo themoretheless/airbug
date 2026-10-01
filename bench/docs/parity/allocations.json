@@ -50,5 +50,97 @@
       ],
       "comparison": "Validated per-wave worker records feed a separate timing-ranked JSON/text summary, preserving source sample/wave/worker identities and absolute/normalized peaks. Unequal operation counts use operation-weighted totals. Worker waves are not treated as independent process repetitions."
     }
-  ]
+  ],
+  "public_api_audit": {
+    "source": "Divan 0.1.21 src/alloc.rs",
+    "constructors": [
+      {
+        "line": 181,
+        "method": "system",
+        "airbug": "TrackingAllocator::new(std::alloc::System)"
+      },
+      {
+        "line": 189,
+        "method": "new",
+        "airbug": "TrackingAllocator::new(custom_allocator)"
+      }
+    ],
+    "internal_methods": [
+      {
+        "line": 228,
+        "method": "new"
+      },
+      {
+        "line": 244,
+        "method": "current"
+      },
+      {
+        "line": 291,
+        "method": "try_current"
+      },
+      {
+        "line": 315,
+        "method": "clear"
+      },
+      {
+        "line": 321,
+        "method": "tally_alloc"
+      },
+      {
+        "line": 333,
+        "method": "tally_dealloc"
+      },
+      {
+        "line": 342,
+        "method": "tally_realloc"
+      },
+      {
+        "line": 388,
+        "method": "is_zero"
+      },
+      {
+        "line": 395,
+        "method": "as_array"
+      },
+      {
+        "line": 422,
+        "method": "realloc"
+      },
+      {
+        "line": 432,
+        "method": "name"
+      },
+      {
+        "line": 442,
+        "method": "prefix"
+      },
+      {
+        "line": 470,
+        "method": "new"
+      },
+      {
+        "line": 476,
+        "method": "is_empty"
+      },
+      {
+        "line": 480,
+        "method": "add_to_total"
+      },
+      {
+        "line": 490,
+        "method": "from_fn"
+      },
+      {
+        "line": 498,
+        "method": "get"
+      },
+      {
+        "line": 503,
+        "method": "get_mut"
+      }
+    ],
+    "visibility": "AllocProfiler is reexported from lib.rs. ThreadAllocInfo, AllocTally, AllocOp and AllocOpMap are pub(crate), so their pub methods are internal. IGNORE_ALLOC is also pub(crate), not a user-facing suppression API.",
+    "boundary_evidence": "Allocated-suite tests cover setup/executor initialization outside recording phases and explicit output-drop policy. Current 506-test macOS/Linux gates include them.",
+    "limitations": "This source visibility audit does not establish Windows allocator behavior."
+  }
 }

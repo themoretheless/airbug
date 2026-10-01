@@ -1,0 +1,470 @@
+{
+  "status": "partial",
+  "ci_workflow": ".github/workflows/ci.yml",
+  "configured_matrix": {
+    "os": [
+      "ubuntu-latest",
+      "macos-latest",
+      "windows-latest"
+    ],
+    "toolchain": [
+      "1.96.0",
+      "stable"
+    ]
+  },
+  "configured_checks": [
+    "workspace debug/release all-features tests excluding airbug-mon",
+    "external Cargo attribute harness",
+    "worker sample budgets",
+    "manual thread matrix",
+    "total measurement target",
+    "rustdoc and Clippy",
+    "persistent OS worker execution with nested Rayon isolation (test-worker-runtime.py)",
+    "threaded batch inheritance across lexical/imported groups and non-Send local paths (test-thread-batches.py)"
+  ],
+  "portability_fixes": [
+    "init prints PowerShell literal quoting on Windows; POSIX quoting elsewhere. Its command-execution integration test selects the corresponding shell.",
+    "Two disabled-case protocol tests compile a small Rust fixture instead of requiring /bin/cat. These tests remain enabled on Windows.",
+    "Full Cargo fixture explicitly enables its temporary dashboard history before testing opt-out, so inherited AIRBUG_DASHBOARD=0 does not invalidate the history assertion. Reproduced and verified with that environment on Linux."
+  ],
+  "local_validation": [
+    "init_finds_parent_package_but_respects_explicit_manifest passed on current macOS host",
+    "4 protocol integration tests passed on current macOS host",
+    "CLI all-target Clippy and diff check passed"
+  ],
+  "unverified": [
+    "Modified CI workflow has not been pushed or executed.",
+    "Windows execution (including PowerShell behavior) and native Linux x86_64 timing behavior remain unverified; Linux x86_64 functional tests passed under QEMU.",
+    "Linux ARM64 was tested with Rust 1.97.1, not the entire configured toolchain matrix.",
+    "Passing the tested hosts does not establish full cross-platform feature parity."
+  ],
+  "toolchain_selection": "Job-level RUSTUP_TOOLCHAIN selects the matrix version for every Python fixture and nested Cargo subprocess, including selection and relative-baseline scripts that previously lacked a step-level override.",
+  "worker_pool_miri_job": {
+    "host": "ubuntu-latest",
+    "toolchain": "nightly with miri and rust-src",
+    "command": "resolved cargo-miri binary: miri test --locked -p airbug-bench --lib worker_pool::",
+    "local_evidence": "Exact test invocation passed all 3 pool safety tests on macOS ARM64; this does not establish the Linux job result."
+  },
+  "workflow_validation": "Parsed current YAML and asserted matrix toolchain environment, both new script steps and dedicated Miri test target. Remote execution remains unverified.",
+  "current_msrv_validation": {
+    "host": "macOS ARM64",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo airbug test -- --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "result": "496 passed, 0 failed, 0 ignored",
+    "report": ".airbug/runs/03980647-08f8-448a-8b19-cde064770fc7/index.html",
+    "fixtures": [
+      "test-thread-batches.py passed with RUSTUP_TOOLCHAIN=1.96.0",
+      "test-worker-runtime.py passed with RUSTUP_TOOLCHAIN=1.96.0"
+    ]
+  },
+  "available_linux_environment": {
+    "engine": "Docker reports linux aarch64, server 29.5.2",
+    "image": "rust:1.97-bookworm (local image 77fac8b98f9f)",
+    "verified_tools": "rustc 1.97.1, cargo 1.97.1, Python 3.11.2, aarch64",
+    "status": "Current all-feature benchmark library/macros/CLI tests and two external Cargo fixtures executed successfully."
+  },
+  "linux_current_validation": {
+    "host": "Docker Linux ARM64 on macOS; native aarch64 container execution",
+    "image": "rust:1.97-bookworm",
+    "image_id": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+    "test_command": "cargo airbug test --out target/linux-test-report -- --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "result": "496 passed, 0 failed, 0 ignored, 0 not run; report.json state=passed and exit_code=0",
+    "report": ".airbug/runs/linux-d6a3022b-770f-4534-9d2f-1708f490783d/index.html",
+    "run_id": "d6a3022b-770f-4534-9d2f-1708f490783d",
+    "isolation": "Sources and host Cargo registry mounted read-only; Linux target/report files stored in dedicated Docker volume airbug-bench-linux-validation-target. Final test report exported to the host. No host target artifacts reused.",
+    "fixtures": [
+      "test-worker-runtime.py passed",
+      "test-thread-batches.py passed",
+      "Full test-cargo-bench.py passed, including imported groups, bootstrap/regression artifacts, baseline/history, CLI forwarding and local Rc worker dispatch"
+    ],
+    "source_hashes": {
+      "bench/src/worker_pool.rs": "64bc6eae42ff08fe3e0a28b0ca2caf3dc4161df9b4d586c716c234e0ff657215",
+      "bench/src/suite.rs": "c226e4d20a21c6d16e835375aca112fd18e17ee4531bb640b3d8700b1d14491d",
+      "bench/src/suite_measure.rs": "95e4d5f042f7b37dbce27f80e3dba27c3720e0b9b9a16864c6454077db06aec1",
+      "bench/src/threads.rs": "1a4d2dbe411b3577261a5b803eadd14f87eead3f59b085f77f3e8a006497728c",
+      "bench/src/sampling.rs": "a1602daddfc48299415b15f8f0923d0d9aaf8e4baf89c49156b5d6165de68619",
+      "bench/macros/src/lib.rs": "d9974a644c8254a3a71f85442285bc4f53a73b7cf949cb90ad830d6f0da11205",
+      "bench/scripts/test-cargo-bench.py": "c5631868408ab3b392fdc997e639b434c4936c0ca9ba15bfbf00d662c8d91da1"
+    },
+    "full_cargo_log": ".airbug/runs/linux-d6a3022b-770f-4534-9d2f-1708f490783d/linux-full-cargo.log"
+  },
+  "windows_compilation": {
+    "target": "x86_64-pc-windows-msvc",
+    "host": "macOS ARM64",
+    "rustc": "1.101.0-nightly (c1070d693 2026-09-28)",
+    "command": "cargo check --offline --locked --target x86_64-pc-windows-msvc -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features",
+    "result": "passed",
+    "scope": "Compiles/checks every target and feature of benchmark library/macros/CLI. Does not link or execute Windows binaries; does not establish Windows filesystem, PowerShell or timing behavior.",
+    "runtime_inventory": "PowerShell and MinGW compiler are installed; no wine/wine64 executable was found on PATH. Installed Rust MSVC target supports checking only in this environment.",
+    "log": ".airbug/validation/linux-amd64-2026-10-01/windows-check.log"
+  },
+  "linux_x86_environment": {
+    "platform": "linux/amd64",
+    "host": "Docker on ARM64 macOS, QEMU execution",
+    "image": "rust:1.97-bookworm",
+    "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+    "image_digest": "sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97",
+    "status": "passed: 496 tests, 0 failed, 0 ignored across 27 test result summaries; direct Cargo exit code 0",
+    "target_volume": "airbug-bench-linux-amd64-validation-target",
+    "log": ".airbug/validation/linux-amd64-2026-10-01/tests.log",
+    "scope": "Functional execution under emulation only; no native x86 performance/timing equivalence claim.",
+    "registry_volume": "airbug-bench-linux-amd64-registry",
+    "isolation": "Workspace and host Cargo registry are read-only. Missing x86 dependencies are downloaded into a separate writable registry volume; target files use a separate x86 volume.",
+    "wrapper_build_log": ".airbug/validation/linux-amd64-2026-10-01/wrapper-build.log",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "report_limitation": "Live-report wrapper could not build because the Docker disk filled. Direct Cargo completed successfully after removing only incremental caches in the two dedicated validation target volumes. Full plain-text log retained; no HTML/live report produced.",
+    "fixtures": "The package test suite includes real Cargo init fixtures. Separate worker-runtime/thread-batches Python fixtures were not rerun on x86; their macOS and Linux ARM64 evidence remains separate.",
+    "source_hashes": {
+      "bench/src/worker_pool.rs": "64bc6eae42ff08fe3e0a28b0ca2caf3dc4161df9b4d586c716c234e0ff657215",
+      "bench/src/suite.rs": "c226e4d20a21c6d16e835375aca112fd18e17ee4531bb640b3d8700b1d14491d",
+      "bench/src/suite_measure.rs": "95e4d5f042f7b37dbce27f80e3dba27c3720e0b9b9a16864c6454077db06aec1",
+      "bench/src/threads.rs": "1a4d2dbe411b3577261a5b803eadd14f87eead3f59b085f77f3e8a006497728c",
+      "bench/src/sampling.rs": "a1602daddfc48299415b15f8f0923d0d9aaf8e4baf89c49156b5d6165de68619",
+      "bench/macros/src/lib.rs": "d9974a644c8254a3a71f85442285bc4f53a73b7cf949cb90ad830d6f0da11205",
+      "bench/scripts/test-cargo-bench.py": "c5631868408ab3b392fdc997e639b434c4936c0ca9ba15bfbf00d662c8d91da1"
+    }
+  },
+  "linux_latest_validation": {
+    "host": "Linux ARM64 Docker on macOS ARM64",
+    "image_id": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "rustc": "1.97.1",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "environment": {
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0"
+    },
+    "result": "506 passed, 0 failed, 0 ignored; process exit 0",
+    "log": ".airbug/validation/linux-arm64-current/tests.log",
+    "log_sha256": "8c9bb82041103a041b7344656b5f4f762f954f877e22de8545cf77e0a0d5b87e",
+    "sources": ".airbug/validation/linux-arm64-current/sources.json",
+    "isolation": "Read-only source and registry mounts; dedicated Linux target volume. Removed only regenerable debug build artifacts and x86 incremental cache after verified disk-full linker failure. Prior saved reports preserved.",
+    "limitations": "Direct Cargo log, no live HTML report. Separate Python fixtures not rerun. Windows and current x86 runtime remain unverified."
+  },
+  "linux_x86_latest_validation": {
+    "host": "Linux x86_64 under QEMU on ARM64 macOS",
+    "image": "0e2bcaef56d0 with --platform linux/amd64 --pull=never",
+    "rustc": "1.97.1",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "result": "506 passed, 0 failed, 0 ignored; process exit 0",
+    "environment": {
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0"
+    },
+    "log": ".airbug/validation/linux-x86-current/tests.log",
+    "log_sha256": "ff33fc14dafab59f2f21be901413d49b4b782b771332649dee4dfae72062d3ef",
+    "sources": ".airbug/validation/linux-x86-current/sources.json",
+    "isolation": "Read-only workspace and host registry mounted at /host-registry; writable x86 registry contains links to host registry; dedicated x86 target volume rebuilt. Prior reports preserved.",
+    "limits": "Functional emulated execution; native x86 timing and Windows runtime remain unverified. Separate Python fixtures not rerun."
+  },
+  "windows_current_compilation": {
+    "command": "cargo check --offline --locked --target x86_64-pc-windows-msvc -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features",
+    "result": "passed; exit 0",
+    "host": "macOS ARM64",
+    "log": ".airbug/validation/windows-current/check.log",
+    "log_sha256": "ff9feb3f871eef72ac983e3ce03f3a55f74d630729538ce527994612c8512032",
+    "limits": "Compilation/type checking only; no Windows linking or runtime execution."
+  },
+  "current_report_changes_validation": {
+    "windows": "All-target/all-feature x86_64-pc-windows-msvc cargo check passed; compilation only",
+    "linux_arm64": {
+      "result": {
+        "passed": 511,
+        "failed": 1,
+        "ignored": 0
+      },
+      "exit_code": 101,
+      "failure": "timer::tests::cpu_frequency_matches_os_bracketed_intervals",
+      "isolated_reproduction": "CPU 6270000ns outside OS bracket 6335358..6338601ns (margin 64386); isolated test failed",
+      "log": ".airbug/validation/linux-arm64-current/followup-tests.log",
+      "log_sha256": "66cd09139780ba41665abf3633301762ccfb6c57b16e867181c48b7ed31107ff",
+      "sources": {
+        "bench/src/timer.rs": "dd062df65050ebc8fc0b58dd1beb1bfadcb3d7ebd2deaa7835f51461696a4a05",
+        "bench/src/relative_format.rs": "d05b1250f85b25c34583e9d78a6620988828d4c413ee439d370b8c578c1b34aa",
+        "bench/src/history.rs": "e602ebfb86d233cd59cb1740217178cc502d57f4755682c891f1ffe0ac96f23a",
+        "bench/src/relative.rs": "9c52a09792a4f9c5d3d3d95b4337b505a8a63081cc4e03b4a60f0e783d631deb",
+        "bench/cli/src/experiment_report.rs": "fa1c14878548fd2994e0f68b25c09a59ada0c372bf03daa11a235fd8624f5fb0"
+      },
+      "conclusion": "Current Linux gate fails; older passing gates do not establish current runtime correctness. Counter versus OS clock discrepancy needs investigation; tolerance unchanged."
+    }
+  },
+  "linux_raw_clock_followup": {
+    "result": {
+      "passed": 512,
+      "failed": 0,
+      "ignored": 0
+    },
+    "exit_code": 0,
+    "log": ".airbug/validation/timer-diagnosis/linux-tests.log",
+    "log_sha256": "1e53f73b6bd62f3c92033b96de08b32720cd6a67bf9c01fd610ec4c8d134e43a",
+    "diagnostic": ".airbug/validation/timer-diagnosis/output.txt",
+    "finding": "24 MHz ARM counter agreed with CLOCK_MONOTONIC_RAW; ordinary CLOCK_MONOTONIC advanced about 0.95% faster during this diagnostic. Prior failures exceeded 1% against ordinary MONOTONIC. Exact source of OS adjustments not identified.",
+    "fix": "Linux ARM64 frequency test uses CLOCK_MONOTONIC_RAW for bracketing. Same 1% plus 1us margin; production clock code unchanged. libc is a target-specific dev-dependency only.",
+    "sources": {
+      "bench/src/timer.rs": "8d4fa0e6ac69f39e2fbe021f3b801631fab836d3138bcd75946c4ca9546f966d",
+      "bench/Cargo.toml": "636d21877f97464c080fdde822fd618040131ffb646dea15c8acbbc82a8bc40b",
+      "Cargo.lock": "2dbb1744e5e2d8ce1c5da5bea97d80467290ae5a919324c0991a3b7539bf739c"
+    },
+    "reference": "https://man7.org/linux/man-pages/man3/clock_gettime.3.html",
+    "limits": "Linux ARM64 functional tests only; no current Linux x86 repeat or Windows execution."
+  },
+  "completion_msrv_validation": {
+    "toolchain": "1.96.0",
+    "result": {
+      "passed": 512,
+      "failed": 0,
+      "ignored": 0
+    },
+    "exit_code": 0,
+    "log": ".airbug/validation/msrv-current/tests.log",
+    "sha256": "ef040275a1c196648c0a2c8aefc7ef8265b796302545958c7a48a1007e393031"
+  },
+  "completion_x86_validation": {
+    "result": {
+      "passed": 511,
+      "failed": 1,
+      "ignored": 0
+    },
+    "exit_code": 101,
+    "log": ".airbug/validation/linux-x86-current/final-tests.log",
+    "sha256": "376291daa7338fb380b86b7341e968389c23760bb0eb73becbf38443db04ead8",
+    "limitation": "Nested compiler spawn stalled under QEMU; child threads waited on futex and SIGTERM was ineffective. Child SIGKILL released runner: 511 tests passed, 1 interrupted test failed. Isolated CARGO_BUILD_JOBS=1 retry also stalled during compiler spawn and was interrupted (exit 101). No source regression established; current complete x86 gate remains unverified.",
+    "diagnostic": ".airbug/validation/linux-x86-current/qemu-wait.txt",
+    "serial_retry_log": ".airbug/validation/linux-x86-current/init-serial.log"
+  },
+  "latest_windows_compile_gate": {
+    "command": "cargo check --offline --locked --target x86_64-pc-windows-msvc -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features",
+    "exit_code": 0,
+    "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22",
+    "fingerprint_scope": "Sorted bench/**/*.rs and three benchmark Cargo.toml files plus Cargo.lock, path and content separated by NUL.",
+    "limits": "Cross-compilation check on macOS; no Windows linking or runtime proof.",
+    "log": ".airbug/validation/parity-current/interval-windows.log",
+    "sha256": "ed30ef82d2aed005dd3217b1dbc2e269f7582c5c54091bf733bef59e1370d0a9"
+  },
+  "latest_msrv_gate": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      537,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/interval-msrv.log",
+    "sha256": "fcd7525911b578c7a5855944a4a71f7153369b7db6a360ebf37e44736ea86574",
+    "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22",
+    "scope": "Current source on macOS ARM64 Rust 1.96.0, including scale_intervals and public nonmonotone formatter path. 537 tests across 27 summaries passed."
+  },
+  "latest_linux_arm_gate": {
+    "platform": "Linux ARM64 container on ARM64 macOS host",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      537,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/interval-full-linux.log",
+    "sha256": "655f9c2381fc746d8a1c153ac01fce593d8142702fb824990605aabc5eedb473",
+    "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22",
+    "scope": "Current all-feature benchmark library/macros/CLI on Linux ARM64 including scale_intervals and public nonmonotone formatter path. No visual or Windows runtime claim."
+  },
+  "historical_msrv_gate_521": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      521,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/msrv-current/latest-tests.log",
+    "sha256": "57b907b972d37c68cd82f1338b522c84ea7dc95cd24b556c4057ee32375adb10",
+    "scope": "Current macOS full benchmark package tests; no other platform claim."
+  },
+  "historical_linux_arm_gate_521": {
+    "command": "docker run --rm --pull=never (pinned arm64 image, read-only workspace/registry, existing target volume) cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "architecture": "aarch64",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      521,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/linux-arm-current/tests.log",
+    "sha256": "69bd1f382dcabdefa7bf3c39fda6013d16d19546e4ed4f7c3bff5b14d9437e0e",
+    "scope": "Historical 521-test Linux ARM64 gate; predates nonlinear formatter and history snapshot changes. A new current-source runtime gate remains required."
+  },
+  "historical_linux_arm_gate_527": {
+    "platform": "Linux ARM64 container on ARM64 macOS host",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      527,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/linux-arm.log",
+    "sha256": "2c4a886a5495759d877fe917a48c34e69192eeafd41ee9ab420a014654d6c8fc",
+    "source_fingerprint_sha256": "4fa2903f75ad0e1df661d7defdd96e55762db854c360b0a07deb656f50628801",
+    "scope": "Current code including no-plots snapshot-validation fix. Read-only workspace and registry, existing target volume, no x86 or Windows runtime claim."
+  },
+  "historical_msrv_gate_527": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      527,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/tests.log",
+    "sha256": "f35003e7b95db87cf03d29d7eaf75212930bb7107f60231db14565fff4105acf",
+    "source_fingerprint_sha256": "4fa2903f75ad0e1df661d7defdd96e55762db854c360b0a07deb656f50628801",
+    "scope": "Current macOS all-feature benchmark package tests after nonlinear formatter/history persistence and no-plots validation fix; does not prove other platform runtime or browser behavior."
+  },
+  "historical_linux_arm_gate_530": {
+    "platform": "Linux ARM64 container on ARM64 macOS host",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      530,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/linux-time-budget.log",
+    "sha256": "c78ac186a67bbcf47f3de37157ed6171ace087bf6bfd0d026e34235077ce500b",
+    "source_fingerprint_sha256": "51a5cc0d4b71bed413f5729a4a4b9c76c53debee80a53f04f0671b32b85f4f01",
+    "scope": "Current source including zero-time budget fixes and independent confidence-interval test; read-only Linux ARM64 container. No Windows or x86 runtime claim."
+  },
+  "historical_windows_compile_gate_before_overlays": {
+    "command": "cargo check --offline --locked --target x86_64-pc-windows-msvc -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features",
+    "exit_code": 0,
+    "source_fingerprint_sha256": "51a5cc0d4b71bed413f5729a4a4b9c76c53debee80a53f04f0671b32b85f4f01",
+    "fingerprint_scope": "Sorted bench/**/*.rs and three benchmark Cargo.toml files plus Cargo.lock, path and content separated by NUL.",
+    "limits": "Cross-compilation check on macOS; no Windows linking or runtime proof.",
+    "log": ".airbug/validation/parity-current/windows-time-budget.log",
+    "sha256": "eeee82e187db2ff9c5ed48ea849c7a17454e526f28332990e1ea243c3a9a07c3"
+  },
+  "historical_msrv_gate_530": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      530,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/msrv-time-budget.log",
+    "sha256": "4590337b87889d559e714179e83550d22b52f159bc148e3306affbe13648d896",
+    "source_fingerprint_sha256": "51a5cc0d4b71bed413f5729a4a4b9c76c53debee80a53f04f0671b32b85f4f01",
+    "scope": "Current source on macOS Rust 1.96.0, including time budget fixes and confidence test."
+  },
+  "historical_linux_arm_gate_532": {
+    "platform": "Linux ARM64 container on ARM64 macOS host",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      532,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/overlay-full-linux.log",
+    "sha256": "182d8410a5ba878012dd05f839168945f0ca38a4b08b1b03aa7103906ad535c3",
+    "source_fingerprint_sha256": "22d15ff3b66b184244a920b3a57876e8ed73cc3612c13c83b59c04150a6b5e0f",
+    "scope": "Current Linux ARM64 all-feature benchmark package tests after decreasing formatters, saved statistical overlays and output preflight changes."
+  },
+  "historical_windows_compile_gate_before_terminal": {
+    "command": "cargo check --offline --locked --target x86_64-pc-windows-msvc -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features",
+    "exit_code": 0,
+    "source_fingerprint_sha256": "22d15ff3b66b184244a920b3a57876e8ed73cc3612c13c83b59c04150a6b5e0f",
+    "fingerprint_scope": "Sorted bench/**/*.rs and three benchmark Cargo.toml files plus Cargo.lock, path and content separated by NUL.",
+    "limits": "Cross-compilation check on macOS; no Windows linking or runtime proof.",
+    "log": ".airbug/validation/parity-current/overlay-windows.log",
+    "sha256": "d88f631ba9e96f7a389d825059754f0b4c040655adcc4352329c5e465bee8601"
+  },
+  "historical_linux_arm_gate_534": {
+    "platform": "Linux ARM64 container on ARM64 macOS host",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      534,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/restored-full-linux.log",
+    "sha256": "d3e392e90f77aa966a87291d0ad4a9740048179794241650921ef52f57e59885",
+    "source_fingerprint_sha256": "4fb8c533f6d1b3ed40840c8c1ee24c3d1e53cce5443d377b0a9515cd9230acf5",
+    "scope": "Current source including nonmonotone statistics, automatic draw reconstruction after JSON roundtrip and collection size boundaries. No Windows runtime, x86 runtime or browser acceptance claim."
+  },
+  "historical_msrv_gate_532": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      532,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/overlay-msrv.log",
+    "sha256": "2c561600feb47b260903b9a4c7aaf6799198a270e5e03e29033f97adce13c6d9",
+    "source_fingerprint_sha256": "22d15ff3b66b184244a920b3a57876e8ed73cc3612c13c83b59c04150a6b5e0f",
+    "scope": "Current macOS Rust 1.96.0 all-feature benchmark package tests including saved distribution overlays and output preflight."
+  },
+  "historical_linux_arm_gate_536": {
+    "platform": "Linux ARM64 container on ARM64 macOS host",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "command": "cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      536,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/terminal-full-linux.log",
+    "sha256": "db95e349483bd9b9bd8e3e964ddfb144603ea535cc6238e5d1bc739e651a78f1",
+    "source_fingerprint_sha256": "2be7cc8d8a1dc1ff112a1a6d4539f85089fb52913be3872a1347ea390de79e52",
+    "scope": "Current benchmark library, macros and CLI all-feature tests on Linux ARM64 after terminal-depth compaction. No Windows runtime, x86 runtime or browser acceptance claim."
+  },
+  "historical_windows_compile_gate_before_intervals": {
+    "command": "cargo check --offline --locked --target x86_64-pc-windows-msvc -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-targets --all-features",
+    "exit_code": 0,
+    "source_fingerprint_sha256": "2be7cc8d8a1dc1ff112a1a6d4539f85089fb52913be3872a1347ea390de79e52",
+    "fingerprint_scope": "Sorted bench/**/*.rs and three benchmark Cargo.toml files plus Cargo.lock, path and content separated by NUL.",
+    "limits": "Cross-compilation check on macOS; no Windows linking or runtime proof.",
+    "log": ".airbug/validation/parity-current/terminal-windows.log",
+    "sha256": "840558fd52d9d62bc4fe113d21f98a4acd84547550b22457ed7665dd5fc3834e"
+  },
+  "historical_msrv_gate_536": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      536,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/current-msrv.log",
+    "sha256": "03b02bd40c96600a1ab6e8f331ecc286a8cdd51a54e4eeb55e5de8b44c7e4ca8",
+    "source_fingerprint_sha256": "2be7cc8d8a1dc1ff112a1a6d4539f85089fb52913be3872a1347ea390de79e52",
+    "scope": "Current source on macOS ARM64 Rust 1.96.0 after formatter regeneration and terminal-depth compaction. 536 tests, 27 summaries; no failures or ignores."
+  },
+  "x86_single_codegen_diagnostic": {
+    "configuration": "QEMU linux/amd64, Cargo jobs=1, dev/test codegen-units=1, incremental=0, debug=0, test-threads=1",
+    "image": "0e2bcaef56d0",
+    "result": "Interrupted owned validation container after repeated stalled child spawn. No tests completed; not a source failure or passing gate.",
+    "observations": "While Cargo reported futures-lite compilation, child PID 143 remained named cargo with two threads in futex_wait_queue across process snapshots. Parent waited on child communication. No further compiler output. Matches prior emulation spawn limitation.",
+    "log": ".airbug/validation/parity-current/x86-single-codegen.log",
+    "sha256": "7dbc1754e9009e2e2c56e85be7a01cdae1ec8883b52851eccf671f992d174d48",
+    "process_snapshot": ".airbug/validation/parity-current/x86-single-codegen-processes.txt",
+    "next_requirement": "Native Linux x86_64 host or changed emulation environment is needed for a complete current runtime gate; do not repeat unchanged QEMU retries."
+  }
+}

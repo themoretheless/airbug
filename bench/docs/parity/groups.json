@@ -1,5 +1,5 @@
 {
-  "status": "partial",
+  "status": "verified_native_group_requirements",
   "upstream": {
     "divan": "0.1.21 src/lib.rs bench_group options, lines 956-1329",
     "criterion": "0.8.2 src/benchmark_group.rs public configuration methods, lines 96-232"
@@ -12,13 +12,13 @@
     },
     {
       "feature": "Sample count, operations, warmup, sample duration and sampling mode",
-      "status": "implemented_with_domain_audit_pending",
+      "status": "verified_native_behavior",
       "airbug": "Sampling per-field inheritance, group_with_defaults; numeric caps tracked under samples"
     },
     {
       "feature": "Thread count/list on a group",
-      "status": "partial",
-      "airbug": "Inline inheritance and runtime override implemented; imported parent thread defaults and sequential opt-in incomplete"
+      "status": "verified_native_behavior",
+      "airbug": "Inline inheritance and runtime override implemented. Imported parent defaults select threaded registration for plain/parameterized sync/async functions and owned/borrowed setup. Sync setup preserves coordinator preparation and Send transfer requirements; async setup stays worker-local with non-Send inputs/outputs/executors. Sequential local cases remain legal. Child counts, sequential opt-out, nested false and runtime matrix precedence preserved. Imported allocated plain/parameterized sync/async routines and coordinator/worker-local setup are implemented with focused evidence below. Explicit batching, custom/measurement combinations and constructed async input-counter state remain separately tracked. Runtime --threads and AIRBUG_BENCH_THREADS now enable ordinary attributed cases before registration, preserving explicit false. Incompatible CLI cases are checked after selection, before workload/timer setup."
     },
     {
       "feature": "Fixed throughput counters",
@@ -27,7 +27,7 @@
     },
     {
       "feature": "Min/max time and external-time accounting",
-      "status": "implemented_with_domain_audit_pending",
+      "status": "verified_native_behavior",
       "airbug": "Inherited min_time_ms/max_time_ms/exclude_external_time"
     },
     {
@@ -66,12 +66,8 @@
     "classification": "These are not Divan bench_group options or Criterion BenchmarkGroup setters. They remain tracked as Airbug extensions; this classification does not assert their implementation."
   },
   "next_required_implementation": {
-    "feature": "Imported group thread defaults and remaining numeric-domain audit",
-    "requirements": [
-      "Resolve inherited worker counts before case registration so case names and execution agree",
-      "Preserve explicit sequential opt-out and child overrides",
-      "Avoid silently imposing Send/Sync requirements on ordinary local benchmarks"
-    ]
+    "feature": "No remaining implementation gap in the listed upstream group fields",
+    "followup": "Report presentation/visual acceptance is tracked under plots; additional Airbug extension combinations retain their own open statuses."
   },
   "validation": {
     "test": "bootstrap::tests::case_configs_control_estimates_draws_regressions_and_labels",
@@ -84,6 +80,128 @@
     "run": ".airbug/runs/76c82e69-aa93-47b2-9530-4e6a125a11e1/index.html",
     "attribute_test": "bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields",
     "cargo_fixture": "bench/scripts/test-cargo-bench.py final standalone bootstrap-options fixture: auto-enabled estimates, imported group from another crate, 32/64 resamples, independent 0.99/0.9 confidence and 0/7 seeds. Passed after correcting --bench cases in fixture invocation; all preceding full-script checks passed.",
-    "saved_settings": "bootstrap::tests::case_configs_control_estimates_draws_regressions_and_labels; cli::analyze_restores_saved_bootstrap_settings_and_overrides_one_field. Includes raw immutability, old runs, invalid metadata, atomic save validation and one-case extraction."
-  }
+    "saved_settings": "bootstrap::tests::case_configs_control_estimates_draws_regressions_and_labels; cli::analyze_restores_saved_bootstrap_settings_and_overrides_one_field. Includes raw immutability, old runs, invalid metadata, atomic save validation and one-case extraction.",
+    "imported_threads": "attributes::imported_worker_defaults_select_paths_and_restore_after_unwind: effective names, operations, Rc output and sequential Rc input, child count override, nested threads=false, CLI registration matrix, unwind restoration. Full attributes suite: 58 passed (.airbug/runs/8c987ef3-4c1c-4cfd-a7f5-e8faff744ae1). Nested false assertion then passed in focused run .airbug/runs/5915daa9-ffcc-42ca-9d6e-85d66e2d23d5.",
+    "imported_threads_external": "bench/scripts/test-cargo-bench.py imported-threads-fixture: separate library exports group, bench target inherits [1,2], Rc output stays worker-local, sync copied parameters, async String borrows, sync Vec setup by reference, async Rc setup by ownership, and sequential opt-out; cargo bench --test verifies thirteen IDs and nineteen total operations. Full script passed; log /tmp/airbug-inherited-setup-cargo.log.",
+    "imported_thread_parameters": "attributes::imported_threads_cover_values_borrows_async_and_reject_unshareable_inputs_lazily: 14 cases, 21 operations, 12 lazy worker-local executors, nine worker-local Rc output drops; copied parameters, shared String borrows, pending future, ordinary Rc inputs preserved and unsafe sharing rejected. All 59 attributes tests passed (.airbug/runs/bb1edc8a-89b4-4a77-ad62-566ec39ec8ab); strict Clippy passed. Explicit async non-Sync rejection and restoration also passed in focused run .airbug/runs/f23916fe-4bce-4d71-a78d-1d1e26cc8623.",
+    "imported_setup_threads": "attributes::inherited_setup_threads_preserve_preparation_location_and_non_send_local_cases: 16 cases, 72 operations; 36 sync inputs prepared on coordinator, 36 Rc async inputs prepared/dropped on workers, 126 input-counter items; borrowed/owned modes and args matrices; local Rc setup remains legal and attempted transfer rejected before work. Passed with 60 attributes tests (.airbug/runs/61b30564-74ca-4369-8d96-bc4b1365555d). Local async counter-state check passed; final suite: 61 tests passed (.airbug/runs/7a38fadf-9048-4596-b9bb-9db9536dbb70), strict all-target Clippy passed.",
+    "runtime_thread_opt_in": "attributes::runtime_threads_opt_in_validate_only_selected_cases_and_respect_false: matrix [1,3] without a thread attribute; all-case rejection before any workload, selected case succeeds with eight operations, Rc/setup and custom failures remain explicit, case/group false remains sequential. All 62 attributes tests passed (.airbug/runs/c71a353a-5d39-4bb4-9784-2d59324bce8f), strict Clippy passed. Full test-cargo-bench.py passed: lazy preview for ordinary sum plus standalone cross-crate CLI-only [2,3] execution, thirteen cases and 31 total operations including sync/async/setup; log /tmp/airbug-cli-thread-opt-in.log.",
+    "fractional_durations": "68 attribute tests passed (.airbug/runs/e6bdb5c9-918e-4771-a690-fe02f1c4586e). Expanded external test-measurement-target.py and final all-target library/macros Clippy passed after preserving u64 inference for integer arithmetic. Shared parser covers imported fractional duration defaults and CLI precedence."
+  },
+  "constructed_async_counters": {
+    "status": "partial",
+    "implemented": "Inherited one-worker async setup now accepts counters created in expression blocks, including FnMut state and Rc<Cell<_>>. Counter calls use interior synchronization outside the measured callback so the setup wrapper satisfies Fn. Explicit multi-worker shareable counters remain supported. Regression tests check exact aggregate and worker counts.",
+    "remaining": "Inherited counts greater than one still use an unavailable-case fallback for constructed counter expressions. Automatic selection based on closure Send/Sync traits is unresolved. This is an Airbug async combination; upstream group-thread coverage is not proved by either implementing or excluding this extension.",
+    "validation": "67 attribute tests passed (.airbug/runs/8d2c9fe4-998b-4fa7-87f8-08c778df5058). Full library/integration suite passed 359 tests (.airbug/runs/4046782e-627c-45bc-bd88-23c21ccf59ef); library/CLI all-target Clippy passed.",
+    "dispatch_investigation": "Removing the syntactic fallback, including adding PhantomData of mutex-wrapped counter closures, still fails compilation for Rc<Cell<u64>> counter state (E0277). Both experiments were reverted; the restored 68 attribute tests passed in .airbug/runs/932b3e6b-5eb9-4c22-9966-4123a9a0d5a4. Closure auto-trait inference remains unresolved; no expanded support claimed."
+  },
+  "documented_divan_options_audit": {
+    "source": "https://docs.rs/divan/latest/divan/attr.bench_group.html",
+    "observed_version": "0.1.21",
+    "scope": "Documented bench_group options and convenience counter aliases; does not prove every combination with bench lifecycle APIs.",
+    "mapping": {
+      "name": "name; imported group name metadata",
+      "crate": "crate attribute / renamed dependency",
+      "sample_count": "samples; sample_count_unit=\"workers\" for worker-count budgeting",
+      "sample_size": "iterations",
+      "threads": "threads; inherited counts resolved before registration",
+      "counters": "bytes/items/chars/cycles attributes; native counters retained as independent units",
+      "bytes_count": "bytes",
+      "chars_count": "chars",
+      "cycles_count": "cycles",
+      "items_count": "items",
+      "min_time": "min_time_ms; full Duration in group_with_sampling",
+      "max_time": "max_time_ms; full Duration in group_with_sampling",
+      "skip_ext_time": "exclude_external_time; explicit false overrides parent",
+      "ignore": "ignore expression; explicit false and runtime conditions supported"
+    },
+    "combination_classification": {
+      "still_required": "Current test-allocated-thread-inheritance.py and test-thread-batches.py passed imported worker/allocation/setup/counter/batch paths; focused attribute tests cover child overrides and local non-Send behavior.",
+      "additional_airbug": "Inherited async executor expressions, custom Measurement/formatter expressions and constructed async input-counter dispatch are Airbug-specific combinations; Divan bench_group documents no async executor or Measurement setting.",
+      "not_claimed": "No declaration of complete group feature parity; source/CLI domains and lifecycle combinations remain tracked."
+    },
+    "evidence": [
+      "bench/tests/attributes.rs inheritance/group tests",
+      "bench/scripts/test-cargo-bench.py complete external integration gate recorded in validation.json",
+      "bench/scripts/test-worker-sample-budget.py worker-count semantics",
+      "bench/scripts/test-measurement-target.py alternative time-target inheritance"
+    ]
+  },
+  "inherited_plain_allocations": {
+    "status": "implemented",
+    "scope": "Parameterless synchronous/asynchronous allocated routines without input setup or explicit batching. Inherited group counts and runtime registration overrides use existing worker-local allocation lifecycle.",
+    "evidence": "allocated_suite::imported_threads_enable_plain_allocated_sync_and_async_cases: counts [1,2] and runtime [3], exact operation/allocation/deallocation/byte totals, one allocation record per worker, async Rc output and sequential opt-out; all 22 allocation integration tests passed.",
+    "remaining": "Batch policy propagation is covered in threaded_batch_policies; constructed input-counter combinations remain open; fresh sync coordinator, sync worker-local and async setup are covered below."
+  },
+  "inherited_allocated_parameters": {
+    "status": "implemented_sync_async_without_setup",
+    "behavior": "Synchronous parameterized allocated routines select shared-worker or caller-local registration using the argument type. Rc arguments remain valid for one worker. Incompatible runtime-selected cases fail before measurement, while filtered compatible cases execute.",
+    "validation": "23 allocation tests passed, including exact Vec byte totals for sizes 16/32 at 1/2 workers, Rc argument at 1 worker, 2-worker rejection and parent one-worker defaults.",
+    "remaining": "Fresh sync coordinator and async worker-local setup are covered in dedicated entries below; batch policy propagation is covered in threaded_batch_policies; other input-counter expression combinations remain open.",
+    "async_validation": "allocated_suite::async_allocated_arguments_borrow_across_await_and_retain_local_worker passed: borrowed String survives Pending/await, exact operations and allocation/deallocation counts at 1/2 workers, proportional byte totals, worker records, local Rc argument at one worker and explicit rejection of two. All 24 allocation tests and all-target library/macro Clippy passed."
+  },
+  "inherited_allocated_setup": {
+    "status": "implemented_sync_coordinator_setup",
+    "behavior": "Synchronous allocated setup inherits group and runtime thread counts for borrowed and owned inputs. Non-Send inputs retain caller-local execution with one worker; selected incompatible multi-worker variants report an error.",
+    "validation": "All 25 allocated_suite tests passed. allocated_setup_inherits_threads_without_counting_preparation verifies fresh mutable inputs and exact 16-byte workload allocations while excluding 128-byte preparation, owned input, inherited defaults, runtime counts [1,2], and Rc fallback/rejection.",
+    "remaining": "Batch policy propagation is covered in threaded_batch_policies; constructed input-counter combinations need separate validation; async and sync worker-local setup are covered below."
+  },
+  "inherited_async_allocated_setup": {
+    "status": "implemented_with_focused_validation",
+    "behavior": "Async allocated routines with borrowed/owned fresh inputs inherit group and runtime thread matrices. Setup is worker-local; inputs and futures need not be Send. Input counters run outside allocation measurement. Non-Sync captured setup state retains single-worker fallback.",
+    "evidence": [
+      "allocated_suite::async_allocated_setup_inherits_workers_and_borrows_across_suspension: Pending/Ready await, fresh mutable inputs, Rc-owned input, exact operation/allocation counts, input byte totals, worker records, inherited one worker, runtime [1,2] and local fallback/rejection",
+      "408 all-feature library/macro tests and doctests passed (.airbug/runs/e73c24cd-51ad-45a6-97c1-5b79259c8c98), including all 26 allocation tests; all-target all-feature Clippy passed."
+    ],
+    "remaining": "Batch policy propagation is covered in threaded_batch_policies; constructed input-counter combinations need separate validation; sync worker-local setup is covered below."
+  },
+  "inherited_sync_worker_setup": {
+    "status": "implemented_with_focused_validation",
+    "behavior": "setup_thread=worker no longer requires local threads. Sequential registration uses caller-local setup; inherited group or runtime thread counts use worker-local setup, including non-Send inputs and outputs. Supported with and without allocation tracking.",
+    "evidence": [
+      "allocated_suite::worker_local_setup_uses_inherited_or_runtime_threads_without_send_inputs: sequential, imported [1,2], runtime [1,3], borrowed/owned Rc inputs, creation/use/drop thread identity, exact allocation and dynamic input byte totals",
+      "All 27 allocation tests and 26 doctests passed",
+      "bench/scripts/test-allocated-thread-inheritance.py passed through actual Cargo with imported groups, sync worker-local and async Rc inputs, lazy dry-run, CLI/environment precedence and exact operation/allocation counts"
+    ],
+    "remaining": "Batch policy propagation is covered in threaded_batch_policies; constructed input-counter combinations still need separate validation; Linux ARM64 current benchmark gate is documented in platforms.json; Linux x86_64 functional tests passed under QEMU (platforms.json); Windows runtime and native x86 timing remain unverified."
+  },
+  "threaded_batch_policies": {
+    "status": "implemented including imported inferred worker dispatch and local non-Send fallbacks",
+    "behavior": "Six native wave executors use scoped BatchPolicy for per-worker waves; borrowed/owned adapters inherit their executor policy. Macros accept explicit threads plus batch and preserve local policy overrides. Manual registration uses with_batch_defaults around threaded input builders. Saved contracts expose threads.batch_policy, including preview. Addressability is checked before factories; user-owned allocations and actual memory exhaustion remain outside capacity guarantees. Imported group defaults now select threaded registration without discarding batch. Every local fallback calls the corresponding batched builder with the resolved policy; owned async adaptation retains that policy. Child overrides and scope restoration are preserved.",
+    "validation": {
+      "broad_gate": "494 all-feature library/macros/CLI tests passed",
+      "broad_report": ".airbug/runs/344c1663-2e23-46ba-95f6-99b7ad5ff046/index.html",
+      "focused_gate": "4 thread_batches tests passed, including all policies on six executors, exact remainder counts, allocation output bytes, explicit attribute paths, addressability rejection before setup and explicit rejection of unsupported imported dispatch",
+      "focused_report": ".airbug/runs/84cb9738-e86a-48d8-8282-ca41ed084c4d/index.html",
+      "cargo": "test-thread-batches.py passed: lexical group inheritance, child override, async Rc input, 2/3-worker CLI override, exact wave records and lazy preview",
+      "clippy": "all-target/all-feature Clippy passed"
+    },
+    "remaining": "Constructed async input-counter closures and custom-measurement/thread cross-products remain separately tracked. Manual plain bench_threads keeps its uninterrupted inside-drop loop; use threaded input builders for explicit batching. Local fallback timing records aggregate all batches of one worker sample.",
+    "inherited_validation": {
+      "focused": "5 thread_batches tests passed; Rc<Cell> output counters enforce batch size 2, child PerIteration enforces size 1, for sync/async and allocated local cases",
+      "report": ".airbug/runs/617643da-cf29-4e1f-ad87-7ffad774c3e6/index.html",
+      "cargo": "Expanded test-thread-batches.py passed imported groups across crates with shared and local non-Send paths, child override and worker matrices",
+      "clippy": "all-target/all-feature Clippy passed",
+      "broad_gate": {
+        "result": "496 passed, 0 failed, 0 ignored; library/macros/CLI all features",
+        "report": ".airbug/runs/df63380c-2ca9-46bf-8711-ae6e95a93891/index.html"
+      }
+    }
+  },
+  "current_source_audit": {
+    "mapping": "criterion-groups.json",
+    "public_group_methods": 13,
+    "identity_constructors": 2,
+    "attribute_tests_passed": 68,
+    "resolved_stale_gap": "constructed_async_counters_support_local_inheritance_and_explicit_workers passed; local FnMut and shared worker AtomicU64 counter state preserve exact totals",
+    "remaining": "Report presentation and additional Airbug extension combinations are tracked separately; not a claim of every conceivable cross-product."
+  },
+  "acceptance_scope": "Nested/named/imported group registration, listed upstream group configuration fields and inherited ordinary lifecycle/worker paths. Separate report presentation and additional Airbug extension combinations are not included in this group requirement.",
+  "acceptance_evidence": [
+    "criterion-groups.json registration_semantic_audit and exact pinned group/identity method inventory",
+    "68 attribute tests and 67 contracts passed on macOS; current full MSRV/Linux ARM64 gates each passed 521 tests",
+    "test-allocated-thread-inheritance.py passed current imported defaults, worker-local/async setup, runtime precedence, lazy preview and exact counts",
+    "test-thread-batches.py passed current lexical/imported inheritance, child override, local non-Send lifetimes and worker matrices",
+    "numeric-domains.json, option-modes.json and test-measurement-target.py record numeric/time option domains and precedence"
+  ]
 }

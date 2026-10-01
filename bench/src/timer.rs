@@ -43,11 +43,35 @@ enum Clock {
     #[cfg(test)]
     Test(Option<u128>),
 }
+/// Start threaded intervals together or when each worker begins its measured work.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WorkerStart {
+    #[default]
+    Shared,
+    Local,
+}
+impl WorkerStart {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "shared" => Ok(Self::Shared),
+            "local" => Ok(Self::Local),
+            _ => Err(error("worker start must be shared or local")),
+        }
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Shared => "shared",
+            Self::Local => "local",
+        }
+    }
+}
+
 /// A validated clock. CPU frequency discovery is lazy and cached process-wide.
 #[derive(Clone, Copy, Debug)]
 pub struct Timer {
     clock: Clock,
     correction: Option<crate::timing::Correction>,
+    worker_start: WorkerStart,
 }
 impl Default for Timer {
     fn default() -> Self {
@@ -92,12 +116,14 @@ impl Timer {
         Self {
             clock: Clock::Test(nanos),
             correction: None,
+            worker_start: WorkerStart::Shared,
         }
     }
     pub const fn os() -> Self {
         Self {
             clock: Clock::Os,
             correction: None,
+            worker_start: WorkerStart::Shared,
         }
     }
     pub fn cpu() -> Result<Self> {
@@ -111,8 +137,19 @@ impl Timer {
             Ok(hz) => Ok(Self {
                 clock: Clock::Cpu(*hz),
                 correction: None,
+                worker_start: WorkerStart::Shared,
             }),
             Err(reason) => Err(error(reason.clone())),
+        }
+    }
+    pub(crate) fn with_worker_start(mut self, policy: WorkerStart) -> Self {
+        self.worker_start = policy;
+        self
+    }
+    pub(crate) fn start_worker(self, shared: TimerStart) -> TimerStart {
+        match self.worker_start {
+            WorkerStart::Shared => shared,
+            WorkerStart::Local => self.start(),
         }
     }
     pub fn name(self) -> &'static str {
@@ -159,6 +196,7 @@ impl Timer {
         Self {
             clock: Clock::Test(Some(nanos)),
             correction: Some(correction),
+            worker_start: WorkerStart::Shared,
         }
     }
     pub(crate) fn with_correction(mut self) -> Result<Self> {
@@ -543,16 +581,44 @@ mod tests {
                 return;
             }
         };
+        fn reference_now() -> Duration {
+            #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+            {
+                // ARM frequency comes from CNTFRQ_EL0, not calibration against
+                // Instant. Compare it to the unslewed hardware clock: Linux
+                // CLOCK_MONOTONIC may receive frequency adjustments.
+                let mut stamp = std::mem::MaybeUninit::<libc::timespec>::uninit();
+                // SAFETY: clock_gettime initializes the pointed-to timespec on success.
+                let result =
+                    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_RAW, stamp.as_mut_ptr()) };
+                assert_eq!(
+                    result,
+                    0,
+                    "CLOCK_MONOTONIC_RAW: {}",
+                    std::io::Error::last_os_error()
+                );
+                let stamp = unsafe { stamp.assume_init() };
+                Duration::new(
+                    stamp.tv_sec.try_into().unwrap(),
+                    stamp.tv_nsec.try_into().unwrap(),
+                )
+            }
+            #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+            {
+                static ORIGIN: OnceLock<Instant> = OnceLock::new();
+                ORIGIN.get_or_init(Instant::now).elapsed()
+            }
+        }
         for _ in 0..5 {
-            let before_start = Instant::now();
+            let before_start = reference_now();
             let start = timer.start();
-            let after_start = Instant::now();
+            let after_start = reference_now();
             std::thread::sleep(Duration::from_millis(5));
-            let before_end = Instant::now();
+            let before_end = reference_now();
             let measured = start.elapsed_ns().unwrap();
-            let after_end = Instant::now();
-            let lower = before_end.duration_since(after_start).as_nanos();
-            let upper = after_end.duration_since(before_start).as_nanos();
+            let after_end = reference_now();
+            let lower = (before_end - after_start).as_nanos();
+            let upper = (after_end - before_start).as_nanos();
             // Brackets account for scheduling around clock reads. The margin
             // allows 1% frequency calibration error plus 1us quantization.
             let margin = upper / 100 + 1000;
@@ -591,5 +657,27 @@ mod tests {
                 }
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod worker_start_tests {
+    use super::*;
+    #[test]
+    fn local_start_replaces_shared_timestamp_and_preserves_correction() {
+        let timer = Timer::os().with_correction().unwrap();
+        let old = Instant::now() - Duration::from_secs(1);
+        let shared = TimerStart {
+            timer,
+            stamp: Stamp::Os(old),
+        };
+        let unchanged = timer.start_worker(shared);
+        assert!(matches!(unchanged.stamp, Stamp::Os(value) if value == old));
+        let before = Instant::now();
+        let local = timer
+            .with_worker_start(WorkerStart::Local)
+            .start_worker(shared);
+        assert!(matches!(local.stamp, Stamp::Os(value) if value >= before));
+        assert!(local.timer.correction().is_some());
     }
 }

@@ -1,0 +1,284 @@
+{
+  "upstream": "Divan 0.1.21",
+  "source": "https://docs.rs/divan/0.1.21/divan/struct.Divan.html",
+  "scope": "Every pub fn declared in upstream src/divan.rs from the pinned source inventory; not the entire Divan API or CLI.",
+  "status": "mapped_not_full_parity_proof",
+  "method_count": 23,
+  "methods": [
+    {
+      "upstream": "main",
+      "airbug": "Suite::main / main_registered",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_action_semantics",
+      "semantics": "Selects list, smoke, profile or measurement from CLI.",
+      "focused_validation": "test-cargo-test-benches.py: debug/release Cargo smoke, one operation per observation, measured Cargo three operations, direct binary dispatch, lazy list/version, process protocol runner; Linux ARM64 exit 0."
+    },
+    {
+      "upstream": "run_benches",
+      "airbug": "Suite::run / run_selected",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/tests/contracts.rs",
+      "status": "mapped",
+      "semantics": "Structured Run instead of mandatory terminal output."
+    },
+    {
+      "upstream": "test_benches",
+      "airbug": "Suite::test_selected; --test",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/tests/attributes.rs",
+      "status": "verified_native_action_semantics",
+      "semantics": "One operation per worker in concurrent cases; does not create a statistical baseline.",
+      "focused_validation": "test-cargo-test-benches.py: debug/release Cargo smoke, one operation per observation, measured Cargo three operations, direct binary dispatch, lazy list/version, process protocol runner; Linux ARM64 exit 0."
+    },
+    {
+      "upstream": "list_benches",
+      "airbug": "Suite::list_selected; --list",
+      "source": "bench/src/suite.rs",
+      "evidence": "selection_semantic_audit in this file; bench/scripts/test-selection.py",
+      "status": "verified_native_selection_semantics",
+      "semantics": "No workload/setup/executor execution; disabled zero-count cases are omitted."
+    },
+    {
+      "upstream": "from_args",
+      "airbug": "Suite::main_registered",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_configuration_precedence",
+      "semantics": "CLI worker settings are applied before registration.",
+      "focused_validation": "Current full external Cargo fixture passed on Linux ARM64: environment defaults, explicit per-field CLI overrides, imported group sampling/comparison/timer/overhead/bootstrap inheritance, runtime worker registration and invalid settings."
+    },
+    {
+      "upstream": "config_with_args",
+      "airbug": "Suite::main",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_configuration_precedence",
+      "semantics": "Explicit CLI settings override corresponding configured fields; use main_registered for matrices.",
+      "focused_validation": "Current full external Cargo fixture passed on Linux ARM64: environment defaults, explicit per-field CLI overrides, imported group sampling/comparison/timer/overhead/bootstrap inheritance, runtime worker registration and invalid settings."
+    },
+    {
+      "upstream": "color",
+      "airbug": "Suite::console_color; --color",
+      "source": "bench/src/console.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "mapped",
+      "semantics": "Auto/always/never; machine output and saved artifacts remain plain."
+    },
+    {
+      "upstream": "run_ignored",
+      "airbug": "Selection::include_ignored; --include-ignored",
+      "source": "bench/src/convenience.rs",
+      "evidence": "bench/tests/attributes.rs",
+      "status": "mapped",
+      "semantics": "Includes ignored cases; zero sample/iteration disables still apply."
+    },
+    {
+      "upstream": "run_only_ignored",
+      "airbug": "Selection::only_ignored; --ignored",
+      "source": "bench/src/convenience.rs",
+      "evidence": "bench/tests/attributes.rs",
+      "status": "mapped",
+      "semantics": "Selects only ignored cases."
+    },
+    {
+      "upstream": "skip_regex",
+      "airbug": "Selection::exclude_regex; --exclude-regex",
+      "source": "bench/src/convenience.rs",
+      "evidence": "selection_semantic_audit in this file; bench/scripts/test-selection.py",
+      "status": "verified_native_selection_semantics",
+      "semantics": "Multiple exclusions; invalid expressions fail before execution."
+    },
+    {
+      "upstream": "skip_exact",
+      "airbug": "Selection::exclude_exact; --exclude-exact",
+      "source": "bench/src/convenience.rs",
+      "evidence": "selection_semantic_audit in this file; bench/scripts/test-selection.py",
+      "status": "verified_native_selection_semantics",
+      "semantics": "Multiple exact exclusions; no substring reinterpretation."
+    },
+    {
+      "upstream": "sample_count",
+      "airbug": "Sampling::samples + SampleCountUnit::Workers; --samples --sample-count-unit workers",
+      "source": "bench/src/sampling.rs",
+      "evidence": "bench/scripts/test-worker-sample-budget.py",
+      "status": "mapped",
+      "semantics": "u64 count, zero disables; rounds to complete worker batches. Default unit remains batches."
+    },
+    {
+      "upstream": "sample_size",
+      "airbug": "Sampling::iterations; --iterations",
+      "source": "bench/src/sampling.rs",
+      "evidence": "bench/scripts/test-worker-sample-budget.py",
+      "status": "mapped",
+      "semantics": "u64 operations per worker; zero disables; fixed count skips calibration."
+    },
+    {
+      "upstream": "threads",
+      "airbug": "Suite::registration_threads / thread_matrix; --threads",
+      "source": "bench/src/threads.rs",
+      "evidence": "bench/scripts/test-manual-thread-matrix.py",
+      "status": "mapped",
+      "semantics": "usize values, zero resolves to available parallelism, ordered deduplication. Lifecycle differences remain in thread-sampling.json."
+    },
+    {
+      "upstream": "min_time",
+      "airbug": "Sampling::min_time; --min-time-ms",
+      "source": "bench/src/sampling.rs",
+      "evidence": "time_budget_semantic_audit in this file; bench/tests/contracts.rs",
+      "status": "verified_native_time_budget_semantics",
+      "semantics": "Duration builder; minimum measured/full-workload budget, including calibration and warmup."
+    },
+    {
+      "upstream": "max_time",
+      "airbug": "Sampling::max_time; --max-time-ms",
+      "source": "bench/src/sampling.rs",
+      "evidence": "time_budget_semantic_audit in this file; bench/tests/contracts.rs",
+      "status": "verified_native_time_budget_semantics",
+      "semantics": "Zero disables the case before work, including smoke/list selection; positive override reenables it. Maximum wins over minimum; complete calls may overshoot."
+    },
+    {
+      "upstream": "skip_ext_time",
+      "airbug": "Sampling::exclude_external_time; --exclude-external-time",
+      "source": "bench/src/sampling.rs",
+      "evidence": "time_budget_semantic_audit in this file; bench/tests/contracts.rs",
+      "status": "verified_native_time_budget_semantics",
+      "semantics": "Uses measured intervals rather than setup/drop-inclusive workload call time for the budget."
+    },
+    {
+      "upstream": "counter",
+      "airbug": "Suite::work_units / input_counters; runtime unit overrides",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/tests/contracts.rs",
+      "status": "mapped",
+      "semantics": "Fixed per-case and input-dependent counters plus programmatic fixed override across registered cases; native API intentionally applies overrides after registration.",
+      "programmatic_global_override": "Suite::override_work_units(unit, count) after registration; applies to existing cases, removes only matching dynamic declaration and preserves other counters. CLI is applied later and takes precedence.",
+      "focused_validation": "contracts::global_builder_counter_override_preserves_other_units_and_is_lazy passed: 2 cases, exact normalized throughput, dynamic byte preservation, zero known count, no execution during override."
+    },
+    {
+      "upstream": "items_count",
+      "airbug": "work_units(\"items\", N); --items-count",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_counter_override",
+      "semantics": "CLI applies to every registered case and replaces only this unit.",
+      "programmatic_global_override": "Suite::override_work_units(unit, count) after registration; applies to existing cases, removes only matching dynamic declaration and preserves other counters. CLI is applied later and takes precedence.",
+      "validation_scope": "Current complete test-cargo-bench.py passed on Linux ARM64: fixed/input unit replacement, simultaneous counters, CLI/environment overrides, zero byte and Unicode character rates. Numeric extremes use lazy contract previews in test-option-domains.py; no extreme-count workload execution claim."
+    },
+    {
+      "upstream": "bytes_count",
+      "airbug": "work_units(\"bytes\", N); --bytes-count",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_counter_override",
+      "semantics": "CLI/environment global override, u64 including zero.",
+      "programmatic_global_override": "Suite::override_work_units(unit, count) after registration; applies to existing cases, removes only matching dynamic declaration and preserves other counters. CLI is applied later and takes precedence.",
+      "validation_scope": "Current complete test-cargo-bench.py passed on Linux ARM64: fixed/input unit replacement, simultaneous counters, CLI/environment overrides, zero byte and Unicode character rates. Numeric extremes use lazy contract previews in test-option-domains.py; no extreme-count workload execution claim."
+    },
+    {
+      "upstream": "bytes_format",
+      "airbug": "BytesFormat; --bytes-format",
+      "source": "bench/src/report.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_byte_unit_format",
+      "semantics": "Decimal/binary scales; raw observations unchanged.",
+      "validation_scope": "Current complete test-cargo-bench.py passed decimal/binary formatting, throughput.json and zero/character rates; output.json records exact scalar and worker display contracts."
+    },
+    {
+      "upstream": "chars_count",
+      "airbug": "work_units(\"chars\", N); --chars-count",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_counter_override",
+      "semantics": "Characters remain distinct from UTF-8 byte counts.",
+      "programmatic_global_override": "Suite::override_work_units(unit, count) after registration; applies to existing cases, removes only matching dynamic declaration and preserves other counters. CLI is applied later and takes precedence.",
+      "validation_scope": "Current complete test-cargo-bench.py passed on Linux ARM64: fixed/input unit replacement, simultaneous counters, CLI/environment overrides, zero byte and Unicode character rates. Numeric extremes use lazy contract previews in test-option-domains.py; no extreme-count workload execution claim."
+    },
+    {
+      "upstream": "cycles_count",
+      "airbug": "work_units(\"cycles\", N); --cycles-count",
+      "source": "bench/src/suite.rs",
+      "evidence": "bench/scripts/test-cargo-bench.py",
+      "status": "verified_native_counter_override",
+      "semantics": "Cycle throughput is displayed as Hz/kHz/MHz/GHz in shared Markdown/HTML tables; raw machine series retain cycles per second. Parameter chart axes still use cycles/s.",
+      "focused_validation": "report::bit_rate_tests::cycle_throughput_displays_frequency_without_changing_machine_units passed; zero, 999/1000 boundaries, MHz/GHz, unchanged items and raw JSON, Markdown variants and HTML.",
+      "programmatic_global_override": "Suite::override_work_units(unit, count) after registration; applies to existing cases, removes only matching dynamic declaration and preserves other counters. CLI is applied later and takes precedence.",
+      "validation_scope": "Current complete test-cargo-bench.py passed on Linux ARM64: fixed/input unit replacement, simultaneous counters, CLI/environment overrides, zero byte and Unicode character rates. Numeric extremes use lazy contract previews in test-option-domains.py; no extreme-count workload execution claim."
+    }
+  ],
+  "remaining": [
+    "Per-option domains and lifecycle differences remain tracked in numeric-domains.json and thread-sampling.json.",
+    "Counter numeric domains are recorded in numeric-domains.json; unit presentation and override semantics are recorded in output.json and divan-counters.json. Actual visual acceptance remains open.",
+    "Platform and visual verification remain incomplete."
+  ],
+  "selection_semantic_audit": {
+    "sources": [
+      "divan-0.1.21/src/divan.rs:63-92",
+      "divan-0.1.21/src/divan.rs:563-644",
+      "divan-0.1.21/src/config/filter.rs::FilterSet::is_match",
+      "bench/src/convenience.rs::Selection::matches"
+    ],
+    "contracts": [
+      "Empty positive filter set selects all eligible cases. Positive filters form a union; any matching exclusion wins.",
+      "Exact exclusions match full identity; regex exclusions use regex matching. Repeated exclusions accumulate.",
+      "Ignored cases can be included or isolated. Zero sample/iteration settings continue to disable cases.",
+      "Airbug listing, help and dry-run do not invoke workload, setup or executor; smoke executes one operation per selected worker."
+    ],
+    "native_differences": [
+      "Airbug ordinary filters are substrings; regex matching is explicit. Native paths use slash separators rather than Divan module separators.",
+      "Invalid Airbug regex configuration returns an error before execution; Divan string skip_regex panics on invalid regex.",
+      "Pinned Divan list_benches calls run_action(Action::Test), despite its list documentation. Airbug preserves nonexecuting list behavior; it does not reproduce this implementation anomaly.",
+      "Divan empty selection returns silently; Airbug measurement reports an actionable error, while list and dry-run accept an empty selection."
+    ],
+    "validation": "test-selection.py passed real Cargo positional/repeated/mixed selectors, exact/glob/regex unions, exclusions, lazy invalid/empty selection, smoke/measurement execution count, concise/full help and default-statistics artifacts.",
+    "additional_evidence": [
+      "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
+      "bench/tests/attributes.rs::zero_sampling_disables_cases_and_child_values_can_enable_them",
+      "bench/tests/attributes.rs::smoke_mode_executes_each_case_once_and_preserves_correctness_checks"
+    ]
+  },
+  "time_budget_semantic_audit": {
+    "source": "divan-0.1.21/src/benchmark/mod.rs:623-812 (pinned local source)",
+    "verified": [
+      "Maximum takes precedence over minimum; calibration and warmup consume the budget.",
+      "Zero maximum disables work even with include-ignored; a positive override reenables selection.",
+      "Measured-only accounting charges at least 1 ns per workload call. Zero raw observations remain zero and a run note explains the accounting floor."
+    ],
+    "native_differences": [
+      "Airbug full-work accounting sums workload call wall times, including their setup/drop. Divan accounts initial start through latest sample end, also including intervening coordination.",
+      "Airbug stores nanoseconds; Divan uses picoseconds. Threaded Airbug samples sum slowest wave durations; Divan uses the slowest whole-worker sample. See thread-sampling.json.",
+      "The 1 ns floor guarantees budget progress, not fast completion for arbitrarily large minimum times."
+    ],
+    "tests": [
+      "contracts::zero_duration_measured_budgets_make_progress_without_changing_observations",
+      "contracts::zero_maximum_time_disables_work_and_positive_override_reenables_it",
+      "contracts::calibration_and_warmup_consume_the_time_budget",
+      "contracts::time_budget_distinguishes_reported_intervals_from_full_workload_calls"
+    ],
+    "validation": "69 contract tests and 68 attribute tests passed; all-target/all-feature Clippy passed for airbug-bench and cargo-airbug-bench."
+  },
+  "action_dispatch_semantic_audit": {
+    "upstream_sources": [
+      "divan-0.1.21/src/divan.rs:59-78",
+      "divan-0.1.21/src/divan.rs:448-469",
+      "divan-0.1.21/src/benchmark/mod.rs:503-507"
+    ],
+    "verified": "Divan main dispatches configured action; Cargo without --bench selects test, --test selects test, --list selects listing. BenchMode::Test uses sample size 1. Airbug external harness reproduces Cargo smoke/measurement distinction in debug and release, selection and lazy listing, and explicit process-runner measurement.",
+    "native_difference": "Airbug returns structured Run through programmatic test_selected/run_selected; its nonexecuting list_selected follows listing intent rather than the pinned Divan list_benches Action::Test implementation anomaly.",
+    "log": ".airbug/validation/parity-current/entrypoint-audit-linux.log",
+    "sha256": "35a6d11d5550c4ddc95c647f0be03da191f2ecb557829c27f30b7b1fc5eca101",
+    "remaining": "This verifies action dispatch and smoke operation counts; it does not close all configuration-precedence rows."
+  },
+  "latest_configuration_validation": {
+    "script": "bench/scripts/test-cargo-bench.py",
+    "exit_code": 0,
+    "platform": "Linux ARM64",
+    "log": ".airbug/validation/parity-current/cargo-precedence-linux-current.log",
+    "sha256": "8188a5ebbdcdbd3564631a06d562cf379208a7defb4d51ea74b22ac5f4527f6b",
+    "corrected_stale_expectations": [
+      "Occupied output paths are rejected before workload or history mutation, including profiling.",
+      "Zero maximum time disables cases and produces no observations."
+    ],
+    "limits": "Native field precedence and Cargo behavior verified; no API signature compatibility or visual/platform-wide equivalence claim."
+  }
+}

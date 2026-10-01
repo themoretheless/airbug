@@ -59,6 +59,9 @@ impl SortOrder {
 #[derive(Default, Clone, Debug)]
 pub struct Selection {
     pub pattern: String,
+    /// Alternative inclusive patterns (OR). When nonempty, replaces `pattern`.
+    /// Uses the same substring/exact/glob mode; exclusions still win.
+    pub patterns: Vec<String>,
     pub sort: SortOrder,
     pub reverse: bool,
     pub exact: bool,
@@ -82,6 +85,15 @@ impl Selection {
         self.validate()?;
         Ok(self)
     }
+    /// Match any of these regular expressions, compiling all before execution.
+    pub fn with_regexes(mut self, patterns: &[&str]) -> Result<Self> {
+        self.regex = Some(
+            regex_automata::meta::Regex::new_many(patterns)
+                .map_err(|e| error(format!("invalid benchmark regex: {e}")))?,
+        );
+        self.validate()?;
+        Ok(self)
+    }
     pub fn skip_regex(&mut self, pattern: &str) -> Result<&mut Self> {
         self.exclude_regex.push(
             regex_automata::meta::Regex::new(pattern)
@@ -98,14 +110,21 @@ impl Selection {
         Ok(())
     }
     pub fn matches(&self, c: &Case) -> bool {
+        let match_pattern = |pattern: &str| {
+            if self.exact {
+                c.id == pattern
+            } else if self.glob {
+                glob(pattern, &c.id)
+            } else {
+                c.id.contains(pattern)
+            }
+        };
         let matches = if let Some(regex) = &self.regex {
             regex.is_match(&c.id)
-        } else if self.exact {
-            c.id == self.pattern
-        } else if self.glob {
-            glob(&self.pattern, &c.id)
+        } else if self.patterns.is_empty() {
+            match_pattern(&self.pattern)
         } else {
-            c.id.contains(&self.pattern)
+            self.patterns.iter().any(|pattern| match_pattern(pattern))
         };
         let ignored = c
             .contract
@@ -175,6 +194,7 @@ impl<T> Fixture<T> {
     }
 }
 /// Reproducible SplitMix64 generator. Not cryptographic; seed=0 is valid.
+#[derive(Clone)]
 pub struct Seeded {
     state: u64,
 }

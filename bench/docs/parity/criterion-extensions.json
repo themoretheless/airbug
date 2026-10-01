@@ -1,0 +1,216 @@
+{
+  "upstream": "Criterion 0.8.2",
+  "status": "source_mapping_with_existing_runtime_evidence",
+  "traits": [
+    {
+      "trait": "ValueFormatter",
+      "file": "src/measurement.rs",
+      "start": 19,
+      "end": 63,
+      "members": [
+        {
+          "kind": "fn",
+          "upstream": "format_value",
+          "line": 21,
+          "airbug": "measurement::ValueFormatter::format_value"
+        },
+        {
+          "kind": "fn",
+          "upstream": "format_throughput",
+          "line": 29,
+          "airbug": "measurement::ValueFormatter::format_throughput"
+        },
+        {
+          "kind": "fn",
+          "upstream": "scale_values",
+          "line": 41,
+          "airbug": "measurement::ValueFormatter::scale_values"
+        },
+        {
+          "kind": "fn",
+          "upstream": "scale_throughputs",
+          "line": 50,
+          "airbug": "measurement::ValueFormatter::scale_throughputs"
+        },
+        {
+          "kind": "fn",
+          "upstream": "scale_for_machines",
+          "line": 62,
+          "airbug": "measurement::ValueFormatter::scale_for_machines"
+        }
+      ]
+    },
+    {
+      "trait": "Measurement",
+      "file": "src/measurement.rs",
+      "start": 73,
+      "end": 101,
+      "members": [
+        {
+          "kind": "type",
+          "upstream": "Intermediate",
+          "line": 77,
+          "airbug": "measurement::Measurement::Start"
+        },
+        {
+          "kind": "type",
+          "upstream": "Value",
+          "line": 81,
+          "airbug": "measurement::Measurement::Value"
+        },
+        {
+          "kind": "fn",
+          "upstream": "start",
+          "line": 84,
+          "airbug": "measurement::Measurement::start"
+        },
+        {
+          "kind": "fn",
+          "upstream": "end",
+          "line": 87,
+          "airbug": "measurement::Measurement::end"
+        },
+        {
+          "kind": "fn",
+          "upstream": "add",
+          "line": 91,
+          "airbug": "measurement::Measurement::add"
+        },
+        {
+          "kind": "fn",
+          "upstream": "zero",
+          "line": 94,
+          "airbug": "measurement::Measurement::zero"
+        },
+        {
+          "kind": "fn",
+          "upstream": "to_f64",
+          "line": 97,
+          "airbug": "measurement::Measurement::to_f64"
+        },
+        {
+          "kind": "fn",
+          "upstream": "formatter",
+          "line": 100,
+          "airbug": "Suite::formatter or formatter attribute, registered separately from Measurement"
+        }
+      ]
+    },
+    {
+      "trait": "AsyncExecutor",
+      "file": "src/async_executor.rs",
+      "start": 19,
+      "end": 22,
+      "members": [
+        {
+          "kind": "fn",
+          "upstream": "block_on",
+          "line": 21,
+          "airbug": "workloads::Executor::block_on"
+        }
+      ]
+    },
+    {
+      "trait": "Profiler",
+      "file": "src/profiler.rs",
+      "start": 9,
+      "end": 19,
+      "members": [
+        {
+          "kind": "fn",
+          "upstream": "start_profiling",
+          "line": 13,
+          "airbug": "profiling::Profiler::start"
+        },
+        {
+          "kind": "fn",
+          "upstream": "stop_profiling",
+          "line": 18,
+          "airbug": "profiling::Profiler::stop"
+        }
+      ]
+    }
+  ],
+  "differences": [
+    "Measurement uses mutable start/end and Result for fallible hooks; add consumes values instead of borrowing",
+    "Formatter is registered separately; text callbacks receive already scaled values and a unit",
+    "Owned formatter units and fallible conversions replace static strings and in-place slices",
+    "Custom metric observations must be finite nonnegative batch totals",
+    "Executor receives &mut self; futures may borrow local non-Send state",
+    "Profiler hooks can return errors; selected cases receive artifact directories; deadline uses wall time"
+  ],
+  "evidence": [
+    "bench/tests/measurements.rs: 22 all-feature integration tests passed on macOS",
+    "bench/tests/executors.rs: 8 all-feature and 2 no-default-feature integration tests passed on macOS",
+    "bench/tests/profiling.rs: 4 all-feature integration tests passed on macOS",
+    "bench/docs/parity/features.json: optional executor feature combinations"
+  ],
+  "remaining": [
+    "Full graph/report-entrypoint formatter semantics and visual inspection",
+    "All-feature gates do not establish every possible user-defined extension combination"
+  ],
+  "profiler_semantic_audit": {
+    "status": "verified_native_equivalent",
+    "upstream_sources": [
+      "criterion-0.8.2/src/profiler.rs:9-19",
+      "criterion-0.8.2/src/routine.rs:31-80"
+    ],
+    "contracts": [
+      "Hooks are profiling-only, bracket measured execution and receive the same benchmark ID and artifact directory",
+      "ExternalProfiler is a no-op default",
+      "Profile mode runs for a requested duration without normal statistical sampling"
+    ],
+    "native_differences": [
+      "Criterion uses one-second warmup then estimates one remaining batch. Airbug adapts batches against a wall-clock deadline; cancellation remains cooperative between batches.",
+      "Airbug fallible hooks and unwind handling attempt stop after attempted start, preserve both primary/cleanup errors, and restore the profiler for subsequent sessions."
+    ],
+    "evidence": [
+      "timed_profile_uses_wall_time_and_brackets_only_selected_work",
+      "ordinary_benchmark_does_not_invoke_profiler_hooks",
+      "hooks_stop_after_start_error_work_panic_and_stop_panic",
+      "panicking_profiler_start_is_stopped_and_restored_for_the_next_session"
+    ],
+    "validation": "All four profiling integration tests passed with --offline --locked --all-features"
+  },
+  "executor_semantic_audit": {
+    "status": "verified_on_current_host",
+    "upstream_source": "criterion-0.8.2/src/async_executor.rs",
+    "coverage": [
+      "Futures and Smol adapters",
+      "Tokio owned/borrowed Runtime and owned/borrowed Handle",
+      "Completion and return-value propagation through Pending/wake",
+      "Non-Send local future and output; custom executor with borrowed mutable state and borrowed return value",
+      "Smol/Tokio timers, spawned tasks and Unix I/O reactor execution",
+      "Runtime factory construction is lazy and runtime reused across samples"
+    ],
+    "native_difference": "Executor takes &mut self instead of &self; blanket implementation supports &mut E. This permits mutable state without interior mutability. Tokio current-thread Handle still requires its runtime to be driven, as documented.",
+    "validation": "Eight all-feature executor integration tests passed on macOS. Windows-specific I/O and runtime remain under platform acceptance."
+  },
+  "measurement_semantic_audit": {
+    "status": "verified_for_finite_nonnegative_batch_totals",
+    "upstream_sources": [
+      "criterion-0.8.2/src/measurement.rs:73-101",
+      "criterion-0.8.2/src/routine.rs:240-278"
+    ],
+    "contracts": [
+      "Typed intermediate and accumulated values need no Clone bound in Airbug",
+      "Fresh-input setup runs outside measurement; zero/add accumulate batch values before conversion to f64",
+      "Custom metric totals remain separate from elapsed wall time and are normalized by operation count",
+      "Sync and async measurement preserve selected input/output destruction boundaries",
+      "Conversion failures clear the sample capture and cannot reuse the previous successful value"
+    ],
+    "native_differences": [
+      "Hooks are fallible and start/end take mutable self; add consumes values rather than borrowing them",
+      "Formatter registration is separate from the Measurement implementation",
+      "Airbug requires finite nonnegative totals. Criterion Measurement and sampling code impose no explicit sign check. End-to-end support for signed custom measurements in Criterion has not been established; unrestricted numeric-domain equivalence is not claimed."
+    ],
+    "evidence": [
+      "typed_measurement_accumulates_waves_separately_from_wall_clock",
+      "caller_defined_typed_totals_support_sync_async_and_keep_wall_separate",
+      "measured_fresh_inputs_exclude_setup_and_input_drop_and_control_output_drop",
+      "async_owned_measurements_preserve_destruction_boundaries",
+      "manual_conversion_failure_never_reuses_a_previous_sample"
+    ],
+    "validation": "cargo test --offline --locked -p airbug-bench --all-features --test measurements: 22 passed, 0 failed"
+  }
+}

@@ -181,3 +181,39 @@ fn smol_executor_drives_os_io() {
     });
     assert_eq!(&bytes, b"data");
 }
+
+#[test]
+fn custom_executor_preserves_borrowed_future_output_and_mutable_state() {
+    struct Counting<'a>(&'a mut usize);
+    impl Executor for Counting<'_> {
+        fn block_on<F: std::future::Future>(&mut self, future: F) -> F::Output {
+            *self.0 += 1;
+            LocalExecutor.block_on(future)
+        }
+    }
+    let mut calls = 0;
+    let mut value = 3;
+    let local = Rc::new(4);
+    {
+        let mut executor = Counting(&mut calls);
+        let result = executor.block_on(async {
+            let mut pending = true;
+            poll_fn(|cx| {
+                if std::mem::take(&mut pending) {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            })
+            .await;
+            value += *local;
+            &mut value
+        });
+        *result += 2;
+        assert_eq!(executor.block_on(async { &value }), &9);
+    }
+    assert_eq!(calls, 2);
+    assert_eq!(value, 9);
+    assert_eq!(Rc::strong_count(&local), 1);
+}

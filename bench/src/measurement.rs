@@ -22,8 +22,16 @@ pub struct FormattedValues {
     pub unit: String,
 }
 
-/// User-defined presentation. Values supplied here are normalized per operation.
-/// A shared typical value allows multiple series to use consistent display units.
+/// Images of closed intervals in one shared display unit.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct FormattedIntervals {
+    pub bounds: Vec<[f64; 2]>,
+    pub unit: String,
+}
+
+/// User-defined presentation. Observation tables use values normalized per operation.
+/// Statistical reports also supply estimates, deviations, outlier fences and regression
+/// totals. A shared typical value lets related series use consistent display units.
 pub trait ValueFormatter {
     /// Optional human text for an already scaled value. None keeps numeric rendering.
     /// The unit and number remain available separately for charts and machine consumers.
@@ -34,7 +42,29 @@ pub trait ValueFormatter {
     fn format_throughput(&self, value: f64, unit: &str) -> Result<Option<String>> {
         self.format_value(value, unit)
     }
+    /// Convert values to a shared display unit, preserving input order and length.
+    /// Linear conversions change statistical report units directly. Increasing
+    /// nonlinear/offset transforms produce a separate labelled display while raw
+    /// statistics retain their units. Its standard errors require retained bootstrap
+    /// draws. Nonlinear regression plots transform the model curve and its bounds.
+    /// Observation-only formatting and throughput have separate validation rules.
     fn scale_values(&self, typical: f64, values: &[f64]) -> Result<FormattedValues>;
+    /// Optional bounds for the image of each closed interval under `scale_values`.
+    /// Return one finite ordered [minimum, maximum] pair per input, in the same
+    /// unit selected by `scale_values` for this typical value. Include interior
+    /// extrema, not only endpoint images. The implementor guarantees containment
+    /// for every value in each interval; finite sampling cannot prove it.
+    ///
+    /// Regression plots use these bounds when supplied. None uses endpoint images
+    /// and requires a monotone transform over the full regression domain.
+    fn scale_intervals(
+        &self,
+        _typical: f64,
+        _intervals: &[[f64; 2]],
+    ) -> Result<Option<FormattedIntervals>> {
+        Ok(None)
+    }
+
     fn scale_throughputs(
         &self,
         typical: f64,
@@ -197,7 +227,10 @@ pub fn format_observations(
     };
     if scaled.values.len() != values.len()
         || scaled.unit.is_empty()
-        || scaled.values.iter().any(|v| !v.is_finite() || *v < 0.0)
+        || scaled
+            .values
+            .iter()
+            .any(|v| !v.is_finite() || (*v < 0.0 && !matches!(format, Format::Human)))
     {
         return Err(crate::error(
             "formatter returned invalid values, unit or observation count",
@@ -294,6 +327,87 @@ pub fn report_csv(metrics: &[FormattedMetric]) -> String {
         }
     }
     output
+}
+
+/// Machine-formatted CSV enriched from the validated source run. Older saved
+/// formatter snapshots need no migration: operations and contracts come from raw
+/// observations, never from the current benchmark registration. `value` remains
+/// formatter-scaled per-operation data for batch totals; `raw_value` is unchanged.
+pub fn saved_report_csv(run: &crate::Run) -> Result<String> {
+    run.validate()?;
+    let metrics = load_formatted(run)?;
+    let mut output = String::from(
+        "case,metric,variant,process,sequence,value,unit,normalized_per_operation,unavailable_reason,operations,pair,raw_value,raw_unit,case_contract,work_totals,worker_work_totals\n",
+    );
+    let wall: std::collections::BTreeMap<_, _> = run
+        .observations
+        .iter()
+        .filter(|observation| observation.metric == "wall")
+        .map(|observation| {
+            (
+                (
+                    observation.case.as_str(),
+                    observation.variant.as_str(),
+                    observation.process,
+                    observation.pair,
+                    observation.sequence,
+                    observation.operations,
+                ),
+                observation,
+            )
+        })
+        .collect();
+    for metric in metrics {
+        let case = run
+            .cases
+            .iter()
+            .find(|case| case.id == metric.case)
+            .unwrap();
+        let observations = run.observations.iter().filter(|observation| {
+            observation.case == metric.case && observation.metric == metric.metric.id
+        });
+        // load_formatted validates the count and identity of every row in order.
+        for (row, raw) in metric.machine.iter().zip(observations) {
+            let work = wall
+                .get(&(
+                    raw.case.as_str(),
+                    raw.variant.as_str(),
+                    raw.process,
+                    raw.pair,
+                    raw.sequence,
+                    raw.operations,
+                ))
+                .copied()
+                .unwrap_or(raw);
+            let fields = [
+                metric.case.clone(),
+                metric.metric.id.clone(),
+                row.variant.clone(),
+                row.process.to_string(),
+                row.sequence.to_string(),
+                row.value.map(|value| value.to_string()).unwrap_or_default(),
+                row.unit.clone(),
+                (metric.metric.statistic == "batch_total").to_string(),
+                row.unavailable_reason.clone().unwrap_or_default(),
+                raw.operations.to_string(),
+                raw.pair.map(|pair| pair.to_string()).unwrap_or_default(),
+                raw.value.clone().unwrap_or_default(),
+                metric.metric.unit.clone(),
+                serde_json::to_string(&case.contract)?,
+                serde_json::to_string(&work.work_totals)?,
+                serde_json::to_string(&work.worker_work_totals)?,
+            ];
+            output.push_str(
+                &fields
+                    .iter()
+                    .map(|value| format!("\"{}\"", value.replace('"', "\"\"")))
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
+            output.push('\n');
+        }
+    }
+    Ok(output)
 }
 
 pub fn report_markdown(metrics: &[FormattedMetric]) -> String {
@@ -428,9 +542,14 @@ pub fn load_formatted(run: &crate::Run) -> Result<Vec<FormattedMetric>> {
                 "saved throughput formatting is stale: input work observations changed",
             ));
         }
-        for rows in [&formatted.human, &formatted.machine]
+        for (rows, allow_negative) in [(&formatted.human, true), (&formatted.machine, false)]
             .into_iter()
-            .chain(formatted.throughput.values().map(|t| &t.observations))
+            .chain(
+                formatted
+                    .throughput
+                    .values()
+                    .map(|t| (&t.observations, false)),
+            )
         {
             if rows.len() != observations.len() {
                 return Err(crate::error("saved formatting row count mismatch"));
@@ -442,7 +561,9 @@ pub fn load_formatted(run: &crate::Run) -> Result<Vec<FormattedMetric>> {
                     || row.unit.is_empty()
                     || (row.value.is_none() && row.display.is_some())
                     || row.value.is_some() != observation.number()?.is_some()
-                    || row.value.is_some_and(|v| !v.is_finite() || v < 0.0)
+                    || row
+                        .value
+                        .is_some_and(|v| !v.is_finite() || (v < 0.0 && !allow_negative))
                 {
                     return Err(crate::error("invalid saved formatting row"));
                 }
@@ -522,18 +643,18 @@ pub fn charts(run: &crate::Run) -> Result<String> {
         output.push_str(&formatted_chart_rows(
             &format!("{title} — formatted observations"),
             &metric.human,
-        ));
+        )?);
         for (counter, throughput) in &metric.throughput {
             output.push_str(&formatted_chart_rows(
                 &format!("{title} — formatted throughput: {counter}"),
                 &throughput.observations,
-            ));
+            )?);
         }
     }
     Ok(output)
 }
 
-fn formatted_chart_rows(title: &str, rows: &[FormattedObservation]) -> String {
+fn formatted_chart_rows(title: &str, rows: &[FormattedObservation]) -> Result<String> {
     let mut groups: std::collections::BTreeMap<
         String,
         std::collections::BTreeMap<String, Vec<(f64, f64)>>,
@@ -558,8 +679,33 @@ fn formatted_chart_rows(title: &str, rows: &[FormattedObservation]) -> String {
             &format!("{title} ({unit})"), &series, 1000,
             "Saved formatter output; X is sequence within each process. Missing values are not plotted. At most 1000 points per series; run.json retains all saved rows. These are descriptive observations, not confidence intervals.",
         ));
+        output.push_str(&formatted_distribution(title, &unit, &series)?);
     }
-    output
+    Ok(output)
+}
+
+fn formatted_distribution(
+    title: &str,
+    unit: &str,
+    series: &[crate::viz::charts::Series],
+) -> Result<String> {
+    let values: Vec<Vec<f64>> = series
+        .iter()
+        .map(|series| series.points.iter().map(|(_, value)| *value).collect())
+        .collect();
+    let populations: Vec<_> = series
+        .iter()
+        .zip(&values)
+        .map(|(series, values)| crate::density::Series {
+            label: &series.label,
+            values,
+        })
+        .collect();
+    crate::density::figure_with_outliers(
+        &populations,
+        &format!("{title} — distribution ({unit})"),
+        unit,
+    )
 }
 
 /// Reformat compatible independent runs together so baseline and candidate use
@@ -584,7 +730,100 @@ pub fn format_comparison(
         allocation.variant = "baseline".into();
         combined.worker_allocations.push(allocation);
     }
+    for allocation in &baseline.worker_timings {
+        let mut allocation = allocation.clone();
+        allocation.variant = "baseline".into();
+        combined.worker_timings.push(allocation);
+    }
     format_observations(&combined, case, metric, formatter, format)
+}
+
+/// Relative changes in a formatter's fixed-work throughput of mean/median
+/// measurement. Original sampling units are resampled first; the formatter then
+/// transforms each statistic pair on one shared scale. This is not the mean of
+/// per-observation rates and makes no reciprocal/linear assumption about callbacks.
+pub fn relative_throughput(
+    baseline: &crate::Run,
+    candidate: &crate::Run,
+    case: &str,
+    metric: &str,
+    formatter: &dyn ValueFormatter,
+    config: &crate::bootstrap::Config,
+) -> Result<Vec<crate::relative::ThroughputChange>> {
+    config.validate()?;
+    crate::analysis::validate_comparison(baseline, Some(candidate), 0., 0.05)?;
+    let case = candidate
+        .cases
+        .iter()
+        .find(|c| c.id == case)
+        .ok_or_else(|| crate::error("unknown comparison case"))?;
+    let metric = case
+        .metrics
+        .iter()
+        .find(|m| m.id == metric)
+        .ok_or_else(|| crate::error("unknown comparison metric"))?;
+    let samples = crate::relative::comparison_samples(baseline, candidate, &case.id, metric);
+    let mut result = Vec::new();
+    for (unit, count) in crate::report::work_counters(case)? {
+        let mut output_unit = None;
+        let report = match (count, &samples) {
+            (Some(work), Ok((before, after, _))) if work > 0 => {
+                let typical = before.iter().chain(after).copied().fold(0., f64::max);
+                crate::relative::bootstrap_by(before, after, config, |before, after, scale| {
+                    let rates = formatter.scale_throughputs(
+                        typical,
+                        work as f64,
+                        unit,
+                        &[before * scale, after * scale],
+                    )?;
+                    if rates.values.len() != 2 || rates.unit.is_empty() {
+                        return Err(crate::error(
+                            "relative throughput formatter returned invalid count or unit",
+                        ));
+                    }
+                    if output_unit.as_ref().is_some_and(|unit| *unit != rates.unit) {
+                        return Err(crate::error(
+                            "relative throughput formatter changed units across resamples",
+                        ));
+                    }
+                    output_unit = Some(rates.unit);
+                    let before = rates.values[0];
+                    let after = rates.values[1];
+                    if !before.is_finite() || !after.is_finite() || before <= 0. || after < 0. {
+                        return Ok(None);
+                    }
+                    let change = (after / before - 1.) * 100.;
+                    Ok(change.is_finite().then_some(change))
+                })
+            }
+            (None, _) => Err(crate::error(
+                "Dynamic work requires a paired throughput comparison",
+            )),
+            (Some(0), _) => Err(crate::error(
+                "Zero work has no defined relative throughput change",
+            )),
+            (_, Err(reason)) => Err(crate::error(reason.to_string())),
+            _ => unreachable!(),
+        };
+        let method = Some("Fixed work: formatter applied to each resampled mean/median measurement pair on a shared scale; percentile interval of resulting rate changes, not a mean of per-observation rates. Positive means higher throughput.".into());
+        for (name, statistic) in [
+            ("mean", report.as_ref().ok().map(|r| &r.mean)),
+            ("median", report.as_ref().ok().map(|r| &r.median)),
+        ] {
+            result.push(crate::relative::ThroughputChange {
+                method: method.clone(),
+                unit: output_unit.clone().unwrap_or_else(|| unit.to_owned()),
+                statistic: name.into(),
+                point_percent: statistic.and_then(|s| s.point_percent),
+                interval_percent: statistic.and_then(|s| s.interval_percent),
+                unavailable_reason: match &report {
+                    Err(reason) => Some(reason.to_string()),
+                    Ok(_) => statistic.and_then(|s| s.unavailable_reason.clone()),
+                },
+            });
+        }
+    }
+    Ok(result)
 }
 
 /// Compare observations in a unit chosen from both raw populations.
@@ -597,7 +836,7 @@ pub fn comparison_chart(
 ) -> Result<String> {
     let rows = format_comparison(baseline, candidate, case, metric, formatter, Format::Human)?;
     let mut output =
-        comparison_rows_chart(&format!("{case} / {metric} — formatted comparison"), &rows);
+        comparison_rows_chart(&format!("{case} / {metric} — formatted comparison"), &rows)?;
     let case_contract = candidate
         .cases
         .iter()
@@ -615,12 +854,12 @@ pub fn comparison_chart(
         output.push_str(&comparison_rows_chart(
             &format!("{case} / {metric} — formatted throughput comparison: {counter}"),
             &rows,
-        ));
+        )?);
     }
     Ok(output)
 }
 
-fn comparison_rows_chart(title: &str, rows: &[FormattedObservation]) -> String {
+fn comparison_rows_chart(title: &str, rows: &[FormattedObservation]) -> Result<String> {
     let unit = rows
         .first()
         .map(|r| r.unit.as_str())
@@ -638,18 +877,151 @@ fn comparison_rows_chart(title: &str, rows: &[FormattedObservation]) -> String {
         .into_iter()
         .map(|(label, points)| crate::viz::charts::Series::new(label, points))
         .collect();
-    crate::viz::charts::scatter(
+    let mut output = crate::viz::charts::scatter(
         &format!("{title} ({unit})"),
         &series,
         1000,
         "One formatter scale selected from both raw populations. X is sequence within each process, not a paired measurement. Missing values omitted; at most 1000 points per series.",
-    )
+    );
+    output.push_str(&formatted_distribution(title, unit, &series)?);
+    Ok(output)
+}
+
+/// Compare original process fits through one shared formatter invocation per variant.
+/// Callers validate run comparability before analysis; metric contracts are checked
+/// here as well. Process identities include their side, so matching IDs stay separate.
+pub fn regression_comparison_chart(
+    baseline: &crate::bootstrap::Report,
+    candidate: &crate::bootstrap::Report,
+    case: &str,
+    metric: &Metric,
+    formatter: &dyn ValueFormatter,
+) -> Result<String> {
+    let mut output = String::new();
+    for (title, presentation) in
+        regression_comparison_presentations(baseline, candidate, case, metric, formatter)?
+    {
+        output.push_str(&format!("<p>Original slope confidence levels: baseline {}, candidate {}. Each curve transforms its own process fit and confidence bounds.</p>",
+            baseline.config_for_case(case).confidence_level, candidate.config_for_case(case).confidence_level));
+        output.push_str(&presentation.figure(&title)?);
+    }
+    Ok(output)
+}
+
+pub(crate) fn regression_comparison_presentations(
+    baseline: &crate::bootstrap::Report,
+    candidate: &crate::bootstrap::Report,
+    case: &str,
+    metric: &Metric,
+    formatter: &dyn ValueFormatter,
+) -> Result<Vec<(String, crate::regression::ComparisonPresentation)>> {
+    let mut output = Vec::new();
+    for row in candidate
+        .rows
+        .iter()
+        .filter(|r| r.case == case && r.metric == metric.id)
+    {
+        let Some(old) = baseline
+            .rows
+            .iter()
+            .find(|r| r.case == case && r.metric == metric.id && r.variant == row.variant)
+        else {
+            continue;
+        };
+        if old.metric_contract.as_ref() != Some(metric)
+            || row.metric_contract.as_ref() != Some(metric)
+            || old.unit != metric.unit
+            || row.unit != metric.unit
+        {
+            return Err(crate::error(
+                "regression comparison metric contracts differ",
+            ));
+        }
+        if old.regressions.is_empty() || row.regressions.is_empty() {
+            continue;
+        }
+        let labeled: Vec<_> = [("baseline", old), ("candidate", row)]
+            .into_iter()
+            .flat_map(|(side, row)| {
+                row.regressions
+                    .iter()
+                    .map(move |r| (format!("{side} process {}", r.process), r))
+            })
+            .collect();
+        let series: Vec<_> = labeled
+            .iter()
+            .map(|(label, r)| crate::regression::Series {
+                label,
+                samples: &r.samples,
+                fit: &r.fit,
+            })
+            .collect();
+        output.push((
+            format!(
+                "{case} / {} / {} — formatted regression comparison",
+                metric.id, row.variant
+            ),
+            crate::regression::ComparisonPresentation::new(&series, formatter)?,
+        ));
+    }
+    Ok(output)
+}
+
+/// Attach saved display coordinates to the selected metric's regression plots.
+/// All process curves share a formatter scale. Tables, slope distributions and
+/// raw estimates retain their original units; only regression geometry changes.
+/// The result can be serialized and rendered with `bootstrap::html` after reload.
+pub fn format_regression_metric(
+    report: &crate::bootstrap::Report,
+    case: &str,
+    metric: &Metric,
+    formatter: &dyn ValueFormatter,
+) -> Result<crate::bootstrap::Report> {
+    let mut result = report.clone();
+    result
+        .rows
+        .retain(|row| row.case == case && row.metric == metric.id);
+    result
+        .presentation
+        .retain(|entry| entry.case == case && entry.metric == metric.id);
+    if result
+        .rows
+        .iter()
+        .any(|row| row.metric_contract.as_ref() != Some(metric))
+    {
+        return Err(crate::error(
+            "formatter metric contract differs from bootstrap report",
+        ));
+    }
+    let series: Vec<_> = result
+        .rows
+        .iter()
+        .flat_map(|row| row.regressions.iter())
+        .map(|r| crate::regression::Series {
+            label: "process",
+            samples: &r.samples,
+            fit: &r.fit,
+        })
+        .collect();
+    if series.is_empty() {
+        return Ok(result);
+    }
+    let presentations = crate::regression::format_series(&series, formatter)?;
+    for (regression, presentation) in result
+        .rows
+        .iter_mut()
+        .flat_map(|row| &mut row.regressions)
+        .zip(presentations)
+    {
+        regression.presentation = Some(presentation);
+    }
+    Ok(result)
 }
 
 /// Format absolute bootstrap estimates and retained draws on one shared scale.
-/// Outlier values and fences share the estimate scale; original classifications are
-/// retained. Regression totals, slopes and slope draws use the same positive linear
-/// unit conversion; operation counts and dimensionless fit quality stay unchanged.
+/// Linear conversions change estimate, outlier and regression units together.
+/// Increasing nonlinear conversions attach a separate display of each statistic
+/// and regression model; raw estimates and classifications keep original units.
 /// The original report is unchanged.
 pub fn format_bootstrap_metric(
     report: &crate::bootstrap::Report,
@@ -658,6 +1030,7 @@ pub fn format_bootstrap_metric(
     formatter: &dyn ValueFormatter,
 ) -> Result<crate::bootstrap::Report> {
     let mut result = report.clone();
+    result.presentation.clear();
     result
         .rows
         .retain(|row| row.case == case && row.metric == metric.id);
@@ -670,6 +1043,7 @@ pub fn format_bootstrap_metric(
             "formatter metric contract differs from bootstrap report",
         ));
     }
+    let raw_rows = result.rows.clone();
     let typical = result
         .rows
         .iter()
@@ -677,7 +1051,6 @@ pub fn format_bootstrap_metric(
         .map(|estimates| estimates.mean.point)
         .fold(0.0f64, f64::max);
     let mut references = Vec::new();
-    let mut signed_positions = Vec::new();
     for row in &mut result.rows {
         if let Some(estimates) = &mut row.estimates {
             for estimate in [
@@ -690,19 +1063,17 @@ pub fn format_bootstrap_metric(
                     &mut estimate.point,
                     &mut estimate.lower,
                     &mut estimate.upper,
-                    &mut estimate.standard_error,
                 ]);
+                references.extend(estimate.standard_error.iter_mut());
             }
             references.extend([&mut estimates.minimum, &mut estimates.maximum]);
         }
         for regression in &mut row.regressions {
+            // These coordinates were bound to the previous units and fit.
+            regression.presentation = None;
             let slope = &mut regression.fit.slope;
-            references.extend([
-                &mut slope.point,
-                &mut slope.lower,
-                &mut slope.upper,
-                &mut slope.standard_error,
-            ]);
+            references.extend([&mut slope.point, &mut slope.lower, &mut slope.upper]);
+            references.extend(slope.standard_error.iter_mut());
             references.extend(
                 regression
                     .samples
@@ -717,7 +1088,6 @@ pub fn format_bootstrap_metric(
             references.extend([&mut outliers.q1, &mut outliers.q3]);
             references.extend(outliers.points.iter_mut().map(|point| &mut point.value));
             for fence in outliers.fences.iter_mut().flatten() {
-                signed_positions.push(references.len());
                 references.push(fence);
             }
         }
@@ -728,43 +1098,50 @@ pub fn format_bootstrap_metric(
             references.extend(draws.median_absolute_deviation.iter_mut());
         }
     }
-    let values: Vec<_> = references.iter().map(|value| **value).collect();
+    let mut values: Vec<_> = references.iter().map(|value| **value).collect();
     if values.is_empty() {
+        for (row, raw) in result.rows.iter_mut().zip(&raw_rows) {
+            row.throughput = format_bootstrap_rates(raw, typical, formatter)?;
+        }
         return Ok(result);
     }
+    // Constant samples alone cannot distinguish a unit conversion from a curve.
+    // Probe intermediate totals as well; formatter order preservation remains a
+    // contract between evaluated points for arbitrary user functions.
+    let anchor = values.iter().copied().fold(0.0f64, f64::max);
+    values.extend([0., anchor * 0.5, anchor * 0.25]);
     let scaled = formatter.scale_values(typical, &values)?;
-    if scaled.values.len() != values.len()
-        || scaled.unit.is_empty()
-        || scaled.values.iter().enumerate().any(|(index, value)| {
-            !value.is_finite() || (*value < 0.0 && !signed_positions.contains(&index))
-        })
-    {
+    if scaled.values.len() != values.len() || scaled.unit.trim().is_empty() {
         return Err(crate::error("invalid bootstrap formatter output"));
     }
-    // Statistical estimates and through-origin fits are valid under a positive
-    // linear unit conversion, not an offset or a nonlinear transformation.
-    if let Some((anchor, converted)) = values
+    // Only a linear change of units may replace the numerical statistics.
+    // Other monotone transforms get a separate, explicitly labelled display.
+    let linear = if let Some((anchor, converted)) = values
         .iter()
         .zip(&scaled.values)
         .filter(|(value, _)| **value > 0.0)
         .max_by(|a, b| a.0.total_cmp(b.0))
     {
-        if *converted <= 0.0
-            || values.iter().zip(&scaled.values).any(|(raw, display)| {
+        *converted > 0.0
+            && values.iter().zip(&scaled.values).all(|(raw, display)| {
                 if *raw == 0.0 {
-                    return *display != 0.0;
+                    return *display == 0.0;
                 }
                 let expected = raw / anchor;
                 let actual = display / converted;
-                !actual.is_finite() || (actual - expected).abs() > 1e-12 * expected.abs()
+                actual.is_finite() && (actual - expected).abs() <= 1e-12 * expected.abs()
             })
-        {
-            return Err(crate::error(
-                "bootstrap formatter must use a positive linear scale",
-            ));
+    } else {
+        scaled.values.iter().all(|value| *value == 0.0)
+    };
+    if !linear {
+        drop(references);
+        result.rows = raw_rows;
+        for row in &mut result.rows {
+            row.throughput = format_bootstrap_rates(row, typical, formatter)?;
         }
-    } else if scaled.values.iter().any(|value| *value != 0.0) {
-        return Err(crate::error("bootstrap formatter must preserve zero"));
+        let result = crate::statistic_format::format(result, formatter)?;
+        return format_regression_metric(&result, case, metric, formatter);
     }
     // A formatter changes units, so observation and fence ordering must survive.
     let mut ordering: Vec<_> = values
@@ -784,7 +1161,8 @@ pub fn format_bootstrap_metric(
     for (destination, value) in references.into_iter().zip(scaled.values) {
         *destination = value;
     }
-    for row in &mut result.rows {
+    for (row, raw) in result.rows.iter_mut().zip(&raw_rows) {
+        row.throughput = format_bootstrap_rates(raw, typical, formatter)?;
         if let Some(estimates) = &row.estimates {
             if [
                 &estimates.mean,
@@ -810,4 +1188,86 @@ pub fn format_bootstrap_metric(
         );
     }
     Ok(result)
+}
+
+fn format_bootstrap_rates(
+    row: &crate::bootstrap::Row,
+    typical: f64,
+    formatter: &dyn ValueFormatter,
+) -> Result<Vec<crate::bootstrap::ThroughputEstimate>> {
+    let mut output = Vec::new();
+    for (unit, count) in &row.work_counters {
+        let mut estimates = vec![
+            (
+                "inverse mean measurement".to_owned(),
+                row.estimates.as_ref().map(|e| &e.mean),
+            ),
+            (
+                "inverse median measurement".to_owned(),
+                row.estimates.as_ref().map(|e| &e.median),
+            ),
+        ];
+        estimates.extend(row.regressions.iter().map(|r| {
+            (
+                format!("inverse slope (process {})", r.process),
+                Some(&r.fit.slope),
+            )
+        }));
+        for (statistic, estimate) in estimates {
+            let mut rate = crate::bootstrap::ThroughputEstimate {
+                statistic,
+                unit: unit.clone(),
+                values: None,
+                display: None,
+                unavailable_reason: None,
+            };
+            match (count, estimate) {
+                (Some(work), Some(estimate))
+                    if [estimate.point, estimate.lower, estimate.upper]
+                        .iter()
+                        .all(|v| v.is_finite() && *v > 0.) =>
+                {
+                    let scaled = formatter.scale_throughputs(
+                        typical,
+                        *work as f64,
+                        unit,
+                        &[estimate.point, estimate.upper, estimate.lower],
+                    )?;
+                    if scaled.values.len() != 3
+                        || scaled.unit.is_empty()
+                        || scaled.values.iter().any(|v| !v.is_finite() || *v < 0.)
+                        || scaled.values[1] > scaled.values[2]
+                    {
+                        return Err(crate::error(
+                            "invalid bootstrap throughput formatter output: expected three finite nonnegative values and ordered bounds",
+                        ));
+                    }
+                    let values = [scaled.values[0], scaled.values[1], scaled.values[2]];
+                    let mut display = values.map(|v| v.to_string());
+                    let mut custom = false;
+                    for (index, value) in values.iter().enumerate() {
+                        if let Some(text) = formatter.format_throughput(*value, &scaled.unit)? {
+                            display[index] = text;
+                            custom = true;
+                        }
+                    }
+                    rate.values = Some(values);
+                    rate.display = custom.then_some(display);
+                    rate.unit = scaled.unit;
+                }
+                (None, _) => {
+                    rate.unavailable_reason =
+                        Some("Dynamic work requires paired throughput analysis.".into())
+                }
+                _ => {
+                    rate.unavailable_reason = Some(
+                        "Throughput requires a positive finite measurement estimate and bounds."
+                            .into(),
+                    )
+                }
+            }
+            output.push(rate);
+        }
+    }
+    Ok(output)
 }

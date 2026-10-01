@@ -1,0 +1,147 @@
+{
+  "status": "partial",
+  "upstream": {
+    "criterion": "0.8.2 src/benchmark_group.rs sample_size/warm_up_time/measurement_time/nresamples",
+    "divan": "0.1.21 src/divan.rs sample_count/sample_size; src/benchmark/mod.rs sample collection"
+  },
+  "sample_count": {
+    "implemented": "Config::samples and Sampling::samples use u64. CLI and attribute paths share this domain. Collection and minimum-time extension no longer stop at 100000. Sequence and collected count are u64, with an explicit terminal check before overflow.",
+    "upstream_ranges": "Criterion setter accepts usize >= 10; Divan setter accepts u32. Airbug supports positive values through u64::MAX. Zero disables execution in Airbug; disabled cases are omitted from selected listings.",
+    "evidence": [
+      "sampling::tests::sample_counts_cover_u64_without_planner_overflow",
+      "sampling::tests::collection_and_minimum_time_can_cross_one_hundred_thousand_samples",
+      "bench/scripts/test-cargo-bench.py sample preview checks: 100001, 2^32, u64::MAX"
+    ],
+    "validation": "All 134 library tests passed (.airbug/runs/d7f70922-f46b-46ac-9892-453d75c76722); Clippy passed for airbug-bench and cargo-airbug-bench all targets. Full Cargo script passed (/tmp/airbug-large-samples-cargo.log). Final builder preview fixture separately passed after addition, verifying Duration::MAX * u64::MAX produces null instead of overflow and never executes workload.",
+    "limits": "Samples remain in memory as observations. Extreme counts verified via planning/preview, not fully collected."
+  },
+  "durations": {
+    "implemented": "Config accepts the full Duration domain. CLI decimal milliseconds and time attributes share an exact nanosecond parser. Attributes accept integer/floating expressions and decimal strings; unsuffixed integer literals and arithmetic retain u64 inference. Negative, nonfinite, sub-nanosecond and overflowing values fail. Preview uses exact decimal strings for fractional/large values; aggregate nanosecond overflow is null.",
+    "evidence": [
+      "sampling::tests::long_durations_validate_and_schedules_remain_bounded",
+      "bench/scripts/test-cargo-bench.py long duration preview checks",
+      "bench/scripts/test-cargo-bench.py builder Duration::MAX and u64::MAX sample preview",
+      "test-measurement-target.py passed after attribute integration: imported group fractional total/sample/warmup/min/max, const f64 expression, string duration, CLI override, u64::MAX literal, untyped 1<<40, Duration::MAX exact string and invalid values rejected before work."
+    ],
+    "zero_maximum": "max_time = 0 disables selection and execution; positive overrides reenable it. Verified by contracts::zero_maximum_time_disables_work_and_positive_override_reenables_it."
+  },
+  "remaining": [
+    "Detailed nonnumeric option and cross-option conflict audit is tracked under configuration.",
+    "Resource boundaries and local/shared worker semantics are covered by threaded_batch_policies in groups.json and thread-sampling.json; differences from Divan caller participation remain documented, not claimed identical."
+  ],
+  "bootstrap_resamples": {
+    "implemented": "Config accepts usize resample counts >= 1 with no one-million ceiling. Absolute estimates, paired regression and relative comparisons reserve distributions fallibly and return an allocation error for impossible capacities. A single draw preserves estimate points, percentile endpoints and retained draws; standard_error is Option<f64> and serializes as null. Regression, custom formatter, Markdown/HTML, old numeric JSON and relative chart explanation are covered.",
+    "evidence": [
+      "bootstrap::tests::resample_counts_above_one_million_and_capacity_errors_are_explicit",
+      "bench/scripts/test-cargo-bench.py large resample lazy preview",
+      "bootstrap::tests::one_resample_preserves_draws_and_marks_standard_error_unavailable"
+    ],
+    "validation": "136 library and 16 measurement tests passed (.airbug/runs/6ca86b9e-1d7c-447c-b41e-1c53c6de339b); all-target Clippy passed. Saved-run analyze test passed (.airbug/runs/12cf396e-7862-41fa-b176-7260ab96f5a7). Full Cargo script passed (/tmp/airbug-single-resample-cargo.log). Final generic unavailable wording and relative explanation passed focused unit and real Cargo artifact checks.",
+    "remaining": "No known positive-usize count gap; wider bootstrap feature coverage is tracked separately in requirements.json."
+  },
+  "hypothesis_resamples": {
+    "implemented": "Any positive usize count, including one and above one million. Monte Carlo +1 correction converts counts before addition, avoiding usize overflow. Retained null distributions reserve fallibly on the first draw; unavailable populations allocate no draw buffer.",
+    "evidence": [
+      "hypothesis::tests::full_resample_domain_keeps_probabilities_and_capacity_errors_explicit",
+      "bench/cli/tests/cli.rs::compare_exports_seeded_null_draws_and_portable_html",
+      "bench/scripts/test-cargo-bench.py one/large hypothesis preview checks"
+    ],
+    "validation": "137 library tests passed (.airbug/runs/e70763b7-39d0-4423-ad86-10e9ead1afa1), including 1000001 actual streaming draws, one retained draw, usize::MAX probability arithmetic and allocation failure. CLI compare export passed (.airbug/runs/4b6bbc01-71dc-43b8-8c36-c4029aa0753f), including one retained draw and p=1 for identical populations. All-target Clippy and focused real Cargo preview checks passed."
+  },
+  "iterations": {
+    "implemented": "Config defaults to u64::MAX and accepts any positive max_iterations. Workload registrations no longer impose the 1048576 ceiling. Explicit user caps and workload-specific caps remain. Total worker operations are bounded before execution by u64::MAX / workers. Calibration doubles with saturation.",
+    "evidence": [
+      "suite::iteration_domain_tests::explicit_counts_cover_u64_and_preserve_user_caps",
+      "suite::iteration_domain_tests::worker_totals_are_bounded_before_work_and_calibration_does_not_wrap",
+      "suite::iteration_domain_tests::fresh_inputs_cross_old_iteration_limit_with_bounded_live_storage",
+      "bench/scripts/test-cargo-bench.py iteration-domain previews"
+    ],
+    "validation": "331 library and integration tests passed (.airbug/runs/f6661abd-801e-4ab1-a2e2-b1a10450fdce). Three focused iteration tests passed after adding the lifecycle test (.airbug/runs/5b0a1d3c-b18a-47f3-b4b4-1fafdfc135a1). Full Cargo script passed (/tmp/airbug-iteration-domain-cargo.log), including u64::MAX previews and worker multiplication rejection. Clippy passed for all targets of airbug-bench and cargo-airbug-bench.",
+    "limits": "u64::MAX is exercised with an O(1) caller-timed callback and dry-run, not that many real operations. Fresh borrowed input executes 1048577 real operations and verifies exactly-once destruction with at most 64 live inputs. Explicit large batch policies still require corresponding addressable memory; these allocation boundaries need further audit."
+  },
+  "batch_capacity": {
+    "implemented": "Borrowed and owned input batch helpers convert u64 sizes to usize with a checked conversion and reserve input and retained-output buffers fallibly before setup. Inside-timing output destruction allocates no output buffer. Zero batch sizes return an error. The same reservation helper is used by typed custom measurements, including sync/async borrowed and owned adapters.",
+    "evidence": [
+      "suite_measure::batch_tests::impossible_buffers_fail_before_setup_in_both_input_modes",
+      "suite_measure::batch_tests::policies_preserve_remainders_and_lifetimes",
+      "bench/tests/batch_policies.rs",
+      "bench/tests/fresh_inputs.rs",
+      "bench/tests/async_cleanup.rs",
+      "bench/tests/measurements.rs::oversized_measured_batches_reject_before_setup_or_measurement"
+    ],
+    "validation": "Five helper tests passed (.airbug/runs/b9ee500a-8f7c-4a7e-9c96-696af868d033); three integration tests passed (.airbug/runs/1484971e-2aa4-40cc-a97d-3fd470ce4522). All-target library Clippy passed. All 17 measurement integration tests passed (.airbug/runs/cf139bb6-84c4-4781-bbb9-8cbafd87f11b), including four oversized-input modes.",
+    "limits": "Fallible reservation does not guarantee recovery from OS overcommit termination or allocation failures inside user setup/work. Other allocation sites, including worker setup, remain to audit."
+  },
+  "conditional_disabling": {
+    "implemented": "The ignore attribute now accepts arbitrary boolean expressions on cases and groups. Expressions are evaluated during registration; inherited defaults can be overridden per case. Existing include-ignored and only-ignored selection remains available.",
+    "upstream": "Divan 0.1.21 benchmark/options.rs has_samples returns false for sample_count=0 or sample_size=0; benchmark/mod.rs skips measurement. Airbug supplies conditional suppression through ignore expressions, and zero sample/iteration budgets now independently disable selection.",
+    "evidence": [
+      "bench/tests/attributes.rs::computed_ignore_defaults_are_evaluated_at_registration_and_can_be_overridden"
+    ],
+    "validation": "All 63 attribute integration tests passed (.airbug/runs/288ce0bf-72f5-477f-9af2-f85ff530a4ad).",
+    "limits": "This is an Airbug-native conditional-selection capability, not identical zero-count behavior: ignored cases can be explicitly included. Zero-budget disabling is tracked under zero_count_execution."
+  },
+  "single_worker": {
+    "implemented": "Both shared-input and worker-local batch helpers run one worker directly on the caller thread. Setup remains outside the timer, measured duration is returned before retained-input destruction, and operation panics still become benchmark errors. threads.execution records caller versus spawned and updates with Suite::thread_count. Inherited and CLI-selected one-worker callbacks now use local borrowed-input adapters when argument/executor captures are not Sync. threads.local_only marks this path; later Suite::thread_count greater than one rejects before changing any entry. Inherited setup fallback now supports one-worker sync borrowed/owned non-Send inputs and outputs, plus async borrowed/owned local captures. Owned async fallback transfers each prepared Option input once and preserves owned-drop contracts. Explicit thread attributes now use the same local dispatch for supported plain/setup cases without custom measurement, allocator, explicit batch or setup_thread overrides. One-worker local cases compile; larger incompatible counts produce registration errors before execution.",
+    "upstream": "Divan 0.1.21 src/benchmark/mod.rs:586 guarantees closures stay on current thread for one worker. Multiple workers use caller plus auxiliary workers; Airbug still spawns all workers when count exceeds one.",
+    "evidence": [
+      "suite_measure::batch_tests::single_worker_uses_caller_thread_and_preserves_error_behavior",
+      "bench/tests/attributes.rs::inherited_setup_threads_preserve_preparation_location_and_non_send_local_cases",
+      "attributes::one_inherited_worker_accepts_local_arguments_and_rejects_later_parallel_override",
+      "attributes::one_worker_setup_accepts_local_inputs_outputs_and_async_captures",
+      "bench/scripts/test-cargo-bench.py exported local-worker-fixture",
+      "attributes::explicit_single_worker_attributes_accept_local_inputs_and_cli_override_rejects_sharing"
+    ],
+    "validation": "336 library/integration tests passed (.airbug/runs/7c4b3ca9-8b9f-406e-81cd-b5fdac3f49a1); all-target library Clippy passed. All 64 attribute tests passed after adding local fallback (.airbug/runs/d3d6492e-f7ba-4c39-a689-04d535a58b39). All 65 attribute tests passed (.airbug/runs/ba3b9d8a-af6b-437a-a538-0d18a36f13ec); all-target library Clippy passed. New test covers sync attribute dispatch and async dispatch helpers, four cases/eight operations, rejecting later multiple-worker override. Focused real Cargo cross-crate fixture passed: six exported cases (sync/async Rc arguments and borrowed/owned Rc setup), inherited threads=[1] and CLI --threads 1, smoke mode six operations and fixed sampling twelve operations; CLI two-worker request rejects. Python syntax and diff checks passed. This fixture was run independently from the broader script. All 66 attribute tests passed (.airbug/runs/943e63b6-7a94-41c1-beda-107f4c97b858); library and macro all-target Clippy passed. Focused exported Cargo fixture passed all three modes: inherited, CLI and explicit thread attributes, each smoke/fixed sampling.",
+    "remaining": "Manual threaded builder APIs retain Send/Sync bounds. Explicit allocator, measurement, batch and setup_thread combinations still need local-dispatch audit. Async setup fallback with non-Sync captured arguments is tested through helpers; exported Cargo tests cover shareable setup closures with Rc inputs. Multi-worker caller participation and independent worker sample aggregation remain separate gaps."
+  },
+  "worker_capacity": {
+    "implemented": "Fallible reservation for shared prepared inputs, scoped join handles, completed inputs and allocation-result vectors. Join and completion storage is reserved before spawning, avoiding allocation-error exits with workers waiting on a gate. WorkerAllocation.worker and WorkerSampleRef.worker now use u64. Runtime slot assignment uses AtomicUsize. Validation parses worker counts as u64, independent of host address width. The 256-worker ceiling is removed from automatic selection, attribute registration, CLI parsing, Suite validation, both batch executors and workloads::parallel. Counts use positive usize; zero still selects host parallelism only in selection APIs. All handle/completion storage is reserved before setup or spawn, including zero-sized inputs.",
+    "evidence": [
+      "suite_measure::batch_tests::worker_buffer_capacity_errors_are_returned",
+      "bench/tests/allocated_suite.rs",
+      "bench/tests/thread_allocations.rs",
+      "bench/tests/allocated_suite.rs::worker_identity_json_preserves_full_u64_and_legacy_indices",
+      "suite_measure::batch_tests::extreme_worker_requests_fail_before_setup_or_work",
+      "suite_measure::batch_tests::worker_batches_can_execute_above_old_ceiling"
+    ],
+    "validation": "7 helper tests passed (.airbug/runs/49a585fa-b487-4afe-b0ca-3e563a5db6df); 22 allocation integration tests passed (.airbug/runs/cd9ef6c4-c418-4ab7-aa1b-0f46610b8eaf); all-target library Clippy passed. After widening identifiers, all 20 allocation integration tests passed (.airbug/runs/135d03d8-a319-4894-bf9e-cde02641726e), including legacy numeric indices and exact u64 JSON roundtrips; library and CLI all-target Clippy passed. After removing the ceiling: 338 library/integration tests passed (.airbug/runs/f3482f05-28de-496c-a87b-8338ea3ef657); eight batch helper tests passed after reordering reservations (.airbug/runs/8d43fb47-0bc9-46a6-a3ce-4be9c4313b3c); 257 actual workers executed in each of three executors (.airbug/runs/b4cc3436-c093-4486-92fc-9f549d59e1de). Extreme usize::MAX is verified as an allocation error before setup/work. Full Cargo script passed (/tmp/airbug-workers-domain-cargo.log), including --threads 257 listing and automatic host parallelism. Final all-target library Clippy passed.",
+    "remaining": "Per-worker setup still contains infallible bounded allocations. OS resource limits constrain real thread creation; no execution at usize::MAX is claimed. JSON integer roundtrips are verified in Rust; consumers using floating-point-only JSON numbers must preserve integer precision. OS overcommit and user allocations cannot be guaranteed recoverable."
+  },
+  "zero_count_execution": {
+    "status": "implemented_native_disable",
+    "implementation": "Zero sample or fixed iteration budgets disable cases before execution, listing and preview selection. include-ignored cannot enable zero budgets. Child/CLI positive overrides can enable cases. All-disabled runs carry sampling.disabled_cases provenance and no measurements; arbitrary empty complete runs remain invalid. Zero resamples and invalid timer/max-iteration limits remain errors.",
+    "remaining": "Exact upstream listing presentation differs; Airbug omits disabled cases from selected lists. Full upstream lifecycle comparison remains separate.",
+    "validation": "360 library/integration tests passed (.airbug/runs/d7170de4-ffbe-4b1e-a649-8603d2de534c). Tests verify inherited disable, child enable, zero iterations, include-ignored behavior, empty result provenance and invalid unmarked empty runs. Real Cargo test-worker-sample-budget.py passed normal/smoke/dry-run zero-budget guards for setup and execution, and positive CLI overrides of zero environment values. Library/CLI all-target Clippy and diff check passed.",
+    "runner": "Process runner preserves normalized sampling.disabled_cases provenance for all-disabled runs and checks its consistency across processes/variants. First-worker initialization uses an explicit seen flag, so empty first results do not hide later case changes.",
+    "runner_validation": "All 44 CLI integration tests passed (.airbug/runs/8f37afc4-51d9-4e90-9e19-cb7001bee7d9), including all-disabled protocol output, changed disabled set rejection, resume/privacy and reports. CLI all-target Clippy and diff check passed."
+  },
+  "fractional_cli_durations": {
+    "status": "implemented_with_focused_validation",
+    "scope": "Direct Suite CLI warmup/sample/total measurement/min/max workload/quick min/max/profile durations and corresponding sampling environment values. Attributes retain integer millisecond expressions; Duration builders support full precision.",
+    "domain": "Nonnegative decimal milliseconds, 1 ns resolution through Duration::MAX; no floating-point parse, no scientific notation, nonzero sub-ns fractions rejected. Per-option positivity constraints remain.",
+    "preview": "Integral milliseconds retain previous JSON integer/string rules; fractional milliseconds are exact decimal strings, including profile and quick previews. Total target multiplies nanoseconds before conversion with overflow yielding null.",
+    "evidence": [
+      "sampling::millisecond_tests::decimal_milliseconds_preserve_nanoseconds_and_full_duration_domain",
+      "14 sampling tests passed (.airbug/runs/0fbfec6b-01fa-4799-8e55-3cc0a8b0d785)",
+      "bench/scripts/test-measurement-target.py passed: exact ns case contracts, fractional environment and overrides, profile/quick and total-preview precision, invalid values and Duration::MAX",
+      "All-target library Clippy, fmt and diff checks passed"
+    ]
+  },
+  "scalar_cli_followup": {
+    "status": "123 boundary/precedence checks passed through a real Cargo-built attribute harness on macOS ARM64",
+    "script": "bench/scripts/test-option-domains.py",
+    "domains": {
+      "samples_and_iterations": "Unsigned u64; zero disables. Values above u32 and u64::MAX survive preview exactly; u64 overflow and negatives rejected.",
+      "resamples": "Positive usize; 1 and 1000001 accepted; zero, negatives and u64 overflow rejected on tested 64-bit host. Full capacity behavior remains covered by library tests.",
+      "confidence_and_significance": "Finite strict (0,1), including smallest positive subnormal and predecessor of 1; zero, one, negatives, NaN and infinity rejected.",
+      "noise_threshold": "Finite nonnegative percent, including 0, 250 and f64::MAX. Criterion expresses fractions and its setter also admits positive infinity; Airbug deliberately rejects nonfinite thresholds. Finite fraction-to-percent multiplication can overflow at extreme values; identical syntax/domain is not claimed.",
+      "time": "Exact decimal milliseconds. Zero accepted for warmup/min/max; positive sample/measurement target required. 1 ns and Duration::MAX preserved as exact integer nanoseconds in case contracts; negative, nonfinite, sub-nanosecond and overflowing values rejected. Divan ParsedSeconds uses Duration::try_from_secs_f64; Criterion CLI also parses f64 seconds. Native decimal spelling avoids float rounding.",
+      "counters": "Bytes/items/chars/cycles/bits accept 0 through u64::MAX and survive contract preview exactly; negatives/overflow/non-numeric values rejected. Divan MaxCountUInt is condtype::num::Usize64 on supported 64-bit hosts."
+    },
+    "precedence": "Explicit samples/iterations/warmup flags override invalid corresponding environment values; without override those environment values fail. Existing per-group/CLI tests cover wider inheritance.",
+    "laziness": "Workload panics if executed. No target/.airbug/.bench output directories were created under the fixture, with dashboard/history enabled.",
+    "limits": "Preview proves representation and validation, not completion of physically enormous runs. Does not exhaust every enum/flag conflict, all group combinations or platform behavior.",
+    "ci": "Script added to OS/toolchain matrix; remote CI unverified."
+  }
+}

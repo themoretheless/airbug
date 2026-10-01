@@ -1,0 +1,76 @@
+{
+  "status": "focused_cli_domains_and_conflicts_verified",
+  "script": "bench/scripts/test-option-domains.py",
+  "result": "263 boundary, precedence, mode, conflict, baseline and profiling checks passed on current macOS; no workload or history writes.",
+  "modes": {
+    "sampling": [
+      "flat",
+      "linear",
+      "auto"
+    ],
+    "sample-count-unit": [
+      "batches",
+      "workers"
+    ],
+    "worker-start": [
+      "shared",
+      "local"
+    ],
+    "timer": [
+      "os",
+      "cpu"
+    ],
+    "overhead": [
+      "raw",
+      "subtract"
+    ],
+    "sort": [
+      "registration",
+      "lexical",
+      "natural",
+      "source",
+      "kind"
+    ],
+    "output-format": [
+      "table",
+      "tree"
+    ],
+    "bytes-format": [
+      "decimal",
+      "binary"
+    ],
+    "color": [
+      "auto",
+      "always",
+      "never"
+    ],
+    "profile": [
+      "quick",
+      "normal",
+      "thorough"
+    ],
+    "summary-estimator": [
+      "mean",
+      "process-median"
+    ],
+    "summary-scale": [
+      "linear",
+      "logarithmic"
+    ]
+  },
+  "negative_checks": "Unknown/missing values for the ten standalone modes; quiet/verbose, plots/no-plots, mutually exclusive selectors, per-sample/total measurement budgets, no-bootstrap/explicit settings, invalid terse listing combinations, incomplete summary settings, discard/output.",
+  "fixed_gap": {
+    "before": "--no-html silently accepted explicit --plots and summary chart settings although it produced no HTML. Reproduced through Cargo-built harness.",
+    "after": "Reject explicit --plots or summary chart options with --no-html before execution/output. Implicit default plots do not conflict; redundant --no-html --no-plots remains accepted.",
+    "validation": "Both orders of --no-html/--plots reject. Summary parameter/scale combinations reject with explicit no-html diagnostic; no output directory created. Full test-formatted-bootstrap.py and all-target/all-feature Clippy passed."
+  },
+  "scope_limit": "This covers the listed native CLI contracts, not every possible flag combination or cross-platform runtime. Baseline naming/path policies, profiling mode and full upstream public API mapping remain separate audit items.",
+  "source_sha256": "bd3a681e587b5ec61fae1e39a018e11f28dd072eee2870daaccd67cb279d7b7f",
+  "logs": ".airbug/validation/option-modes",
+  "latest_validation": {
+    "command": "python3 bench/scripts/test-option-domains.py",
+    "checks": 263,
+    "exit_code": 0,
+    "scope": "Listed native option domains and explicit conflicts, not all possible flag cross-products."
+  }
+}

@@ -67,6 +67,9 @@ pub struct Observation {
     /// Empty for legacy observations and cases with fixed per-operation counters.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub work_totals: BTreeMap<String, String>,
+    /// Actual input work by worker slot. Empty when attribution is unavailable.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub worker_work_totals: BTreeMap<u64, BTreeMap<String, String>>,
     pub case: String,
     pub metric: String,
     pub variant: String,
@@ -80,6 +83,37 @@ pub struct Observation {
 }
 impl Observation {
     pub(crate) fn validate_work_totals(&self, case: &Case) -> Result<()> {
+        if !self.worker_work_totals.is_empty() {
+            let workers: u64 = case
+                .contract
+                .get("threads")
+                .ok_or_else(|| error("worker work without threads"))?
+                .parse()?;
+            if self.metric != "wall"
+                || self.availability != Availability::Available
+                || self.worker_work_totals.len() as u64 != workers
+                || self.worker_work_totals.keys().any(|w| *w >= workers)
+            {
+                return Err(error("invalid worker work identities"));
+            }
+            let mut sums = BTreeMap::<String, u128>::new();
+            for totals in self.worker_work_totals.values() {
+                if !totals.keys().eq(self.work_totals.keys()) {
+                    return Err(error("incomplete worker work units"));
+                }
+                for (unit, value) in totals {
+                    let sum = sums.entry(unit.clone()).or_default();
+                    *sum = sum
+                        .checked_add(value.parse::<u128>()?)
+                        .ok_or_else(|| error("worker work total overflow"))?;
+                }
+            }
+            for (unit, sum) in sums {
+                if sum != self.work_totals[&unit].parse::<u128>()? {
+                    return Err(error("worker work disagrees with aggregate"));
+                }
+            }
+        }
         for (unit, value) in &self.work_totals {
             if unit.is_empty()
                 || self.metric != "wall"
@@ -119,7 +153,8 @@ impl Observation {
     }
 }
 /// One worker's measured wave, linked to its enclosing sample. Worker indices
-/// identify slots within a wave, not persistent OS threads across waves.
+/// identify slots within the recorded process. Thread reuse depends on the case
+/// executor contract; legacy runs may have created fresh threads for each wave.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerAllocation {
     pub case: String,
@@ -127,12 +162,45 @@ pub struct WorkerAllocation {
     pub process: u32,
     pub sequence: u64,
     pub wave: u64,
-    pub worker: u32,
+    pub worker: u64,
     pub operations: u64,
     pub wall_ns: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adjusted_wall_ns: Option<String>,
     pub metrics: BTreeMap<String, String>,
+}
+/// One worker wave linked to a collected aggregate sample, without allocation data.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkerTiming {
+    pub case: String,
+    pub variant: String,
+    pub process: u32,
+    pub sequence: u64,
+    pub wave: u64,
+    pub worker: u64,
+    pub operations: u64,
+    pub wall_ns: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjusted_wall_ns: Option<String>,
+}
+/// All waves for one worker slot within a collected sample.
+/// A slot can run on different OS threads across waves. These records are not
+/// independent process repetitions; timer boundaries are unchanged.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerSlotSample {
+    pub case: String,
+    pub variant: String,
+    pub process: u32,
+    pub sequence: u64,
+    pub worker: u64,
+    pub waves: u64,
+    pub operations: u64,
+    pub wall_ns: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjusted_wall_ns: Option<String>,
+    /// Exact logical work known for this slot; missing units are unknown, not zero.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub work_totals: BTreeMap<String, String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Run {
@@ -145,9 +213,19 @@ pub struct Run {
     pub observations: Vec<Observation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub worker_allocations: Vec<WorkerAllocation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub worker_timings: Vec<WorkerTiming>,
     pub notes: Vec<String>,
 }
 impl Run {
+    /// Combine timing waves by sample and worker slot, summing exact
+    /// durations and operations before normalization. Validates the run first.
+    /// Ordinary timings take priority over allocation records for each process/case/variant.
+    /// Adjusted time is available only when every component has adjusted time.
+    pub fn worker_slot_samples(&self) -> crate::Result<Vec<WorkerSlotSample>> {
+        self.validate()?;
+        crate::worker_timing::slot_samples(self)
+    }
     pub fn new() -> Self {
         let mut environment = BTreeMap::new();
         environment.insert("os".into(), std::env::consts::OS.into());
@@ -168,6 +246,7 @@ impl Run {
             cases: vec![],
             observations: vec![],
             worker_allocations: vec![],
+            worker_timings: vec![],
             notes: vec![],
         }
     }
@@ -176,6 +255,19 @@ impl Run {
             return Err(error(format!("unsupported schema {}", self.schema)));
         }
         if self.cases.is_empty() && self.status == Status::Complete {
+            let disabled = self
+                .provenance
+                .get("sampling.disabled_cases")
+                .map(|value| serde_json::from_str::<Vec<String>>(value))
+                .transpose()?;
+            if self.observations.is_empty()
+                && self.worker_timings.is_empty()
+                && self.worker_allocations.is_empty()
+                && disabled
+                    .is_some_and(|cases| !cases.is_empty() && cases.iter().all(|id| !id.is_empty()))
+            {
+                return Ok(());
+            }
             return Err(error("run has no cases"));
         }
         let mut cases = BTreeMap::new();
@@ -216,12 +308,13 @@ impl Run {
             o.number()?;
             o.validate_work_totals(c)?;
         }
+        crate::worker_timing::validate(self)?;
         let mut worker_ids = BTreeSet::new();
         for w in &self.worker_allocations {
             let case = cases
                 .get(&w.case)
                 .ok_or_else(|| error("worker allocation refers to unknown case"))?;
-            let workers: u32 = case
+            let workers: u64 = case
                 .contract
                 .get("threads")
                 .ok_or_else(|| error("worker allocation without thread contract"))?
@@ -319,7 +412,7 @@ impl Run {
             if waves.is_empty() {
                 return Err(error("missing worker allocation records"));
             }
-            let worker_count: usize = case
+            let worker_count: u64 = case
                 .contract
                 .get("threads")
                 .ok_or_else(|| error("missing worker count"))?
@@ -337,7 +430,7 @@ impl Run {
             let mut aggregate: BTreeMap<&str, u128> = BTreeMap::new();
             for (expected, (&index, workers)) in waves.iter().enumerate() {
                 if index != expected as u64
-                    || workers.len() != worker_count
+                    || workers.len() as u64 != worker_count
                     || workers
                         .iter()
                         .any(|w| w.operations != workers[0].operations)

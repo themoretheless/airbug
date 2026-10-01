@@ -10,7 +10,7 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub samples: u32,
+    pub samples: u64,
     pub warmup: Duration,
     pub sample_time: Duration,
     pub max_iterations: u64,
@@ -21,22 +21,15 @@ impl Default for Config {
             samples: 30,
             warmup: Duration::from_millis(50),
             sample_time: Duration::from_millis(5),
-            max_iterations: 1_048_576,
+            max_iterations: u64::MAX,
         }
     }
 }
 impl Config {
     pub(crate) fn validate(&self) -> Result<()> {
-        if self.samples == 0
-            || self.samples > 100_000
-            || self.max_iterations == 0
-            || self.max_iterations > 1_048_576
-            || self.sample_time.is_zero()
-            || self.sample_time > Duration::from_secs(60)
-            || self.warmup > Duration::from_secs(60)
-        {
+        if self.max_iterations == 0 || self.sample_time.is_zero() {
             return Err(error(
-                "invalid benchmark config: samples 1..100000, iterations 1..1048576, time 1ns..60s, warmup <=60s",
+                "invalid benchmark config: max_iterations must be positive, sample time must be positive",
             ));
         }
         Ok(())
@@ -81,6 +74,7 @@ struct Entry<'a> {
     formatters: BTreeMap<String, Box<dyn crate::measurement::ValueFormatter + 'a>>,
     allocation_sample: Option<std::rc::Rc<std::cell::Cell<Option<crate::alloc::ThreadStats>>>>,
     worker_allocations: Option<std::rc::Rc<std::cell::RefCell<Vec<crate::WorkerAllocation>>>>,
+    worker_timings: Option<std::rc::Rc<std::cell::RefCell<Vec<crate::WorkerTiming>>>>,
     case: Case,
     work: Work<'a>,
     sampling: Sampling,
@@ -98,6 +92,13 @@ struct Entry<'a> {
     timer_kind: Option<crate::timer::TimerKind>,
     source: Option<(String, u32, u32)>,
     verify: Option<Box<dyn FnMut() -> Result<()> + 'a>>,
+}
+impl Entry<'_> {
+    fn iteration_cap(&self, config: &Config) -> u64 {
+        self.max_batch
+            .min(config.max_iterations)
+            .min(u64::MAX / self.operations_per_iteration.max(1))
+    }
 }
 /// Human console detail. Structured output and persisted artifacts are unchanged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -124,6 +125,9 @@ pub struct Suite<'a> {
     summary_scale: crate::viz::charts::AxisScale,
     plots: bool,
     registration_threads: Option<Vec<usize>>,
+    cargo_harness: bool,
+    inherited_threads: Option<Vec<usize>>,
+    inherited_threads_disabled: bool,
     registration_drop: Option<DropPolicy>,
     registration_batch: Option<BatchPolicy>,
     console_output: ConsoleOutput,
@@ -148,6 +152,9 @@ impl<'a> Suite<'a> {
             summary_scale: Default::default(),
             plots: true,
             registration_threads: None,
+            cargo_harness: false,
+            inherited_threads: None,
+            inherited_threads_disabled: false,
             registration_drop: None,
             registration_batch: None,
             console_output: ConsoleOutput::Normal,
@@ -165,7 +172,8 @@ impl<'a> Suite<'a> {
     pub fn has_registration_batch_policy(&self) -> bool {
         self.registration_batch.is_some()
     }
-    /// Apply a batch default while registering imported groups.
+    /// Apply a batch default while registering cases or imported groups.
+    /// Threaded input executors use this policy to size each worker wave.
     pub fn with_batch_defaults(
         &mut self,
         policy: BatchPolicy,
@@ -201,11 +209,84 @@ impl<'a> Suite<'a> {
         }
         self
     }
+    #[doc(hidden)]
+    pub fn inherited_thread_counts(&self) -> Option<Vec<usize>> {
+        if self.inherited_threads_disabled {
+            None
+        } else {
+            self.inherited_threads
+                .clone()
+                .or_else(|| self.registration_threads.clone())
+        }
+    }
+    /// Scope worker defaults to an imported group. `None` clears an outer default.
+    #[doc(hidden)]
+    pub fn with_thread_defaults(
+        &mut self,
+        counts: Option<Vec<usize>>,
+        register: impl FnOnce(&mut Self),
+    ) -> &mut Self {
+        let disabled = std::mem::replace(&mut self.inherited_threads_disabled, counts.is_none());
+        let previous = std::mem::replace(&mut self.inherited_threads, counts);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| register(self)));
+        self.inherited_threads = previous;
+        self.inherited_threads_disabled = disabled;
+        if let Err(payload) = result {
+            std::panic::resume_unwind(payload);
+        }
+        self
+    }
+    /// Register unsupported CLI combinations without preventing selection of
+    /// unrelated cases. Explicit imported defaults retain registration errors.
+    #[doc(hidden)]
+    pub fn register_without_thread_support(&mut self, register: impl FnOnce(&mut Self)) {
+        let requested = self.inherited_thread_counts().is_some();
+        assert!(
+            !requested || self.inherited_threads.is_none(),
+            "this imported benchmark requires threads to be declared on its own group or threads = false to stay sequential"
+        );
+        let start = self.entries.len();
+        register(self);
+        if requested {
+            for entry in &mut self.entries[start..] {
+                entry.case.contract.insert("threads.registration_error".into(),
+                    "this case cannot enable threads at runtime with its current options; declare supported threading on the case or use threads = false".into());
+            }
+        }
+    }
+    #[doc(hidden)]
+    pub fn unavailable_thread_case(&mut self, name: &str, reason: &str) {
+        assert!(
+            self.inherited_threads.is_none(),
+            "benchmark {name} {reason}"
+        );
+        let message = format!("benchmark {name} {reason}");
+        let failure = message.clone();
+        self.register_fallible(
+            name,
+            "unavailable concurrent case",
+            u64::MAX,
+            Box::new(move |_, _| Err(error(failure.clone()))),
+        );
+        self.entries
+            .last_mut()
+            .unwrap()
+            .case
+            .contract
+            .insert("threads.registration_error".into(), message);
+    }
+    fn validate_case_threads(&self, entry: &Entry<'_>) -> Result<()> {
+        if let Some(reason) = entry.case.contract.get("threads.registration_error") {
+            return Err(error(format!("{}: {reason}", entry.case.id)));
+        }
+        Ok(())
+    }
     /// Set the worker matrix used by attribute registration. Call before registering
-    /// groups. Sequential cases retain their execution model.
+    /// groups. Attributed cases opt into concurrent execution unless they declare
+    /// `threads = false`. Incompatible selected cases fail before execution.
     pub fn registration_threads(&mut self, counts: &[usize]) -> Result<&mut Self> {
-        if counts.is_empty() || counts.iter().any(|n| *n > 256) {
-            return Err(error("thread matrix requires at least one count in 0..256"));
+        if counts.is_empty() {
+            return Err(error("thread matrix requires at least one count"));
         }
         self.registration_threads = Some(crate::threads::counts(counts));
         Ok(self)
@@ -219,10 +300,29 @@ impl<'a> Suite<'a> {
             .clone()
             .unwrap_or_else(|| crate::threads::counts(counts))
     }
+    /// Follow Cargo's harness convention: without `--bench`, check each case once.
+    /// Attribute suites enable this automatically when compiled as Cargo test targets.
+    /// For a direct measurement of that executable, pass `--bench`.
+    /// The Airbug protocol runner selects measurement mode automatically.
+    pub fn cargo_harness(&mut self) -> &mut Self {
+        self.cargo_harness = true;
+        self
+    }
+
     /// Configure runtime worker choices before registering attributed cases.
     /// Generated `#[suite]` entrypoints use this so names match the actual matrix.
     pub fn main_registered(mut self, register: impl FnOnce(&mut Self)) -> Result<()> {
         let cli: Vec<String> = std::env::args().skip(1).collect();
+        if cli
+            .iter()
+            .any(|arg| matches!(arg.as_str(), "--version" | "-V"))
+        {
+            println!("airbug-bench {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        if crate::help::print_if_requested(&cli) {
+            return Ok(());
+        }
         let mut args = crate::sampling::environment_args(&cli, |name| match std::env::var(name) {
             Ok(value) => Ok(Some(value)),
             Err(std::env::VarError::NotPresent) => Ok(None),
@@ -535,7 +635,15 @@ impl<'a> Suite<'a> {
                     Some(kind) => kind.resolve()?,
                     None => self.timer,
                 };
-                Ok((index, timer))
+                Ok((
+                    index,
+                    timer.with_worker_start(
+                        self.entries[index]
+                            .sampling
+                            .worker_start
+                            .unwrap_or_default(),
+                    ),
+                ))
             })
             .collect()
     }
@@ -577,6 +685,7 @@ impl<'a> Suite<'a> {
         }
     }
     fn validate_case_quick(&self, entry: &Entry<'_>, test_mode: bool) -> Result<()> {
+        self.validate_case_threads(entry)?;
         if let Some(quick) = self.quick_for(entry) {
             quick.validate()?;
             let cold = entry
@@ -603,7 +712,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "reused closure state; output drop included",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let start = timer.start();
                 for _ in 0..n {
@@ -628,7 +737,7 @@ impl<'a> Suite<'a> {
         self.register_fallible(
             name,
             "local allocation-counted loop; output drop included",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let phase = allocator.begin_thread_phase()?;
@@ -670,7 +779,7 @@ impl<'a> Suite<'a> {
         self.register_fallible(
             name,
             "async allocation-counted loop; output drop included",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let executor = state.get_or_insert_with(&mut executor);
@@ -711,7 +820,7 @@ impl<'a> Suite<'a> {
         self.register_fallible(
             name,
             "fresh input; setup/input drop excluded; allocated batches",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let (elapsed, counts) = allocator.measure_input_batch(
@@ -777,7 +886,7 @@ impl<'a> Suite<'a> {
         self.register_fallible(
             name,
             "async fresh input; allocation-counted batches",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let executor = state.get_or_insert_with(&mut executor);
@@ -824,7 +933,7 @@ impl<'a> Suite<'a> {
         self.register_fallible(
             name,
             "async fresh input; allocation-counted batches",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let executor = state.get_or_insert_with(&mut executor);
@@ -877,7 +986,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| input_batch(timer, n, &mut setup, &mut f, drop)),
         );
         self
@@ -894,7 +1003,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "fresh owned input; setup excluded; consumed input drop inside operation",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 crate::suite_measure::owned_input_batch(timer, n, &mut setup, &mut f, drop)
             }),
@@ -914,7 +1023,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "fresh borrowed input; setup/input drop excluded; explicit batch policy",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 crate::suite_measure::input_batch_sized(
                     timer,
@@ -941,7 +1050,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "fresh owned input; setup excluded; consumed input drop inside operation",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 crate::suite_measure::owned_input_batch_sized(
                     timer,
@@ -1003,7 +1112,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "fresh owned input; setup excluded; consumed input drop inside operation",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
                 crate::suite_measure::owned_input_batch(
@@ -1043,7 +1152,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "fresh owned input; setup excluded; consumed input drop inside operation",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
                 crate::suite_measure::owned_input_batch_sized(
@@ -1078,7 +1187,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "fresh borrowed input; setup/input drop excluded; explicit batch policy",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
                 crate::suite_measure::input_batch_sized(
@@ -1144,7 +1253,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 // Borrow once per batch, before timing; no RefCell checks in the measured loop.
                 let mut setup = s.borrow_mut();
@@ -1164,6 +1273,28 @@ impl<'a> Suite<'a> {
         }));
         self
     }
+    /// Register a worker-count family with stable `name/threads=N` case names.
+    /// Runtime choices set by `main_registered` override `counts`. Zero means
+    /// available parallelism; duplicate effective counts are registered once.
+    /// The callback constructs a fresh case for each count, so captured state
+    /// need not implement Clone. It must pass `workers` to a threaded bench API.
+    /// Registration runs immediately; benchmark operations remain lazy.
+    pub fn thread_matrix<T: crate::threads::ThreadCounts<M>, M>(
+        &mut self,
+        name: &str,
+        counts: T,
+        mut register: impl FnMut(&mut Self, &str, usize),
+    ) -> Result<&mut Self> {
+        let counts = self.resolve_thread_counts(counts);
+        if counts.is_empty() {
+            return Err(error("thread matrix requires at least one count"));
+        }
+        for workers in counts {
+            register(self, &format!("{name}/threads={workers}"), workers);
+        }
+        Ok(self)
+    }
+
     /// Cartesian parameter matrix. Registration stays lazy; caller registers cases using each ID.
     /// Values must be unique per axis; at most 4096 combinations.
     pub fn matrix(
@@ -1251,6 +1382,7 @@ impl<'a> Suite<'a> {
             formatters: BTreeMap::new(),
             allocation_sample: None,
             worker_allocations: None,
+            worker_timings: None,
             case: Case {
                 id: format!("{}/{}", self.name, name),
                 contract,
@@ -1323,14 +1455,15 @@ impl<'a> Suite<'a> {
 
     /// Apply registered formatters without modifying raw data. Loaded runs must
     /// have the same complete metric contract as the registered formatter target.
-    /// Absolute bootstrap estimates in registered formatter units. Raw statistical
-    /// output remains separate; regression and outlier graphs keep their raw units.
+    /// Absolute bootstrap estimates in registered formatter units, including
+    /// fixed-work throughput intervals. Raw statistical output remains separate.
     pub fn formatted_bootstrap(
         &self,
         report: &crate::bootstrap::Report,
     ) -> Result<crate::bootstrap::Report> {
         let mut result = report.clone();
         result.rows.clear();
+        result.presentation.clear();
         for entry in &self.entries {
             for (id, formatter) in &entry.formatters {
                 let metric = entry
@@ -1339,18 +1472,65 @@ impl<'a> Suite<'a> {
                     .iter()
                     .find(|metric| metric.id == *id)
                     .ok_or_else(|| error("formatted metric absent from registered case"))?;
-                result.rows.extend(
-                    crate::measurement::format_bootstrap_metric(
-                        report,
-                        &entry.case.id,
-                        metric,
-                        formatter.as_ref(),
-                    )?
-                    .rows,
-                );
+                let formatted = crate::measurement::format_bootstrap_metric(
+                    report,
+                    &entry.case.id,
+                    metric,
+                    formatter.as_ref(),
+                )?;
+                result.rows.extend(formatted.rows);
+                result.presentation.extend(formatted.presentation);
             }
         }
         Ok(result)
+    }
+
+    /// Parameter summary HTML using registered metric formatters after aggregation.
+    pub fn html_with_summary(
+        &self,
+        run: &Run,
+        summary: Option<crate::report::SummaryPlot<'_>>,
+    ) -> Result<String> {
+        let formatters: Vec<_> = self
+            .entries
+            .iter()
+            .flat_map(|entry| {
+                entry.formatters.iter().map(|(id, formatter)| {
+                    let metric = entry
+                        .case
+                        .metrics
+                        .iter()
+                        .find(|m| m.id == *id)
+                        .expect("registered formatter metric");
+                    (entry.case.id.as_str(), metric, formatter.as_ref())
+                })
+            })
+            .collect();
+        crate::report::html_run_with_summary_formatters(run, summary, &formatters)
+    }
+
+    /// Save portable numeric conversions for the requested summary configuration.
+    pub fn save_summary_formatting(
+        &self,
+        run: &mut Run,
+        summary: &crate::report::SummaryPlot<'_>,
+    ) -> Result<()> {
+        let formatters: Vec<_> = self
+            .entries
+            .iter()
+            .flat_map(|entry| {
+                entry.formatters.iter().map(|(id, formatter)| {
+                    let metric = entry
+                        .case
+                        .metrics
+                        .iter()
+                        .find(|m| m.id == *id)
+                        .expect("registered formatter metric");
+                    (entry.case.id.as_str(), metric, formatter.as_ref())
+                })
+            })
+            .collect();
+        crate::summary_format::save(run, summary, &formatters)
     }
 
     pub fn formatted_metrics(&self, run: &Run) -> Result<Vec<crate::measurement::FormattedMetric>> {
@@ -1418,6 +1598,46 @@ impl<'a> Suite<'a> {
             }
         }
         Ok(result)
+    }
+
+    fn format_relative_rates(
+        &self,
+        baseline: &Run,
+        candidate: &Run,
+        config: &crate::bootstrap::Config,
+        rows: &mut [crate::relative::Comparison],
+    ) -> Result<()> {
+        for row in rows {
+            let Some(entry) = self.entries.iter().find(|entry| entry.case.id == row.case) else {
+                continue;
+            };
+            let Some(formatter) = entry.formatters.get(&row.metric) else {
+                continue;
+            };
+            let contract = candidate
+                .cases
+                .iter()
+                .find(|case| case.id == row.case)
+                .and_then(|case| case.metrics.iter().find(|metric| metric.id == row.metric));
+            if contract
+                != entry
+                    .case
+                    .metrics
+                    .iter()
+                    .find(|metric| metric.id == row.metric)
+            {
+                return Err(error("formatter metric contract differs from loaded run"));
+            }
+            row.throughput = crate::measurement::relative_throughput(
+                baseline,
+                candidate,
+                &row.case,
+                &row.metric,
+                formatter.as_ref(),
+                config,
+            )?;
+        }
+        Ok(())
     }
 
     /// Measure a synchronous workload with a custom value alongside wall time.
@@ -1602,7 +1822,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "custom measurement waves; fresh input setup/drop outside; output destruction follows policy",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let mut total = measurement.zero();
@@ -1611,11 +1831,9 @@ impl<'a> Suite<'a> {
                 let wave_size = batch.size(n);
                 while remaining > 0 {
                     let count = remaining.min(wave_size);
-                    let mut inputs: Vec<_> = (0..count).map(|_| setup()).collect();
-                    let mut outputs = match drop_output {
-                        DropPolicy::InsideTiming => Vec::new(),
-                        DropPolicy::OutsideTiming => Vec::with_capacity(inputs.len()),
-                    };
+                    let (mut inputs, mut outputs) =
+                        crate::suite_measure::batch_buffers::<I, O>(count, drop_output)?;
+                    inputs.extend((0..count).map(|_| setup()));
                     let wall = timer.start();
                     let start = measurement.start()?;
                     for input in &mut inputs {
@@ -1679,7 +1897,7 @@ impl<'a> Suite<'a> {
         }
         let sample = std::rc::Rc::new(std::cell::Cell::new(None));
         let captured = sample.clone();
-        self.register(name, "caller-defined custom value; caller owns measurement boundaries; wall measures complete batch", 1_048_576,
+        self.register(name, "caller-defined custom value; caller owns measurement boundaries; wall measures complete batch", u64::MAX,
             Box::new(move |n, timer| {
                 captured.set(None);
                 let wall = timer.start();
@@ -1755,7 +1973,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "caller-timed batch; caller defines setup/drop/completion boundaries",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, _timer| Ok(Measured::raw(measure(n).as_nanos()))),
         );
         self.entries.last_mut().unwrap().caller_timed = true;
@@ -1806,7 +2024,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             crate::suite_measure::input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
                 input_batch(
@@ -1875,7 +2093,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "reused borrowed input; input drop excluded",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
                 crate::suite_measure::input_batch_sized(
@@ -1927,7 +2145,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             crate::suite_measure::input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let executor = state.get_or_insert_with(&mut executor);
                 input_batch(
@@ -1953,7 +2171,8 @@ impl<'a> Suite<'a> {
     }
 
     /// Concurrent operations. Spawning/joining threads is excluded; scheduling and start
-    /// synchronization are included. Each worker runs n operations; normalization uses n*workers.
+    /// synchronization are included by default; Sampling.worker_start can select local starts.
+    /// Each worker runs n operations; normalization uses n*workers.
     pub fn bench_threads<O>(
         &mut self,
         name: &str,
@@ -1962,13 +2181,17 @@ impl<'a> Suite<'a> {
     ) -> &mut Self {
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
+        let samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let captured_samples = samples.clone();
         self.register_fallible(
             name,
             "concurrent batch; spawn/join excluded; output drop included",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
+                captured_samples.borrow_mut().clear();
+                let mut records = Vec::new();
                 let workers = captured_count.get();
-                crate::suite_measure::parallel_batch(
+                let total = crate::suite_measure::parallel_batch_recorded(
                     timer,
                     workers,
                     || (),
@@ -1978,9 +2201,33 @@ impl<'a> Suite<'a> {
                         }
                         start.measure(n)
                     },
-                )
+                    Some(&mut records),
+                )?;
+                captured_samples
+                    .borrow_mut()
+                    .extend(records.into_iter().enumerate().map(|(worker, elapsed)| {
+                        crate::WorkerTiming {
+                            case: String::new(),
+                            variant: "candidate".into(),
+                            process: 0,
+                            sequence: 0,
+                            wave: 0,
+                            worker: worker as u64,
+                            operations: n,
+                            wall_ns: elapsed.raw_ns.to_string(),
+                            adjusted_wall_ns: Some(elapsed.adjusted_ns.to_string()),
+                        }
+                    }));
+                Ok(total)
             }),
         );
+        self.entries.last_mut().unwrap().worker_timings = Some(samples);
+        self.entries
+            .last_mut()
+            .unwrap()
+            .case
+            .contract
+            .insert("threads.timing_records".into(), "wave-v1".into());
         self.thread_contract(workers);
         self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         self
@@ -1996,19 +2243,26 @@ impl<'a> Suite<'a> {
         f: impl Fn(&mut I) -> O + Sync + 'a,
         drop: DropPolicy,
     ) -> &mut Self {
+        let batch = self.registration_batch_policy();
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
+        let samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let captured_samples = samples.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
+                captured_samples.borrow_mut().clear();
+                let mut wave = 0;
                 let workers = captured_count.get();
                 let mut remaining = n;
                 let mut total = Measured::default();
                 while remaining > 0 {
-                    let count = remaining.min(64);
-                    total = total.add(crate::suite_measure::parallel_local_batch(
+                    let count = remaining.min(batch.size(n));
+                    crate::suite_measure::validate_batch_capacity::<I, O>(count)?;
+                    let mut records = Vec::new();
+                    total = total.add(crate::suite_measure::parallel_local_batch_recorded(
                         timer,
                         workers,
                         || {
@@ -2032,17 +2286,37 @@ impl<'a> Suite<'a> {
                             black_box(&outputs);
                             Ok(elapsed)
                         },
+                        Some(&mut records),
                     )?)?;
+                    captured_samples
+                        .borrow_mut()
+                        .extend(records.into_iter().enumerate().map(|(worker, elapsed)| {
+                            crate::WorkerTiming {
+                                case: String::new(),
+                                variant: "candidate".into(),
+                                process: 0,
+                                sequence: 0,
+                                wave,
+                                worker: worker as u64,
+                                operations: count,
+                                wall_ns: elapsed.raw_ns.to_string(),
+                                adjusted_wall_ns: Some(elapsed.adjusted_ns.to_string()),
+                            }
+                        }));
+                    wave += 1;
                     remaining -= count;
                 }
                 Ok(total)
             }),
         );
+        self.entries.last_mut().unwrap().worker_timings = Some(samples);
         self.thread_contract(workers);
         self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
+        contract.insert("threads.timing_records".into(), "wave-v1".into());
         contract.insert("threads.setup".into(), "worker".into());
         contract.insert("threads.scope".into(), "sum of synchronized wave intervals; <=64 operations per worker per wave; worker-local setup/drop and spawn/join excluded; values retained until all worker timers stop".into());
+        self.record_thread_batch_policy(batch);
         self
     }
     /// Allocation accounting on each worker, with fresh worker-local inputs.
@@ -2065,33 +2339,35 @@ impl<'a> Suite<'a> {
         let worker_samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let captured_workers = worker_samples.clone();
         let case_id = format!("{}/{}", self.name, name);
+        let batch = self.registration_batch_policy();
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let workers = captured_count.get();
                 captured.set(None);
                 captured_workers.borrow_mut().clear();
                 let mut wave_index = 0;
-                if workers == 0 || workers > 256 {
-                    return Err(error("workers must be 1..256"));
+                if workers == 0 {
+                    return Err(error("workers must be positive"));
                 }
                 let mut remaining = n;
                 let mut total = Measured::default();
                 let mut counts = crate::alloc::ThreadStats::default();
                 while remaining > 0 {
-                    let count = remaining.min(64);
-                    let next_worker = std::sync::atomic::AtomicU32::new(0);
-                    let results = std::sync::Mutex::new(Vec::with_capacity(workers));
+                    let count = remaining.min(batch.size(n));
+                    crate::suite_measure::validate_batch_capacity::<I, O>(count)?;
+                    let results =
+                        std::sync::Mutex::new(crate::suite_measure::worker_buffer(workers)?);
                     total = total.add(crate::suite_measure::parallel_local_batch(
                         timer,
                         workers,
                         || {
                             (
-                                next_worker.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                                crate::counters::worker_slot().expect("worker preparation scope"),
                                 (0..count).map(|_| setup()).collect::<Vec<_>>(),
                                 Vec::with_capacity(count as usize),
                             )
@@ -2183,6 +2459,7 @@ impl<'a> Suite<'a> {
             }
             .into(),
         );
+        self.record_thread_batch_policy(batch);
         self
     }
 
@@ -2237,33 +2514,35 @@ impl<'a> Suite<'a> {
         let worker_samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let captured_workers = worker_samples.clone();
         let case_id = format!("{}/{}", self.name, name);
+        let batch = self.registration_batch_policy();
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let workers = captured_count.get();
                 captured.set(None);
                 captured_workers.borrow_mut().clear();
                 let mut wave_index = 0;
-                if workers == 0 || workers > 256 {
-                    return Err(error("workers must be 1..256"));
+                if workers == 0 {
+                    return Err(error("workers must be positive"));
                 }
                 let mut remaining = n;
                 let mut total = Measured::default();
                 let mut counts = crate::alloc::ThreadStats::default();
                 while remaining > 0 {
-                    let count = remaining.min(64);
-                    let next_worker = std::sync::atomic::AtomicU32::new(0);
-                    let results = std::sync::Mutex::new(Vec::with_capacity(workers));
+                    let count = remaining.min(batch.size(n));
+                    crate::suite_measure::validate_batch_capacity::<I, O>(count)?;
+                    let results =
+                        std::sync::Mutex::new(crate::suite_measure::worker_buffer(workers)?);
                     total = total.add(crate::suite_measure::parallel_local_batch(
                         timer,
                         workers,
                         || {
                             (
-                                next_worker.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                                crate::counters::worker_slot().expect("worker preparation scope"),
                                 executor(),
                                 (0..count).map(|_| setup()).collect::<Vec<_>>(),
                                 Vec::with_capacity(count as usize),
@@ -2358,6 +2637,7 @@ impl<'a> Suite<'a> {
             }
             .into(),
         );
+        self.record_thread_batch_policy(batch);
         self
     }
 
@@ -2413,33 +2693,35 @@ impl<'a> Suite<'a> {
         let worker_samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let captured_workers = worker_samples.clone();
         let case_id = format!("{}/{}", self.name, name);
+        let batch = self.registration_batch_policy();
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let workers = captured_count.get();
                 captured.set(None);
                 captured_workers.borrow_mut().clear();
                 let mut wave_index = 0;
-                if workers == 0 || workers > 256 {
-                    return Err(error("workers must be 1..256"));
+                if workers == 0 {
+                    return Err(error("workers must be positive"));
                 }
                 let mut remaining = n;
                 let mut total = Measured::default();
                 let mut counts = crate::alloc::ThreadStats::default();
                 while remaining > 0 {
-                    let count = remaining.min(64);
-                    let next_worker = std::sync::atomic::AtomicU32::new(0);
-                    let results = std::sync::Mutex::new(Vec::with_capacity(workers));
+                    let count = remaining.min(batch.size(n));
+                    crate::suite_measure::validate_batch_capacity::<I, O>(count)?;
+                    let results =
+                        std::sync::Mutex::new(crate::suite_measure::worker_buffer(workers)?);
                     total = total.add(crate::suite_measure::parallel_batch(
                         timer,
                         workers,
                         || {
                             (
-                                next_worker.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                                crate::counters::worker_slot().expect("worker preparation scope"),
                                 (0..count).map(|_| setup()).collect::<Vec<_>>(),
                                 Vec::with_capacity(count as usize),
                             )
@@ -2531,6 +2813,7 @@ impl<'a> Suite<'a> {
             }
             .into(),
         );
+        self.record_thread_batch_policy(batch);
         self
     }
 
@@ -2602,19 +2885,26 @@ impl<'a> Suite<'a> {
     where
         E: crate::workloads::Executor + 'a,
     {
+        let batch = self.registration_batch_policy();
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
+        let samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let captured_samples = samples.clone();
         self.register_fallible(
             name,
             input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
+                captured_samples.borrow_mut().clear();
+                let mut wave = 0;
                 let workers = captured_count.get();
                 let mut remaining = n;
                 let mut total = Measured::default();
                 while remaining > 0 {
-                    let count = remaining.min(64);
-                    total = total.add(crate::suite_measure::parallel_local_batch(
+                    let count = remaining.min(batch.size(n));
+                    crate::suite_measure::validate_batch_capacity::<I, O>(count)?;
+                    let mut records = Vec::new();
+                    total = total.add(crate::suite_measure::parallel_local_batch_recorded(
                         timer,
                         workers,
                         || {
@@ -2638,19 +2928,39 @@ impl<'a> Suite<'a> {
                             black_box(&outputs);
                             Ok(elapsed)
                         },
+                        Some(&mut records),
                     )?)?;
+                    captured_samples
+                        .borrow_mut()
+                        .extend(records.into_iter().enumerate().map(|(worker, elapsed)| {
+                            crate::WorkerTiming {
+                                case: String::new(),
+                                variant: "candidate".into(),
+                                process: 0,
+                                sequence: 0,
+                                wave,
+                                worker: worker as u64,
+                                operations: count,
+                                wall_ns: elapsed.raw_ns.to_string(),
+                                adjusted_wall_ns: Some(elapsed.adjusted_ns.to_string()),
+                            }
+                        }));
+                    wave += 1;
                     remaining -= count;
                 }
                 Ok(total)
             }),
         );
+        self.entries.last_mut().unwrap().worker_timings = Some(samples);
         self.thread_contract(workers);
         self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         let contract = &mut self.entries.last_mut().unwrap().case.contract;
+        contract.insert("threads.timing_records".into(), "wave-v1".into());
         contract.insert("threads.setup".into(), "worker".into());
         contract.insert("threads.scope".into(), "sum of synchronized wave intervals; <=64 operations per worker per wave; worker-local setup/drop and spawn/join excluded; values retained until all worker timers stop".into());
         contract.insert("async.executor".into(), std::any::type_name::<E>().into());
         contract.insert("async.scope".into(), "one executor per worker per wave; construction/drop excluded; sequential future creation/polling per worker included; workers concurrent".into());
+        self.record_thread_batch_policy(batch);
         self
     }
     /// Concurrent async operations consuming worker-local fresh inputs.
@@ -2715,19 +3025,26 @@ impl<'a> Suite<'a> {
         f: impl Fn(&mut I) -> O + Sync + 'a,
         drop: DropPolicy,
     ) -> &mut Self {
+        let batch = self.registration_batch_policy();
         let runtime_workers = std::rc::Rc::new(std::cell::Cell::new(workers));
         let captured_count = runtime_workers.clone();
+        let samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let captured_samples = samples.clone();
         self.register_fallible(
             name,
             crate::suite_measure::input_lifecycle(drop),
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
+                captured_samples.borrow_mut().clear();
+                let mut wave = 0;
                 let workers = captured_count.get();
                 let mut remaining = n;
                 let mut total = Measured::default();
                 while remaining > 0 {
-                    let count = remaining.min(64);
-                    total = total.add(crate::suite_measure::parallel_batch(
+                    let count = remaining.min(batch.size(n));
+                    crate::suite_measure::validate_batch_capacity::<I, O>(count)?;
+                    let mut records = Vec::new();
+                    total = total.add(crate::suite_measure::parallel_batch_recorded(
                         timer,
                         workers,
                         || {
@@ -2751,20 +3068,60 @@ impl<'a> Suite<'a> {
                             black_box(&outputs);
                             Ok(elapsed)
                         },
+                        Some(&mut records),
                     )?)?;
+                    captured_samples
+                        .borrow_mut()
+                        .extend(records.into_iter().enumerate().map(|(worker, elapsed)| {
+                            crate::WorkerTiming {
+                                case: String::new(),
+                                variant: "candidate".into(),
+                                process: 0,
+                                sequence: 0,
+                                wave,
+                                worker: worker as u64,
+                                operations: count,
+                                wall_ns: elapsed.raw_ns.to_string(),
+                                adjusted_wall_ns: Some(elapsed.adjusted_ns.to_string()),
+                            }
+                        }));
+                    wave += 1;
                     remaining -= count;
                 }
                 Ok(total)
             }),
         );
+        self.entries.last_mut().unwrap().worker_timings = Some(samples);
+        self.entries
+            .last_mut()
+            .unwrap()
+            .case
+            .contract
+            .insert("threads.timing_records".into(), "wave-v1".into());
         self.thread_contract(workers);
         self.entries.last_mut().unwrap().runtime_workers = Some(runtime_workers);
         self.entries.last_mut().unwrap().case.contract.insert(
             "threads.scope".into(),
             "sum of synchronized wave intervals; <=64 operations per worker per wave; spawn/join and inter-wave setup/drop excluded; total operations across workers".into(),
         );
+        self.record_thread_batch_policy(batch);
         self
     }
+    fn record_thread_batch_policy(&mut self, batch: BatchPolicy) {
+        let contract = &mut self.entries.last_mut().unwrap().case.contract;
+        contract.insert("threads.batch_policy".into(), format!("{batch:?}"));
+        for key in ["lifecycle", "threads.scope"] {
+            if let Some(value) = contract.get_mut(key) {
+                *value = value
+                    .replace("chunks of <=64", "chunks sized by threads.batch_policy")
+                    .replace(
+                        "<=64 operations per worker per wave",
+                        "operations per worker per wave sized by threads.batch_policy",
+                    );
+            }
+        }
+    }
+
     /// Override worker counts for registered concurrent cases. Sequential cases keep
     /// their execution model; their closures need not be thread safe.
     /// Zero selects available host parallelism, as in the `threads` attribute.
@@ -2774,8 +3131,19 @@ impl<'a> Suite<'a> {
         } else {
             workers
         };
-        if !(1..=256).contains(&workers) {
-            return Err(error("workers must be 1..256"));
+        if workers == 0 {
+            return Err(error("workers must be positive"));
+        }
+        if workers != 1
+            && self.entries.iter().any(|entry| {
+                entry
+                    .case
+                    .contract
+                    .get("threads.local_only")
+                    .is_some_and(|v| v == "true")
+            })
+        {
+            return Err(error("local-only threaded case requires one worker"));
         }
         for entry in &mut self.entries {
             if let Some(count) = &entry.runtime_workers {
@@ -2785,9 +3153,77 @@ impl<'a> Suite<'a> {
                     .case
                     .contract
                     .insert("threads".into(), workers.to_string());
+                entry.case.contract.insert(
+                    "threads.execution".into(),
+                    if workers == 1 { "caller" } else { "spawned" }.into(),
+                );
             }
         }
         Ok(self)
+    }
+
+    pub(crate) fn bench_async_owned_inherited<E, I, O>(
+        &mut self,
+        name: &str,
+        executor: impl FnMut() -> E + 'a,
+        mut setup: impl FnMut() -> I + 'a,
+        work: impl AsyncFn(I) -> O + 'a,
+        drop: DropPolicy,
+        batch: BatchPolicy,
+    ) -> &mut Self
+    where
+        E: crate::workloads::Executor + 'a,
+        I: 'a,
+        O: 'a,
+    {
+        self.bench_async_batched_ref(
+            name,
+            executor,
+            move || Some(setup()),
+            async move |input: &mut Option<I>| work(input.take().expect("fresh owned input")).await,
+            drop,
+            batch,
+        );
+        self.owned_input_contract(drop);
+        self
+    }
+
+    pub(crate) fn local_thread_contract(&mut self) {
+        self.thread_contract(1);
+        self.record_thread_batch_policy(self.registration_batch_policy());
+        let entry = self.entries.last_mut().unwrap();
+        let samples = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let captured = samples.clone();
+        let mut work = std::mem::replace(&mut entry.work, Box::new(|_, _| unreachable!()));
+        entry.work = Box::new(move |n, timer| {
+            captured.borrow_mut().clear();
+            let elapsed = work(n, timer)?;
+            captured.borrow_mut().push(crate::WorkerTiming {
+                case: String::new(),
+                variant: "candidate".into(),
+                process: 0,
+                sequence: 0,
+                wave: 0,
+                worker: 0,
+                operations: n,
+                wall_ns: elapsed.raw_ns.to_string(),
+                adjusted_wall_ns: Some(elapsed.adjusted_ns.to_string()),
+            });
+            Ok(elapsed)
+        });
+        entry.worker_timings = Some(samples);
+        entry
+            .case
+            .contract
+            .insert("threads.timing_records".into(), "wave-v1".into());
+        entry.case.contract.insert(
+            "threads.timing_scope".into(),
+            "one local batch; component intervals summed".into(),
+        );
+        entry
+            .case
+            .contract
+            .insert("threads.local_only".into(), "true".into());
     }
 
     fn thread_contract(&mut self, workers: usize) {
@@ -2797,7 +3233,11 @@ impl<'a> Suite<'a> {
             .case
             .contract
             .insert("threads".into(), workers.to_string());
-        entry.case.contract.insert("threads.scope".into(), "spawn/join excluded; common start to last worker completion; scheduling included; total operations across workers".into());
+        entry.case.contract.insert(
+            "threads.execution".into(),
+            if workers == 1 { "caller" } else { "spawned" }.into(),
+        );
+        entry.case.contract.insert("threads.scope".into(), "spawn/join excluded; maximum worker interval; start boundary in threads.timer_start; total operations across workers".into());
         entry.case.metrics[0] = Metric::duration(
             "wall",
             "concurrent batch wall clock; scheduler included",
@@ -2868,7 +3308,7 @@ impl<'a> Suite<'a> {
             e.case.contract.insert(format!("tag.{tag}"), "true".into());
         }
     }
-    /// Positive work units per operation: e.g. bytes or elements. Throughput is derived in reports.
+    /// Nonnegative work units per operation: e.g. bytes or elements. Throughput is derived in reports.
     pub fn work_units(&mut self, unit: &str, count: u64) -> &mut Self {
         if let Some(e) = self.entries.last_mut() {
             e.case
@@ -2881,8 +3321,12 @@ impl<'a> Suite<'a> {
         }
         self
     }
-    /// Replace a counter across all registered cases, including dynamic declarations.
-    fn override_work_units(&mut self, unit: &str, count: u64) {
+    /// Replace a counter across all currently registered cases, including dynamic
+    /// declarations of that unit. Other units are preserved; zero is a known count.
+    /// Call after registering cases (inside `main_registered`'s callback when used).
+    /// Cases registered later are unaffected. CLI counter options take precedence
+    /// when `main` runs. This changes reporting contracts without executing work.
+    pub fn override_work_units(&mut self, unit: &str, count: u64) -> &mut Self {
         for entry in &mut self.entries {
             entry.case.contract.remove(&format!("work.input.{unit}"));
             entry
@@ -2901,6 +3345,7 @@ impl<'a> Suite<'a> {
                     .insert("work.count".into(), count.to_string());
             }
         }
+        self
     }
     /// Attach actual work totals accumulated during input preparation. Dynamic
     /// totals replace fixed counters of the same unit in throughput reports.
@@ -2916,6 +3361,7 @@ impl<'a> Suite<'a> {
             let mut work = std::mem::replace(&mut entry.work, Box::new(|_, _| unreachable!()));
             entry.work = Box::new(move |n, timer| {
                 shared.reset();
+                let _worker = crate::counters::WorkerScope::enter(0);
                 let elapsed = work(n, timer)?;
                 shared.snapshot()?;
                 Ok(elapsed)
@@ -2936,7 +3382,7 @@ impl<'a> Suite<'a> {
         self.register(
             name,
             "shared lazy process fixture; setup/borrow/drop excluded; output drop included",
-            1_048_576,
+            u64::MAX,
             Box::new(move |n, timer| {
                 let mut input = fixture.get().borrow_mut();
                 let start = timer.start();
@@ -2969,7 +3415,9 @@ impl<'a> Suite<'a> {
             .entries
             .iter()
             .enumerate()
-            .filter(|(_, entry)| selection.matches(&entry.case))
+            .filter(|(_, entry)| {
+                !entry.sampling.disabled(&self.config) && selection.matches(&entry.case)
+            })
             .map(|(i, _)| i)
             .collect();
         // Each key follows actual group nodes, then the leaf. This keeps children
@@ -3124,13 +3572,15 @@ impl<'a> Suite<'a> {
         let mut ids = std::collections::BTreeSet::new();
         for &index in &indices {
             let e = &self.entries[index];
+            self.validate_case_threads(e)?;
             e.sampling
-                .validate(&self.config, e.max_batch.min(self.config.max_iterations))?;
+                .for_workers(&self.config, e.operations_per_iteration)
+                .validate(&self.config, e.iteration_cap(&self.config))?;
             if !ids.insert(&e.case.id) {
                 return Err(error("duplicate benchmark ID"));
             }
-            if !(1..=256).contains(&e.operations_per_iteration) {
-                return Err(error("workers must be 1..256"));
+            if e.operations_per_iteration == 0 {
+                return Err(error("workers must be positive"));
             }
             if e.case
                 .contract
@@ -3171,17 +3621,18 @@ impl<'a> Suite<'a> {
                     live.start_case(position)?;
                 }
                 if self.console_output != ConsoleOutput::Quiet {
-                    eprintln!("profile: {} — {} ms", entry.case.id, duration.as_millis());
+                    eprintln!("profile: {} — {:?}", entry.case.id, duration);
                 }
                 let outcome = profiling::attempt(|| {
                     if let Some(check) = &mut entry.verify {
                         check()?;
                     }
                     entry.executed = true;
+                    let iteration_cap = entry.iteration_cap(&self.config);
                     let stats = profiling::session(&mut *profiler, &entry.case.id, &path, || {
                         profiling::repeat(
                             duration,
-                            entry.max_batch.min(self.config.max_iterations),
+                            iteration_cap,
                             entry.sampling.iterations,
                             entry.operations_per_iteration,
                             &mut |n| (entry.work)(n, timer).map(|m| m.raw_ns),
@@ -3249,12 +3700,17 @@ impl<'a> Suite<'a> {
         }
 
         let mut ids = std::collections::BTreeSet::new();
-        for e in self.entries.iter().filter(|e| selection.matches(&e.case)) {
+        for e in self
+            .entries
+            .iter()
+            .filter(|e| !e.sampling.disabled(&self.config) && selection.matches(&e.case))
+        {
             self.validate_case_quick(e, test_mode)?;
             e.sampling
-                .validate(&self.config, e.max_batch.min(self.config.max_iterations))?;
-            if e.operations_per_iteration == 0 || e.operations_per_iteration > 256 {
-                return Err(error("workers must be 1..256"));
+                .for_workers(&self.config, e.operations_per_iteration)
+                .validate(&self.config, e.iteration_cap(&self.config))?;
+            if e.operations_per_iteration == 0 {
+                return Err(error("workers must be positive"));
             }
             if !ids.insert(&e.case.id) {
                 return Err(error("duplicate benchmark ID"));
@@ -3309,6 +3765,18 @@ impl<'a> Suite<'a> {
             "mixed"
         };
         let mut run = Run::new();
+        let disabled: Vec<_> = self
+            .entries
+            .iter()
+            .filter(|e| e.sampling.disabled(&self.config) && selection.matches(&e.case))
+            .map(|e| &e.case.id)
+            .collect();
+        if !disabled.is_empty() {
+            run.provenance.insert(
+                "sampling.disabled_cases".into(),
+                serde_json::to_string(&disabled)?,
+            );
+        }
         run.provenance
             .insert("timer.clock".into(), clock_name.into());
         if let Some(hz) = timers.values().find_map(|timer| timer.frequency_hz()) {
@@ -3419,7 +3887,10 @@ impl<'a> Suite<'a> {
                 }
                 .into(),
             );
-            let config = e.sampling.apply(&self.config);
+            let config = e
+                .sampling
+                .for_workers(&self.config, e.operations_per_iteration)
+                .apply(&self.config);
             let cold = e
                 .case
                 .contract
@@ -3487,6 +3958,13 @@ impl<'a> Suite<'a> {
                 if test_mode { "test_once" } else { "benchmark" }.into(),
             );
             let samples = if once { 1 } else { config.samples };
+            e.case.contract.insert(
+                "sampling.requested_samples".into(),
+                e.sampling
+                    .samples
+                    .unwrap_or(self.config.samples)
+                    .to_string(),
+            );
             e.case
                 .contract
                 .insert("samples".into(), samples.to_string());
@@ -3514,7 +3992,7 @@ impl<'a> Suite<'a> {
                     check().map_err(|err| error(format!("{} pre-validation: {err}", e.case.id)))?;
                 }
             }
-            let cap = e.max_batch.min(config.max_iterations);
+            let cap = e.iteration_cap(&config);
             let mut n = if once {
                 1
             } else {
@@ -3536,7 +4014,7 @@ impl<'a> Suite<'a> {
                     if calibrated_ns >= config.sample_time.as_nanos() || n >= cap {
                         break;
                     }
-                    n = (n * 2).min(cap);
+                    n = n.saturating_mul(2).min(cap);
                 }
             }
             let start = Instant::now();
@@ -3547,6 +4025,7 @@ impl<'a> Suite<'a> {
             }
             let schedule = Schedule::new(&e.sampling, &config, n, calibrated_ns, cap);
             e.sampling.record(&mut e.case.contract);
+            e.sampling.record_worker_start(&mut e.case);
             e.case.contract.insert(
                 "sampling.mode".into(),
                 if once { "once" } else { schedule.mode.as_str() }.into(),
@@ -3574,7 +4053,7 @@ impl<'a> Suite<'a> {
             }
             run.cases.push(e.case.clone());
             let mut under_target = false;
-            let mut collected = 0u32;
+            let mut collected = 0u64;
             let mut operation_range = (u64::MAX, 0u64);
             let quick_start = Instant::now();
             let mut previous_quick = None;
@@ -3586,7 +4065,7 @@ impl<'a> Suite<'a> {
             } else {
                 budget.needs_samples(collected, samples)
             } {
-                if collected == 100_000 && quick.is_some() {
+                if collected == u64::MAX && quick.is_some() {
                     run.cases
                         .last_mut()
                         .unwrap()
@@ -3594,10 +4073,11 @@ impl<'a> Suite<'a> {
                         .insert("quick.stop".into(), "sample_limit".into());
                     break;
                 }
-                if collected == 100_000 {
+                if collected == u64::MAX {
                     return Err(error(format!(
-                        "{}: min_time not reached within 100000 samples",
-                        e.case.id
+                        "{}: min_time not reached within {} samples",
+                        e.case.id,
+                        u64::MAX
                     )));
                 }
                 let n = if once {
@@ -3625,6 +4105,23 @@ impl<'a> Suite<'a> {
                 operation_range.0 = operation_range.0.min(operations);
                 operation_range.1 = operation_range.1.max(operations);
                 run.observations.push(Observation {
+                    worker_work_totals: if e.case.contract.contains_key("threads") {
+                        e.input_counters
+                            .as_ref()
+                            .map(|c| c.worker_snapshot(e.operations_per_iteration))
+                            .transpose()?
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|(worker, mut totals)| {
+                                totals.retain(|unit, _| {
+                                    e.case.contract.contains_key(&format!("work.input.{unit}"))
+                                });
+                                (worker, totals)
+                            })
+                            .collect()
+                    } else {
+                        Default::default()
+                    },
                     work_totals: e
                         .input_counters
                         .as_ref()
@@ -3642,7 +4139,7 @@ impl<'a> Suite<'a> {
                     variant: "candidate".into(),
                     process: 0,
                     pair: None,
-                    sequence: collected as u64,
+                    sequence: collected,
                     value: Some(elapsed.to_string()),
                     operations,
                     availability: Availability::Available,
@@ -3650,18 +4147,21 @@ impl<'a> Suite<'a> {
                 if compensate {
                     let mut adjusted = run.observations.last().unwrap().clone();
                     adjusted.metric = "wall.adjusted".into();
+                    adjusted.work_totals.clear();
+                    adjusted.worker_work_totals.clear();
                     adjusted.value = Some(measured.adjusted_ns.to_string());
                     run.observations.push(adjusted);
                 }
                 if let Some((metric, sample)) = &e.measurement_sample {
                     run.observations.push(Observation {
+                        worker_work_totals: Default::default(),
                         work_totals: Default::default(),
                         case: e.case.id.clone(),
                         metric: metric.clone(),
                         variant: "candidate".into(),
                         process: 0,
                         pair: None,
-                        sequence: collected as u64,
+                        sequence: collected,
                         value: Some(
                             sample
                                 .get()
@@ -3681,22 +4181,33 @@ impl<'a> Suite<'a> {
                         .zip(counts.metric_values())
                     {
                         run.observations.push(Observation {
+                            worker_work_totals: Default::default(),
                             work_totals: Default::default(),
                             case: e.case.id.clone(),
                             metric: id.into(),
                             variant: "candidate".into(),
                             process: 0,
                             pair: None,
-                            sequence: collected as u64,
+                            sequence: collected,
                             value: Some(value.to_string()),
                             operations,
                             availability: Availability::Available,
                         });
                     }
                 }
+                if let Some(workers) = &e.worker_timings {
+                    for mut worker in workers.borrow_mut().drain(..) {
+                        worker.case = e.case.id.clone();
+                        worker.sequence = collected;
+                        if !compensate {
+                            worker.adjusted_wall_ns = None;
+                        }
+                        run.worker_timings.push(worker);
+                    }
+                }
                 if let Some(workers) = &e.worker_allocations {
                     for mut worker in workers.borrow_mut().drain(..) {
-                        worker.sequence = collected as u64;
+                        worker.sequence = collected;
                         if !compensate {
                             worker.adjusted_wall_ns = None;
                         }
@@ -3741,6 +4252,13 @@ impl<'a> Suite<'a> {
                     "{}: max_time exhausted before collecting a sample",
                     e.case.id
                 )));
+            }
+            if !once
+                && budget.zero_duration_steps > 0
+                && (e.sampling.min_time.is_some_and(|d| !d.is_zero())
+                    || e.sampling.max_time.is_some())
+            {
+                run.notes.push(format!("{}: time budget charged a 1 ns progress floor for {} zero-duration workload calls; recorded durations are unchanged.", e.case.id, budget.zero_duration_steps));
             }
             if !once && budget.expired() {
                 run.notes.push(format!("{}: max_time reached after {collected} samples; requested {samples}. Limits are checked between workload calls.", e.case.id));
@@ -3804,6 +4322,16 @@ impl<'a> Suite<'a> {
     /// --warmup-ms, --json, --output. Errors propagate to the caller's main.
     pub fn main(mut self) -> Result<()> {
         let all_args: Vec<_> = std::env::args().skip(1).collect();
+        if all_args
+            .iter()
+            .any(|arg| matches!(arg.as_str(), "--version" | "-V"))
+        {
+            println!("airbug-bench {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        if crate::help::print_if_requested(&all_args) {
+            return Ok(());
+        }
         let environment_args =
             crate::sampling::environment_args(&all_args, |name| match std::env::var(name) {
                 Ok(value) => Ok(Some(value)),
@@ -3814,6 +4342,16 @@ impl<'a> Suite<'a> {
             .into_iter()
             .chain(all_args.iter().cloned())
             .collect();
+        if effective_args.iter().any(|arg| arg == "--sample-ms")
+            && effective_args.iter().any(|arg| arg == "--measurement-ms")
+            && !effective_args
+                .iter()
+                .any(|arg| matches!(arg.as_str(), "-h" | "--help" | "--help-all"))
+        {
+            return Err(error(
+                "--sample-ms and --measurement-ms are mutually exclusive",
+            ));
+        }
         if let Some(requested) = crate::threads::from_args(&effective_args)? {
             crate::threads::validate_registered_request(
                 &requested,
@@ -3836,12 +4374,17 @@ impl<'a> Suite<'a> {
                 entry.sampling.samples = None;
                 entry.sampling.warmup = None;
                 entry.sampling.sample_time = None;
+                entry.sampling.measurement_time = None;
             }
         }
         let mut selection = crate::Selection::default();
         let mut list = false;
+        let mut terse_list = false;
+        let mut list_format_set = false;
         let mut dry_run = false;
-        let mut test_mode = false;
+        let mut test_mode = self.cargo_harness
+            && !all_args.iter().any(|arg| arg == "--bench")
+            && std::env::var_os("AIRBUG_BENCH_RUNNER").is_none_or(|value| value != "1");
         let mut json = false;
         let mut color = self.console_color;
         let mut color_cli = false;
@@ -3863,11 +4406,12 @@ impl<'a> Suite<'a> {
         let mut summary_parameter = None;
         let mut summary_estimator = None;
         let mut summary_scale = None;
-        let mut filter_set = false;
+        let mut filters = Vec::new();
         let mut regex_filter = false;
         let mut bootstrap: Option<crate::bootstrap::Config> = None;
         let mut bootstrap_cli = crate::bootstrap::Options::default();
         let mut bootstrap_distributions = false;
+        let mut no_bootstrap = false;
         let mut bytes_format = None;
         let mut comparison_config = self.comparison_config;
         let mut significance_set = false;
@@ -3879,6 +4423,7 @@ impl<'a> Suite<'a> {
             std::env::var_os("AIRBUG_BENCH_HISTORY_DIR").map(std::path::PathBuf::from);
         let mut history_root_set = false;
         let mut discard = false;
+        let mut no_html = false;
         let mut load_baseline = None;
         let mut named_baseline: Option<(String, bool)> = None;
         let mut save_baseline: Option<(String, crate::baseline::SaveMode)> = None;
@@ -3892,6 +4437,17 @@ impl<'a> Suite<'a> {
                 // Cargo supplies this even for targets with harness = false.
                 "--bench" => {}
                 "--dry-run" => dry_run = true,
+                "--nocapture" | "--show-output" => {}
+                "--format" => {
+                    if list_format_set {
+                        return Err(error("list format specified twice"));
+                    }
+                    list_format_set = true;
+                    match args.next().as_deref() {
+                        Some("terse") => terse_list = true,
+                        _ => return Err(error("--format requires terse (with --list)")),
+                    }
+                }
                 "--output-format" => {
                     if format_cli {
                         return Err(error("output format specified twice"));
@@ -3936,6 +4492,7 @@ impl<'a> Suite<'a> {
                     no_plots = arg == "--no-plots";
                 }
                 "--discard" => discard = true,
+                "--no-html" => no_html = true,
                 "--load-baseline" => {
                     if load_baseline.is_some() {
                         return Err(error("loaded baseline specified twice"));
@@ -4033,8 +4590,8 @@ impl<'a> Suite<'a> {
                     self.quick_cli = true;
                     let quick = self.quick.get_or_insert_with(Default::default);
                     match arg.as_str() {
-                        "--quick-min-ms" => quick.min_time = Duration::from_millis(value.parse()?),
-                        "--quick-max-ms" => quick.max_time = Duration::from_millis(value.parse()?),
+                        "--quick-min-ms" => quick.min_time = crate::sampling::milliseconds(&value)?,
+                        "--quick-max-ms" => quick.max_time = crate::sampling::milliseconds(&value)?,
                         _ => quick.relative_deviation = value.parse()?,
                     }
                 }
@@ -4042,11 +4599,11 @@ impl<'a> Suite<'a> {
                     if profile_time.is_some() {
                         return Err(error("profile time specified twice"));
                     }
-                    let millis: u64 = args
-                        .next()
-                        .ok_or_else(|| error("--profile-time-ms requires a duration"))?
-                        .parse()?;
-                    let duration = Duration::from_millis(millis);
+                    let duration = crate::sampling::milliseconds(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--profile-time-ms requires a duration"))?,
+                    )?;
                     crate::profiling::validate_duration(duration)?;
                     profile_time = Some(duration);
                 }
@@ -4087,6 +4644,7 @@ impl<'a> Suite<'a> {
                             .ok_or_else(|| error("--bytes-format requires decimal or binary"))?,
                     )?)
                 }
+                "--no-bootstrap" => no_bootstrap = true,
                 "--bootstrap-distributions" => {
                     if bootstrap_distributions {
                         return Err(error("--bootstrap-distributions specified twice"));
@@ -4188,13 +4746,10 @@ impl<'a> Suite<'a> {
                 "--ignored" => selection.only_ignored = true,
                 "--json" => json = true,
                 "--filter" => {
-                    if filter_set {
-                        return Err(error("benchmark filter specified twice"));
-                    }
-                    filter_set = true;
-                    selection.pattern = args
-                        .next()
-                        .ok_or_else(|| error("--filter requires value"))?
+                    filters.push(
+                        args.next()
+                            .ok_or_else(|| error("--filter requires value"))?,
+                    );
                 }
                 "--summary-parameter" => {
                     if summary_parameter.is_some() {
@@ -4256,11 +4811,11 @@ impl<'a> Suite<'a> {
                     }
                 }
                 "--min-time-ms" | "--max-time-ms" => {
-                    let value = Duration::from_millis(
-                        args.next()
-                            .ok_or_else(|| error("time limit requires milliseconds"))?
-                            .parse()?,
-                    );
+                    let value = crate::sampling::milliseconds(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("time limit requires milliseconds"))?,
+                    )?;
                     for entry in &mut self.entries {
                         if arg == "--min-time-ms" {
                             entry.sampling.min_time = Some(value);
@@ -4275,6 +4830,26 @@ impl<'a> Suite<'a> {
                             Some(arg == "--exclude-external-time");
                     }
                 }
+                "--worker-start" => {
+                    let policy = crate::timer::WorkerStart::parse(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--worker-start requires value"))?,
+                    )?;
+                    for entry in &mut self.entries {
+                        entry.sampling.worker_start = Some(policy);
+                    }
+                }
+                "--sample-count-unit" => {
+                    let unit = crate::SampleCountUnit::parse(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--sample-count-unit requires value"))?,
+                    )?;
+                    for entry in &mut self.entries {
+                        entry.sampling.sample_count_unit = Some(unit);
+                    }
+                }
                 "--samples" => {
                     for entry in &mut self.entries {
                         entry.sampling.samples = None;
@@ -4284,76 +4859,63 @@ impl<'a> Suite<'a> {
                         .ok_or_else(|| error("--samples requires value"))?
                         .parse()?
                 }
+                "--measurement-ms" => {
+                    let duration = crate::sampling::milliseconds(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--measurement-ms requires value"))?,
+                    )?;
+                    if duration.is_zero() {
+                        return Err(error("--measurement-ms must be positive"));
+                    }
+                    for entry in &mut self.entries {
+                        entry.sampling.sample_time = None;
+                        entry.sampling.measurement_time = Some(duration);
+                    }
+                }
                 "--sample-ms" => {
                     for entry in &mut self.entries {
                         entry.sampling.sample_time = None;
+                        entry.sampling.measurement_time = None;
                     }
-                    self.config.sample_time = Duration::from_millis(
-                        args.next()
-                            .ok_or_else(|| error("--sample-ms requires value"))?
-                            .parse()?,
-                    )
+                    self.config.sample_time = crate::sampling::milliseconds(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--sample-ms requires value"))?,
+                    )?
                 }
                 "--warmup-ms" => {
                     for entry in &mut self.entries {
                         entry.sampling.warmup = None;
                     }
-                    self.config.warmup = Duration::from_millis(
-                        args.next()
-                            .ok_or_else(|| error("--warmup-ms requires value"))?
-                            .parse()?,
-                    )
+                    self.config.warmup = crate::sampling::milliseconds(
+                        &args
+                            .next()
+                            .ok_or_else(|| error("--warmup-ms requires value"))?,
+                    )?
                 }
-                "--help" | "-h" => {
-                    println!(
-                        "Airbug benchmarks
-
-Start here:
-  cargo bench                       Measure, compare with previous run, save HTML report
-  cargo bench FILTER                Run matching cases
-  cargo bench -- --list             List cases without measuring
-  cargo bench -- --profile quick    Short exploratory run
-  cargo bench -- --discard          Measure without saving results
-  cargo bench -- --quiet            Results without progress or detailed tables
-  cargo bench -- --verbose          Include environment and case contracts
-  cargo bench -- --output-format tree  Hierarchical results and lists
-  cargo bench -- --color auto       Color: auto, always or never (auto respects NO_COLOR)
-
-Reports: target/airbug-bench/reports/<run-id>/report.html
-Use --output NEW_DIRECTORY to choose a destination.
-Sampling environment: AIRBUG_BENCH_SAMPLES, AIRBUG_BENCH_ITERATIONS, AIRBUG_BENCH_WARMUP_MS,
-AIRBUG_BENCH_SAMPLE_MS, AIRBUG_BENCH_SAMPLING, AIRBUG_BENCH_MIN_TIME_MS,
-AIRBUG_BENCH_MAX_TIME_MS, AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME.
-Also: AIRBUG_BENCH_TIMER, AIRBUG_BENCH_SORT, AIRBUG_BENCH_REVERSE, AIRBUG_BENCH_BYTES_FORMAT.
-CLI flags take precedence; --forward overrides reverse sorting from the environment.
-Concurrent cases: --threads N[,N...] (repeatable; 0 = available parallelism), AIRBUG_BENCH_THREADS.
-Counter overrides: --bytes-count N, --items-count N, --chars-count N, --cycles-count N, --bits-count N.
-Environment: AIRBUG_BENCH_BYTES_COUNT, AIRBUG_BENCH_ITEMS_COUNT, AIRBUG_BENCH_CHARS_COUNT, AIRBUG_BENCH_CYCLES_COUNT, AIRBUG_BENCH_BITS_COUNT.
-The first run establishes a baseline; insufficient evidence stays inconclusive.
-
-All options:"
-                    );
-                    println!(
-                        "[FILTER] --bench --list --test --discard --load-baseline NAME --save-baseline NAME --replace-baseline NAME --retain-baseline NAME --baseline NAME --baseline-lenient NAME --baseline-store DIRECTORY --history-dir DIRECTORY --no-history --plots|--no-plots --timer os|cpu --overhead raw|subtract --quick [--quick-min-ms N --quick-max-ms N --quick-relative-deviation F] --profile-time-ms N --include-ignored --ignored --profile quick|normal|thorough --filter TEXT [--exact|--glob|--regex] --exclude GLOB --exclude-exact PATH --exclude-regex REGEX --sort registration|lexical|natural|source|kind --reverse --tag TAG --samples N --iterations N --sampling flat|linear|auto --min-time-ms N --max-time-ms N [--exclude-external-time|--include-external-time] --sample-ms N --warmup-ms N --resamples N --bootstrap-distributions --confidence-level FRACTION --significance-level FRACTION --noise-threshold-percent PERCENT --hypothesis-resamples N --hypothesis-seed N --hypothesis-distribution --analysis-seed N --bytes-format decimal|binary --summary-parameter NAME --summary-estimator process-median|mean --summary-scale linear|logarithmic --json --output NEW_DIRECTORY"
-                    );
-                    return Ok(());
-                }
-                _ if !arg.starts_with('-') => {
-                    if filter_set {
-                        return Err(error("benchmark filter specified twice"));
-                    }
-                    filter_set = true;
-                    selection.pattern = arg;
-                }
+                _ if !arg.starts_with('-') => filters.push(arg),
                 _ => return Err(error(format!("unknown argument {arg}"))),
             }
         }
-        if no_plots
+        if list_format_set && (!list || dry_run || json || format_cli) {
+            return Err(error(
+                "--format terse requires --list and cannot combine with --dry-run, --json or --output-format",
+            ));
+        }
+        if no_html && plots_cli && !no_plots {
+            return Err(error("--no-html conflicts with --plots"));
+        }
+        if (no_plots || no_html)
             && (summary_parameter.is_some()
                 || summary_scale.is_some()
                 || summary_estimator.is_some())
         {
-            return Err(error("--no-plots conflicts with summary chart options"));
+            return Err(error(if no_html {
+                "--no-html conflicts with summary chart options"
+            } else {
+                "--no-plots conflicts with summary chart options"
+            }));
         }
         if summary_estimator.is_some() && summary_parameter.is_none() {
             return Err(error("--summary-estimator requires --summary-parameter"));
@@ -4381,14 +4943,31 @@ All options:"
             config.validate()?;
         }
         if regex_filter {
-            let pattern = selection.pattern.clone();
-            selection = selection.with_regex(&pattern)?;
+            // No filter preserves the ordinary match-all selection.
+            if filters.is_empty() {
+                filters.push(String::new());
+            }
+            let patterns: Vec<_> = filters.iter().map(String::as_str).collect();
+            selection = selection.with_regexes(&patterns)?;
+        } else if filters.len() == 1 {
+            selection.pattern = filters.pop().unwrap();
+        } else {
+            selection.patterns = filters;
         }
         selection.validate()?;
-        if self
-            .selected_indices(&selection)
-            .iter()
-            .any(|&i| !self.entries[i].bootstrap.is_empty())
+        if no_bootstrap && bootstrap.is_some() {
+            return Err(error(
+                "--no-bootstrap cannot combine with explicit bootstrap settings",
+            ));
+        }
+        if !no_bootstrap && !test_mode && profile_time.is_none() {
+            bootstrap.get_or_insert_default();
+        }
+        if !no_bootstrap
+            && self
+                .selected_indices(&selection)
+                .iter()
+                .any(|&i| !self.entries[i].bootstrap.is_empty())
         {
             bootstrap.get_or_insert_default();
         }
@@ -4470,6 +5049,13 @@ All options:"
                 "named baseline comparison requires a benchmark measurement",
             ));
         }
+        for name in load_baseline
+            .iter()
+            .chain(named_baseline.iter().map(|(name, _)| name))
+            .chain(save_baseline.iter().map(|(name, _)| name))
+        {
+            crate::baseline::validate_name(name)?;
+        }
         if dry_run {
             let clocks: std::collections::BTreeSet<_> = self
                 .selected_indices(&selection)
@@ -4494,6 +5080,10 @@ All options:"
                 "raw"
             };
             let preview_quick = if test_mode { None } else { self.quick };
+            let has_total_target = self
+                .selected_indices(&selection)
+                .into_iter()
+                .any(|i| self.entries[i].sampling.measurement_time.is_some());
             let has_quick = !test_mode
                 && self
                     .selected_indices(&selection)
@@ -4506,9 +5096,9 @@ All options:"
                 .into_iter()
                 .map(|i| {
                     let e = &self.entries[i];
-                    let config = e.sampling.apply(&self.config);
-                    e.sampling
-                        .validate(&self.config, e.max_batch.min(config.max_iterations))?;
+                    let config = e.sampling.for_workers(&self.config, e.operations_per_iteration).apply(&self.config);
+                    e.sampling.for_workers(&self.config, e.operations_per_iteration)
+                        .validate(&self.config, e.iteration_cap(&config))?;
                     let mut case = e.case.clone();
                     let compensate = self.overhead_for(e) && !test_mode && !e.caller_timed && !case.contract.get("temperature").is_some_and(|v| v.starts_with("cold;"));
                     case.metrics.retain(|metric| metric.id != "wall.adjusted");
@@ -4528,6 +5118,8 @@ All options:"
                     case.contract
                         .retain(|key, _| !key.starts_with("quick.") && key != "sampling.mode");
                     e.sampling.record(&mut case.contract);
+                    e.sampling.record_worker_start(&mut case);
+                    case.contract.insert("sampling.requested_samples".into(), e.sampling.samples.unwrap_or(self.config.samples).to_string());
                     case.contract
                         .insert("samples".into(), config.samples.to_string());
                     case.contract
@@ -4558,18 +5150,31 @@ All options:"
                     Ok(case)
                 })
                 .collect::<Result<Vec<_>>>()?;
+            let duration_json = crate::sampling::milliseconds_json;
             println!(
                 "{}",
                 serde_json::to_string_pretty(
-                    &serde_json::json!({"cases":cases,"timer":preview_timer,"overhead":preview_overhead,"profile_time_ms":profile_time.map(|d| d.as_millis()),"adaptive_quick":preview_quick.map(|q| serde_json::json!({"min_time_ms":q.min_time.as_millis(),"max_time_ms":q.max_time.as_millis(),"relative_deviation":q.relative_deviation})),"samples":(!has_quick).then_some(self.config.samples),"warmup_ms":if has_quick {0} else {self.config.warmup.as_millis()},"target_sample_ms":(!has_quick).then_some(self.config.sample_time.as_millis()),"target_measured_ms_per_case":(!has_quick).then_some(self.config.samples as u128*self.config.sample_time.as_millis()),"note":"No work executed. Calibration, setup and validation add wall time; target duration is not a precision guarantee."})
+                    &serde_json::json!({"cases":cases,"timer":preview_timer,"overhead":preview_overhead,"profile_time_ms":profile_time.map(|d| duration_json(d.as_nanos())),"adaptive_quick":preview_quick.map(|q| serde_json::json!({"min_time_ms":duration_json(q.min_time.as_nanos()),"max_time_ms":duration_json(q.max_time.as_nanos()),"relative_deviation":q.relative_deviation})),"samples":(!has_quick).then_some(self.config.samples),"warmup_ms":duration_json(if has_quick {0} else {self.config.warmup.as_nanos()}),"target_sample_ms":(!has_quick && !has_total_target).then_some(duration_json(self.config.sample_time.as_nanos())),"target_measured_ms_per_case":(!has_quick && !has_total_target).then_some(self.config.sample_time.as_nanos().checked_mul(self.config.samples as u128).map(duration_json)),"note":"No work executed. Calibration, setup and validation add wall time; target duration is not a precision guarantee."})
                 )?
             );
             return Ok(());
         }
         if list {
             let names = self.list_selected(&selection);
-            if self.console_format == crate::ConsoleFormat::Tree && !json {
-                println!("{}", crate::console::tree_names(names));
+            if terse_list {
+                if names.iter().any(|name| name.contains(['\n', '\r'])) {
+                    return Err(error(
+                        "terse listing cannot represent case names containing newlines",
+                    ));
+                }
+                for id in names {
+                    println!("{id}: benchmark");
+                }
+            } else if self.console_format == crate::ConsoleFormat::Tree && !json {
+                println!(
+                    "{}",
+                    crate::console::terminal_tree(&crate::console::tree_names(names))
+                );
             } else {
                 for id in names {
                     println!("{id}");
@@ -4577,10 +5182,44 @@ All options:"
             }
             return Ok(());
         }
+        if !self
+            .entries
+            .iter()
+            .any(|entry| selection.matches(&entry.case))
+        {
+            let mut message = String::from(
+                "no benchmarks match this selection.\nUse cargo bench -- --list to see case names; filters match parts of a name.\nCheck exclusions and use --include-ignored to include ignored cases.",
+            );
+            if self.entries.is_empty() {
+                message.push_str("\nThis suite has no registered benchmarks. Add a #[bench] function inside #[airbug_bench::suite].");
+            } else {
+                message.push_str("\nRegistered cases (including ignored):");
+                for entry in self.entries.iter().take(10) {
+                    message.push_str(&format!("\n  {}", entry.case.id.escape_debug()));
+                }
+                if self.entries.len() > 10 {
+                    message.push_str(&format!("\n  … and {} more", self.entries.len() - 10));
+                }
+            }
+            return Err(error(message));
+        }
         if cfg!(debug_assertions) && !test_mode && load_baseline.is_none() {
             return Err(error(
                 "benchmarks require an optimized build; use cargo run --release or cargo bench",
             ));
+        }
+        // Fail before timers, setup, profiling hooks, or workload execution.
+        // create_dir/write_new below still enforce exclusivity against races.
+        if let Some(path) = &output {
+            match std::fs::symlink_metadata(path) {
+                Ok(_) => {
+                    return Err(error(format!(
+                        "output path already exists: {path}. Choose a new --output directory to preserve previous results."
+                    )));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
         }
         if let Some((name, mode)) = &save_baseline {
             crate::baseline::Store::new(&baseline_store).prepare_case_save_for(
@@ -4708,6 +5347,18 @@ All options:"
                 if !formatted.is_empty() {
                     crate::measurement::save_formatted(&mut run, &formatted)?;
                 }
+                if !no_plots && !no_html {
+                    if let Some(parameter) = summary_parameter.as_deref() {
+                        self.save_summary_formatting(
+                            &mut run,
+                            &crate::report::SummaryPlot {
+                                parameter,
+                                estimator: summary_estimator.unwrap_or_default(),
+                                scale: summary_scale.unwrap_or_default(),
+                            },
+                        )?;
+                    }
+                }
                 let estimates = bootstrap
                     .as_ref()
                     .map(|config| {
@@ -4724,16 +5375,53 @@ All options:"
                         )
                     })
                     .transpose()?;
+                if let Some(config) = &bootstrap {
+                    for (case, baseline) in &baseline_snapshot {
+                        let config = bootstrap_overrides.get(case).unwrap_or(config);
+                        let before = crate::history::one_case(baseline, case);
+                        let after = crate::history::one_case(&run, case);
+                        if crate::analysis::validate_comparison(&before, Some(&after), 0., 0.05)
+                            .is_ok()
+                        {
+                            let mut rows = crate::relative::compare_runs(&before, &after, config)?;
+                            self.format_relative_rates(&before, &after, config, &mut rows)?;
+                            crate::relative_format::save(&before, &mut run, config, &rows)?;
+                            if let Some(entry) =
+                                self.entries.iter().find(|entry| &entry.case.id == case)
+                            {
+                                for (id, formatter) in &entry.formatters {
+                                    let metric = entry
+                                        .case
+                                        .metrics
+                                        .iter()
+                                        .find(|metric| &metric.id == id)
+                                        .ok_or_else(|| {
+                                            error("formatted metric absent from registered case")
+                                        })?;
+                                    crate::regression_format::save(
+                                        &before,
+                                        &mut run,
+                                        case,
+                                        metric,
+                                        config,
+                                        formatter.as_ref(),
+                                    )?;
+                                }
+                            }
+                        }
+                    }
+                }
                 let rates = bytes_format
                     .map(|format| crate::report::throughput_with_format(&run, format))
                     .transpose()?;
                 if let Some(p) = &output {
-                    run.save_new(p)?;
+                    run.validate()?;
+                    std::fs::create_dir(p)?;
                     if !formatted.is_empty() {
                         crate::model::write_new(&p.join("formatted.json"), &formatted)?;
                         std::fs::write(
                             p.join("formatted.csv"),
-                            crate::measurement::report_csv(&formatted),
+                            crate::measurement::saved_report_csv(&run)?,
                         )?;
                     }
                     crate::model::write_new(
@@ -4753,34 +5441,40 @@ All options:"
                                 &p.join("formatted-estimates.json"),
                                 &formatted_report,
                             )?;
-                            let html = if no_plots {
-                                crate::report::html(&crate::bootstrap::markdown(&formatted_report))
-                            } else {
-                                crate::bootstrap::html(&formatted_report)
-                            };
-                            std::fs::write(p.join("formatted-estimates.html"), html)?;
+                            if !no_html {
+                                let html = if no_plots {
+                                    crate::report::html(&crate::bootstrap::markdown(
+                                        &formatted_report,
+                                    ))
+                                } else {
+                                    crate::bootstrap::html(&formatted_report)
+                                };
+                                std::fs::write(p.join("formatted-estimates.html"), html)?;
+                            }
                         }
                         crate::model::write_new(
                             &std::path::Path::new(p).join("estimates.json"),
                             report,
                         )?;
-                        let mut html = std::fs::OpenOptions::new()
-                            .write(true)
-                            .create_new(true)
-                            .open(std::path::Path::new(p).join("estimates.html"))?;
-                        std::io::Write::write_all(
-                            &mut html,
-                            (if no_plots {
-                                crate::report::html(&crate::bootstrap::markdown(report))
-                            } else {
-                                crate::bootstrap::html_with_case_scales(
-                                    report,
-                                    summary_scale,
-                                    &self.summary_scales(&selection)?,
-                                )
-                            })
-                            .as_bytes(),
-                        )?;
+                        if !no_html {
+                            let mut html = std::fs::OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(std::path::Path::new(p).join("estimates.html"))?;
+                            std::io::Write::write_all(
+                                &mut html,
+                                (if no_plots {
+                                    crate::report::html(&crate::bootstrap::markdown(report))
+                                } else {
+                                    crate::bootstrap::html_with_case_scales(
+                                        report,
+                                        summary_scale,
+                                        &self.summary_scales(&selection)?,
+                                    )
+                                })
+                                .as_bytes(),
+                            )?;
+                        }
                     }
                 }
                 let named_comparison = if named_baseline.is_some() {
@@ -4794,7 +5488,8 @@ All options:"
                     None
                 };
                 if let (Some(path), Some(report)) = (&output, &named_comparison) {
-                    report.export_with_plots(&path.join("comparison.json"), !no_plots)?;
+                    report
+                        .export_with_plots(&path.join("comparison.json"), !no_plots && !no_html)?;
                     if let (Some(config), Some(candidate)) = (&bootstrap, &estimates) {
                         let mut charts = String::new();
                         let mut relative_reports = Vec::new();
@@ -4808,15 +5503,23 @@ All options:"
                                         &crate::history::one_case(&run, &case.case),
                                         config,
                                     )?;
-                                    if !no_plots {
+                                    if !no_plots && !no_html {
                                         charts.push_str(&crate::relative::charts(
                                             &relative,
                                             case.config.noise_threshold_percent,
                                         )?);
-                                        let baseline = crate::bootstrap::analyze(baseline, config)?;
+                                        let baseline_analysis =
+                                            crate::bootstrap::analyze(baseline, config)?;
                                         charts.push_str(&crate::bootstrap::comparison_charts(
-                                            &baseline, candidate,
+                                            &baseline_analysis,
+                                            candidate,
                                         ));
+                                        charts.push_str(&crate::regression_format::charts(
+                                            &crate::history::one_case(baseline, &case.case),
+                                            &crate::history::one_case(&run, &case.case),
+                                            config,
+                                            &std::collections::BTreeMap::new(),
+                                        )?);
                                     }
                                     relative_reports.extend(relative);
                                 }
@@ -4832,6 +5535,11 @@ All options:"
                                 ));
                             }
                         }
+                        let relative_text = crate::relative::markdown(&relative_reports);
+                        if !json && self.console_output != ConsoleOutput::Quiet {
+                            println!("{relative_text}");
+                        }
+                        charts.push_str(&crate::report::html_fragment(&relative_text));
                         if no_plots {
                             charts.push_str(&crate::report::html_fragment(&report.markdown()));
                         } else if charts.is_empty() {
@@ -4842,16 +5550,19 @@ All options:"
                             .create_new(true)
                             .open(path.join("relative-distributions.json"))?;
                         serde_json::to_writer_pretty(relative_file, &relative_reports)?;
-                        let html = crate::report::html("# Baseline statistical comparison")
-                            .replace("<!--CHARTS-->", &charts)
-                            .replace("<!--DETAILS-->", "");
-                        let mut file = std::fs::OpenOptions::new()
-                            .write(true)
-                            .create_new(true)
-                            .open(path.join("regression-comparison.html"))?;
-                        std::io::Write::write_all(&mut file, html.as_bytes())?;
+                        if !no_html {
+                            let html = crate::report::html("# Baseline statistical comparison")
+                                .replace("<!--CHARTS-->", &charts)
+                                .replace("<!--DETAILS-->", "");
+                            let mut file = std::fs::OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(path.join("regression-comparison.html"))?;
+                            std::io::Write::write_all(&mut file, html.as_bytes())?;
+                        }
                     }
                 }
+                let mut previous_regression_charts = String::new();
                 let previous = if history_enabled
                     && loaded_runs.is_none()
                     && !discard
@@ -4869,23 +5580,76 @@ All options:"
                         executable.file_name().unwrap_or_default().to_string_lossy()
                     );
                     Some(
-                        crate::history::History::new(root, &namespace).record_with_export_plots(
-                            &run,
+                        crate::history::History::new(root, &namespace).record_with_analysis(
+                            &mut run,
                             comparison_config,
                             &comparison_overrides,
-                            output
-                                .as_ref()
-                                .map(|path| path.join("comparison.json"))
-                                .as_deref(),
-                            !no_plots,
+                            (
+                                output
+                                    .as_ref()
+                                    .map(|path| path.join("comparison.json"))
+                                    .as_deref(),
+                                !no_plots && !no_html,
+                                output.as_ref().map(|path| path.join("run.json")).as_deref(),
+                            ),
+                            |baseline, candidate, config, rows| {
+                                let case = baseline
+                                    .cases
+                                    .first()
+                                    .ok_or_else(|| error("history baseline has no case"))?;
+                                let selected = crate::history::one_case(candidate, &case.id);
+                                self.format_relative_rates(baseline, &selected, config, rows)?;
+                                for row in rows.iter() {
+                                    let Some(entry) =
+                                        self.entries.iter().find(|entry| entry.case.id == row.case)
+                                    else {
+                                        continue;
+                                    };
+                                    let Some(formatter) = entry.formatters.get(&row.metric) else {
+                                        continue;
+                                    };
+                                    let metric = entry
+                                        .case
+                                        .metrics
+                                        .iter()
+                                        .find(|metric| metric.id == row.metric)
+                                        .ok_or_else(|| {
+                                            error("formatted metric absent from registered case")
+                                        })?;
+                                    crate::regression_format::save(
+                                        baseline,
+                                        candidate,
+                                        &row.case,
+                                        metric,
+                                        config,
+                                        formatter.as_ref(),
+                                    )?;
+                                }
+                                if !no_plots && !no_html {
+                                    previous_regression_charts.push_str(
+                                        &crate::regression_format::charts(
+                                            baseline,
+                                            candidate,
+                                            config,
+                                            &std::collections::BTreeMap::new(),
+                                        )?,
+                                    );
+                                }
+                                Ok(())
+                            },
                         )?,
                     )
                 } else {
                     None
                 };
-                if let Some(path) = &output {
+                if previous.is_none() {
+                    if let Some(path) = &output {
+                        crate::model::write_new(&path.join("run.json"), &run)?;
+                    }
+                }
+                if let Some(path) = output.as_ref().filter(|_| !no_html) {
                     let mut html = if no_plots {
-                        crate::report::html(&crate::report::markdown(&run)?)
+                        crate::report::html_run_without_plots(&run)?
                     } else {
                         crate::report::html_run_with_summary(
                             &run,
@@ -4930,6 +5694,10 @@ All options:"
                             }
                             html = html.replace("</body>", &format!("{charts}</body>"));
                         }
+                    }
+                    if !previous_regression_charts.is_empty() {
+                        html = html
+                            .replace("</body>", &format!("{previous_regression_charts}</body>"));
                     }
                     if let Some(comparison) = named_comparison.as_ref().or(previous.as_ref()) {
                         html = html.replace(
@@ -5038,7 +5806,7 @@ All options:"
                         println!("{}", report.markdown());
                     }
                     if let Some(report) = &previous {
-                        println!("{}", report.markdown());
+                        println!("{}", report.concise_markdown());
                     }
                 } else {
                     if self.console_output == ConsoleOutput::Verbose {
@@ -5055,7 +5823,13 @@ All options:"
                         }
                     }
                     if self.console_format == crate::ConsoleFormat::Tree {
-                        println!("{}", crate::console::tree(&summaries));
+                        println!(
+                            "{}",
+                            crate::console::terminal_tree(&crate::console::tree(
+                                &summaries,
+                                bytes_format
+                            ))
+                        );
                     } else {
                         println!(
                             "{}",
@@ -5087,10 +5861,26 @@ All options:"
                         );
                     }
                     if let Some(previous) = &previous {
-                        println!("{}", previous.markdown());
+                        println!(
+                            "{}",
+                            if self.console_output == ConsoleOutput::Quiet {
+                                previous.concise_markdown()
+                            } else {
+                                previous.markdown()
+                            }
+                        );
                     }
-                    if let Some(report) = &estimates {
-                        println!("{}", crate::bootstrap::markdown(report));
+                    if let Some(report) = &estimates
+                        && self.console_output != ConsoleOutput::Quiet
+                    {
+                        println!(
+                            "{}",
+                            if self.console_format == crate::ConsoleFormat::Tree {
+                                crate::bootstrap::text_summary(report)
+                            } else {
+                                crate::bootstrap::markdown(report)
+                            }
+                        );
                     }
                 }
             }
@@ -5191,6 +5981,69 @@ mod comparison_scope_tests {
 mod counter_override_tests {
     use super::*;
     #[test]
+    fn manual_thread_matrix_is_lazy_distinct_and_runtime_overridable() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        for override_counts in [None, Some(vec![3, 1, 3])] {
+            let calls = AtomicUsize::new(0);
+            let mut suite = Suite::new("manual");
+            if let Some(counts) = &override_counts {
+                suite.registration_threads(counts).unwrap();
+            }
+            let mut registered = Vec::new();
+            suite
+                .thread_matrix("work", [1, 2, 1], |suite, id, workers| {
+                    registered.push(workers);
+                    let calls = &calls;
+                    suite.bench_threads(id, workers, move || {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                    });
+                    suite.sampling(Sampling {
+                        iterations: Some(2),
+                        ..Default::default()
+                    });
+                })
+                .unwrap();
+            assert_eq!(
+                registered,
+                if override_counts.is_some() {
+                    vec![3, 1]
+                } else {
+                    vec![1, 2]
+                }
+            );
+            assert_eq!(calls.load(Ordering::SeqCst), 0);
+            suite.config(Config {
+                samples: 1,
+                warmup: Duration::ZERO,
+                sample_time: Duration::from_nanos(1),
+                max_iterations: 2,
+            });
+            let run = suite.run("").unwrap();
+            assert_eq!(
+                calls.load(Ordering::SeqCst),
+                registered.iter().sum::<usize>() * 2
+            );
+            for (case, workers) in run.cases.iter().zip(&registered) {
+                assert_eq!(case.id, format!("manual/work/threads={workers}"));
+                assert_eq!(case.contract["threads"], workers.to_string());
+                let row = run
+                    .observations
+                    .iter()
+                    .find(|row| row.case == case.id && row.metric == "wall")
+                    .unwrap();
+                assert_eq!(row.operations, (*workers * 2) as u64);
+            }
+        }
+        assert!(
+            Suite::new("empty")
+                .thread_matrix("work", [0usize; 0], |_, _, _| panic!(
+                    "empty matrix registered a case"
+                ))
+                .is_err()
+        );
+    }
+
+    #[test]
     fn runtime_threads_change_execution_and_normalization() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         let calls = AtomicUsize::new(0);
@@ -5216,7 +6069,7 @@ mod counter_override_tests {
             suite.entries[0].runtime_workers.as_ref().unwrap().get(),
             crate::threads::available()
         );
-        assert!(suite.thread_count(257).is_err());
+        assert!(suite.thread_count(257).is_ok());
         suite.thread_count(4).unwrap();
         suite.config(Config {
             samples: 1,
@@ -5305,5 +6158,143 @@ mod counter_override_tests {
         assert_eq!(dynamic.work_totals["bytes"], "12");
         assert!(!dynamic.work_totals.contains_key("items"));
         assert_eq!(run.cases[1].contract["work.count"], "9");
+    }
+}
+
+#[cfg(test)]
+mod iteration_domain_tests {
+    use super::*;
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
+
+    #[test]
+    fn explicit_counts_cover_u64_and_preserve_user_caps() {
+        for n in [1_048_577, u32::MAX as u64, u64::MAX] {
+            let calls = Rc::new(Cell::new(0));
+            let captured = calls.clone();
+            let mut suite = Suite::new("iterations");
+            suite.config(Config {
+                samples: 1,
+                warmup: Duration::ZERO,
+                ..Default::default()
+            });
+            suite.bench_custom("count", move |actual| {
+                assert_eq!(actual, n);
+                captured.set(captured.get() + 1);
+                Duration::from_nanos(actual)
+            });
+            suite.sampling(Sampling {
+                iterations: Some(n),
+                ..Default::default()
+            });
+            let run = suite.run("").unwrap();
+            assert_eq!(calls.get(), 1);
+            assert_eq!(run.observations[0].operations, n);
+            assert_eq!(
+                run.observations[0].value.as_deref(),
+                Some(n.to_string().as_str())
+            );
+            run.validate().unwrap();
+        }
+        let mut limited = Suite::new("limited");
+        limited.config(Config {
+            max_iterations: 10,
+            ..Default::default()
+        });
+        limited.bench_custom("never", |_| panic!("invalid plan executed workload"));
+        limited.sampling(Sampling {
+            iterations: Some(11),
+            ..Default::default()
+        });
+        assert!(
+            limited
+                .run("")
+                .unwrap_err()
+                .to_string()
+                .contains("iterations must be 1..10")
+        );
+    }
+
+    #[test]
+    fn fresh_inputs_cross_old_iteration_limit_with_bounded_live_storage() {
+        struct Input<'a>(&'a Cell<u64>, &'a Cell<u64>);
+        impl Drop for Input<'_> {
+            fn drop(&mut self) {
+                self.0.set(self.0.get() - 1);
+                self.1.set(self.1.get() + 1);
+            }
+        }
+        let live = Cell::new(0u64);
+        let peak = Cell::new(0u64);
+        let dropped = Cell::new(0u64);
+        let calls = Cell::new(0u64);
+        let n = 1_048_577;
+        let mut suite = Suite::new("large-input-batch");
+        suite.config(Config {
+            samples: 1,
+            warmup: Duration::ZERO,
+            ..Default::default()
+        });
+        suite.bench_with_input(
+            "fresh",
+            || {
+                live.set(live.get() + 1);
+                peak.set(peak.get().max(live.get()));
+                Input(&live, &dropped)
+            },
+            |_| calls.set(calls.get() + 1),
+            DropPolicy::OutsideTiming,
+        );
+        suite.sampling(Sampling {
+            iterations: Some(n),
+            ..Default::default()
+        });
+        let run = suite.run("").unwrap();
+        assert_eq!(run.observations[0].operations, n);
+        assert_eq!(calls.get(), n);
+        assert_eq!(dropped.get(), n);
+        assert_eq!(live.get(), 0);
+        assert_eq!(peak.get(), 64);
+        run.validate().unwrap();
+    }
+
+    #[test]
+    fn worker_totals_are_bounded_before_work_and_calibration_does_not_wrap() {
+        let mut suite = Suite::new("workers");
+        suite.bench_threads("never", 2, || panic!("overflowing count executed workload"));
+        assert_eq!(
+            suite.entries[0].iteration_cap(&Config::default()),
+            u64::MAX / 2
+        );
+        suite.sampling(Sampling {
+            iterations: Some(u64::MAX / 2 + 1),
+            ..Default::default()
+        });
+        assert!(
+            suite
+                .run("")
+                .unwrap_err()
+                .to_string()
+                .contains("iterations must be")
+        );
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let captured = calls.clone();
+        let mut calibrating = Suite::new("calibration");
+        calibrating.config(Config {
+            samples: 1,
+            warmup: Duration::ZERO,
+            sample_time: Duration::from_nanos(1),
+            ..Default::default()
+        });
+        calibrating.bench_custom("instant", move |n| {
+            captured.borrow_mut().push(n);
+            Duration::ZERO
+        });
+        let run = calibrating.run("").unwrap();
+        assert_eq!(calls.borrow().len(), 66);
+        assert_eq!(&calls.borrow()[63..], &[1u64 << 63, u64::MAX, u64::MAX]);
+        assert_eq!(run.observations[0].operations, u64::MAX);
     }
 }

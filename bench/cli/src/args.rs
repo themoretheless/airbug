@@ -244,10 +244,14 @@ pub(crate) enum Action {
         #[arg(short, long)]
         output: PathBuf,
     },
-    /// Scaffold a checked parameterized benchmark in an existing Cargo package.
+    /// Add a ready-to-run benchmark to an existing Cargo package.
     Init {
-        #[arg(long, default_value = "Cargo.toml")]
-        manifest_path: PathBuf,
+        /// Name of the benchmark target and file in benches/.
+        #[arg(long, default_value = "bench")]
+        name: String,
+        /// Package manifest; by default Cargo finds it in this directory or its parents.
+        #[arg(long)]
+        manifest_path: Option<PathBuf>,
         #[arg(long)]
         library_path: Option<PathBuf>,
     },
@@ -337,8 +341,9 @@ pub(crate) enum Action {
         candidate: Option<PathBuf>,
         #[arg(long, default_value_t = 5.0)]
         threshold: f64,
-        #[arg(long, default_value_t = 0.05)]
-        alpha: f64,
+        /// Significance level (default 0.05); explicit value also overrides relative confidence.
+        #[arg(long)]
+        alpha: Option<f64>,
         #[arg(long)]
         json: bool,
         /// Portable HTML with retained Welch null-distribution charts.
@@ -353,10 +358,12 @@ pub(crate) enum Action {
         /// Export relative mean/median draws for two independent runs in a JSON envelope.
         #[arg(long, requires_all = ["json", "candidate"])]
         relative_distributions: bool,
-        #[arg(long, default_value_t = 10_000)]
-        hypothesis_resamples: usize,
-        #[arg(long, default_value_t = 0)]
-        hypothesis_seed: u64,
+        /// Null resamples (default 10000); explicit value overrides saved relative resamples.
+        #[arg(long)]
+        hypothesis_resamples: Option<usize>,
+        /// Null seed (default 0); explicit value overrides saved relative seeds.
+        #[arg(long)]
+        hypothesis_seed: Option<u64>,
         #[arg(long, value_enum, default_value = "fail")]
         uncertainty: Uncertainty,
         #[arg(long)]

@@ -52,8 +52,7 @@ pub fn gaussian(values: &[f64], resolution: usize) -> Result<Density> {
     }
     let lo = normalized.iter().copied().fold(f64::INFINITY, f64::min) - 4. * width;
     let hi = normalized.iter().copied().fold(f64::NEG_INFINITY, f64::max) + 4. * width;
-    let mut points = Vec::with_capacity(resolution);
-    for index in 0..resolution {
+    let point = |index: usize| -> Result<(f64, f64)> {
         let x = lo + (hi - lo) * index as f64 / (resolution - 1) as f64;
         let sum = normalized
             .iter()
@@ -67,8 +66,23 @@ pub fn gaussian(values: &[f64], resolution: usize) -> Result<Density> {
         if !x.is_finite() || !density.is_finite() {
             return Err(error("density grid exceeds numeric precision"));
         }
-        points.push((x, density));
-    }
+        Ok((x, density))
+    };
+    let workers = crate::parallel_analysis::density_workers(resolution, values.len());
+    let points = if workers == 1 {
+        (0..resolution).map(point).collect::<Result<Vec<_>>>()?
+    } else {
+        let jobs: Vec<_> = (0..workers)
+            .map(|worker| resolution * worker / workers..resolution * (worker + 1) / workers)
+            .collect();
+        let mut points = Vec::with_capacity(resolution);
+        for chunk in crate::parallel_analysis::ordered(jobs, |range| {
+            range.map(point).collect::<Result<Vec<_>>>()
+        })? {
+            points.extend(chunk);
+        }
+        points
+    };
     Ok(Density::Curve {
         bandwidth,
         points,
@@ -316,6 +330,49 @@ fn render(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn parallel_density_preserves_every_point_bit_for_bit() {
+        use super::*;
+        for factor in [1.0, 1e200] {
+            let values: Vec<_> = (0..1025)
+                .map(|n| (((n * 17) % 509) as f64 - 254.0) * factor)
+                .collect();
+            let resolution = 257;
+            let Density::Curve {
+                bandwidth,
+                points,
+                samples,
+            } = gaussian(&values, resolution).unwrap()
+            else {
+                panic!("curve expected")
+            };
+            let scale = values.iter().map(|v| v.abs()).fold(0.0, f64::max);
+            let normalized: Vec<_> = values.iter().map(|v| v / scale).collect();
+            let mean = normalized.iter().sum::<f64>() / values.len() as f64;
+            let variance = normalized.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
+                / (values.len() - 1) as f64;
+            let width = variance.sqrt() * (4.0 / (3.0 * values.len() as f64)).powf(0.2);
+            assert_eq!(bandwidth.to_bits(), (width * scale).to_bits());
+            assert_eq!(samples, values.len());
+            let lo = normalized.iter().copied().fold(f64::INFINITY, f64::min) - 4.0 * width;
+            let hi = normalized.iter().copied().fold(f64::NEG_INFINITY, f64::max) + 4.0 * width;
+            for (index, (actual_x, actual_y)) in points.iter().enumerate() {
+                let x = lo + (hi - lo) * index as f64 / (resolution - 1) as f64;
+                let sum = normalized
+                    .iter()
+                    .map(|v| {
+                        let z = (x - v) / width;
+                        (-0.5 * z * z).exp()
+                    })
+                    .sum::<f64>();
+                let y =
+                    (sum / values.len() as f64 / (2.0 * std::f64::consts::PI).sqrt()) / bandwidth;
+                assert_eq!(actual_x.to_bits(), (x * scale).to_bits());
+                assert_eq!(actual_y.to_bits(), y.to_bits());
+            }
+            assert_eq!(points.len(), resolution);
+        }
+    }
     use super::*;
     #[test]
     fn estimate_overlay_keeps_external_point_and_degenerate_intervals() {
@@ -323,7 +380,7 @@ mod tests {
             point: 50.,
             lower: 1.,
             upper: 3.,
-            standard_error: 1.,
+            standard_error: Some(1.),
         };
         let chart = estimate_figure(&[1., 2., 3.], &estimate, "bootstrap", "ns").unwrap();
         assert_eq!(chart.matches("<polygon").count(), 1);
@@ -341,7 +398,7 @@ mod tests {
             point: 7.,
             lower: 7.,
             upper: 7.,
-            standard_error: 0.,
+            standard_error: Some(0.),
         };
         let chart = estimate_figure(&[7.; 10], &constant, "constant", "ns").unwrap();
         assert!(chart.contains("point mass"));

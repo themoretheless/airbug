@@ -177,24 +177,17 @@ pub fn export(run: &Run, format: &str) -> Result<String> {
         if formatted.is_empty() {
             return Err(error("run has no saved machine formatter output"));
         }
-        return Ok(airbug_bench::measurement::report_csv(&formatted));
+        return airbug_bench::measurement::saved_report_csv(run);
     }
     let mut out = String::new();
     if format == "csv" {
-        out.push_str("case,metric,variant,process,pair,sequence,value,operations,unit,scope,phase,statistic,availability\n");
+        out.push_str("case,metric,variant,process,pair,sequence,value,operations,unit,scope,phase,statistic,availability,case_contract,work_totals,worker_work_totals\n");
     } else if format != "jsonl" {
         return Err(error("format must be csv, jsonl or formatted-csv"));
     }
     for o in &run.observations {
-        let m = run
-            .cases
-            .iter()
-            .find(|c| c.id == o.case)
-            .unwrap()
-            .metrics
-            .iter()
-            .find(|m| m.id == o.metric)
-            .unwrap();
+        let case = run.cases.iter().find(|c| c.id == o.case).unwrap();
+        let m = case.metrics.iter().find(|m| m.id == o.metric).unwrap();
         if format == "jsonl" {
             out.push_str(&serde_json::to_string(
                 &serde_json::json!({"observation":o,"descriptor":m}),
@@ -216,6 +209,9 @@ pub fn export(run: &Run, format: &str) -> Result<String> {
                     m.phase.clone(),
                     m.statistic.clone(),
                     serde_json::to_string(&o.availability)?,
+                    serde_json::to_string(&case.contract)?,
+                    serde_json::to_string(&o.work_totals)?,
+                    serde_json::to_string(&o.worker_work_totals)?,
                 ]
                 .iter()
                 .map(|s| csv_cell(s))

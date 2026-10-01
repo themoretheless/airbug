@@ -47,8 +47,8 @@ impl Default for Config {
 }
 impl Config {
     pub fn validate(&self) -> Result<()> {
-        if !(2..=1_000_000).contains(&self.resamples) {
-            return Err(error("bootstrap resamples must be 2..=1000000"));
+        if self.resamples == 0 {
+            return Err(error("bootstrap resamples must be positive"));
         }
         if !self.confidence_level.is_finite()
             || self.confidence_level <= 0.0
@@ -59,12 +59,25 @@ impl Config {
         Ok(())
     }
 }
+/// Fallible reservation keeps representational/allocation limits separate from
+/// statistical configuration; a requested count must never panic on capacity.
+pub(crate) fn resample_buffer<T>(count: usize) -> Result<Vec<T>> {
+    let mut values = Vec::new();
+    values.try_reserve_exact(count).map_err(|error| {
+        crate::error(format!(
+            "cannot allocate bootstrap distribution for {count} resamples: {error}"
+        ))
+    })?;
+    Ok(values)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Estimate {
     pub point: f64,
     pub lower: f64,
     pub upper: f64,
-    pub standard_error: f64,
+    /// Unavailable with fewer than two bootstrap draws.
+    pub standard_error: Option<f64>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Estimates {
@@ -199,16 +212,46 @@ fn estimate_impl(
         .max(f64::MIN_POSITIVE);
     let normalized: Vec<_> = values.iter().map(|v| v / scale).collect();
     let points = statistics(&mut normalized.clone());
-    let mut rng = Seeded::new(config.seed);
-    let mut distributions: [Vec<f64>; 4] =
-        std::array::from_fn(|_| Vec::with_capacity(config.resamples));
-    let mut sample = vec![0.0; values.len()];
-    for _ in 0..config.resamples {
-        for value in &mut sample {
-            *value = normalized[draw_index(&mut rng, values.len())];
+    let mut distributions: [Vec<f64>; 4] = std::array::from_fn(|_| Vec::new());
+    for distribution in &mut distributions {
+        *distribution = resample_buffer(config.resamples)?;
+    }
+    let workers = crate::parallel_analysis::workers(config.resamples, values.len());
+    if workers == 1 {
+        let mut rng = Seeded::new(config.seed);
+        let mut sample = vec![0.0; values.len()];
+        for _ in 0..config.resamples {
+            for value in &mut sample {
+                *value = normalized[draw_index(&mut rng, values.len())];
+            }
+            for (distribution, statistic) in distributions.iter_mut().zip(statistics(&mut sample)) {
+                distribution.push(statistic);
+            }
         }
-        for (distribution, statistic) in distributions.iter_mut().zip(statistics(&mut sample)) {
-            distribution.push(statistic);
+    } else {
+        let chunks = crate::parallel_analysis::chunks(
+            config.resamples,
+            config.seed,
+            &[values.len()],
+            workers,
+            |count, mut rng| {
+                let mut rows = resample_buffer(count)?;
+                let mut sample = vec![0.0; values.len()];
+                for _ in 0..count {
+                    for value in &mut sample {
+                        *value = normalized[draw_index(&mut rng, values.len())];
+                    }
+                    rows.push(statistics(&mut sample));
+                }
+                Ok(rows)
+            },
+        )?;
+        for chunk in chunks {
+            for row in chunk {
+                for (distribution, statistic) in distributions.iter_mut().zip(row) {
+                    distribution.push(statistic);
+                }
+            }
         }
     }
     let retained = if capture {
@@ -239,7 +282,8 @@ fn estimate_impl(
     let mut estimates = Vec::with_capacity(4);
     for (mut distribution, point) in distributions.into_iter().zip(points) {
         let mean = distribution.iter().sum::<f64>() / distribution.len() as f64;
-        let standard_error = deviation(&distribution, mean) * scale;
+        let standard_error =
+            (distribution.len() > 1).then(|| deviation(&distribution, mean) * scale);
         distribution.sort_by(f64::total_cmp);
         let estimate = Estimate {
             point: point * scale,
@@ -247,14 +291,10 @@ fn estimate_impl(
             upper: quantile(&distribution, 1.0 - tail) * scale,
             standard_error,
         };
-        if [
-            estimate.point,
-            estimate.lower,
-            estimate.upper,
-            estimate.standard_error,
-        ]
-        .iter()
-        .any(|v| !v.is_finite())
+        if [estimate.point, estimate.lower, estimate.upper]
+            .iter()
+            .chain(estimate.standard_error.iter())
+            .any(|v| !v.is_finite())
         {
             return Err(error("bootstrap estimate exceeds finite numeric range"));
         }
@@ -277,6 +317,9 @@ fn estimate_impl(
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProcessRegression {
     pub process: u32,
+    /// Optional display coordinates; numerical estimates remain in original units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<crate::regression::Presentation>,
     pub fit: crate::regression::Fit,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slope_distribution: Option<Vec<f64>>,
@@ -284,6 +327,58 @@ pub struct ProcessRegression {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub samples: Vec<crate::regression::Sample>,
 }
+/// Fixed work per operation divided by a duration estimate. Bounds reverse under
+/// the reciprocal transform; this is not the mean of observed per-batch rates.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ThroughputEstimate {
+    pub statistic: String,
+    pub unit: String,
+    /// Point, lower and upper rate in the declared unit.
+    pub values: Option<[f64; 3]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<[String; 3]>,
+    pub unavailable_reason: Option<String>,
+}
+fn throughput_estimate(
+    statistic: String,
+    unit: &str,
+    count: Option<u64>,
+    estimate: Option<&Estimate>,
+) -> ThroughputEstimate {
+    let mut result = ThroughputEstimate {
+        statistic,
+        unit: format!("{unit}/s"),
+        values: None,
+        display: None,
+        unavailable_reason: None,
+    };
+    let unavailable = match (count, estimate) {
+        (None, _) => Some(
+            "Dynamic work counts require paired rate analysis; reciprocal duration alone is insufficient.",
+        ),
+        (_, None) => Some("Duration estimate unavailable."),
+        (Some(count), Some(estimate)) => {
+            let durations = [estimate.point, estimate.upper, estimate.lower];
+            if durations
+                .iter()
+                .any(|value| !value.is_finite() || *value <= 0.0)
+            {
+                Some("Rate interval requires strictly positive finite duration bounds and point.")
+            } else {
+                let rates = durations.map(|duration| count as f64 / duration * 1e9);
+                if rates.iter().any(|rate| !rate.is_finite()) {
+                    Some("Rate exceeds finite numeric range.")
+                } else {
+                    result.values = Some(rates);
+                    None
+                }
+            }
+        }
+    };
+    result.unavailable_reason = unavailable.map(str::to_owned);
+    result
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Row {
     pub case: String,
@@ -296,6 +391,11 @@ pub struct Row {
     pub resampling_unit: String,
     pub units: usize,
     pub estimates: Option<Estimates>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub throughput: Vec<ThroughputEstimate>,
+    /// Source work contracts; None marks a dynamic input counter.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub work_counters: BTreeMap<String, Option<u64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub distributions: Option<Distributions>,
     #[serde(default)]
@@ -306,6 +406,8 @@ pub struct Row {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Report {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub presentation: Vec<crate::statistic_format::DisplayStatistic>,
     pub config: Config,
     /// Effective per-case settings, overriding the report-wide fallback.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -348,6 +450,12 @@ pub fn save_settings(
 /// Runs without saved settings use the standard defaults. Case extraction may leave
 /// settings for omitted cases; those entries are validated but not analyzed.
 pub fn analyze_saved(run: &Run, overrides: Options, capture: bool) -> Result<Report> {
+    let (fallback, cases) = saved_settings(run, overrides)?;
+    analyze_impl(run, &fallback, &cases, capture)
+}
+
+/// Resolve saved bootstrap settings without running statistical analysis.
+pub fn saved_settings(run: &Run, overrides: Options) -> Result<(Config, BTreeMap<String, Config>)> {
     let saved = run
         .provenance
         .get(SAVED_CONFIG)
@@ -368,7 +476,7 @@ pub fn analyze_saved(run: &Run, overrides: Options, capture: bool) -> Result<Rep
     for config in cases.values_mut() {
         *config = overrides.resolve(config)?;
     }
-    analyze_impl(run, &fallback, &cases, capture)
+    Ok((fallback, cases))
 }
 
 /// Multi-process data is reduced to one median per process before resampling.
@@ -488,6 +596,7 @@ fn analyze_impl(
                                 };
                                 regressions.push(ProcessRegression {
                                     process,
+                                    presentation: None,
                                     fit,
                                     slope_distribution,
                                     samples: samples.clone(),
@@ -502,11 +611,39 @@ fn analyze_impl(
                 } else {
                     (None, None)
                 };
+                let mut throughput = Vec::new();
+                if metric.id == "wall" && metric.unit == "ns" && metric.statistic == "batch_total" {
+                    for (unit, count) in crate::report::work_counters(case)? {
+                        for (name, estimate) in [
+                            ("inverse mean duration", estimates.as_ref().map(|e| &e.mean)),
+                            (
+                                "inverse median duration",
+                                estimates.as_ref().map(|e| &e.median),
+                            ),
+                        ] {
+                            throughput.push(throughput_estimate(
+                                name.into(),
+                                unit,
+                                count,
+                                estimate,
+                            ));
+                        }
+                        for regression in &regressions {
+                            throughput.push(throughput_estimate(
+                                format!("inverse slope (process {})", regression.process),
+                                unit,
+                                count,
+                                Some(&regression.fit.slope),
+                            ));
+                        }
+                    }
+                }
                 rows.push(Row { metric_contract: Some(metric.clone()), case: case.id.clone(), metric: metric.id.clone(), variant: variant.into(), unit: metric.unit.clone(),
                 resampling_unit: if multiple { "process_median" } else { "normalized_observation" }.into(), units: values.len(),
                 regressions,
                 outliers: if !missing.contains(variant) && !values.is_empty() { Some(crate::outliers::classify(&values)?) } else { None },
-                estimates, distributions,
+                estimates, distributions, throughput,
+                work_counters: crate::report::work_counters(case)?.into_iter().map(|(unit, count)| (unit.to_owned(), count)).collect(),
                 note: if !valid { "At least two complete units are required; missing observations are not silently discarded." }
                     else if multiple { "Assumes independent processes. Each process contributes one median." }
                     else { "Exploratory within-process interval; autocorrelation can invalidate coverage. Not individual-operation latency or evidence of between-process reproducibility." }.into() });
@@ -514,11 +651,63 @@ fn analyze_impl(
         }
     }
     Ok(Report {
+        presentation: Vec::new(),
         case_configs: overrides.clone(),
         config: config.clone(),
         method: "percentile_bootstrap_linear_quantiles".into(),
         rows,
     })
+}
+
+/// Compact confidence estimates for non-table console layouts.
+pub fn text_summary(report: &Report) -> String {
+    let mut text =
+        String::from("Bootstrap mean estimates; within-process samples may be autocorrelated.\n");
+    for row in &report.rows {
+        let config = report.case_configs.get(&row.case).unwrap_or(&report.config);
+        let label = crate::report::escape(&format!(
+            "{} / {} [{}; {}]",
+            row.case, row.metric, row.variant, row.resampling_unit
+        ));
+        let unit = crate::report::escape(&format!(
+            "{}{}",
+            row.unit,
+            if row
+                .metric_contract
+                .as_ref()
+                .is_some_and(|metric| metric.statistic == "batch_total")
+            {
+                "/op"
+            } else {
+                ""
+            }
+        ));
+        if let Some(estimates) = &row.estimates {
+            let estimate = &estimates.mean;
+            text.push_str(&format!(
+                "{label}: mean {:.6}; {:.2}% interval [{:.6}, {:.6}] {unit}; {} sampling units\n",
+                estimate.point,
+                config.confidence_level * 100.,
+                estimate.lower,
+                estimate.upper,
+                row.units
+            ));
+        } else {
+            text.push_str(&format!(
+                "{label}: confidence estimate unavailable; {} sampling units\n",
+                row.units
+            ));
+        }
+    }
+    if report.config.resamples == 1
+        || report
+            .case_configs
+            .values()
+            .any(|config| config.resamples == 1)
+    {
+        text.push_str("One resample does not establish sampling uncertainty.\n");
+    }
+    text
 }
 
 pub fn markdown(report: &Report) -> String {
@@ -535,6 +724,10 @@ pub fn markdown(report: &Report) -> String {
     let mut notes = String::new();
     for row in &report.rows {
         let label = escape(&format!("{} / {} / {}", row.case, row.metric, row.variant));
+        if report.config_for_case(&row.case).resamples == 1 {
+            notes.push_str(&format!("\n- {label}: one resample; interval endpoints reflect a single draw and do not establish sampling uncertainty. Standard error is unavailable.\n"));
+        }
+
         if !report.case_configs.is_empty() {
             let config = report.config_for_case(&row.case);
             notes.push_str(&format!(
@@ -552,11 +745,14 @@ pub fn markdown(report: &Report) -> String {
                 ("scaled MAD", &estimates.median_absolute_deviation),
             ] {
                 output.push_str(&format!(
-                    "| {label} | {name} | {:.6} | [{:.6}, {:.6}] | {:.6} | {} | {} |\n",
+                    "| {label} | {name} | {:.6} | [{:.6}, {:.6}] | {} | {} | {} |\n",
                     estimate.point,
                     estimate.lower,
                     estimate.upper,
-                    estimate.standard_error,
+                    estimate
+                        .standard_error
+                        .map(|value| format!("{value:.6}"))
+                        .unwrap_or_else(|| "unavailable".into()),
                     escape(&row.unit),
                     row.units
                 ));
@@ -568,22 +764,70 @@ pub fn markdown(report: &Report) -> String {
                 row.units
             ));
         }
+        if !row.throughput.is_empty() {
+            notes.push_str(&format!("\n- {label}: throughput divides fixed work per operation by the named duration estimate, reversing its interval bounds. It inherits that estimate's sampling population and confidence level; it is not an arithmetic mean of observed rates. Rate standard error is not inferred from duration standard error.\n"));
+        }
+        for rate in &row.throughput {
+            if let Some([point, lower, upper]) = rate.values {
+                let display = rate.display.clone().unwrap_or_else(|| {
+                    [
+                        format!("{point:.6}"),
+                        format!("{lower:.6}"),
+                        format!("{upper:.6}"),
+                    ]
+                });
+                output.push_str(&format!(
+                    "| {label} | throughput: {} | {} | [{}, {}] | — | {} | — |\n",
+                    escape(&rate.statistic),
+                    escape(&display[0]),
+                    escape(&display[1]),
+                    escape(&display[2]),
+                    escape(&rate.unit)
+                ));
+            } else {
+                notes.push_str(&format!(
+                    "\n- {label}: throughput {} ({}): unavailable: {}\n",
+                    escape(&rate.statistic),
+                    escape(&rate.unit),
+                    escape(
+                        rate.unavailable_reason
+                            .as_deref()
+                            .unwrap_or("missing rate estimate")
+                    )
+                ));
+            }
+        }
         if let Some(outliers) = &row.outliers {
-            notes.push_str(&format!("\n- {label}: outliers low severe {}, low mild {}, normal {}, high mild {}, high severe {}. No observations discarded.\n", outliers.counts[0], outliers.counts[1], outliers.counts[2], outliers.counts[3], outliers.counts[4]));
+            let total: u128 = outliers.counts.iter().map(|&count| count as u128).sum();
+            let count = |index: usize| {
+                let count = outliers.counts[index];
+                if total == 0 {
+                    format!("{count} (percentage unavailable)")
+                } else {
+                    format!("{count} ({:.2}%)", count as f64 / total as f64 * 100.0)
+                }
+            };
+            notes.push_str(&format!("\n- {label}: outliers low severe {}, low mild {}, normal {}, high mild {}, high severe {}. Classified population: {total} {} units. No observations discarded.\n", count(0), count(1), count(2), count(3), count(4), escape(&row.resampling_unit)));
         }
         for regression in &row.regressions {
             let fit = &regression.fit;
             output.push_str(&format!(
-                "| {label} | slope (process {}) | {:.6} | [{:.6}, {:.6}] | {:.6} | {}/op | {} |\n",
+                "| {label} | slope (process {}) | {:.6} | [{:.6}, {:.6}] | {} | {}/op | {} |\n",
                 regression.process,
                 fit.slope.point,
                 fit.slope.lower,
                 fit.slope.upper,
-                fit.slope.standard_error,
+                fit.slope
+                    .standard_error
+                    .map(|value| format!("{value:.6}"))
+                    .unwrap_or_else(|| "unavailable".into()),
                 escape(&row.unit),
                 fit.samples
             ));
             notes.push_str(&format!("\n- {label}, process {}: through-origin fit, centered R² {}; bootstrap resamples paired batches. Within-process independence is assumed.\n", regression.process, fit.r_squared.map(|r| format!("{r:.6}")).unwrap_or_else(|| "undefined (constant totals)".into())));
+            if let Some([lower, upper]) = fit.r_squared_at_slope_bounds {
+                notes.push_str(&format!("\n- {label}, process {}: centered R² at lower/upper slope bounds [{lower:.6}, {upper:.6}]. These endpoint diagnostics are not a confidence interval for R².\n", regression.process));
+            }
         }
         notes.push_str(&format!(
             "\n- {}: {} ({})\n",
@@ -593,6 +837,7 @@ pub fn markdown(report: &Report) -> String {
         ));
     }
     output.push_str(&notes);
+    output.push_str(&crate::statistic_format::markdown(report));
     output
 }
 
@@ -693,15 +938,28 @@ pub fn html_with_case_scales(
                     )),
                 }
             }
-            charts.push_str(&crate::regression::figure(
-                &regression.samples,
-                &regression.fit,
-                &format!(
-                    "{} / {} / {} / process {} regression",
-                    row.case, row.metric, row.variant, regression.process
+            let title = format!(
+                "{} / {} / {} / process {} regression",
+                row.case, row.metric, row.variant, regression.process
+            );
+            let chart = match &regression.presentation {
+                Some(presentation) => presentation
+                    .figure(&regression.samples, &regression.fit, "process", &title)
+                    .unwrap_or_else(|err| {
+                        format!(
+                            "<p>{}: saved regression display unavailable: {}</p>",
+                            crate::report::escape(&title),
+                            crate::report::escape(&err.to_string()),
+                        )
+                    }),
+                None => crate::regression::figure(
+                    &regression.samples,
+                    &regression.fit,
+                    &title,
+                    &row.unit,
                 ),
-                &row.unit,
-            ));
+            };
+            charts.push_str(&chart);
         }
     }
     charts.push_str(&violin_charts_with_case_scales(
@@ -709,6 +967,7 @@ pub fn html_with_case_scales(
         override_scale,
         scales,
     ));
+    charts.push_str(&crate::statistic_format::charts(report));
     crate::report::html(&markdown(report))
         .replace("<!--CHARTS-->", &charts)
         .replace("<!--DETAILS-->", "")
@@ -889,6 +1148,40 @@ pub fn comparison_charts(baseline: &Report, candidate: &Report) -> String {
 mod tests {
     use super::*;
     #[test]
+    fn parallel_bootstrap_retains_exact_sequential_draws() {
+        let values: Vec<_> = (0..37).map(|n| ((n * 17) % 43) as f64 / 8.0).collect();
+        let scale = values.iter().copied().fold(0.0, f64::max);
+        let normalized: Vec<_> = values.iter().map(|v| v / scale).collect();
+        let config = Config {
+            resamples: 2051,
+            seed: 91,
+            ..Config::default()
+        };
+        let result = estimate_with_distributions(&values, &config).unwrap();
+        let mut rng = Seeded::new(config.seed);
+        let mut sample = vec![0.0; values.len()];
+        let mut expected: [Vec<f64>; 4] = std::array::from_fn(|_| Vec::new());
+        for _ in 0..config.resamples {
+            for value in &mut sample {
+                *value = normalized[draw_index(&mut rng, values.len())];
+            }
+            for (rows, value) in expected.iter_mut().zip(statistics(&mut sample)) {
+                rows.push(value * scale);
+            }
+        }
+        let [mean, median, standard_deviation, median_absolute_deviation] = expected;
+        assert_eq!(
+            result.distributions,
+            Distributions {
+                mean,
+                median,
+                standard_deviation,
+                median_absolute_deviation
+            }
+        );
+    }
+
+    #[test]
     fn case_configs_control_estimates_draws_regressions_and_labels() {
         let mut recorder = crate::Recorder::new();
         for id in ["first", "second"] {
@@ -1039,12 +1332,30 @@ mod tests {
         let captured = analyze_with_distributions(&run, &config).unwrap();
         let expected = estimate_with_distributions(&[2., 4.], &config).unwrap();
         assert_eq!(captured.rows[0].units, 2);
+        let compact = text_summary(&captured);
+        assert!(compact.contains("mean 3.000000; 95.00% interval"));
+        assert!(compact.contains("ns/op; 2 sampling units"));
+        assert!(compact.contains("process_median"));
+        assert!(!compact.contains("| Case"));
+        let mut per_case = captured.clone();
+        per_case.case_configs.insert(
+            "case".into(),
+            Config {
+                confidence_level: 0.8,
+                resamples: 1,
+                seed: 7,
+            },
+        );
+        assert!(text_summary(&per_case).contains("80.00% interval"));
+        assert!(text_summary(&per_case).contains("One resample"));
         let document = html(&captured);
         assert_eq!(document.matches("Bootstrap confidence interval").count(), 4);
         for statistic in ["mean", "median", "standard deviation", "MAD"] {
             assert!(document.contains(&format!("bootstrap {statistic} (process_median)")));
         }
         assert_eq!(captured.rows[0].resampling_unit, "process_median");
+        assert!(markdown(&captured).contains("normal 2 (100.00%)"));
+        assert!(markdown(&captured).contains("Classified population: 2 process_median units"));
         assert_eq!(
             captured.rows[0].distributions.as_ref(),
             Some(&expected.distributions)
@@ -1073,6 +1384,11 @@ mod tests {
         assert!(draws.iter().all(|value| (value - 3.).abs() < 1e-12));
         assert!(html(&slopes).contains("bootstrap slope"));
         assert!(html(&slopes).contains("ns/operation"));
+        assert!(
+            markdown(&slopes)
+                .contains("centered R² at lower/upper slope bounds [1.000000, 1.000000]")
+        );
+        assert!(html(&slopes).contains("not a confidence interval for R²"));
         let plain = analyze(&varying, &config).unwrap();
         assert!(plain.rows[0].regressions[0].slope_distribution.is_none());
         let restored: Report =
@@ -1143,6 +1459,8 @@ mod tests {
             metric: "wall".into(),
             variant: "candidate".into(),
             unit: "ns".into(),
+            throughput: Vec::new(),
+            work_counters: BTreeMap::new(),
             metric_contract: Some(metric),
             resampling_unit: "process_median".into(),
             units: 3,
@@ -1153,6 +1471,7 @@ mod tests {
             note: String::new(),
         };
         let mut report = Report {
+            presentation: Vec::new(),
             case_configs: BTreeMap::new(),
             config: Config::default(),
             method: "fixture".into(),
@@ -1195,6 +1514,7 @@ mod tests {
     fn density_reports_preserve_population_labels_and_all_observations() {
         let values = [1., 2., 3., 4., 100.];
         let baseline = Report {
+            presentation: Vec::new(),
             case_configs: BTreeMap::new(),
             config: Config::default(),
             method: "fixture".into(),
@@ -1207,12 +1527,18 @@ mod tests {
                 resampling_unit: "process_median".into(),
                 units: 5,
                 estimates: None,
+                throughput: Vec::new(),
+                work_counters: BTreeMap::new(),
                 distributions: None,
                 regressions: vec![],
                 outliers: Some(crate::outliers::classify(&values).unwrap()),
                 note: String::new(),
             }],
         };
+        assert!(markdown(&baseline).contains("normal 4 (80.00%)"));
+        assert!(markdown(&baseline).contains("high severe 1 (20.00%)"));
+        assert!(html(&baseline).contains("Classified population: 5 process_median units"));
+
         let expected = crate::density::figure_with_outliers(
             &[crate::density::Series {
                 label: "process_median",
@@ -1254,6 +1580,66 @@ mod tests {
         assert_eq!(describe(&[1e300; 4]).unwrap().mean, 1e300);
     }
     #[test]
+    fn confidence_changes_only_percentile_bounds() {
+        let values = [1.0, 2.0, 4.0, 8.0, 32.0];
+        let config = Config {
+            resamples: 257,
+            confidence_level: 0.5,
+            seed: 73,
+        };
+        let narrow = estimate_with_distributions(&values, &config).unwrap();
+        let wide = estimate_with_distributions(
+            &values,
+            &Config {
+                confidence_level: 0.99,
+                ..config
+            },
+        )
+        .unwrap();
+        assert_eq!(narrow.distributions, wide.distributions);
+        for (a, b, draws) in [
+            (
+                &narrow.estimates.mean,
+                &wide.estimates.mean,
+                &wide.distributions.mean,
+            ),
+            (
+                &narrow.estimates.median,
+                &wide.estimates.median,
+                &wide.distributions.median,
+            ),
+            (
+                &narrow.estimates.standard_deviation,
+                &wide.estimates.standard_deviation,
+                &wide.distributions.standard_deviation,
+            ),
+            (
+                &narrow.estimates.median_absolute_deviation,
+                &wide.estimates.median_absolute_deviation,
+                &wide.distributions.median_absolute_deviation,
+            ),
+        ] {
+            assert_eq!(a.point, b.point);
+            assert_eq!(a.standard_error, b.standard_error);
+            assert!(b.lower <= a.lower && b.upper >= a.upper);
+            let mut sorted = draws.clone();
+            sorted.sort_by(f64::total_cmp);
+            for (estimate, confidence) in [(a, 0.5), (b, 0.99)] {
+                for (actual, probability) in [
+                    (estimate.lower, (1.0 - confidence) / 2.0),
+                    (estimate.upper, (1.0 + confidence) / 2.0),
+                ] {
+                    let position = probability * (sorted.len() - 1) as f64;
+                    let index = position.floor() as usize;
+                    let expected = sorted[index]
+                        + (sorted[position.ceil() as usize] - sorted[index]) * position.fract();
+                    assert!((actual - expected).abs() <= 1e-12 * expected.abs().max(1.0));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn constant_samples_and_seeded_reproducibility() {
         let config = Config {
             resamples: 500,
@@ -1266,7 +1652,7 @@ mod tests {
                 point: 7.0,
                 lower: 7.0,
                 upper: 7.0,
-                standard_error: 0.0
+                standard_error: Some(0.0)
             }
         );
         assert_eq!(result.standard_deviation.point, 0.0);
@@ -1287,6 +1673,135 @@ mod tests {
         .unwrap();
         assert!(wider.mean.lower <= result.mean.lower && wider.mean.upper >= result.mean.upper);
     }
+    #[test]
+    fn resample_counts_above_one_million_and_capacity_errors_are_explicit() {
+        let config = Config {
+            resamples: 1_000_001,
+            ..Default::default()
+        };
+        let result = estimate(&[7.0, 7.0], &config).unwrap();
+        assert_eq!(result.mean.point, 7.0);
+        assert_eq!(result.mean.lower, 7.0);
+        assert_eq!(result.mean.upper, 7.0);
+        assert_eq!(result.mean.standard_error, Some(0.0));
+        let impossible = Config {
+            resamples: usize::MAX,
+            ..Default::default()
+        };
+        impossible.validate().unwrap();
+        let error = estimate(&[1.0, 2.0], &impossible).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot allocate bootstrap distribution")
+        );
+        let error = crate::relative::bootstrap(&[1.0, 2.0], &[2.0, 3.0], &impossible).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot allocate bootstrap distribution")
+        );
+        let pairs = [
+            crate::regression::Sample {
+                operations: 1.0,
+                total: 2.0,
+            },
+            crate::regression::Sample {
+                operations: 2.0,
+                total: 4.0,
+            },
+        ];
+        let error = crate::regression::fit(&pairs, &impossible).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot allocate bootstrap distribution")
+        );
+    }
+
+    #[test]
+    fn one_resample_preserves_draws_and_marks_standard_error_unavailable() {
+        let config = Config {
+            resamples: 1,
+            ..Default::default()
+        };
+        let mut recorder = crate::Recorder::new();
+        recorder
+            .case(crate::Case {
+                id: "one".into(),
+                contract: Default::default(),
+                metrics: vec![crate::Metric::duration("wall", "batch", "batch_total")],
+            })
+            .unwrap();
+        recorder.observe("one", "wall", 2).unwrap();
+        recorder.observe("one", "wall", 6).unwrap();
+        let mut run = recorder.finish().unwrap();
+        run.observations[1].operations = 2;
+        let raw = serde_json::to_vec(&run).unwrap();
+        let report = analyze_with_distributions(&run, &config).unwrap();
+        let row = &report.rows[0];
+        let estimates = row.estimates.as_ref().unwrap();
+        let draws = row.distributions.as_ref().unwrap();
+        for (estimate, values) in [
+            (&estimates.mean, &draws.mean),
+            (&estimates.median, &draws.median),
+            (&estimates.standard_deviation, &draws.standard_deviation),
+            (
+                &estimates.median_absolute_deviation,
+                &draws.median_absolute_deviation,
+            ),
+        ] {
+            assert_eq!(values.len(), 1);
+            assert_eq!(estimate.standard_error, None);
+            assert_eq!(estimate.lower, values[0]);
+            assert_eq!(estimate.upper, values[0]);
+        }
+        let regression = &row.regressions[0];
+        assert_eq!(regression.fit.slope.standard_error, None);
+        assert_eq!(regression.slope_distribution.as_ref().unwrap().len(), 1);
+        assert_eq!(regression.fit.slope.lower, regression.fit.slope.upper);
+        let json = serde_json::to_value(&report).unwrap();
+        assert!(json["rows"][0]["estimates"]["mean"]["standard_error"].is_null());
+        let recovered: Report = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            recovered.rows[0]
+                .estimates
+                .as_ref()
+                .unwrap()
+                .mean
+                .standard_error,
+            None
+        );
+        let old: Estimate =
+            serde_json::from_str(r#"{"point":2,"lower":1,"upper":3,"standard_error":0.25}"#)
+                .unwrap();
+        assert_eq!(old.standard_error, Some(0.25));
+        for output in [markdown(&report), html(&report)] {
+            assert!(output.contains("Standard error is unavailable"));
+            assert!(output.contains("do not establish sampling uncertainty"));
+        }
+        let relative = crate::relative::bootstrap(&[1.0, 2.0], &[2.0, 3.0], &config).unwrap();
+        assert_eq!(relative.mean.draws_percent.len(), 1);
+        let charts = crate::relative::charts(
+            &[crate::relative::Comparison {
+                case: "one".into(),
+                metric: "wall".into(),
+                unit: "ns".into(),
+                scope: "batch".into(),
+                resampling_unit: "process".into(),
+                baseline_units: 2,
+                candidate_units: 2,
+                report: Some(relative),
+                throughput: Vec::new(),
+                unavailable_reason: None,
+            }],
+            5.0,
+        )
+        .unwrap();
+        assert!(charts.contains("do not establish sampling uncertainty"));
+        assert_eq!(serde_json::to_vec(&run).unwrap(), raw);
+    }
+
     #[test]
     fn validates_inputs_and_handles_large_scales() {
         let config = Config {
@@ -1309,7 +1824,7 @@ mod tests {
             estimate(
                 &[1.0, 2.0],
                 &Config {
-                    resamples: 1,
+                    resamples: 0,
                     ..config.clone()
                 }
             )
@@ -1340,8 +1855,122 @@ mod tests {
             let expected = (sample.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
                 / (sample.len() * sample.len()) as f64)
                 .sqrt();
-            assert!((result.mean.standard_error / expected - 1.0).abs() < 0.2);
+            assert!((result.mean.standard_error.unwrap() / expected - 1.0).abs() < 0.2);
         }
         assert!((125..=149).contains(&covered), "coverage {covered}/150");
+    }
+}
+
+#[cfg(test)]
+mod throughput_tests {
+    use super::*;
+
+    #[test]
+    fn reciprocal_bounds_handle_zero_dynamic_and_overflow() {
+        let estimate = Estimate {
+            point: 4.,
+            lower: 2.,
+            upper: 8.,
+            standard_error: Some(1.),
+        };
+        let rate = throughput_estimate("mean".into(), "items", Some(2), Some(&estimate));
+        assert_eq!(
+            rate.values,
+            Some([500_000_000., 250_000_000., 1_000_000_000.])
+        );
+        assert_eq!(rate.unit, "items/s");
+        assert_eq!(
+            throughput_estimate("mean".into(), "items", Some(0), Some(&estimate)).values,
+            Some([0.; 3])
+        );
+        assert!(
+            throughput_estimate("mean".into(), "items", None, Some(&estimate))
+                .unavailable_reason
+                .unwrap()
+                .contains("Dynamic")
+        );
+        for duration in [0., -1., f64::MIN_POSITIVE, f64::INFINITY] {
+            let invalid = Estimate {
+                point: duration,
+                lower: duration,
+                upper: duration,
+                standard_error: None,
+            };
+            assert!(
+                throughput_estimate("mean".into(), "items", Some(u64::MAX), Some(&invalid))
+                    .values
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn saved_report_preserves_fixed_counter_rates_and_legacy_rows() {
+        let mut recorder = crate::Recorder::new();
+        recorder
+            .case(crate::Case {
+                id: "fixed".into(),
+                contract: [
+                    ("work.counter.items".into(), "2".into()),
+                    ("work.counter.bytes".into(), "1024".into()),
+                ]
+                .into(),
+                metrics: vec![crate::Metric::duration("wall", "batch", "batch_total")],
+            })
+            .unwrap();
+        recorder.observe("fixed", "wall", 4).unwrap();
+        let mut run = recorder.finish().unwrap();
+        let original = run.observations[0].clone();
+        run.observations.clear();
+        for operations in 1..=4 {
+            let mut observation = original.clone();
+            observation.sequence = operations - 1;
+            observation.operations = operations;
+            observation.value = Some((4 * operations).to_string());
+            run.observations.push(observation);
+        }
+        let source = serde_json::to_string(&run).unwrap();
+        let config = Config {
+            resamples: 128,
+            ..Default::default()
+        };
+        let report = analyze(&run, &config).unwrap();
+        let rates = &report.rows[0].throughput;
+        assert_eq!(rates.len(), 6);
+        for rate in rates {
+            let expected = if rate.unit == "items/s" {
+                500_000_000.
+            } else {
+                256_000_000_000.
+            };
+            for value in rate.values.unwrap() {
+                assert!((value / expected - 1.).abs() < 1e-12);
+            }
+        }
+        assert!(markdown(&report).contains("throughput: inverse slope (process 0)"));
+        assert!(html(&report).contains("items/s"));
+        assert_eq!(serde_json::to_string(&run).unwrap(), source);
+        let restored: Report =
+            serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
+        assert_eq!(restored.rows[0].throughput, *rates);
+        let mut old = serde_json::to_value(&report.rows[0]).unwrap();
+        old.as_object_mut().unwrap().remove("throughput");
+        assert!(
+            serde_json::from_value::<Row>(old)
+                .unwrap()
+                .throughput
+                .is_empty()
+        );
+        for observation in &mut run.observations {
+            observation.value = Some("0".into());
+        }
+        let zero = analyze(&run, &config).unwrap();
+        assert!(
+            zero.rows[0]
+                .throughput
+                .iter()
+                .all(|rate| rate.values.is_none())
+        );
+        assert!(markdown(&zero).contains("strictly positive"));
     }
 }

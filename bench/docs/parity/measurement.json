@@ -66,7 +66,7 @@
     "Direct Cargo registration, saved-run reports and regression comparison retain custom metric identity",
     "Verify sync/async lifecycle and caller-defined typed totals against Criterion public Bencher methods; audit threaded and allocation combinations separately against actual upstream support"
   ],
-  "next_implementation": "Complete statistical graph formatter integration, visual verification and standalone shared-scale comparison formatter policy; retain additional thread/allocation combinations as explicit extensions.",
+  "next_implementation": "Resolve formatter-domain and statistical-display semantics described in formatter_domain_audit, then complete graph/entrypoint and visual acceptance. Preserve existing validated linear unit conversions and snapshot checks.",
   "progress": "Added measurement::Measurement typed Start/Value lifecycle, zero/add accumulator and to_f64 conversion. Suite::bench_measured registers a distinct batch-total metric and executes synchronous operations in BatchPolicy waves. A separate timer supplies wall observations and scheduling; custom numeric totals cannot replace elapsed time. Invalid finite/nonnegative conversion fails explicitly. Suite::bench_measured_with_input now prepares fresh inputs and deferred-output buffers before both clocks, excludes input destruction, and follows DropPolicy for outputs. Plain bench_measured shares this implementation via unit input. bench_measured_with_owned_input moves each fresh input exactly once using the same wave engine; consumed input destruction is included, while returned inputs follow output-drop policy. Ownership and lifecycle contracts distinguish this from borrowed inputs. bench_async_measured_with_input runs borrowing futures sequentially on a lazily initialized executor created before the custom wave timer. Future construction, polling and completion are included; outputs follow DropPolicy. Added bench_async_measured and bench_async_measured_with_owned_input using the shared async borrowed-input engine. Plain operations include output destruction; owned futures distinguish consumed input destruction from returned input deferred destruction. Added ValueFormatter with human/shared-scale, throughput and machine conversions. format_observations normalizes batches, uses one population-wide typical maximum, preserves missing rows, validates converted values/count/unit and leaves Run unchanged. Formatted rows serialize to JSON and render to Markdown/HTML tables. Suite::formatter registers presentation per case/metric; formatted_metrics checks the full metric contract on loaded runs. main emits human tables to console/HTML and human+machine formatted.json/BENCH_FORMATTED, retaining raw Run and comparison data. Loaded baselines are formatted with currently registered callbacks only when metric contracts agree. Suite main persists formatted snapshots in versioned provenance. Each snapshot hashes its metric contract and raw observations. report Markdown/HTML restores it without custom code; missing selected metrics are ignored and changed source values produce an explicit stale-formatting diagnostic. Snapshot writes validate before mutating the run. Registered formatters now receive fixed work counters automatically via scale_throughputs. Per-counter throughput rows preserve work_per_operation in JSON/snapshots and render in console/HTML; snapshot restore rejects changed work counters. New snapshot field has a serde default for prior saved runs. Primary html_run reports now include plots of saved human-formatted observations, grouped by display unit with separate process/variant series. Stale snapshots produce explicit unavailable diagnostics, and plot captions state thinning/missing-value behavior. Unified report HTML now renders saved human-unit observation plots; --no-plots retains tables only. Stale formatter snapshots suppress formatted graphs with explicit diagnostics while keeping the rest of the report usable. format_comparison validates compatible independent runs and selects a shared formatter scale over both normalized raw populations. comparison_chart labels baseline/candidate/process series; direct Cargo named-baseline HTML uses it with registered callbacks rather than overlaying independent snapshots. Dynamic input work now flows through Suite::formatted_metrics and ValueFormatter::scale_input_throughputs. Matching uses case/variant/process/sequence/pair and requires equal operation counts; default conversion requires one shared unit. Dynamic snapshots retain null work_per_operation and a separate hash of wall observations, preserving existing fixed-work snapshot encoding. ProcessFormatting validates worker snapshots before rebasing process/variant identities, intersects complete formatted metric/counter coverage across workers, and saves new hashes after raw observations are merged. Runner protocol invokes it, preserving per-row units and keeping differently scaled units on separate graphs. ValueFormatter now has optional format_value/format_throughput human-text overrides on scaled numeric values and units. Text is persisted in backward-compatible optional display fields and escaped in Markdown/HTML; machine and unavailable rows never invoke text callbacks. Numeric graph data remains separate. Added measurement/formatter attributes for sync/async functions, fresh borrowed/owned inputs, runtime arguments, batch/drop policies and input counters. Inline group defaults inherit both expressions. Unsupported threads/allocator combinations and formatter without measurement are compile errors; imported groups must declare these defaults locally. Saved formatter charts now include each fixed/dynamic throughput counter, grouped by display unit and process/variant. Named-baseline comparison_chart also formats both raw populations jointly for each throughput counter and plots them on a shared scale. Captions correctly point to run.json for complete persisted rows. Caller-defined typed custom totals now support sync/async and attributes with args and formatter. Lifecycle hooks are not invoked; the caller returns the complete batch total. Independent wall timing excludes lazy executor construction and numeric conversion. Direct Cargo now writes formatted.csv with machine rows, normalization metadata, exact integer identities and missing reasons. Saved-run export --format formatted-csv validates formatter snapshots, rejects missing/stale output and preserves original run bytes. Airbug machine callbacks receive normalized batch values; Criterion CSV callbacks receive sample totals, so Airbug labels this normalization explicitly and retains raw totals in its raw export. Added format_bootstrap_metric and Suite::formatted_bootstrap: absolute estimates, confidence endpoints, standard errors, min/max and retained draws use one shared scale across variants. Direct Cargo saves formatted-estimates.json/html with no-plots support, retaining raw estimates separately. Outlier points, quartiles and finite signed fences now share the same formatter call; classification labels, counts, indices and missing fences are preserved. Nonfinite output and reordered values are rejected. The bootstrap_formatter integration test verifies signed fences, shared units and immutable raw reports. Regression totals, slope estimates/intervals/errors and retained slope draws now share the same scale, preserving process identity, operation counts and R-squared. Statistical formatters must apply a positive linear conversion without offset; integration coverage checks regression fields and rejects offsets, nonlinear transforms, collapsed scales and infinity.",
   "evidence": [
     "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock: Vec accumulator, 130 operations in 64/64/2 waves, 390 total and 3 per operation, separate wall observations, lazy listing, JSON roundtrip and NaN rejection",
@@ -108,11 +108,320 @@
     "cli::saved_report_restores_formatter_snapshot_and_rejects_stale_values: passed with formatted-csv export and stale snapshot rejection before output creation",
     "bench/scripts/test-cargo-bench.py: full script passed; Python csv.DictReader roundtrip of automatic formatted.csv agrees with machine JSON values, units, sequence and normalization flag after named-baseline reload",
     "measurements::bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw_report: passed; shared typical across variants, exact point/CI/error conversion, retained mean draws, escaped HTML units, raw report byte preservation and mismatched contract rejection",
-    "bench/scripts/test-cargo-bench.py: full script passed; loaded custom baseline retains raw mean 3 units while formatted-estimates.json reports mean 1 group and matching HTML"
+    "bench/scripts/test-cargo-bench.py: full script passed; loaded custom baseline retains raw mean 3 units while formatted-estimates.json reports mean 1 group and matching HTML",
+    "Bootstrap custom throughput uses source work_counters, original estimate values, scale_throughputs and format_throughput for point/CI; 18 measurement tests passed followed by 16 bootstrap-focused tests including invalid bounds, dynamic unavailability, HTML escaping and unchanged raw report (.airbug/runs/dc33ab00-55b8-4d4a-b1da-092929fc4c71). All-target library Clippy passed before the final added test.",
+    "test-formatted-bootstrap.py passed: real Cargo custom Measurement/ValueFormatter, deterministic raw mean 3 vs display mean 1, fixed throughput 2 items/unit, all point/bound text callbacks, escaped HTML with/without SVG, saved-baseline lazy reanalysis with conflicting current --items-count 12 still uses original count 6; raw artifact unchanged. CI step added, remote CI not executed."
   ],
   "upstream_combination_audit": {
     "criterion": "Bencher<M> and AsyncBencher<A,M> expose typed custom totals; no built-in worker-count API was found in their public method surface. Caller routines may coordinate their own worker threads.",
     "divan": "Worker counts and allocation tracking exist, while benchmark/mod.rs Bencher generics configure input generation rather than a Criterion-style Measurement trait.",
     "conclusion": "Built-in threaded custom Measurement and Measurement-plus-allocation are additional Airbug combinations, not an established missing upstream method. Keep them tracked separately while completing actual lifecycle and formatter requirements."
+  },
+  "formatted_observation_distributions": {
+    "status": "implemented_not_browser_verified",
+    "behavior": "Saved human and fixed/dynamic throughput rows render scatter plus KDE with outlier rugs. Units receive separate figures; variant/process populations remain separate curves. Shared-scale baseline comparisons use the same distribution renderer. Missing values are omitted and constant populations are point masses. Raw observations remain unchanged.",
+    "validation": [
+      "17 measurements integration tests passed, including exact 0.9/1.1 shared-scale point masses, ns/us process separation, dynamic throughput KDE and missing rows.",
+      "Standalone saved-report CLI test passed: custom-unit distribution restored from snapshot, no-plots suppresses SVG, stale source rejects formatter snapshot.",
+      "Library and CLI all-target Clippy passed."
+    ],
+    "test_runs": [
+      "3bd12726-008b-4d5c-bec7-838408bac9da",
+      "00dc5a07-830d-4d66-a5b6-1c2a1ff3d48f"
+    ],
+    "remaining": "Browser visual verification and full statistical/report-entrypoint formatter audit remain incomplete."
+  },
+  "relative_throughput": {
+    "scope": "Fixed-work mean/median measurement statistics, transformed by ValueFormatter after resampling original units on a shared scale. Named and automatic Cargo baselines.",
+    "status": "focused_validation",
+    "evidence": "Nonlinear oracle, raw preservation, zero-work/insufficient data, process populations, JSON/text/HTML and actual Cargo history commit verified; output.json records reports.",
+    "limits": "No dynamic paired-work relative estimator or visual graph completion claim. Automatic type dispatch for threaded measurement combinations remains an extension, not claimed."
+  },
+  "axis_escaping_followup": {
+    "defect": "Custom unit k<units> was escaped in headings but inserted as markup in SVG axis tick suffixes. Reproduced by the full formatted bootstrap HTML test before the fix.",
+    "fix": "Plot axes escape both suffixes as text.",
+    "validation": [
+      "Both-axis special-character regression test passed",
+      "All 20 measurement integration tests passed; full formatted bootstrap HTML now verifies all seven graph labels, escaped per-operation slope unit and no distribution-unavailable diagnostics",
+      "Real cargo bench formatted-bootstrap script passed before the renderer fix; source counters, baseline reload, custom scale/text, relative throughput and no-html export verified",
+      "Full current library/macros/CLI/doctest gate: 506 passed, zero failures; core.json current_gate records saved report and progress hash."
+    ],
+    "remaining": "Browser visual inspection and other report-entrypoint semantics remain unverified."
+  },
+  "exported_svg_validation": {
+    "status": "passed_structural_not_visual",
+    "command": "python3 bench/scripts/test-formatted-bootstrap.py",
+    "behavior": "External Cargo formatter emits groups<&>; every SVG in generated HTML artifacts is parsed as XML and SVG text must recover the literal special-character unit. Includes loaded baselines and existing no-plots/no-html checks.",
+    "log": ".airbug/validation/formatted-svg/tests.log",
+    "sha256": "adcb76f5537dfe2102d7472ac4c19b822f5301ceca5f94f9131d5b67d2b86d85",
+    "limits": "No browser interaction, layout or pixel inspection claim."
+  },
+  "standalone_custom_comparison": {
+    "status": "named_baseline_history_and_output_snapshots_verified",
+    "evidence": "bench/scripts/test-formatted-bootstrap.py: real cargo bench named baseline; filtered standalone relative JSON restores two custom throughput changes of -50%; changed resample count returns explicit unavailable rates; HTML with/without plots and baseline report on both axes pass. 22 measurement and 66 contract tests, library/CLI Clippy passed. External scenario also verifies another baseline clears rates, edited candidate rejects without overwriting output, and standalone compare restores -50% rates from two committed automatic-history runs. All 13 history tests pass. Automatic --output/run.json equals the committed enriched history run; standalone compare restores its custom rates. Run-export failure preserves the caller, existing artifact and previous history entry (14 history tests). Standalone report restores saved bootstrap fallback and per-case settings, then restores -50% custom rates in graphical HTML, no-plots HTML and Markdown; distinct case resamples/seed/confidence verified.",
+    "current_behavior": "Direct Cargo named-baseline comparisons persist per-case/per-metric formatter throughput with source hashes and bootstrap settings. relative::compare_runs restores matching rates; different baseline/settings produce unavailable rates and changed candidate data rejects the snapshot.",
+    "remaining": "Report hypothesis tests still use their own significance configuration. Custom snapshots require matching comparison settings. Browser and current cross-platform validation remain pending.",
+    "default_settings_followup": {
+      "implementation": "bootstrap::saved_settings resolves per-case saved configuration independently of analysis; compare restores relative/absolute plot settings by default and applies only explicitly supplied fields. Null hypothesis defaults stay unchanged.",
+      "test": "compare_restores_case_bootstrap_settings_and_overrides_only_explicit_fields passed: two distinct case configurations and seed-only override",
+      "external_test": "test-formatted-bootstrap.py expanded to require default standalone comparison restoration without resample flags",
+      "validation": "46 existing CLI tests plus the new two-case override test passed; expanded real Cargo fixture passed default restoration and explicit mismatch checks; all-target/all-feature library and CLI Clippy passed."
+    }
+  },
+  "formatter_domain_audit": {
+    "sources": [
+      "criterion-0.8.2/src/measurement.rs::ValueFormatter",
+      "bench/src/measurement.rs::format_bootstrap_metric"
+    ],
+    "established": "Criterion public trait does not explicitly require a positive linear transform. Airbug now supports increasing nonlinear and offset statistical displays separately from original estimates; positive linear conversions retain direct unit replacement.",
+    "reason_for_native_check": "Nonlinear transformed statistics have explicit formatter(original statistic) labels and standard errors recomputed from retained transformed draws. Original estimates, outlier classifications and raw units remain separate.",
+    "unresolved": "Signed and nonmonotone native formatting, saved statistical overlays and interval images have focused and external Cargo evidence later in this file. Upstream endpoint-plotting limitations are recorded in upstream_formatter_geometry_audit. Browser/platform final acceptance remains open.",
+    "related_boundary": "Measurement numeric values must be finite nonnegative in Airbug; signed-domain end-to-end upstream support is not yet established (criterion-extensions.json).",
+    "already_verified": "Linear absolute estimate/graph conversions, arbitrary supported throughput conversion, machine CSV, saved custom snapshots and exact comparison/config matching have current external Cargo evidence.",
+    "upstream_graph_followup": {
+      "sources": [
+        "criterion-0.8.2/src/plot/plotters_backend/distributions.rs::abs_distribution",
+        "criterion-0.8.2/src/plot/plotters_backend/regression.rs::regression_figure"
+      ],
+      "observed": "Absolute distribution renderer transforms CI endpoints, point estimate and bootstrap draws before KDE. Regression transforms observed totals and only model endpoints, then draws a straight line from (0,0).",
+      "counterexample": "For y=x at x=1,2 with formatter f(y)=y^2, transformed observations are (1,1),(2,4), while the upstream rendered line from (0,0) to (2,4) has y=2 at x=1. It is not f(original model).",
+      "implementation_requirement": "Keep raw estimates separate from display coordinates. A nonlinear display must transform the model curve and its bounds rather than reuse a transformed slope in the linear renderer; transformed point/interval labels must state their meaning. Existing positive-linear behavior stays valid."
+    },
+    "regression_display_implementation": {
+      "status": "implemented_saved_bootstrap_regression_display",
+      "entrypoint": "measurement::format_regression_metric; regression::format_series and Presentation::figure",
+      "behavior": "All process coordinates share one formatter call. Display snapshots serialize inside ProcessRegression and bootstrap::html restores them without a formatter, validating their source hash and coordinate structure. Raw estimates and tables keep original units. Linear statistical reformatting clears obsolete display snapshots.",
+      "validation": "Nine regression tests passed, including full bootstrap JSON roundtrip, unchanged raw report, stale source rejection, malformed band rejection, metric contract mismatch and replacement by linear statistical formatting. All-target/all-feature library Clippy passed. All 24 measurement integration tests passed. regression_report example generated three XML-valid SVG charts including a nonlinear snapshot restored from JSON; no unavailable diagnostics. This is structural, not browser visual validation.",
+      "limits": "Named and automatic pair restoration are verified separately below. Browser/platform acceptance remains open. Renderer samples 65 grid points plus observed x values and requires a finite monotone increasing formatter.",
+      "example_artifact": ".airbug/validation/nonlinear-regression/report.html"
+    },
+    "nonlinear_statistic_display": {
+      "status": "verified_native_cargo_and_saved_bootstrap_report",
+      "behavior": "Automatic format_bootstrap_metric and Suite dispatch stores a separate Report.presentation for increasing nonlinear/offset conversions. Points and original bounds are transformed on one scale; SE is recomputed from retained transformed draws or explicitly unavailable. Markdown/HTML render saved display and validate source/config hashes. Regression snapshots remain separate from raw model.",
+      "evidence": "192 library tests passed before the final formatter-domain/probe refinements. Current all 24 measurement integration tests and all-target/all-feature Clippy passed. Square, positive/negative offsets and square root have transformed draw/SE oracles. Both external Cargo scripts passed: nonlinear including negative human display, lazy baseline, no-plots/no-html and existing linear saved report/comparison/export regression coverage.",
+      "remaining": "Nonmonotone statistical displays are supported as documented in nonmonotone_statistical_display; nonmonotone regression bands require scale_intervals; see nonmonotone_regression_intervals. Increasing/decreasing and signed display, named/automatic overlays and standalone snapshot restoration are verified in transformed_statistic_overlay and decreasing_regression_display. Browser acceptance and Windows runtime remain open; current Linux gate is recorded in platforms.json.",
+      "commands": [
+        "cargo test --offline --locked -p airbug-bench --all-features --test measurements",
+        "cargo clippy --offline --locked -p airbug-bench --all-targets --all-features -- -D warnings",
+        "python3 bench/scripts/test-nonlinear-bootstrap.py",
+        "python3 bench/scripts/test-formatted-bootstrap.py"
+      ],
+      "source_sha256": {
+        "bench/src/statistic_format.rs": "1907d2a70ca99e200db3de44bf3f691f91312ab1a625e0fbf0a2542963f938f9",
+        "bench/src/measurement.rs": "0bd33738a2305623808d681686eb989561d62b6ad2b698496a9334759720c60c",
+        "bench/src/bootstrap.rs": "592e4be204df6d443d79b640eab4e4222a56a062a08ce87af9810c4e5632a9a0",
+        "bench/src/suite.rs": "3c756e64176c07d8d2a866dc9763ee0a1ff245f9e55b6ae62d1063b1a8f03ae3",
+        "bench/scripts/test-nonlinear-bootstrap.py": "8399ccd3a79658d9e4f9fe4e4e07291e49a63d1c2ea42de257c9767d02e0028c"
+      }
+    },
+    "named_regression_comparison": {
+      "status": "verified_native_cargo_named_baseline",
+      "entrypoint": "measurement::regression_comparison_chart; Suite named baseline regression-comparison.html",
+      "behavior": "Original process fits from both sides use one formatter invocation per variant and shared axes; side labels keep coincident process IDs distinct. Exact metric contracts are required. Filtering a report now also filters its saved statistical presentation. Valid confidence bounds need not contain the point estimate; raw and transformed renderers preserve those intervals.",
+      "evidence": [
+        "Expanded test-nonlinear-bootstrap.py passed actual cargo bench with linear sampling, saved baseline, doubled custom work totals and transformed regression coordinates in comparison HTML; all SVG parsed as XML.",
+        "All 10 regression tests passed, including both-side numeric coordinates, contract rejection, selected/absent case presentation filtering and point estimates outside confidence bounds.",
+        "All-target/all-feature Clippy, format and diff checks passed."
+      ],
+      "remaining": "Nonmonotone statistical displays are supported as documented in nonmonotone_statistical_display; nonmonotone regression bands require scale_intervals; see nonmonotone_regression_intervals. Increasing/decreasing and signed display, named/automatic overlays and standalone snapshot restoration are verified in transformed_statistic_overlay and decreasing_regression_display. Browser acceptance and Windows runtime remain open; current Linux gate is recorded in platforms.json.",
+      "source_sha256": {
+        "bench/src/measurement.rs": "e9b35828b7b3206a1da27f040cf2e6c3449139db2ccda3a00c4dfb5d0665ef7f",
+        "bench/src/regression.rs": "d9950974d6d0a9a27542a43c309fe03717cea44fe880877e2d88417126641b89",
+        "bench/src/suite.rs": "e70037d8e4d978291509105627cdccd7cb6d6d049d5a856f6b2d59754eb8f09c",
+        "bench/scripts/test-nonlinear-bootstrap.py": "e63737f638ae427f31c0edce92078f08d99a34a9809a46cf2a1abab3d2707545"
+      }
+    },
+    "saved_regression_comparison": {
+      "status": "verified_named_pair_standalone_compare_and_report",
+      "provenance": "airbug.presentation.regression-comparison.v1",
+      "behavior": "Shared-scale process snapshots persist in candidate run.json for named baselines. compare --html and report --baseline restore without formatter code. Per-metric source hashes support filtering; mismatched baseline/config produces an unavailable notice; changed candidate or malformed geometry rejects rendering. Snapshot publication is atomic on formatter failure. Named HTML reuses the same snapshot rather than calling the formatter again.",
+      "validation": [
+        "14 regression-related tests passed: paired values, source/config mismatch, atomic failed formatting and malformed geometry rejection.",
+        "test-nonlinear-bootstrap.py passed real cargo bench followed by standalone filtered compare and report. Restored SVG XML, different settings and preserved output on stale snapshot were checked.",
+        "All-target/all-feature Clippy passed for airbug-bench and cargo-airbug-bench. Format/diff checks passed."
+      ],
+      "remaining": "Nonmonotone statistical displays are supported as documented in nonmonotone_statistical_display; nonmonotone regression bands require scale_intervals; see nonmonotone_regression_intervals. Increasing/decreasing and signed display, named/automatic overlays and standalone snapshot restoration are verified in transformed_statistic_overlay and decreasing_regression_display. Browser acceptance and Windows runtime remain open; current Linux gate is recorded in platforms.json.",
+      "source_sha256": {
+        "bench/src/regression_format.rs": "0a842b670f63ade887c66d52e2d0c2c7a6f1795dd0f619c6daa4937aef8f514e",
+        "bench/src/regression.rs": "e7ead0ec944d3fa6431675ef2fc6688b6352f4c0b8bfdbfa9a38355dc63f67f1",
+        "bench/src/measurement.rs": "627c12afe21aaeb59f2c006b98de7bdcf6bdb7930edf9acea397886a2c04639d",
+        "bench/src/suite.rs": "b676043fc402a363a58f65b164afcc1c312906715bdd16df8cd18fba69510e2f",
+        "bench/cli/src/cmd.rs": "99a7e4c3bc2b9d2d2d31034ca17d2b0ffe713358320dcf2f3b97f835a4ce58d8",
+        "bench/cli/src/experiment_report.rs": "ce1af5558a3add0aa5cc5495f84085a00abaa434ad3407836bbfafb97f5b108e",
+        "bench/scripts/test-nonlinear-bootstrap.py": "7cecd7feccfb8c37b02db383ee682828d9b8f9643b14428676dbdd1ce2b2f0c7"
+      }
+    },
+    "automatic_regression_history": {
+      "status": "verified_native_history_archive_output_and_standalone_restore",
+      "behavior": "History formatter callback enriches a temporary complete candidate while throughput uses the normalized selected case. Regression snapshots are saved before commit, copied identically to output and archive and rendered in the main report. Failed formatting preserves the caller and previous committed baseline.",
+      "validation": [
+        "All 14 history tests passed; failure test now mutates temporary provenance before returning an error and verifies the caller remains unchanged.",
+        "Expanded test-nonlinear-bootstrap.py passed two automatic runs, exact archived/output run equivalence, main-report graph presence and standalone filtered comparison restoration. Named baselines and stale/config protection remained passing.",
+        "All-target/all-feature Clippy passed for library and CLI; formatting and diff checks passed."
+      ],
+      "source_sha256": {
+        "bench/src/history.rs": "641a076496cea0e3f2b0dffa7718f4813c2ab275114abecf37613293e83fde40",
+        "bench/src/suite.rs": "fa1909d53713cdcc748271fb16a28cbc692c2527d973ab96566ae060896eb2e4",
+        "bench/scripts/test-nonlinear-bootstrap.py": "64bc48228dbb3878cdb5ba597fddac386341fc158ce8065e5872f73310513094"
+      }
+    }
+  },
+  "linux_nonlinear_validation": {
+    "status": "passed",
+    "command": "python3 bench/scripts/test-nonlinear-bootstrap.py",
+    "platform": "Linux ARM64",
+    "image": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "exit_code": 0,
+    "log": ".airbug/validation/parity-current/linux-nonlinear.log",
+    "script_sha256": "64bc48228dbb3878cdb5ba597fddac386341fc158ce8065e5872f73310513094",
+    "coverage": [
+      "Nonlinear square and offset display with unchanged raw statistics",
+      "Retained bootstrap draws and transformed standard errors",
+      "Named baseline, no-plots and no-html",
+      "Saved regression geometry restored through standalone compare/report",
+      "Automatic history output/archive equality",
+      "Filtered comparison, settings mismatch and stale-output protection"
+    ],
+    "limits": "Numeric and serialized artifact validation; does not establish rendered browser appearance or Windows runtime."
+  },
+  "decreasing_statistical_display": {
+    "status": "implemented_focused_validation",
+    "upstream_source": "criterion-0.8.2/src/measurement.rs::ValueFormatter::scale_values documents unit consistency and no NaN, without requiring increasing order",
+    "behavior": "Monotone decreasing statistical transforms reverse interval endpoints, retain transformed bootstrap draws, recompute standard errors and preserve raw rows. Equal inputs must have equal outputs; range-collapsing transforms remain rejected. Nonmonotone statistical support is recorded in nonmonotone_statistical_display.",
+    "evidence": "bench/tests/measurements.rs::decreasing_statistical_display_reverses_bounds_without_changing_raw_data",
+    "validation": "25 all-feature measurement tests passed on macOS, including JSON restoration and immutable original estimates.",
+    "limits": "Historical validation for decreasing display; subsequent nonmonotone interval support and saved statistical overlays are recorded below. See platforms.json for current source-specific gates."
+  },
+  "decreasing_regression_display": {
+    "status": "unit_and_native_cargo_validation_passed",
+    "behavior": "Monotone decreasing transforms supported for regression samples, fitted curves and confidence bands. Polygon storage is normalized to lower-forward/upper-backward for saved presentation validation. Raw fits unchanged.",
+    "evidence": "regression::tests::nonlinear_regression_transforms_model_at_observed_x_without_refitting now checks reverse coordinates, band bounds and JSON restoration; test-nonlinear-bootstrap.py includes reverse display loaded from saved baseline.",
+    "validation": "15 regression library tests passed; all-target/all-feature library Clippy passed. Expanded test-nonlinear-bootstrap.py passed with reverse-display baseline reanalysis, transformed point/draws/SE, regression rendering and valid SVG XML; existing named/automatic history and standalone restoration scenarios remained passing. Logs: .airbug/validation/parity-current/reverse-regression.log and reverse-cargo.log.",
+    "limits": "Nonmonotone transforms remain rejected; no browser visual verification."
+  },
+  "negative_display_followup": {
+    "status": "focused_test_and_external_cargo_passed",
+    "behavior": "Negative scaling takes the separate display path; raw estimates and positive original regression slope stay unchanged. Paired baseline/candidate regression snapshots preserve negative coordinates through JSON.",
+    "evidence": "regression::tests::nonlinear_regression_transforms_model_at_observed_x_without_refitting",
+    "validation": "Focused regression test command completed successfully; expanded external Cargo negative-display fixture and all-target/all-feature library Clippy passed.",
+    "logs": [
+      ".airbug/validation/parity-current/negative-regression.log",
+      ".airbug/validation/parity-current/negative-cargo.log"
+    ]
+  },
+  "transformed_statistic_overlay": {
+    "status": "library_implementation_focused_tests_passed",
+    "api": "statistic_format::comparison_charts",
+    "behavior": "Both source reports are selected by full case and metric contract, then transformed in one formatter call to establish common units. Baseline/candidate bootstrap densities are overlaid per matching variant/statistic. Raw reports remain unchanged. Missing retained draws or differing resampling populations are rejected.",
+    "evidence": "measurements::decreasing_statistical_display_reverses_bounds_without_changing_raw_data",
+    "remaining": [
+      "Browser visual acceptance"
+    ],
+    "validation": "All 25 measurement integration tests passed after negative-transform expectation was updated. Overlay SVG, baseline/candidate labels, retained-draw requirement, population mismatch and raw preservation checked. Log: .airbug/validation/parity-current/stat-overlay-verified.log. All-target library Clippy passed for overlay implementation before this test-only correction.",
+    "named_baseline_integration": {
+      "status": "native_cargo_and_single_sample_verified",
+      "behavior": "Suite named-baseline comparison HTML renders transformed bootstrap distributions on shared formatter units. Analysis captures draws for these graphs even if the user did not request exported draw artifacts. no-plots/no-html skip this work. Missing estimates produce an explicit unavailable note.",
+      "validation": "Expanded nonlinear Cargo fixture passed transformed mean/median overlay checks, SVG XML, and one-sample named comparison with an explicit unavailable note instead of failure. Existing standalone regression/history/no-plots/no-html scenarios remained passing. All-target/all-feature library/CLI Clippy passed.",
+      "log": ".airbug/validation/parity-current/named-stat-overlay-single.log"
+    },
+    "automatic_history_integration": {
+      "status": "verified_native_cargo_linux_arm64",
+      "behavior": "Suite uses one shared helper for named and automatic baseline comparisons. The automatic-history callback appends transformed mean/median and other retained-statistic density overlays to the main report. no-plots/no-html suppress generation.",
+      "evidence": "test-nonlinear-bootstrap.py now checks formatter(mean)/formatter(median) comparison in history-second/report.html",
+      "remaining": "Persistence and standalone restoration are implemented and verified in saved_comparison; browser acceptance remains open.",
+      "validation": "Expanded test-nonlinear-bootstrap.py passed on Linux ARM64 with explicit automatic-history mean/median overlay assertions, named baselines, single-sample handling and output/archive equality. Library/CLI all-target Clippy passed on macOS. macOS fixture session 14254 remains live; no terminal result claimed.",
+      "log": ".airbug/validation/parity-current/history-stat-overlay-linux.log"
+    },
+    "saved_comparison": {
+      "status": "implemented_external_cargo_linux_verified",
+      "storage": "Optional statistics and statistics_unavailable fields in airbug.presentation.regression-comparison.v1; absent fields retain legacy snapshot behavior.",
+      "behavior": "Named and automatic snapshots bind both source populations and bootstrap settings. They contain shared-scale statistical presentations and retained draws. Direct and standalone rendering reuse the same snapshot. Missing samples preserve an unavailable note. Candidate mismatch rejects; another baseline/config yields an unavailable notice; inner statistical sources are hash-validated before SVG generation.",
+      "validation": "Expanded Linux ARM64 nonlinear Cargo fixture passed named and automatic restored mean/median overlays through standalone compare/report, metric filtering, stale candidate/settings protection, one-sample notes, no-plots/no-html, and output/archive equality. Library/CLI Clippy passed. Extended snapshot unit test passed on macOS: malformed inner source rejected, legacy optional fields restored, stale candidate/config and atomic formatter failure preserved.",
+      "log": ".airbug/validation/parity-current/saved-stat-overlay-linux.log"
+    },
+    "joint_scale_oracle": {
+      "status": "passed_macos_and_linux",
+      "test": "statistic_format::tests::comparison_uses_joint_scale_and_preserves_process_draws_and_settings",
+      "coverage": [
+        "Three independent process medians on each side; candidate is 1000 times larger",
+        "Adaptive unit selection and nonlinear square transformation applied once to both populations",
+        "Exact transformed point, endpoints and every retained mean draw",
+        "Independent sample-standard-deviation oracle for transformed standard error",
+        "Different saved seeds preserved per side",
+        "JSON restoration without another formatter call and original reports unchanged"
+      ],
+      "validation": "Focused test passed on macOS and within complete Linux ARM64 gate: 532 passed, no failures/ignores. Library/CLI all-target Clippy passed."
+    }
+  },
+  "nonmonotone_statistical_display": {
+    "status": "implemented_public_path_oracle_verified",
+    "behavior": "Finite nonmonotone transformations use percentiles of transformed retained bootstrap estimates, not just the transformed original endpoints. JSON and Markdown identify interval_method. Monotone transformations retain original-bound semantics. Equal input values must map consistently; constant range collapse remains rejected. Missing draws are reproduced from saved source observations or paired regression samples using the effective case configuration. Reproduced estimates must exactly match the saved estimates before draws are accepted. No workload is executed.",
+    "evidence": "statistic_format::nonmonotone_tests::folded_interval_uses_draw_quantiles_instead_of_endpoint_images",
+    "validation": "198 library and 25 measurement integration tests passed on Linux ARM64, including automatic reconstruction after JSON serialization for statistics and slopes, independent percentile oracle, source preservation and rejection of changed settings or incomplete/inconsistent observations.",
+    "limitations": [
+      "Legacy reports lacking reproducible source data return an error; nonmonotonicity is detected over the supplied values",
+      "Nonmonotone regression bands require scale_intervals",
+      "Existing complete platform gates predate this change"
+    ],
+    "log": ".airbug/validation/parity-current/restored-statistics-linux.log",
+    "public_path_limit": "Public format_bootstrap_metric now supports reports with regression fits when the formatter provides scale_intervals. Missing bootstrap draws reproduce from JSON source data. Nonmonotone regression transforms without interval bounds still fail explicitly."
+  },
+  "upstream_formatter_geometry_audit": {
+    "version": "Criterion 0.8.2",
+    "source_files": [
+      {
+        "path": ".airbug/validation/upstream-surface/sources/criterion-0.8.2/src/measurement.rs",
+        "sha256": "8d9991860a598a90da5350139ff09eb5be696d9b20ed6de30e3a225ad5fe6597"
+      },
+      {
+        "path": ".airbug/validation/upstream-surface/sources/criterion-0.8.2/src/plot/plotters_backend/regression.rs",
+        "sha256": "cbef40f8441ec69a77d5603db09470ac6b9663e50a53984809435c9967a8f96f"
+      },
+      {
+        "path": ".airbug/validation/upstream-surface/sources/criterion-0.8.2/src/plot/gnuplot_backend/regression.rs",
+        "sha256": "e3f1c20506f00919eeefbb2c1bfcfd957c1d06006b361bbe2071d3ad5e3ad6a6"
+      },
+      {
+        "path": ".airbug/validation/upstream-surface/sources/criterion-0.8.2/src/plot/plotters_backend/distributions.rs",
+        "sha256": "1059ef6743e81a44833a6acdade11b2279b7979bc77815009aca30ad3dd42e71"
+      }
+    ],
+    "contract": "ValueFormatter::scale_values chooses a unit from typical_value, can be called repeatedly with the same typical value, and prohibits NaN. The trait documentation does not state monotonicity or linearity.",
+    "regression_behavior": "Both inspected backends transform observed totals and three values at max_iters (point slope and slope interval endpoints multiplied by max_iters). They connect transformed endpoint values to an untransformed origin. Plotters uses a straight line and triangular polygon. This is not a general transformation of a regression curve or confidence region.",
+    "distribution_behavior": "Plotters transforms original confidence endpoints and bootstrap draws separately; the transformed endpoints define the KDE interval. It does not calculate percentile bounds of transformed draws.",
+    "analytical_counterexamples": [
+      "For f(y)=y^2, slope=2 and max_iters=3, the transformed line endpoint is 36. A straight line from the origin gives y=12 at x=1; transforming the original fit gives f(2)=4.",
+      "For f(y)=(y-4)^2 and original interval [2,6], both transformed endpoints are 4 while the image contains 0 at y=4. Endpoint-only bounds cannot represent this region."
+    ],
+    "airbug_status": "Monotone regression curves and confidence bands have explicit transformed coordinates. Nonmonotone statistical intervals use transformed bootstrap percentiles. Nonmonotone regression confidence bands remain unsupported; this audit does not close that gap.",
+    "acceptance_boundary": "Do not infer correct arbitrary nonlinear plotting from the permissive formatter trait or upstream endpoint plotting. Distinguish callable formatter domain, visual behavior and statistical interval interpretation in the final comparison."
+  },
+  "latest_cargo_regression_validation": {
+    "command": "python3 bench/scripts/test-nonlinear-bootstrap.py",
+    "platform": "Linux ARM64",
+    "exit_code": 0,
+    "log": ".airbug/validation/parity-current/terminal-nonlinear-linux.log",
+    "sha256": "5427d570e4c4df4905b987269f93760c34827a8704a76c0e8540858e7ea70250",
+    "scope": "Ordinary Cargo custom formatter, increasing/decreasing/signed display, named baseline, automatic history, standalone restoration, no-plots/no-html, source/config guards. Does not validate nonmonotone regression bands or visual rendering."
+  },
+  "nonmonotone_regression_intervals": {
+    "status": "implemented_public_path_verified",
+    "api": "Optional ValueFormatter::scale_intervals(typical, intervals) -> Result<Option<FormattedIntervals>>. Existing formatters default to None.",
+    "semantics": "Caller supplies image bounds for each closed interval, including interior extrema, in the same unit as scale_values. Bounds apply to every sampled regression abscissa. Original fits remain unchanged; saved coordinates render without the formatter.",
+    "validation": "201 library and 25 measurement tests passed on Linux ARM64. Folded quadratic oracle verifies interior zero, nonzero transformed origin, JSON restoration, unchanged raw fit and rejection of wrong counts/units, reversed/nonfinite bounds and excluded endpoint images. Public format_bootstrap_metric with slope and reconstructed draws matches retained-draw report. Clippy passed before the final test-only public-path addition.",
+    "log": ".airbug/validation/parity-current/interval-public-linux.log",
+    "remaining": [
+      "Formatter guarantees containment of interior values; Airbug can only validate shape and transformed endpoints.",
+      "macOS MSRV and Linux ARM64 full gates each pass 537 tests; Windows compile and external history fixture pass. Windows and current full x86 runtime remain unverified.",
+      "Browser visual acceptance remains open."
+    ],
+    "external_validation": {
+      "script": "bench/scripts/test-nonlinear-bootstrap.py",
+      "platform": "Linux ARM64",
+      "exit_code": 0,
+      "log": ".airbug/validation/parity-current/folded-history-linux.log",
+      "sha256": "b7bad2cedc04e21645123b37b6e21698441c4b507cc074d08e9ba33fe8360a03",
+      "scope": "Cargo folded formatter with supplied interval images; named baseline; independent coordinate oracle; standalone compare with workload disabled; folded automatic history output/archive equality and standalone restoration; existing monotone, no-plots/no-html and stale-source scenarios still pass."
+    }
   }
 }

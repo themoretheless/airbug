@@ -32,6 +32,7 @@ struct Options {
     quick: Option<syn::LitBool>,
     quick_config: Option<Expr>,
     threads: Option<Expr>,
+    inherited_thread_dispatch: bool,
     bytes: Option<Expr>,
     items: Option<Expr>,
     chars: Option<Expr>,
@@ -42,10 +43,13 @@ struct Options {
     input_chars: Option<Expr>,
     input_cycles: Option<Expr>,
     input_bits: Option<Expr>,
-    ignore: Option<syn::LitBool>,
+    ignore: Option<Expr>,
     samples: Option<Expr>,
+    sample_count_unit: Option<syn::LitStr>,
+    worker_start: Option<syn::LitStr>,
     warmup_ms: Option<Expr>,
     sample_ms: Option<Expr>,
+    measurement_ms: Option<Expr>,
     iterations: Option<Expr>,
     sampling: Option<syn::LitStr>,
     min_time_ms: Option<Expr>,
@@ -196,9 +200,30 @@ impl Parse for Options {
                     }
                     options.sampling = Some(value);
                 }
+                "worker_start" => {
+                    let value: syn::LitStr = input.parse()?;
+                    if !matches!(value.value().as_str(), "shared" | "local") {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            "worker_start must be shared or local",
+                        ));
+                    }
+                    options.worker_start = Some(value);
+                }
+                "sample_count_unit" => {
+                    let value: syn::LitStr = input.parse()?;
+                    if !matches!(value.value().as_str(), "batches" | "workers") {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            "sample_count_unit must be batches or workers",
+                        ));
+                    }
+                    options.sample_count_unit = Some(value);
+                }
                 "samples" => options.samples = Some(input.parse()?),
                 "warmup_ms" => options.warmup_ms = Some(input.parse()?),
                 "sample_ms" => options.sample_ms = Some(input.parse()?),
+                "measurement_ms" => options.measurement_ms = Some(input.parse()?),
                 _ => return Err(syn::Error::new_spanned(key, "unknown benchmark option")),
             }
             if input.is_empty() {
@@ -321,6 +346,27 @@ fn quick_defaults(options: &Options, runtime: &syn::Path) -> Option<impl quote::
     })
 }
 
+fn attribute_milliseconds(value: &Expr, runtime: &syn::Path) -> impl quote::ToTokens {
+    fn integer_expression(value: &Expr) -> bool {
+        match value {
+            Expr::Lit(expr) => matches!(&expr.lit, syn::Lit::Int(lit) if lit.suffix().is_empty()),
+            Expr::Binary(expr) => integer_expression(&expr.left) && integer_expression(&expr.right),
+            Expr::Paren(expr) => integer_expression(&expr.expr),
+            Expr::Group(expr) => integer_expression(&expr.expr),
+            _ => false,
+        }
+    }
+    // Preserve the former u64 context for untyped integer arithmetic as well as
+    // literals. Other expressions retain their own type before decimal conversion.
+    let value = if integer_expression(value) {
+        quote!({ let value: u64 = #value; value })
+    } else {
+        quote!(#value)
+    };
+    quote!(#runtime::__milliseconds(&::std::string::ToString::to_string(&(#value)))
+        .expect("valid benchmark millisecond duration"))
+}
+
 fn sampling_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTokens {
     let samples = options
         .samples
@@ -330,17 +376,31 @@ fn sampling_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTo
     let warmup = options
         .warmup_ms
         .as_ref()
-        .map(|e| quote!(Some(::std::time::Duration::from_millis(#e))))
+        .map(|e| {
+            let duration = attribute_milliseconds(e, runtime);
+            quote!(Some(#duration))
+        })
         .unwrap_or_else(|| quote!(None));
     let sample = options
         .sample_ms
         .as_ref()
-        .map(|e| quote!(Some(::std::time::Duration::from_millis(#e))))
+        .map(|e| {
+            let duration = attribute_milliseconds(e, runtime);
+            quote!(Some(#duration))
+        })
         .unwrap_or_else(|| quote!(None));
     let iterations = options
         .iterations
         .as_ref()
         .map(|e| quote!(Some(#e)))
+        .unwrap_or_else(|| quote!(None));
+    let measurement = options
+        .measurement_ms
+        .as_ref()
+        .map(|e| {
+            let duration = attribute_milliseconds(e, runtime);
+            quote!(Some(#duration))
+        })
         .unwrap_or_else(|| quote!(None));
     let mode = options
         .sampling
@@ -357,7 +417,10 @@ fn sampling_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTo
     let duration = |value: &Option<Expr>| {
         value
             .as_ref()
-            .map(|e| quote!(Some(::std::time::Duration::from_millis(#e))))
+            .map(|e| {
+                let duration = attribute_milliseconds(e, runtime);
+                quote!(Some(#duration))
+            })
             .unwrap_or_else(|| quote!(None))
     };
     let min_time = duration(&options.min_time_ms);
@@ -367,14 +430,95 @@ fn sampling_defaults(options: &Options, runtime: &syn::Path) -> impl quote::ToTo
         .as_ref()
         .map(|e| quote!(Some(#e)))
         .unwrap_or_else(|| quote!(None));
-    quote!(#runtime::Sampling { samples: #samples, warmup: #warmup, sample_time: #sample, iterations: #iterations, mode: #mode, min_time: #min_time, max_time: #max_time, exclude_external_time: #exclude_external_time })
+    let sample_count_unit = options
+        .sample_count_unit
+        .as_ref()
+        .map(|s| {
+            let variant = if s.value() == "workers" {
+                quote!(Workers)
+            } else {
+                quote!(Batches)
+            };
+            quote!(Some(#runtime::SampleCountUnit::#variant))
+        })
+        .unwrap_or_else(|| quote!(None));
+    let worker_start = options
+        .worker_start
+        .as_ref()
+        .map(|s| {
+            let variant = if s.value() == "local" {
+                quote!(Local)
+            } else {
+                quote!(Shared)
+            };
+            quote!(Some(#runtime::timer::WorkerStart::#variant))
+        })
+        .unwrap_or_else(|| quote!(None));
+    quote!(#runtime::Sampling { worker_start: #worker_start, sample_count_unit: #sample_count_unit, samples: #samples, warmup: #warmup, sample_time: #sample, measurement_time: #measurement, iterations: #iterations, mode: #mode, min_time: #min_time, max_time: #max_time, exclude_external_time: #exclude_external_time })
 }
 
 fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
+    if options.threads.is_some() {
+        let disabled = matches!(&options.threads, Some(Expr::Lit(expr)) if matches!(&expr.lit, syn::Lit::Bool(value) if !value.value));
+        let local_dispatch = !disabled
+            && !options.custom
+            && options.measurement.is_none()
+            && options.setup_thread.is_none()
+            && (f.sig.asyncness.is_none()
+                || [
+                    &options.input_bytes,
+                    &options.input_items,
+                    &options.input_chars,
+                    &options.input_cycles,
+                    &options.input_bits,
+                ]
+                .into_iter()
+                .flatten()
+                .all(|expr| matches!(expr, Expr::Closure(_) | Expr::Path(_))));
+        options.inherited_thread_dispatch = local_dispatch;
+        return registration_batch(f, options);
+    }
+    let original = registration_batch(f, options.clone())?;
+    // Constructed async counters use the local fallback under inherited defaults;
+    // concrete threads remain available for explicitly shareable counter state.
+    if !options.custom && options.measurement.is_none() {
+        let mut threaded = options;
+        threaded.inherited_thread_dispatch = true;
+        threaded.threads = Some(syn::parse_quote!(
+            suite
+                .inherited_thread_counts()
+                .expect("inherited worker counts")
+        ));
+        let threaded = registration_batch(f, threaded)?;
+        return syn::parse2(quote!({
+            if suite.inherited_thread_counts().is_some() {
+                #threaded
+            } else {
+                #original
+            }
+        }));
+    }
+    syn::parse2(quote!({
+        suite.register_without_thread_support(|suite| #original);
+    }))
+}
+
+fn registration_batch(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
     if matches!(&options.threads, Some(Expr::Lit(expr)) if matches!(&expr.lit, syn::Lit::Bool(value) if !value.value))
     {
         options.threads = None;
         options.setup_thread = None;
+    }
+    // Threaded executors read the scoped batch policy at registration. Keep
+    // batch out of the sequential method selector below.
+    if options.threads.is_some() && !options.custom {
+        let batch = options.batch.take();
+        let original = registration_impl(f, options)?;
+        return if let Some(batch) = batch {
+            syn::parse2(quote!({ suite.with_batch_defaults(#batch, |suite| #original); }))
+        } else {
+            Ok(original)
+        };
     }
     let original = registration_impl(f, options.clone())?;
     if options.batch.is_some() {
@@ -423,10 +567,10 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
             "executor requires an async function",
         ));
     }
-    if options.setup_thread.is_some() && (options.setup.is_none() || options.threads.is_none()) {
+    if options.setup_thread.is_some() && options.setup.is_none() {
         return Err(syn::Error::new_spanned(
             &f.sig,
-            "setup_thread requires setup and threads",
+            "setup_thread requires setup",
         ));
     }
     let input_counts: Vec<_> = [
@@ -446,21 +590,26 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
         ));
     }
     let units: Vec<_> = input_counts.iter().map(|(unit, _)| unit).collect();
-    let counter_bound = if (is_async && options.threads.is_some())
-        || options
-            .setup_thread
-            .as_ref()
-            .is_some_and(|v| v.value() == "worker")
-    {
-        quote!(Fn)
-    } else {
-        quote!(FnMut)
-    };
+    let counter_bound =
+        if (is_async && options.threads.is_some() && !options.inherited_thread_dispatch)
+            || options
+                .setup_thread
+                .as_ref()
+                .is_some_and(|v| v.value() == "worker")
+        {
+            quote!(Fn)
+        } else {
+            quote!(FnMut)
+        };
     let counter_functions: Vec<_> = input_counts
         .iter()
         .map(|(unit, expr)| {
             let name = format_ident!("__airbug_input_count_{unit}");
-            quote!(#[allow(unused_mut)] let mut #name = __airbug_input_counter(#expr);)
+            if is_async && options.inherited_thread_dispatch {
+                quote!(let #name = ::std::sync::Mutex::new(__airbug_input_counter(#expr));)
+            } else {
+                quote!(#[allow(unused_mut)] let mut #name = __airbug_input_counter(#expr);)
+            }
         })
         .collect();
     let input_counter_init = (!units.is_empty()).then(|| quote! {
@@ -552,6 +701,11 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
         quote!(#runtime::DropPolicy::InsideTiming)
     };
     let has_args = options.args.is_some();
+    let thread_argument_marker = if has_args {
+        quote!(#runtime::threads::argument_marker(&__airbug_arg))
+    } else {
+        quote!(#runtime::threads::argument_marker(&()))
+    };
     let borrowed_arg = has_args
         && options.setup.is_none()
         && matches!(f.sig.inputs.last(),
@@ -617,6 +771,11 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
             };
             let record = input_counts.iter().map(|(unit, _)| {
                 let name = format_ident!("__airbug_input_count_{unit}");
+                let name = if is_async && options.inherited_thread_dispatch {
+                    quote!((#name.lock().expect("input counter mutex poisoned")))
+                } else {
+                    quote!(#name)
+                };
                 quote!(__airbug_setup_counters.add(#unit, #name(&__airbug_input));)
             });
             quote!({ let __airbug_input = #call; #(#record)* __airbug_input })
@@ -691,6 +850,11 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
                 };
                 let record = input_counts.iter().map(|(unit, _)| {
                     let name = format_ident!("__airbug_input_count_{unit}");
+                    let name = if is_async && options.inherited_thread_dispatch {
+                        quote!((#name.lock().expect("input counter mutex poisoned")))
+                    } else {
+                        quote!(#name)
+                    };
                     quote!(__airbug_setup_counters.add(#unit, #name(&__airbug_input));)
                 });
                 quote!({ let __airbug_input = #call; #(#record)* __airbug_input })
@@ -707,7 +871,75 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
                 if is_async { "async_" } else { "" },
                 if owned_input { "" } else { "_ref" }
             );
-            if options.threads.is_some() && is_async {
+            if options.threads.is_some()
+                && is_async
+                && options.setup.is_some()
+                && options.inherited_thread_dispatch
+            {
+                let (constructor, registration_trait, registration_method) = if owned_input {
+                    (
+                        quote!(inherited_async_owned_setup),
+                        quote!(RegisterInheritedAsyncAllocatedOwnedSetup),
+                        quote!(register_inherited_async_allocated_owned_setup),
+                    )
+                } else {
+                    (
+                        quote!(inherited_async_setup),
+                        quote!(RegisterInheritedAsyncAllocatedSetup),
+                        quote!(register_inherited_async_allocated_setup),
+                    )
+                };
+                quote!({
+                    use #runtime::threads::#registration_trait as _;
+                    (&&#runtime::threads::#constructor(#thread_argument_marker, move || #executor,
+                        move || #setup_call, async move |__airbug_input| #call.await))
+                        .#registration_method(suite, &__airbug_name, #allocator, __airbug_workers, #policy);
+                })
+            } else if options.threads.is_some()
+                && !is_async
+                && options.setup.is_some()
+                && !worker_setup
+                && options.inherited_thread_dispatch
+            {
+                let (constructor, registration_trait, registration_method) = if owned_input {
+                    (
+                        quote!(inherited_owned_setup),
+                        quote!(RegisterInheritedAllocatedOwnedSetup),
+                        quote!(register_inherited_allocated_owned_setup),
+                    )
+                } else {
+                    (
+                        quote!(inherited_setup),
+                        quote!(RegisterInheritedAllocatedSetup),
+                        quote!(register_inherited_allocated_setup),
+                    )
+                };
+                quote!({
+                    use #runtime::threads::#registration_trait as _;
+                    (&&#runtime::threads::#constructor(move || #setup_call, move |__airbug_input| #call))
+                        .#registration_method(suite, &__airbug_name, #allocator, __airbug_workers, #policy);
+                })
+            } else if options.threads.is_some()
+                && !is_async
+                && options.setup.is_none()
+                && options.inherited_thread_dispatch
+            {
+                quote!({
+                    use #runtime::threads::RegisterInheritedAllocated as _;
+                    (&&#runtime::threads::InheritedCallback::new(#thread_argument_marker, move || #invocation))
+                        .register_inherited_allocated(suite, &__airbug_name, #allocator, __airbug_workers, #policy);
+                })
+            } else if options.threads.is_some()
+                && is_async
+                && options.setup.is_none()
+                && options.inherited_thread_dispatch
+            {
+                quote!({
+                    use #runtime::threads::RegisterInheritedAsyncAllocated as _;
+                    (&&#runtime::threads::InheritedCallback::new(#thread_argument_marker, (move || #executor, async move || #invocation.await)))
+                        .register_inherited_async_allocated(suite, &__airbug_name, #allocator, __airbug_workers, #policy);
+                })
+            } else if options.threads.is_some() && is_async {
                 let method = format_ident!(
                     "bench_async_threads_allocated_with_{}input",
                     if owned_input { "owned_" } else { "" }
@@ -776,13 +1008,65 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
         } else {
             let record = input_counts.iter().map(|(unit, _)| {
                 let name = format_ident!("__airbug_input_count_{unit}");
+                let name = if is_async && options.inherited_thread_dispatch {
+                    quote!((#name.lock().expect("input counter mutex poisoned")))
+                } else {
+                    quote!(#name)
+                };
                 quote!(
                     __airbug_setup_counters.add(#unit, #name(&__airbug_input));
                 )
             });
             quote!({ let __airbug_input = #setup_call; #(#record)* __airbug_input })
         };
-        if is_async && options.threads.is_some() {
+        if !is_async && options.inherited_thread_dispatch && !worker_setup {
+            let (constructor, trait_name, method) = if owned_input {
+                (
+                    format_ident!("inherited_owned_setup"),
+                    format_ident!("RegisterInheritedOwnedSetup"),
+                    format_ident!("register_inherited_owned_setup"),
+                )
+            } else {
+                (
+                    format_ident!("inherited_setup"),
+                    format_ident!("RegisterInheritedSetup"),
+                    format_ident!("register_inherited_setup"),
+                )
+            };
+            quote!({
+                use #runtime::threads::#trait_name as _;
+                (&&#runtime::threads::#constructor(move || #setup_call, |__airbug_input| #target(__airbug_input)))
+                    .#method(suite, &__airbug_name, __airbug_workers, #policy);
+            })
+        } else if is_async && options.inherited_thread_dispatch {
+            let (constructor, trait_name, method) = if owned_input {
+                (
+                    format_ident!("inherited_async_owned_setup"),
+                    format_ident!("RegisterInheritedAsyncOwnedSetup"),
+                    format_ident!("register_inherited_async_owned_setup"),
+                )
+            } else {
+                (
+                    format_ident!("inherited_async_setup"),
+                    format_ident!("RegisterInheritedAsyncSetup"),
+                    format_ident!("register_inherited_async_setup"),
+                )
+            };
+            let receiver = if input_counts
+                .iter()
+                .any(|(_, expr)| !matches!(expr, Expr::Closure(_) | Expr::Path(_)))
+            {
+                quote!(&__airbug_callback)
+            } else {
+                quote!(&&__airbug_callback)
+            };
+            quote!({
+                use #runtime::threads::#trait_name as _;
+                let __airbug_callback = #runtime::threads::#constructor(#thread_argument_marker, move || #executor,
+                    move || #setup_call, async move |__airbug_input| #target(__airbug_input).await);
+                (#receiver).#method(suite, &__airbug_name, __airbug_workers, #policy);
+            })
+        } else if is_async && options.threads.is_some() {
             if owned_input {
                 quote!(suite.bench_async_threads_with_owned_input(&__airbug_name, __airbug_workers,
                     move || #executor, move || #setup_call,
@@ -800,7 +1084,7 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
                 quote!(suite.bench_async_with_owned_input(&__airbug_name, move || #executor, move || #setup_call,
                 move |__airbug_input| #target(__airbug_input), #policy);)
             }
-        } else if owned_input && worker_setup {
+        } else if owned_input && worker_setup && options.threads.is_some() {
             quote!(suite.bench_threads_with_local_owned_input(&__airbug_name, __airbug_workers, move || #setup_call,
                 |__airbug_input| #target(__airbug_input), #policy);)
         } else if owned_input && options.threads.is_some() {
@@ -822,7 +1106,7 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
                 quote!(suite.bench_async_with_input(&__airbug_name, move || #executor, move || #setup_call,
                 async move |__airbug_input| #target(__airbug_input).await, #policy);)
             }
-        } else if worker_setup {
+        } else if worker_setup && options.threads.is_some() {
             quote!(suite.bench_threads_with_local_input(&__airbug_name, __airbug_workers, move || #setup_call,
                 |__airbug_input| #target(__airbug_input), #policy);)
         } else if options.threads.is_some() {
@@ -849,6 +1133,12 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
             quote!(suite.bench_batched(&__airbug_name, || (),
                 move |_: ()| #invocation, #policy, #batch);)
         }
+    } else if is_async && options.threads.is_some() && options.inherited_thread_dispatch {
+        quote!({
+            use #runtime::threads::RegisterInheritedAsync as _;
+            (&&#runtime::threads::InheritedCallback::new(#thread_argument_marker, (move || #executor, async move || #invocation.await)))
+                .register_inherited_async(suite, &__airbug_name, __airbug_workers, #policy);
+        })
     } else if is_async && options.threads.is_some() {
         quote!(suite.bench_async_threads(&__airbug_name, __airbug_workers, move || #executor,
             async move || #invocation.await, #policy);)
@@ -857,11 +1147,23 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
             async move |__airbug_input| #target(__airbug_input).await, #policy);)
     } else if is_async {
         quote!(suite.bench_async_factory(&__airbug_name, move || #executor, move || #invocation, #policy);)
+    } else if options.threads.is_some() && options.inherited_thread_dispatch {
+        quote!({
+            use #runtime::threads::RegisterInheritedCallback as _;
+            (&&#runtime::threads::InheritedCallback::new(#thread_argument_marker, move || #invocation))
+                .register_inherited(suite, &__airbug_name, __airbug_workers, #policy);
+        })
     } else if options.threads.is_some() {
         if outside || options.drop_output.is_none() {
-            quote!(suite.bench_threads_with_input(&__airbug_name, __airbug_workers, || (), move |_: &mut ()| #invocation, #policy);)
+            quote!(suite.bench_threads_with_local_input(&__airbug_name, __airbug_workers, || (), move |_: &mut ()| #invocation, #policy);)
         } else {
-            quote!(suite.bench_threads(&__airbug_name, __airbug_workers, move || #invocation);)
+            quote!({
+                if suite.has_registration_batch_policy() {
+                    suite.bench_threads_with_local_input(&__airbug_name, __airbug_workers, || (), move |_: &mut ()| #invocation, #policy);
+                } else {
+                    suite.bench_threads(&__airbug_name, __airbug_workers, move || #invocation);
+                }
+            })
         }
     } else if outside || options.drop_output.is_none() {
         quote!(suite.bench_with_input(&__airbug_name, || (), move |_: &mut ()| #invocation, #policy);)
@@ -869,7 +1171,8 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
         quote!(suite.bench(&__airbug_name, move || #invocation);)
     };
     // Keep the original plain loop when no deferred destruction is requested.
-    let body = if options.drop_output.is_none()
+    let body = if !options.inherited_thread_dispatch
+        && options.drop_output.is_none()
         && options.setup.is_none()
         && options.batch.is_none()
         && options.measurement.is_none()
@@ -897,7 +1200,7 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
             Some(quote!(suite.bench(&__airbug_name, move || #invocation);))
         };
         if let Some(plain) = plain {
-            quote! { if matches!(#policy, #runtime::DropPolicy::InsideTiming) { #plain } else { #body } }
+            quote! { if matches!(#policy, #runtime::DropPolicy::InsideTiming) && !suite.has_registration_batch_policy() { #plain } else { #body } }
         } else {
             body
         }
@@ -1251,6 +1554,10 @@ pub fn bench(args: TokenStream, item: TokenStream) -> TokenStream {
 
 impl Options {
     fn inherit(&mut self, parent: &Self) {
+        if self.sample_ms.is_none() && self.measurement_ms.is_none() {
+            self.sample_ms = parent.sample_ms.clone();
+            self.measurement_ms = parent.measurement_ms.clone();
+        }
         macro_rules! inherit { ($($field:ident),*) => { $(if self.$field.is_none() { self.$field = parent.$field.clone(); })* }; }
         inherit!(
             crate_path,
@@ -1284,8 +1591,9 @@ impl Options {
             input_cycles,
             input_bits,
             samples,
+            sample_count_unit,
+            worker_start,
             warmup_ms,
-            sample_ms,
             iterations,
             sampling,
             min_time_ms,
@@ -1301,7 +1609,6 @@ impl Options {
             return Ok(());
         }
         let unsupported: Vec<_> = [
-            ("threads", self.threads.is_some()),
             ("executor", self.executor.is_some()),
             ("allocator", self.allocator.is_some()),
             ("setup_thread", self.setup_thread.is_some()),
@@ -1480,6 +1787,20 @@ fn register_module(module: &mut syn::ItemMod, inherited: &Options) -> syn::Resul
         }
         for path in groups {
             let registration = quote! { suite.group_with_defaults(#path::__AIRBUG_GROUP_NAME, #sampling, #ignored, &[#(#counters),*], #path::__airbug_register_group); };
+            let registration = if let Some(threads) = &inherited.threads {
+                let counts = if matches!(threads, Expr::Lit(expr) if matches!(&expr.lit, syn::Lit::Bool(value) if !value.value))
+                {
+                    quote!(None)
+                } else if matches!(threads, Expr::Lit(expr) if matches!(expr.lit, syn::Lit::Int(_)))
+                {
+                    quote!(Some(#runtime::threads::counts({ let workers: usize = #threads; workers })))
+                } else {
+                    quote!(Some(#runtime::threads::counts(#threads)))
+                };
+                quote! { suite.with_thread_defaults(#counts, |suite| { #registration }); }
+            } else {
+                registration
+            };
             let registration = if let Some(batch) = &inherited.batch {
                 quote! { suite.with_batch_defaults(#batch, |suite| { #registration }); }
             } else {
@@ -1571,9 +1892,18 @@ pub fn suite(args: TokenStream, item: TokenStream) -> TokenStream {
         .unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
     quote! {
         #module
-        fn main() -> #runtime::Result<()> {
-            let suite = #runtime::Suite::new(#name);
-            suite.main_registered(#ident::__airbug_register_group)
+        fn main() -> ::std::process::ExitCode {
+            let mut suite = #runtime::Suite::new(#name);
+            if cfg!(test) {
+                suite.cargo_harness();
+            }
+            match suite.main_registered(#ident::__airbug_register_group) {
+                Ok(()) => ::std::process::ExitCode::SUCCESS,
+                Err(error) => {
+                    ::std::eprintln!("error: {error}");
+                    ::std::process::ExitCode::FAILURE
+                }
+            }
         }
     }
     .into()
@@ -1618,7 +1948,6 @@ mod imported_default_tests {
     #[test]
     fn unsupported_imported_defaults_are_never_silently_discarded() {
         for option in [
-            "threads = 2",
             "executor = executor()",
             "allocator = &ALLOCATOR",
             "setup_thread = \"worker\"",

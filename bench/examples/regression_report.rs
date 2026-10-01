@@ -1,8 +1,40 @@
 //! Deterministic chart fixture; this does not measure performance.
 use airbug_bench::{
     bootstrap::Config,
-    regression::{Sample, Series, comparison_figure, figure, fit},
+    regression::{Presentation, Sample, Series, comparison_figure, figure, fit, format_series},
 };
+
+struct SquaredDisplay;
+impl airbug_bench::measurement::ValueFormatter for SquaredDisplay {
+    fn scale_values(
+        &self,
+        _: f64,
+        values: &[f64],
+    ) -> airbug_bench::Result<airbug_bench::measurement::FormattedValues> {
+        Ok(airbug_bench::measurement::FormattedValues {
+            values: values.iter().map(|v| v * v).collect(),
+            unit: "ns²".into(),
+        })
+    }
+    fn scale_throughputs(
+        &self,
+        _: f64,
+        _: f64,
+        _: &str,
+        _: &[f64],
+    ) -> airbug_bench::Result<airbug_bench::measurement::FormattedValues> {
+        Err("this example formats only regression totals".into())
+    }
+    fn scale_for_machines(
+        &self,
+        values: &[f64],
+    ) -> airbug_bench::Result<airbug_bench::measurement::FormattedValues> {
+        Ok(airbug_bench::measurement::FormattedValues {
+            values: values.to_vec(),
+            unit: "ns".into(),
+        })
+    }
+}
 
 fn main() -> airbug_bench::Result<()> {
     let samples: Vec<_> = [12., 17., 34., 37., 55., 58., 75., 77.]
@@ -76,6 +108,15 @@ fn main() -> airbug_bench::Result<()> {
         "Synthetic baseline and candidate — eight processes",
         "ns",
     ));
+    // Simulate a saved artifact loaded without the original formatter instance.
+    let saved = serde_json::to_vec(&format_series(&series, &SquaredDisplay)?)?;
+    let restored: Vec<Presentation> = serde_json::from_slice(&saved)?;
+    chart.push_str(&restored[0].figure(
+        series[0].samples,
+        series[0].fit,
+        series[0].label,
+        "Synthetic nonlinear display — restored from JSON",
+    )?);
     println!(
         "{}",
         airbug_bench::report::html(

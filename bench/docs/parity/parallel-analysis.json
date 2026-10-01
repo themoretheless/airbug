@@ -1,0 +1,102 @@
+{
+  "status": "implemented_resampling_and_density_with_focused_validation",
+  "scope": "Descriptive, regression, relative and pooled-null Welch resampling plus Gaussian density grids. Small workloads stay serial. This is not a complete report visual or cross-platform audit.",
+  "policy": "Default parallel-analysis feature; at least 2048 resamples and 32 observations; available_parallelism capped at 8. Independent scoped OS threads, all joined before returning. No global Rayon or benchmark worker pool usage.",
+  "reproducibility": "Coordinator walks the original rejection-sampling RNG to establish exact chunk boundary states. Workers retain original generation order. Serial mode keeps its original loop and memory behavior. Parallel mode requires temporary row buffers in addition to output distributions.",
+  "validation": [
+    "176 library tests passed with default features",
+    "Full captured bootstrap distribution equality against a serial oracle (37 observations, 2051 draws) passed with and without default features",
+    "Chunk ordering tested at 1/2/3/8 workers and a seed forcing rejection; panic path joins every launched worker",
+    "All-target/all-feature Clippy passed"
+  ],
+  "probe": {
+    "host": "macOS ARM64",
+    "input": "128 observations; 10000 resamples; 9 one-operation samples per mode; warmup 0; dashboard/history and post-measurement bootstrap disabled",
+    "median_ns": {
+      "serial": 20052625.0,
+      "parallel": 5139875.0
+    },
+    "ratio": 3.9013837885162577,
+    "limits": "Single host/workload, serial then parallel; not a general speed guarantee or cross-platform timing proof.",
+    "artifacts": ".airbug/validation/parallel-analysis"
+  },
+  "source_hashes": {
+    "bench/src/parallel_analysis.rs": "e9bc98ccb31dbc6a3fb38afc1589af071b6531fd57cbf6bb53ca4c32cd5ab9f5",
+    "bench/src/bootstrap.rs": "e436227e8acb159b83088d8117014112e7c17cfe14650f5e5a3381d29c7f3e43",
+    "bench/src/convenience.rs": "753e56b2409e1176069542b09097f9122c8e597ac106fb6e69994a4d159f89b8",
+    "bench/src/regression.rs": "6c6b7a57c489cbf937e422228c53dc5beddb9d548e56304b884b52ee51b35d0c",
+    "bench/src/relative.rs": "48c17533b9bcbfa7dcda6b55db223f113615ad46b2e2f894d8f3f8d99caebfde",
+    "bench/src/hypothesis.rs": "3ac17e381372b11bbfc17d28077d1a49e7f57f830198eca3b2971513c0dbae12",
+    "bench/src/density.rs": "2fe0f9640f9582fecdc52a51a231f42feb6fff629f3e49b494166c55490ddf0f"
+  },
+  "regression_followup": {
+    "validation": [
+      "8 regression tests passed",
+      "179 all-feature library tests passed",
+      "2051 captured slopes on 37 non-linear observation pairs match the sequential oracle exactly; test passed with and without default features",
+      "All-target/all-feature Clippy passed"
+    ],
+    "median_ns": {
+      "serial": 2143750.0,
+      "parallel": 1309459.0
+    },
+    "ratio": 1.6371264774231191,
+    "probe": "128 observation pairs, 10000 resamples, 9 samples per mode on macOS ARM64; serial then parallel; dashboard/history and post-measurement bootstrap disabled. Single-workload evidence only.",
+    "artifacts": ".airbug/validation/parallel-regression"
+  },
+  "relative_followup": {
+    "validation": [
+      "6 relative bootstrap tests passed",
+      "180 all-feature library tests passed",
+      "Complete transform input order checked against a serial oracle for 37/41 observations and 2051 draws with two seeds, including rejection; passed with and without default features",
+      "Non-Send Rc transform stays on caller; failure at call 17 stops exactly there",
+      "All-target/all-feature Clippy passed"
+    ],
+    "median_ns": {
+      "serial": 23081167.0,
+      "parallel": 5983583.0
+    },
+    "ratio": 3.8574156989215327,
+    "probe": "Two 128-observation populations, 10000 resamples, 9 samples per mode on macOS ARM64; serial then parallel; dashboard/history and post-measurement bootstrap disabled. Single-workload evidence only.",
+    "artifacts": ".airbug/validation/parallel-relative",
+    "scope": "Pure sample statistics are computed in workers; user transforms execute sequentially after workers join. Parallel mode uses temporary buffers and may finish statistical work before a transform fails."
+  },
+  "hypothesis_followup": {
+    "validation": [
+      "7 hypothesis tests passed",
+      "181 all-feature library tests passed",
+      "8193 null draws match serial oracle exactly for two seeds, including a rejection and infinite null statistics; counts and p-values match, with and without default features",
+      "No-capture results match captured reports and retain zero distribution capacity; workers return counters without resample buffers",
+      "All-target/all-feature Clippy passed"
+    ],
+    "median_ns": {
+      "serial": 5143792.0,
+      "parallel": 1883292.0
+    },
+    "ratio": 2.731276934219441,
+    "probe": "Two 128-observation populations, 10000 resamples, 9 samples per mode on macOS ARM64; serial then parallel; no retained distribution, dashboard/history and post-measurement bootstrap disabled. Single-workload evidence only.",
+    "artifacts": ".airbug/validation/parallel-hypothesis",
+    "memory": "No-capture memory scales with input size and worker count, not resample count. Capture validates total distribution capacity before parallel planning and retains chunk outputs in original order."
+  },
+  "kde_followup": {
+    "validation": [
+      "182 all-feature library tests passed",
+      "All 257 coordinate pairs match the sequential formula bit for bit for 1025 observations at normal and 1e200 scales; passed with and without default features",
+      "All-target/all-feature Clippy passed"
+    ],
+    "policy": "At least 64 grid points and 262144 kernel evaluations. At most min(available_parallelism, 8, points/32) workers; points retain input order and each point retains its original sequential sum order.",
+    "median_ns": {
+      "serial": 4781417.0,
+      "parallel": 1567458.0
+    },
+    "ratio": 3.050427507467505,
+    "probe": "10000 observations, 256 grid points, 9 samples per mode on macOS ARM64; serial then parallel; dashboard/history and post-measurement bootstrap disabled. Single-workload evidence only.",
+    "artifacts": ".airbug/validation/parallel-kde"
+  },
+  "full_gate": {
+    "command": "cargo airbug test -- --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "result": "505 passed, 0 failed, 0 ignored, 0 not run; report state=passed, exit_code=0",
+    "report": ".airbug/runs/80058132-0f6f-4741-880d-fcec41f0bbe9/index.html",
+    "scope": "Current macOS ARM64; library, macros, CLI and doctests. Does not prove visual browser behavior, remote CI or Windows runtime."
+  }
+}

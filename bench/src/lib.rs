@@ -16,6 +16,7 @@ pub use quick::QuickConfig;
 pub mod threads;
 pub mod timer;
 mod timing;
+mod worker_timing;
 pub use convenience::{Fixture, Seeded, Selection, SortOrder};
 pub mod history;
 pub mod hypothesis;
@@ -25,22 +26,30 @@ pub mod scenario;
 pub use scenario::Recorder;
 mod console;
 pub mod density;
+mod help;
 pub mod measurement;
 pub mod model;
 mod ordering;
 pub mod outliers;
 pub mod presentation;
 pub mod regression;
+pub mod regression_format;
 pub mod relative;
+pub mod relative_format;
 pub mod report;
 mod sampling;
+pub mod statistic_format;
 pub use console::{ConsoleColor, ConsoleFormat};
+#[doc(hidden)]
+pub use sampling::milliseconds as __milliseconds;
 mod suite;
 pub mod summary;
 pub mod violin;
-pub use sampling::{Sampling, SamplingMode};
+pub use sampling::{SampleCountUnit, Sampling, SamplingMode};
+mod parallel_analysis;
 mod suite_measure;
 pub mod viz;
+mod worker_pool;
 pub use model::*;
 pub use suite::{BatchPolicy, Config, ConsoleOutput, DropPolicy, Suite};
 
@@ -162,8 +171,8 @@ pub fn error(message: impl Into<String>) -> BenchError {
 /// fn extra_external_field<const N: usize, const B: bool>() {}
 /// ```
 /// ```compile_fail
-/// #[airbug_bench::bench(setup_thread = "worker", setup = || 1)]
-/// fn missing_workers(value: &mut i32) {}
+/// #[airbug_bench::bench(setup_thread = "worker")]
+/// fn missing_setup() {}
 /// ```
 /// ```compile_fail
 /// #[airbug_bench::bench(threads = [2], setup_thread = "elsewhere", setup = || 1)]
@@ -241,3 +250,5 @@ pub mod workloads;
 
 #[cfg(feature = "memory")]
 pub mod memory;
+
+pub mod summary_format;

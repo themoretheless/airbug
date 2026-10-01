@@ -315,9 +315,10 @@ pub(crate) fn execute() -> Result<i32> {
         })?,
         Action::Ci { output: path } => output(include_str!("ci-template.yml"), Some(path))?,
         Action::Init {
+            name,
             manifest_path,
             library_path,
-        } => project::init(&manifest_path, library_path.as_deref())?,
+        } => project::init(manifest_path.as_deref(), library_path.as_deref(), &name)?,
         Action::Discover {
             manifest_path,
             offline,
@@ -869,18 +870,40 @@ pub(crate) fn execute() -> Result<i32> {
             metric,
             output: path,
         } => {
+            let relative_overrides = airbug_bench::bootstrap::Options {
+                resamples: hypothesis_resamples,
+                seed: hypothesis_seed,
+                confidence_level: alpha.map(|alpha| 1. - alpha),
+            };
+            let alpha = alpha.unwrap_or(0.05);
+            let hypothesis_resamples = hypothesis_resamples.unwrap_or(10_000);
+            let hypothesis_seed = hypothesis_seed.unwrap_or(0);
             let select = |mut r: Run| -> Result<Run> {
                 r.cases.retain(|c| c.id.contains(&filter));
                 for c in &mut r.cases {
                     c.metrics.retain(|m| m.id.contains(&metric));
                 }
                 r.cases.retain(|c| !c.metrics.is_empty());
+                if r.cases.is_empty() {
+                    return Err(error(
+                        "no benchmark cases or metrics match the comparison filters",
+                    ));
+                }
                 r.observations.retain(|o| {
                     r.cases
                         .iter()
                         .any(|c| c.id == o.case && c.metrics.iter().any(|m| m.id == o.metric))
                 });
                 r.worker_allocations.retain(|w| {
+                    r.observations.iter().any(|o| {
+                        o.case == w.case
+                            && o.variant == w.variant
+                            && o.process == w.process
+                            && o.sequence == w.sequence
+                            && o.metric == "wall"
+                    })
+                });
+                r.worker_timings.retain(|w| {
                     r.observations.iter().any(|o| {
                         o.case == w.case
                             && o.variant == w.variant
@@ -903,45 +926,66 @@ pub(crate) fn execute() -> Result<i32> {
             } else {
                 analysis::compare_with_hypothesis(&a, b.as_ref(), threshold, alpha, config)?
             };
+            let relative = b
+                .as_ref()
+                .filter(|_| !json || html || relative_distributions)
+                .map(|candidate| {
+                    let (fallback, cases) =
+                        airbug_bench::bootstrap::saved_settings(candidate, relative_overrides)?;
+                    airbug_bench::relative::compare_runs_with_case_configs(
+                        &a, candidate, &fallback, &cases,
+                    )
+                });
+            let relative = relative.transpose()?;
+            let relative_text = if (!json || html) && !relative_distributions {
+                if let Some(relative) = &relative {
+                    airbug_bench::relative::markdown(relative)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
             let text = if html && no_plots {
-                report::html(&report::comparison(&rows))
+                report::html(&format!("{}\n{relative_text}", report::comparison(&rows)))
                     .replace("<!--CHARTS-->", "")
                     .replace("<!--DETAILS-->", "")
             } else if html {
                 let mut document =
                     airbug_bench::hypothesis_plot::html(&rows, "Benchmark comparison")?;
                 if let Some(b) = &b {
-                    let config = airbug_bench::bootstrap::Config {
-                        resamples: hypothesis_resamples,
-                        seed: hypothesis_seed,
-                        confidence_level: (1. - alpha).clamp(f64::EPSILON, 1. - f64::EPSILON),
-                    };
-                    let baseline = airbug_bench::bootstrap::analyze(&a, &config)?;
-                    let candidate = airbug_bench::bootstrap::analyze(b, &config)?;
+                    let candidate =
+                        airbug_bench::bootstrap::analyze_saved(b, relative_overrides, false)?;
+                    let baseline = airbug_bench::bootstrap::analyze_with_case_configs(
+                        &a,
+                        &candidate.config,
+                        &candidate.case_configs,
+                        false,
+                    )?;
                     document = document.replace(
                         "</main>",
                         &format!(
-                            "{}{}{}</main>",
+                            "{}{}{}{}</main>",
                             report::iteration_comparison(&a, b)?,
+                            airbug_bench::regression_format::charts(
+                                &a,
+                                b,
+                                &candidate.config,
+                                &candidate.case_configs
+                            )?,
                             airbug_bench::bootstrap::comparison_charts(&baseline, &candidate),
-                            airbug_bench::relative::charts(
-                                &airbug_bench::relative::compare_runs(&a, b, &config)?,
-                                threshold
-                            )?
+                            airbug_bench::relative::charts(relative.as_ref().unwrap(), threshold)?
                         ),
                     );
                 }
-                document
+                document.replace(
+                    "</main>",
+                    &format!("{}</main>", report::html_fragment(&relative_text)),
+                )
             } else if relative_distributions {
-                let candidate = b
+                let relative = relative
                     .as_ref()
                     .ok_or("relative distributions require two runs")?;
-                let config = airbug_bench::bootstrap::Config {
-                    resamples: hypothesis_resamples,
-                    seed: hypothesis_seed,
-                    confidence_level: (1. - alpha).clamp(f64::EPSILON, 1. - f64::EPSILON),
-                };
-                let relative = airbug_bench::relative::compare_runs(&a, candidate, &config)?;
                 serde_json::to_string_pretty(&serde_json::json!({
                     "comparisons": rows,
                     "relative": relative,
@@ -949,7 +993,7 @@ pub(crate) fn execute() -> Result<i32> {
             } else if json {
                 serde_json::to_string_pretty(&rows)?
             } else {
-                report::comparison(&rows)
+                format!("{}\n{relative_text}", report::comparison(&rows))
             };
             output(&text, path)?;
             if check {

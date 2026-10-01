@@ -20,6 +20,7 @@ fn main() -> airbug_bench::Result<()> {
             baseline_units: 5,
             candidate_units: 5,
             report: Some(report),
+            throughput: Vec::new(),
             unavailable_reason: None,
         }],
         5.,

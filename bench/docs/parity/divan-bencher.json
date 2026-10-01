@@ -1,0 +1,126 @@
+{
+  "upstream": "Divan 0.1.21 src/benchmark/mod.rs",
+  "public_entrypoint": "src/lib.rs reexports benchmark::Bencher; benchmark module is private",
+  "methods": [
+    {
+      "upstream": "bench",
+      "line": 103,
+      "airbug": "Suite::bench / bench_threads",
+      "semantics": "OutsideTiming reproduces Divan output-drop boundary; worker count is explicit"
+    },
+    {
+      "upstream": "bench_local",
+      "line": 124,
+      "airbug": "Suite::bench",
+      "semantics": "FnMut can borrow local non-Send state; OutsideTiming selects deferred output destruction"
+    },
+    {
+      "upstream": "with_inputs",
+      "line": 157,
+      "airbug": "Suite::bench_with_input / bench_with_owned_input / worker variants",
+      "semantics": "Fresh setup supplied with operation; setup is outside measured interval"
+    },
+    {
+      "upstream": "counter",
+      "line": 193,
+      "airbug": "Suite::work_units; bytes/items/chars/cycles attributes",
+      "semantics": "Fixed work per operation; multiple counter units"
+    },
+    {
+      "upstream": "input_counter",
+      "line": 244,
+      "airbug": "setup + counters::InputCounters + Suite::input_counters; input_* attributes",
+      "semantics": "Count original input before mutation outside timing"
+    },
+    {
+      "upstream": "count_inputs_as",
+      "line": 281,
+      "airbug": "input_* attribute closure returning the integer input",
+      "semantics": "Explicit counter unit and integer conversion instead of generic counter marker"
+    },
+    {
+      "upstream": "bench_values",
+      "line": 320,
+      "airbug": "Suite::bench_with_owned_input / bench_threads_with_owned_input",
+      "semantics": "Move input into operation; consumed input destruction inside; returned output OutsideTiming"
+    },
+    {
+      "upstream": "bench_local_values",
+      "line": 362,
+      "airbug": "Suite::bench_with_owned_input",
+      "semantics": "Borrowed FnMut and non-Send values; explicit output-drop policy"
+    },
+    {
+      "upstream": "bench_refs",
+      "line": 402,
+      "airbug": "Suite::bench_with_input / bench_threads_with_local_input",
+      "semantics": "Borrow fresh input; setup and input destruction outside timing"
+    },
+    {
+      "upstream": "bench_local_refs",
+      "line": 448,
+      "airbug": "Suite::bench_with_input",
+      "semantics": "Borrowing FnMut with non-Send input and output; input destruction outside timing"
+    }
+  ],
+  "excluded_internal_methods": [
+    {
+      "method": "is_test",
+      "line": 489,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "is_tune",
+      "line": 494,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "is_collect",
+      "line": 499,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "sample_size",
+      "line": 504,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "new",
+      "line": 540,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "bench_loop_local",
+      "line": 560,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "compute_stats",
+      "line": 1068,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    },
+    {
+      "method": "transpose",
+      "line": 1283,
+      "reason": "Internal BenchMode/BenchContext or StatsSet implementation; not reachable through exported Bencher"
+    }
+  ],
+  "status": "source_mapping_with_existing_behavior_tests",
+  "evidence": [
+    "bench/tests/local_closures.rs",
+    "bench/tests/fresh_inputs.rs",
+    "bench/tests/contracts.rs::dynamic_work_totals_exclude_pilot_and_warmup_and_drive_throughput",
+    "bench/tests/attributes.rs::dynamic_worker_counts_sum_actual_inputs_before_mutation"
+  ],
+  "limitations": [
+    "Airbug output destruction defaults differ; OutsideTiming must be selected",
+    "Manual counter registration is explicit; attribute input counters provide concise registration",
+    "Worker scheduling differences remain documented separately; no API compatibility claim"
+  ],
+  "validation": {
+    "command": "cargo test --offline --locked -p airbug-bench --all-features --test fresh_inputs --test local_closures --test contracts",
+    "passed": 70,
+    "failed": 0,
+    "scope": "Current macOS runtime; source mapping is not proof of every cross-product or platform"
+  }
+}

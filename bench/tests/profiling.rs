@@ -154,3 +154,40 @@ fn ordinary_benchmark_does_not_invoke_profiler_hooks() {
     suite.run("").unwrap();
     assert!(events.borrow().is_empty());
 }
+
+#[test]
+fn panicking_profiler_start_is_stopped_and_restored_for_the_next_session() {
+    struct PanicStart(Rc<RefCell<Vec<&'static str>>>);
+    impl Profiler for PanicStart {
+        fn start(&mut self, _: &str, _: &Path) -> airbug_bench::Result<()> {
+            self.0.borrow_mut().push("start");
+            panic!("start panic");
+        }
+        fn stop(&mut self, _: &str, _: &Path) -> airbug_bench::Result<()> {
+            self.0.borrow_mut().push("stop");
+            Err(std::io::Error::other("cleanup error").into())
+        }
+    }
+    let root = tempfile::tempdir().unwrap();
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let mut suite = Suite::new("panic-start");
+    suite.profiler(PanicStart(events.clone()));
+    suite.bench("case", || panic!("work must not execute"));
+    for name in ["first", "second"] {
+        let output = root.path().join(name);
+        assert!(
+            suite
+                .profile_selected(&Selection::default(), Duration::from_millis(1), &output)
+                .is_err()
+        );
+        let report: airbug_bench::profiling::ProfileReport =
+            serde_json::from_slice(&std::fs::read(output.join("profile.json")).unwrap()).unwrap();
+        assert!(!report.complete);
+        let error = report.cases[0].error.as_ref().unwrap();
+        assert!(error.contains("start panic"), "{error}");
+        assert!(error.contains("cleanup error"), "{error}");
+        assert!(!error.contains("work must not execute"), "{error}");
+        assert!(report.cases[0].stats.is_none());
+    }
+    assert_eq!(*events.borrow(), ["start", "stop", "start", "stop"]);
+}

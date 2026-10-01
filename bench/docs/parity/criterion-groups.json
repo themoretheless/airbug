@@ -1,0 +1,146 @@
+{
+  "upstream": "Criterion 0.8.2 src/benchmark_group.rs",
+  "methods": [
+    {
+      "upstream": "sample_size",
+      "line": 96,
+      "owner": "BenchmarkGroup",
+      "airbug": "group samples / Sampling::samples"
+    },
+    {
+      "upstream": "warm_up_time",
+      "line": 108,
+      "owner": "BenchmarkGroup",
+      "airbug": "group warmup_ms / Sampling::warmup"
+    },
+    {
+      "upstream": "measurement_time",
+      "line": 126,
+      "owner": "BenchmarkGroup",
+      "airbug": "group measurement_ms / Sampling::measurement_time"
+    },
+    {
+      "upstream": "nresamples",
+      "line": 144,
+      "owner": "BenchmarkGroup",
+      "airbug": "group resamples / Suite::with_bootstrap_defaults"
+    },
+    {
+      "upstream": "noise_threshold",
+      "line": 166,
+      "owner": "BenchmarkGroup",
+      "airbug": "group noise_threshold_percent / Suite::with_comparison_defaults"
+    },
+    {
+      "upstream": "confidence_level",
+      "line": 181,
+      "owner": "BenchmarkGroup",
+      "airbug": "group confidence_level / Suite::with_bootstrap_defaults"
+    },
+    {
+      "upstream": "significance_level",
+      "line": 211,
+      "owner": "BenchmarkGroup",
+      "airbug": "group significance_level / Suite::with_comparison_defaults"
+    },
+    {
+      "upstream": "plot_config",
+      "line": 219,
+      "owner": "BenchmarkGroup",
+      "airbug": "group summary_scale / Suite::with_summary_scale_defaults"
+    },
+    {
+      "upstream": "throughput",
+      "line": 226,
+      "owner": "BenchmarkGroup",
+      "airbug": "group bytes/items/bits counters / Suite::group_with_defaults"
+    },
+    {
+      "upstream": "sampling_mode",
+      "line": 232,
+      "owner": "BenchmarkGroup",
+      "airbug": "group sampling / Sampling::mode"
+    },
+    {
+      "upstream": "bench_function",
+      "line": 249,
+      "owner": "BenchmarkGroup",
+      "airbug": "Suite::group plus bench registration; attributed group module"
+    },
+    {
+      "upstream": "bench_with_input",
+      "line": 258,
+      "owner": "BenchmarkGroup",
+      "airbug": "args attributes or named closure capturing immutable parameter; fresh setup is a separate option"
+    },
+    {
+      "upstream": "finish",
+      "line": 364,
+      "owner": "BenchmarkGroup",
+      "airbug": "Group closure returns after lazy registration; Suite::main emits final reports after execution"
+    },
+    {
+      "upstream": "new",
+      "line": 437,
+      "owner": "BenchmarkId",
+      "airbug": "Named parameterized cases, args + name, Suite::parameter"
+    },
+    {
+      "upstream": "from_parameter",
+      "line": 449,
+      "owner": "BenchmarkId",
+      "airbug": "Parameter-only case name plus Suite::parameter; summary_family links related inputs"
+    }
+  ],
+  "status": "source_mapping_with_attribute_tests",
+  "semantics": [
+    "Group registration is lazy in Airbug; finish does not execute work or emit reports until the suite runs",
+    "bench_with_input in Criterion passes a shared supplied parameter; Airbug setup additionally creates fresh inputs per operation",
+    "Sampling and analysis defaults inherit per field, with nearest explicit child settings taking precedence"
+  ],
+  "evidence": [
+    "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
+    "bench/tests/attributes.rs::imported_groups_inherit_sampling_per_field_with_nearest_override",
+    "bench/tests/attributes.rs::bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields",
+    "bench/tests/attributes.rs::summary_family_attributes_persist_inline_and_imported_identities"
+  ],
+  "limitations": [
+    "Numeric-domain differences tracked separately",
+    "Report visual inspection and complete group-report equivalence remain open"
+  ],
+  "validation": {
+    "command": "cargo test --offline --locked -p airbug-bench --all-features --test attributes",
+    "passed": 68,
+    "failed": 0,
+    "scope": "Current macOS; source method-set checked by test-upstream-surface.py"
+  },
+  "registration_semantic_audit": {
+    "upstream_sources": [
+      "criterion-0.8.2/src/benchmark_group.rs:258-364",
+      "criterion-0.8.2/src/benchmark_group.rs:437-455"
+    ],
+    "contracts": [
+      "Shared borrowed non-Clone input can be captured by multiple cases without copying or requiring a static lifetime",
+      "Group path distinguishes identical leaf names; selection uses the complete identity",
+      "Explicit validate_registration rejects duplicate full identities without executing workloads",
+      "Group defaults inherit by field, nearest child overrides win, and explicit false/zero values are preserved",
+      "Parameter metadata and summary_family retain grouping independently of display name"
+    ],
+    "native_differences": [
+      "Criterion executes each case during registration and finish/drop generates group summaries. Airbug registers lazily and emits reports when Suite runs.",
+      "Criterion validates uniqueness during every registration. Airbug exposes validate_registration for whole-suite uniqueness, invoked by the CLI; low-level selected execution checks selected cases.",
+      "Criterion mutable group setters affect subsequent registrations. Airbug scoped defaults apply to entries created by that closure, with nested explicit settings taking precedence.",
+      "Numeric option-domain differences are tracked separately in numeric-domains.json."
+    ],
+    "evidence": [
+      "bench/tests/contracts.rs::groups_keep_shared_borrowed_inputs_lazy_and_select_by_full_identity",
+      "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
+      "bench/tests/attributes.rs::imported_groups_inherit_sampling_per_field_with_nearest_override",
+      "bench/tests/attributes.rs::imported_groups_preserve_false_zero_dynamic_counters_and_nearest_defaults",
+      "bench/tests/attributes.rs::bootstrap_defaults_inherit_per_field_and_cli_overrides_only_explicit_fields",
+      "bench/tests/attributes.rs::summary_scale_attributes_inherit_inline_and_imported_groups",
+      "bench/tests/attributes.rs::summary_family_attributes_persist_inline_and_imported_identities"
+    ],
+    "validation": "68 attribute tests and 67 contract tests passed with --offline --locked --all-features on macOS."
+  }
+}

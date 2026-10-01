@@ -74,13 +74,20 @@ pub fn svg(distribution: &WelchDistribution, title: &str) -> Result<String> {
 /// Render comparison rows as a portable HTML document with inline SVG charts.
 /// Missing captures are explicit; no new statistical samples are generated.
 pub fn html(rows: &[crate::analysis::Comparison], title: &str) -> Result<String> {
-    let mut output = format!(
-        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{0}</title><body><main><h1>{0}</h1>",
-        escape(title)
-    );
-    output.push_str(&fragment(rows)?);
-    output.push_str("</main></body></html>");
-    Ok(output)
+    let document = crate::report::html(&crate::report::comparison(rows))
+        .replacen(
+            "<title>bench · Performance report</title>",
+            &format!("<title>{}</title>", escape(title)),
+            1,
+        )
+        .replacen(
+            "<h1>bench comparison</h1>",
+            &format!("<h1>{}</h1>", escape(title)),
+            1,
+        )
+        .replace("<!--CHARTS-->", &fragment(rows)?)
+        .replace("<!--DETAILS-->", "");
+    Ok(document)
 }
 
 /// Embeddable comparison charts without a second HTML document.
@@ -159,7 +166,14 @@ mod tests {
         assert!(document.contains("was not retained"));
         assert!(document.contains("128 null draws"));
         assert!(document.contains("&lt;case&gt;"));
-        assert!(!document.contains("<script>"));
+        assert!(!document.contains("<script>bad()"));
+        assert!(document.contains("&lt;script&gt;bad()&lt;/script&gt;"));
+        assert!(document.contains("id=\"report-index\""));
+        assert!(document.contains("id=\"section-search\""));
+        assert!(document.contains("<table>"));
+        assert!(document.contains("<title>&lt;title&gt;</title>"));
+        assert_eq!(document.matches("<!doctype html>").count(), 1);
+        assert!(!document.contains("<!--CHARTS-->"));
         assert!(
             html(&[], "Empty")
                 .unwrap()

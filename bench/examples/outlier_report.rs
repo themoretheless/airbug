@@ -10,10 +10,13 @@ fn main() -> airbug_bench::Result<()> {
     };
     let captured = bootstrap::estimate_with_distributions(&values, &config)?;
     let report = bootstrap::Report {
+            presentation: Vec::new(),
         case_configs: Default::default(),
         config: config.clone(), method: "synthetic_example_percentile_bootstrap".into(),
         rows: vec![bootstrap::Row {
             metric_contract: None,
+            throughput: Vec::new(),
+            work_counters: Default::default(),
             case: "synthetic/outlier-demo".into(), metric: "value".into(), variant: "example".into(), unit: "units".into(),
             resampling_unit: "synthetic_observation".into(), units: values.len(),
             estimates: Some(captured.estimates),

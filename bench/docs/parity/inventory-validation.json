@@ -1,0 +1,35 @@
+{
+  "status": "verified_inventory_integrity_and_manager_mapping",
+  "command": "python3 bench/scripts/test-upstream-surface.py --sources .airbug/validation/upstream-surface/sources",
+  "declarations": {
+    "criterion_0.8.2": 253,
+    "divan_0.1.21": 244
+  },
+  "manager_methods": {
+    "criterion": 24,
+    "divan": 23
+  },
+  "checks": [
+    "Pinned archive SHA-256 verified before reading source inventory",
+    "Extracted Rust sources and Cargo.toml exactly match archive contents",
+    "Generated inventory matches checked-in snapshot",
+    "Manager method sets exactly match mapping tables without duplicate entries",
+    "Seven missing, extra or modified input scenarios fail and preserve previous output",
+    "CLI exact declaration sets, source SHA-256, and full Cargo feature dependency maps match pinned source/manifests; trait and group method tables also checked."
+  ],
+  "log": ".airbug/validation/upstream-surface/full-inventory-tests.log",
+  "log_sha256": "4a57783cf2d892e98c985dafee1a6c2fd80f38506393da0dc4bc33669f763f26",
+  "limitations": [
+    "Textual declarations do not resolve reexports, cfg gates or macro expansions",
+    "Manager method mapping does not prove equivalent runtime semantics",
+    "Full public API, visual reports and platform execution audits remain incomplete"
+  ],
+  "cli_arguments": {
+    "criterion": 31,
+    "divan": 26
+  },
+  "cargo_features": {
+    "criterion": 12,
+    "divan": 5
+  }
+}

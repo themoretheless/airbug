@@ -166,6 +166,8 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
     }
     fs::create_dir(out.join("logs"))?;
     let mut result = Run::new();
+    let mut protocol_seen = false;
+    let mut disabled_cases: Vec<String> = Vec::new();
     let mut presentation = airbug_bench::presentation::Consensus::default();
     let mut formatting = airbug_bench::measurement::ProcessFormatting::default();
     if let Some(policy) = &privacy {
@@ -259,6 +261,11 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .stdin(Stdio::null());
+            if plan.protocol {
+                // Cargo bench executables also serve cargo test. Protocol runs
+                // request measurements without changing the worker's argv.
+                command.env("AIRBUG_BENCH_RUNNER", "1");
+            }
             if let Some(c) = &p.cwd {
                 command.current_dir(c);
             }
@@ -433,16 +440,38 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                 }
                 presentation.observe(&worker)?;
                 formatting.observe(&worker, e.process, &e.variant)?;
-                if result.cases.is_empty() {
+                let worker_disabled: Vec<String> = worker
+                    .provenance
+                    .get("sampling.disabled_cases")
+                    .map(|value| serde_json::from_str(value))
+                    .transpose()?
+                    .unwrap_or_default();
+                if !protocol_seen {
                     result.cases = worker.cases;
-                } else if result.cases != worker.cases {
-                    return Err(error("worker cases/contracts changed across processes"));
+                    disabled_cases = worker_disabled;
+                    result.provenance.remove("sampling.disabled_cases");
+                    if !disabled_cases.is_empty() {
+                        result.provenance.insert(
+                            "sampling.disabled_cases".into(),
+                            serde_json::to_string(&disabled_cases)?,
+                        );
+                    }
+                    protocol_seen = true;
+                } else if result.cases != worker.cases || disabled_cases != worker_disabled {
+                    return Err(error(
+                        "worker cases/contracts or disabled cases changed across processes",
+                    ));
                 }
                 presentation.save(&mut result)?;
                 for mut w in worker.worker_allocations {
                     w.process = e.process;
                     w.variant = e.variant.clone();
                     result.worker_allocations.push(w);
+                }
+                for mut w in worker.worker_timings {
+                    w.process = e.process;
+                    w.variant = e.variant.clone();
+                    result.worker_timings.push(w);
                 }
                 for mut o in worker.observations {
                     o.process = e.process;
@@ -478,6 +507,7 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                     });
                 }
                 result.observations.push(Observation {
+                    worker_work_totals: Default::default(),
                     work_totals: Default::default(),
                     case: "process".into(),
                     metric: "wall".into(),

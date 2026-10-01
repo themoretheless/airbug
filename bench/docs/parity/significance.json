@@ -52,8 +52,115 @@
     "Paired A/B analysis is an Airbug extension; no paired comparison API was found in the audited Criterion/Divan surface, so its interval method does not block this parity item."
   ],
   "tracked_elsewhere": {
-    "plots": "Criterion t-distribution visualization remains part of plots coverage.",
-    "artifacts": "Raw resampling distribution export and full Criterion report artifact mapping remain part of artifacts coverage.",
+    "plots": "Welch distribution rendering and export are implemented; final visual acceptance remains in plots.json.",
+    "artifacts": "Retained null draws export is implemented; final report artifact acceptance remains in artifacts.json.",
     "platforms": "Cross-platform runtime validation remains separate."
+  },
+  "source_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/analysis/compare.rs::t_test",
+      "criterion-0.8.2/src/stats/mod.rs::Distribution::p_value",
+      "criterion-0.8.2/src/report.rs::CliReport::measurement_complete",
+      "bench/src/hypothesis.rs::sample_welch",
+      "bench/src/analysis.rs::compare_with_hypothesis"
+    ],
+    "capabilities": "Welch statistic, pooled null resampling, configurable significance, practical effect threshold, relative estimates and reported uncertainty are available natively.",
+    "native_differences": [
+      "Criterion discards nonfinite null draws, then computes twice the smaller empirical tail using a strict x < t count. Airbug compares absolute statistics, retains degenerate outcomes, and applies (extreme + 1)/(resamples + 1). Finite-sample p-values are not identical.",
+      "Criterion gates its improved/regressed/no-change wording by p-value and then the relative mean interval versus its noise threshold. Airbug reports zero-effect hypothesis and practical median-interval decision separately.",
+      "Airbug family-adjusts significance for multiple comparisons and reports the effective alpha. Independent process medians are its inferential units; one-process batch changes remain exploratory.",
+      "Seeded native resampling makes repeated analyses reproducible; no upstream random-stream compatibility is claimed."
+    ],
+    "evidence": [
+      "bench/src/hypothesis.rs::tests::pooled_resampling_matches_exhaustive_small_population",
+      "bench/src/hypothesis.rs::tests::exported_distribution_reconstructs_probability_and_preserves_infinities",
+      "bench/tests/hypothesis.rs::test_uses_process_units_normalizes_batches_and_reports_family_alpha"
+    ],
+    "validation": "Three all-feature hypothesis integration tests passed on macOS; numerical oracle tests are covered by the latest 521-test MSRV gate."
+  },
+  "descriptive_estimates_audit": {
+    "sources": [
+      "criterion-0.8.2/src/analysis/mod.rs:298-331",
+      "criterion-0.8.2/src/stats/univariate/sample.rs:64-78,187-198",
+      "criterion-0.8.2/src/stats/univariate/percentiles.rs",
+      "bench/src/bootstrap.rs::statistics",
+      "bench/src/bootstrap.rs::estimate_impl"
+    ],
+    "matched_formulas": [
+      "Arithmetic mean",
+      "Median and percentile bounds using linear interpolation over sorted observations",
+      "Sample standard deviation with n-1 denominator",
+      "Median absolute deviation scaled by 1.4826",
+      "Bootstrap standard error from the sample standard deviation of retained estimates"
+    ],
+    "native_differences": [
+      "Airbug normalizes by maximum absolute value internally to limit overflow, then restores original units. Floating-point rounding and random streams need not match upstream.",
+      "A single observation has descriptive location values but no sample standard deviation or bootstrap interval; a single resample has unavailable standard error.",
+      "Airbug labels the statistical population: normalized batches for one process, equally weighted process medians for multiple processes."
+    ],
+    "validation": "All 12 bootstrap::tests tests passed on macOS, covering known point values, retained resample oracles, standard errors, constant/single/large values, confidence settings, population labels and parallel determinism."
+  },
+  "regression_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/stats/bivariate/regression.rs::Slope",
+      "criterion-0.8.2/src/analysis/mod.rs::regression",
+      "bench/src/regression.rs::fit_impl"
+    ],
+    "matched_capabilities": [
+      "Through-origin ordinary least-squares slope sum(x*y)/sum(x*x)",
+      "Bootstrap resampling preserves operation/total pairs",
+      "Percentile slope interval and bootstrap standard error",
+      "Goodness of fit at point slope and confidence-bound endpoints"
+    ],
+    "native_differences": [
+      "Airbug scales coordinates to limit overflow and reports unavailable goodness for constant totals; negative R-squared is preserved.",
+      "Pinned Criterion Slope::r_squared assigns ss_tot = ss_res + (y - y_bar)^2 inside its loop. Airbug uses centered total variation sum((y - mean)^2), independently checked as 1 - SSE/SST. Numeric identity to that upstream implementation is not claimed.",
+      "Airbug fits each process separately; no pooling of within-process paired batches into independent process repetitions."
+    ],
+    "validation": "Eight all-feature regression tests passed: exact/noisy oracles, paired resamples, endpoint goodness, scale invariance, negative/undefined R-squared, saved pairs and deterministic parallel analysis."
+  },
+  "outlier_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/stats/univariate/outliers/tukey.rs:184-200,253-273",
+      "criterion-0.8.2/src/analysis/mod.rs:124-153",
+      "bench/src/outliers.rs::classify"
+    ],
+    "matched_contracts": [
+      "Linear-interpolated quartiles and IQR",
+      "Mild fences at 1.5 IQR and severe fences at 3 IQR",
+      "Strict comparisons: a point exactly on a fence belongs to the less severe class",
+      "Original observation order and all five class counts retained",
+      "Classification annotates data without removing outliers from estimation"
+    ],
+    "native_boundaries": [
+      "Airbug rejects empty/nonfinite populations and supports singleton descriptive classification.",
+      "Unrepresentable finite-range fences serialize as null rather than invalid JSON numbers.",
+      "Multi-process estimate classification uses the declared process-median population; raw observation charts remain separate."
+    ],
+    "validation": "Two outlier tests passed: both tails and fence equality, zero-IQR core, extreme numeric range and JSON validity. Full 521-test MSRV gate includes contracts::outlier_reporting_preserves_extreme_observations_in_estimates."
+  },
+  "configuration_semantic_audit": {
+    "sources": [
+      "criterion-0.8.2/src/lib.rs:568-642",
+      "bench/src/bootstrap.rs::Config::validate",
+      "bench/src/history.rs::ComparisonConfig::validate"
+    ],
+    "contracts": [
+      "Positive bootstrap resample count; confidence and significance strictly between zero and one.",
+      "Confidence changes percentile boundaries, not point estimates, bootstrap draws or their standard error.",
+      "Practical threshold changes practical decisions independently of significance."
+    ],
+    "native_differences": [
+      "Airbug rejects infinite noise thresholds; pinned Criterion accepts positive infinity. Airbug uses percent units and a default 5% margin, Criterion uses a fractional threshold and defaults to 1%.",
+      "Airbug returns validation errors instead of setter panics. One bootstrap draw is supported with unavailable standard error.",
+      "Absolute bootstrap confidence is independent from history significance; comparison inference uses process populations and family adjustment as documented above."
+    ],
+    "evidence": [
+      "bootstrap::tests::confidence_changes_only_percentile_bounds",
+      "bootstrap::tests::one_resample_preserves_draws_and_marks_standard_error_unavailable",
+      "history::tests::comparison_configuration_changes_decisions_and_rejects_invalid_values",
+      "bench/scripts/test-option-domains.py: 263 boundary and precedence checks passed"
+    ],
+    "validation": "All 196 library tests passed on macOS with all features, including the new independent percentile-bound oracle, retained-draw invariance and history decision/configuration tests. All-target/all-feature library Clippy, formatting and diff checks passed. Log: .airbug/validation/parity-current/statistics-audit.log."
   }
 }

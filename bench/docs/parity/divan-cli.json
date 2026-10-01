@@ -1,0 +1,197 @@
+{
+  "upstream": "Divan 0.1.21",
+  "source": "src/cli.rs",
+  "source_sha256": "2fc55921151fe8b4492a8d07d7d5fa1955ae097500b73c6c55035e10c1805064",
+  "archive_verified_against": "upstream-surface.json divan.sha256",
+  "status": "exact_inventory_mapped_not_complete_semantic_verification",
+  "argument_count": 26,
+  "arguments": [
+    {
+      "upstream": "format",
+      "source_line": 39,
+      "airbug": "--list --format terse emits case: benchmark; rejects incompatible output modes and newline-bearing IDs. Actual nextest 0.9.146 discovery/run passed for parameterized and ignored cases and failure propagation.",
+      "status": "verified_integration"
+    },
+    {
+      "upstream": "filter",
+      "source_line": 44,
+      "airbug": "Repeated positional or --filter alternatives; --regex for pattern semantics, --exact for exact; exclusions win",
+      "status": "mapped"
+    },
+    {
+      "upstream": "test",
+      "source_line": 50,
+      "airbug": "--test and cargo test --benches",
+      "status": "mapped"
+    },
+    {
+      "upstream": "list",
+      "source_line": 54,
+      "airbug": "--list",
+      "status": "mapped"
+    },
+    {
+      "upstream": "color",
+      "source_line": 56,
+      "airbug": "--color auto|always|never",
+      "status": "mapped"
+    },
+    {
+      "upstream": "skip",
+      "source_line": 62,
+      "airbug": "Repeated --exclude-regex or --exclude-exact; native glob exclusion also available",
+      "status": "mapped"
+    },
+    {
+      "upstream": "exact",
+      "source_line": 67,
+      "airbug": "--exact applies to all positive patterns; exact exclusions use --exclude-exact",
+      "status": "mapped"
+    },
+    {
+      "upstream": "ignored",
+      "source_line": 68,
+      "airbug": "--ignored",
+      "status": "mapped"
+    },
+    {
+      "upstream": "include-ignored",
+      "source_line": 70,
+      "airbug": "--include-ignored",
+      "status": "mapped"
+    },
+    {
+      "upstream": "sort",
+      "source_line": 75,
+      "airbug": "--sort kind|natural|source (plus registration/lexical); AIRBUG_BENCH_SORT",
+      "status": "mapped"
+    },
+    {
+      "upstream": "sortr",
+      "source_line": 82,
+      "airbug": "--sort plus --reverse; AIRBUG_BENCH_SORT plus AIRBUG_BENCH_REVERSE; --forward override",
+      "status": "mapped"
+    },
+    {
+      "upstream": "timer",
+      "source_line": 90,
+      "airbug": "--timer os|cpu (cpu is timestamp counter, not CPU execution time); AIRBUG_BENCH_TIMER",
+      "status": "mapped"
+    },
+    {
+      "upstream": "sample-count",
+      "source_line": 97,
+      "airbug": "--samples plus --sample-count-unit workers for upstream worker-sample counting; AIRBUG_BENCH_SAMPLES",
+      "status": "mapped"
+    },
+    {
+      "upstream": "sample-size",
+      "source_line": 104,
+      "airbug": "--iterations; AIRBUG_BENCH_ITERATIONS",
+      "status": "mapped"
+    },
+    {
+      "upstream": "threads",
+      "source_line": 111,
+      "airbug": "--threads N[,N...] repeated; AIRBUG_BENCH_THREADS; 0 selects host concurrency",
+      "status": "mapped"
+    },
+    {
+      "upstream": "min-time",
+      "source_line": 120,
+      "airbug": "--min-time-ms decimal; AIRBUG_BENCH_MIN_TIME_MS",
+      "status": "mapped"
+    },
+    {
+      "upstream": "max-time",
+      "source_line": 127,
+      "airbug": "--max-time-ms decimal; AIRBUG_BENCH_MAX_TIME_MS",
+      "status": "mapped"
+    },
+    {
+      "upstream": "skip-ext-time",
+      "source_line": 134,
+      "airbug": "--exclude-external-time / --include-external-time; AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME",
+      "status": "mapped"
+    },
+    {
+      "upstream": "items-count",
+      "source_line": 142,
+      "airbug": "--items-count; AIRBUG_BENCH_ITEMS_COUNT",
+      "status": "mapped"
+    },
+    {
+      "upstream": "bytes-count",
+      "source_line": 149,
+      "airbug": "--bytes-count; AIRBUG_BENCH_BYTES_COUNT",
+      "status": "mapped"
+    },
+    {
+      "upstream": "bytes-format",
+      "source_line": 156,
+      "airbug": "--bytes-format decimal|binary; AIRBUG_BENCH_BYTES_FORMAT",
+      "status": "mapped"
+    },
+    {
+      "upstream": "chars-count",
+      "source_line": 163,
+      "airbug": "--chars-count; AIRBUG_BENCH_CHARS_COUNT",
+      "status": "mapped"
+    },
+    {
+      "upstream": "cycles-count",
+      "source_line": 170,
+      "airbug": "--cycles-count; AIRBUG_BENCH_CYCLES_COUNT; frequency display",
+      "status": "mapped"
+    },
+    {
+      "upstream": "bench",
+      "source_line": 177,
+      "airbug": "Cargo harness measurement flag; explicit smoke --test takes precedence",
+      "status": "mapped"
+    },
+    {
+      "upstream": "nocapture",
+      "source_line": 177,
+      "airbug": "Upstream ignored compatibility flag; Airbug does not capture workload output",
+      "status": "compatibility_only"
+    },
+    {
+      "upstream": "show-output",
+      "source_line": 177,
+      "airbug": "Upstream ignored compatibility flag; Airbug does not capture workload output",
+      "status": "compatibility_only"
+    }
+  ],
+  "environment_variables": [
+    "DIVAN_SORT",
+    "DIVAN_SORTR",
+    "DIVAN_TIMER",
+    "DIVAN_SAMPLE_COUNT",
+    "DIVAN_SAMPLE_SIZE",
+    "DIVAN_THREADS",
+    "DIVAN_MIN_TIME",
+    "DIVAN_MAX_TIME",
+    "DIVAN_SKIP_EXT_TIME",
+    "DIVAN_ITEMS_COUNT",
+    "DIVAN_BYTES_COUNT",
+    "DIVAN_BYTES_FORMAT",
+    "DIVAN_CHARS_COUNT",
+    "DIVAN_CYCLES_COUNT"
+  ],
+  "selection_validation": [
+    "contracts::multiple_inclusive_patterns_union_before_exclusions_and_execute_once passed",
+    "bench/scripts/test-selection.py passed: real Cargo positional/repeated/mixed filters, exact/glob/regex, exclusions, list/dry-run laziness, invalid later regex and deduplicated smoke/measurement execution",
+    "All 66 contracts integration tests passed (.airbug/runs/3e995274-3446-4d23-837a-a8ad9b4ada1e); all-target library Clippy, fmt and diff checks passed."
+  ],
+  "remaining": [
+    "All mappings require domain/lifecycle evidence in their respective audits; this inventory alone is not parity proof.",
+    "Output fields and worker caller-participation semantics remain tracked separately."
+  ],
+  "nextest_validation": {
+    "script": "bench/scripts/test-nextest.py",
+    "version": "0.9.146 (8af696ddc 2026-09-21), official macOS binary downloaded to /tmp only",
+    "result": "Actual runner discovery JSON contains all expected parameter/ignored cases; selected normal cases execute once, ignored-only execution is explicit, failure propagates with original panic text. Listing and version do not execute work.",
+    "ci": "Pinned runner setup and integration script added to existing platform/toolchain matrix; remote CI not executed."
+  }
+}

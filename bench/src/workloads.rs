@@ -58,13 +58,14 @@ pub fn parallel<T: Send>(
     workers: usize,
     work: impl Fn(usize) -> T + Sync,
 ) -> Result<ParallelResult<T>> {
-    if workers == 0 || workers > 256 {
-        return Err(error("workers must be 1..256"));
+    if workers == 0 {
+        return Err(error("workers must be positive"));
     }
     let gate = (Mutex::new(None::<bool>), Condvar::new());
     let start = Instant::now();
     let outputs = std::thread::scope(|scope| -> Result<Vec<T>> {
-        let mut handles = vec![];
+        let mut handles = crate::suite_measure::worker_buffer(workers)?;
+        let mut outputs = crate::suite_measure::worker_buffer(workers)?;
         let mut spawn_error = None;
         for i in 0..workers {
             let gate = &gate;
@@ -87,7 +88,6 @@ pub fn parallel<T: Send>(
         }
         *gate.0.lock().unwrap() = Some(spawn_error.is_none());
         gate.1.notify_all();
-        let mut outputs = vec![];
         let mut panicked = false;
         for h in handles {
             match h.join() {

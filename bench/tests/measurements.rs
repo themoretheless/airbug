@@ -626,7 +626,10 @@ fn custom_formatters_share_scale_preserve_missing_rows_and_raw_data() {
     );
     let chart = airbug_bench::measurement::charts(&decoded).unwrap();
     assert!(chart.contains("formatted observations (k-units|&lt;x&gt;)"));
-    assert_eq!(chart.matches("<circle").count(), 2);
+    assert_eq!(chart.matches("<figure").count(), 4);
+    assert!(chart.contains("formatted observations — distribution (k-units|&lt;x&gt;)"));
+    assert!(chart.contains("formatted throughput: items — distribution (items/unit)"));
+    assert!(chart.contains("1 identical samples: point mass at 2.000000e0"));
     assert!(chart.contains("formatted throughput: items (items/unit)"));
     assert!(
         airbug_bench::report::html_run(&decoded)
@@ -755,7 +758,10 @@ fn comparison_formatter_chooses_one_scale_from_both_runs() {
     )
     .unwrap();
     assert!(chart.contains("formatted comparison (k-units)"));
-    assert_eq!(chart.matches("<circle").count(), 2);
+    assert_eq!(chart.matches("<figure").count(), 2);
+    assert!(chart.contains("formatted comparison — distribution (k-units)"));
+    assert!(chart.contains("point mass at 9.000000e-1 k-units"));
+    assert!(chart.contains("point mass at 1.100000e0 k-units"));
     candidate.cases[0].metrics[0].unit = "different".into();
     assert!(
         format_comparison(
@@ -882,13 +888,28 @@ fn dynamic_formatter_matches_work_by_identity_and_invalidates_saved_work() {
             .len(),
         2
     );
+    let csv = measurement::saved_report_csv(&restored).unwrap();
+    assert_eq!(csv.lines().count(), 3);
+    for row in csv.lines().skip(1) {
+        if row.contains(r#","2","","20","#) {
+            assert!(row.ends_with(r#","{""items"":""6""}","{}""#));
+        } else {
+            assert!(row.contains(r#","5","","100","#));
+            assert!(row.ends_with(r#","{""items"":""50""}","{}""#));
+        }
+    }
     let charts = measurement::charts(&restored).unwrap();
     assert!(charts.contains("formatted throughput: items (items/unit)"));
-    assert_eq!(charts.matches("<circle").count(), 4);
+    assert_eq!(charts.matches("<figure").count(), 4);
+    assert!(charts.contains("formatted throughput: items — distribution (items/unit)"));
+    assert!(charts.contains("2 samples; Gaussian KDE bandwidth"));
     let comparison =
         measurement::comparison_chart(&restored, &restored, &case, "instructions", &Rates).unwrap();
     assert!(comparison.contains("formatted throughput comparison: items (items/unit)"));
-    assert_eq!(comparison.matches("<circle").count(), 8);
+    assert_eq!(comparison.matches("<figure").count(), 4);
+    assert!(
+        comparison.contains("formatted throughput comparison: items — distribution (items/unit)")
+    );
 
     let mut changed = run.clone();
     changed
@@ -1095,6 +1116,11 @@ fn process_formatting_preserves_units_and_requires_every_worker() {
     let charts = measurement::charts(&combined).unwrap();
     assert!(charts.contains("formatted observations (ns)"));
     assert!(charts.contains("formatted observations (us)"));
+    assert!(charts.contains("formatted observations — distribution (ns)"));
+    assert!(charts.contains("formatted observations — distribution (us)"));
+    assert!(charts.contains("point mass at 1.000000e3 ns"));
+    assert!(charts.contains("point mass at 1.000000e0 us"));
+    assert_eq!(charts.matches("<figure").count(), 4);
     let mut absent = second.clone();
     absent.provenance.clear();
     for missing_first in [false, true] {
@@ -1449,6 +1475,7 @@ fn bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw
         .regressions
         .push(airbug_bench::bootstrap::ProcessRegression {
             process: 7,
+            presentation: None,
             fit,
             slope_distribution: Some(draws),
             samples,
@@ -1480,12 +1507,12 @@ fn bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw
             assert_eq!(actual.fit.samples, expected.fit.samples);
             let (a, e) = (&actual.fit.slope, &expected.fit.slope);
             assert_eq!(
-                [a.point, a.lower, a.upper, a.standard_error],
+                [a.point, a.lower, a.upper, a.standard_error.unwrap()],
                 [
                     e.point / 1000.0,
                     e.lower / 1000.0,
                     e.upper / 1000.0,
-                    e.standard_error / 1000.0
+                    e.standard_error.unwrap() / 1000.0
                 ]
             );
             assert_eq!(
@@ -1534,12 +1561,12 @@ fn bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw
             ),
         ] {
             assert_eq!(
-                [a.point, a.lower, a.upper, a.standard_error],
+                [a.point, a.lower, a.upper, a.standard_error.unwrap()],
                 [
                     e.point / 1000.0,
                     e.lower / 1000.0,
                     e.upper / 1000.0,
-                    e.standard_error / 1000.0
+                    e.standard_error.unwrap() / 1000.0
                 ]
             );
         }
@@ -1555,7 +1582,24 @@ fn bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw
         );
     }
     assert_eq!(original, serde_json::to_vec(&report).unwrap());
-    assert!(airbug_bench::bootstrap::html(&formatted).contains("k&lt;units&gt;"));
+    let html = airbug_bench::bootstrap::html(&formatted);
+    assert!(html.contains("k&lt;units&gt;"));
+    assert!(!html.contains("distribution unavailable"));
+    // Verify every statistical graph family survives conversion, including the
+    // retained regression draws and totals that use different dimensional units.
+    for label in [
+        "bootstrap mean",
+        "bootstrap median",
+        "bootstrap standard deviation",
+        "bootstrap MAD",
+        "bootstrap slope",
+        "process 7 regression",
+        "density",
+    ] {
+        assert!(html.contains(label), "missing formatted graph: {label}");
+    }
+    assert!(html.contains("k&lt;units&gt;/operation"));
+    assert!(!html.contains("k<units>"));
     struct Invalid(fn(f64) -> f64);
     impl ValueFormatter for Invalid {
         fn scale_values(&self, _: f64, values: &[f64]) -> Result<FormattedValues> {
@@ -1574,9 +1618,79 @@ fn bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw
     for transform in [
         (|v| v + 100_000.0) as fn(f64) -> f64,
         |v| v * v,
-        |_| 0.0,
-        |_| f64::INFINITY,
+        |v| v - 100_000.0,
+        |v| v.sqrt(),
+        |v| -v,
     ] {
+        let displayed = format_bootstrap_metric(
+            &report,
+            "bootstrap/value",
+            &ManualValue.metric(),
+            &Invalid(transform),
+        )
+        .unwrap();
+        assert!(!displayed.presentation.is_empty());
+        let raw = report.rows.iter().find(|r| r.metric == "work").unwrap();
+        let mean = displayed
+            .presentation
+            .iter()
+            .find(|p| p.variant == raw.variant && p.statistic == "mean")
+            .unwrap();
+        assert_eq!(
+            mean.estimate.point,
+            transform(raw.estimates.as_ref().unwrap().mean.point)
+        );
+        let expected: Vec<_> = raw
+            .distributions
+            .as_ref()
+            .unwrap()
+            .mean
+            .iter()
+            .copied()
+            .map(transform)
+            .collect();
+        assert_eq!(mean.draws, expected);
+        assert_eq!(
+            mean.estimate.standard_error,
+            airbug_bench::bootstrap::describe(&expected)
+                .unwrap()
+                .standard_deviation
+        );
+        assert_eq!(displayed.rows[0].estimates, raw.estimates);
+        assert_eq!(displayed.rows[0].unit, raw.unit);
+        let mut restored: airbug_bench::bootstrap::Report =
+            serde_json::from_slice(&serde_json::to_vec(&displayed).unwrap()).unwrap();
+        let html = airbug_bench::bootstrap::html(&restored);
+        assert!(html.contains("formatter(mean)"));
+        assert!(!html.contains("statistical display unavailable"));
+        assert!(!html.contains("saved regression display unavailable"));
+        restored.rows[0].estimates.as_mut().unwrap().mean.point += 1.;
+        assert!(
+            airbug_bench::bootstrap::markdown(&restored)
+                .contains("statistical display unavailable")
+        );
+        let mut no_draws = report.clone();
+        for row in &mut no_draws.rows {
+            row.distributions = None;
+            for regression in &mut row.regressions {
+                regression.slope_distribution = None;
+            }
+        }
+        let no_draws = format_bootstrap_metric(
+            &no_draws,
+            "bootstrap/value",
+            &ManualValue.metric(),
+            &Invalid(transform),
+        )
+        .unwrap();
+        assert!(
+            no_draws
+                .presentation
+                .iter()
+                .all(|p| p.estimate.standard_error.is_none())
+        );
+    }
+    for transform in [(|_| 0.0) as fn(f64) -> f64, |_| f64::INFINITY] {
         assert!(
             format_bootstrap_metric(
                 &report,
@@ -1587,7 +1701,882 @@ fn bootstrap_formatter_scales_estimates_intervals_and_draws_without_mutating_raw
             .is_err()
         );
     }
+    let mut missing_error = report.clone();
+    for row in &mut missing_error.rows {
+        if let Some(estimates) = &mut row.estimates {
+            estimates.mean.standard_error = None;
+        }
+        for regression in &mut row.regressions {
+            regression.fit.slope.standard_error = None;
+        }
+    }
+    let missing_json = serde_json::to_vec(&missing_error).unwrap();
+    let formatted_missing = format_bootstrap_metric(
+        &missing_error,
+        "bootstrap/value",
+        &ManualValue.metric(),
+        &Scale,
+    )
+    .unwrap();
+    for row in &formatted_missing.rows {
+        assert!(
+            row.estimates
+                .as_ref()
+                .unwrap()
+                .mean
+                .standard_error
+                .is_none()
+        );
+        assert!(
+            row.regressions
+                .iter()
+                .all(|r| r.fit.slope.standard_error.is_none())
+        );
+    }
+    assert_eq!(serde_json::to_vec(&missing_error).unwrap(), missing_json);
     let mut wrong = ManualValue.metric();
     wrong.scope = "different".into();
     assert!(format_bootstrap_metric(&report, "bootstrap/value", &wrong, &Scale).is_err());
+}
+
+#[test]
+fn oversized_measured_batches_reject_before_setup_or_measurement() {
+    use airbug_bench::{DropPolicy, workloads::LocalExecutor};
+    for mode in 0..4 {
+        let waves = Rc::new(RefCell::new(vec![]));
+        let measurement = Counter {
+            value: Rc::new(Cell::new(0)),
+            waves: waves.clone(),
+            invalid: false,
+        };
+        let mut suite = Suite::new("oversized");
+        let batch = BatchPolicy::Iterations(u64::MAX.try_into().unwrap());
+        let setup = || -> u64 { panic!("setup executed before capacity check") };
+        match mode {
+            0 => {
+                suite
+                    .bench_measured_with_input(
+                        "case",
+                        measurement,
+                        batch,
+                        setup,
+                        |_| panic!("work executed"),
+                        DropPolicy::OutsideTiming,
+                    )
+                    .unwrap();
+            }
+            1 => {
+                suite
+                    .bench_measured_with_owned_input(
+                        "case",
+                        measurement,
+                        batch,
+                        setup,
+                        |_| panic!("work executed"),
+                        DropPolicy::OutsideTiming,
+                    )
+                    .unwrap();
+            }
+            2 => {
+                suite
+                    .bench_async_measured_with_input(
+                        "case",
+                        measurement,
+                        batch,
+                        || LocalExecutor,
+                        setup,
+                        async |_| panic!("work executed"),
+                        DropPolicy::OutsideTiming,
+                    )
+                    .unwrap();
+            }
+            _ => {
+                suite
+                    .bench_async_measured_with_owned_input(
+                        "case",
+                        measurement,
+                        batch,
+                        || LocalExecutor,
+                        setup,
+                        async |_| panic!("work executed"),
+                        DropPolicy::OutsideTiming,
+                    )
+                    .unwrap();
+            }
+        }
+        suite.config(Config {
+            samples: 1,
+            warmup: Duration::ZERO,
+            ..Default::default()
+        });
+        suite.sampling(Sampling {
+            iterations: Some(u64::MAX),
+            ..Default::default()
+        });
+        assert!(
+            suite
+                .run("")
+                .unwrap_err()
+                .to_string()
+                .contains("batch input buffer")
+        );
+        assert!(waves.borrow().is_empty());
+    }
+}
+
+#[test]
+fn bootstrap_throughput_uses_custom_units_text_and_source_counters() {
+    use airbug_bench::measurement::{FormattedValues, ValueFormatter, format_bootstrap_metric};
+    struct Rate;
+    impl ValueFormatter for Rate {
+        fn scale_values(&self, _: f64, values: &[f64]) -> Result<FormattedValues> {
+            Ok(FormattedValues {
+                values: values.iter().map(|v| v / 2.).collect(),
+                unit: "pairs".into(),
+            })
+        }
+        fn scale_throughputs(
+            &self,
+            typical: f64,
+            work: f64,
+            unit: &str,
+            values: &[f64],
+        ) -> Result<FormattedValues> {
+            assert_eq!(typical, 6.);
+            assert_eq!(work, 2.);
+            assert_eq!(unit, "items");
+            Ok(FormattedValues {
+                values: values.iter().map(|v| work / v).collect(),
+                unit: "items/tick".into(),
+            })
+        }
+        fn format_throughput(&self, value: f64, _: &str) -> Result<Option<String>> {
+            Ok(Some(format!("<rate {value:.3}>")))
+        }
+        fn scale_for_machines(&self, _: &[f64]) -> Result<FormattedValues> {
+            unreachable!()
+        }
+    }
+    let metric = ManualValue.metric();
+    let mut recorder = airbug_bench::Recorder::new();
+    recorder
+        .case(airbug_bench::Case {
+            id: "custom".into(),
+            contract: [("work.counter.items".into(), "2".into())].into(),
+            metrics: vec![metric.clone()],
+        })
+        .unwrap();
+    recorder.observe("custom", &metric.id, 4).unwrap();
+    recorder.observe("custom", &metric.id, 8).unwrap();
+    let run = recorder.finish().unwrap();
+    let report = airbug_bench::bootstrap::analyze(
+        &run,
+        &airbug_bench::bootstrap::Config {
+            resamples: 64,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let original = serde_json::to_vec(&report).unwrap();
+    let formatted = format_bootstrap_metric(&report, "custom", &metric, &Rate).unwrap();
+    let rate = &formatted.rows[0].throughput[0];
+    let mean = &report.rows[0].estimates.as_ref().unwrap().mean;
+    assert_eq!(
+        rate.values,
+        Some([2. / mean.point, 2. / mean.upper, 2. / mean.lower])
+    );
+    assert_eq!(rate.unit, "items/tick");
+    assert_eq!(rate.display.as_ref().unwrap()[0], "<rate 0.333>");
+    assert!(airbug_bench::bootstrap::html(&formatted).contains("&lt;rate 0.333&gt;"));
+    assert_eq!(serde_json::to_vec(&report).unwrap(), original);
+    let restored: airbug_bench::bootstrap::Report =
+        serde_json::from_slice(&serde_json::to_vec(&formatted).unwrap()).unwrap();
+    assert_eq!(restored.rows[0].throughput, formatted.rows[0].throughput);
+}
+
+#[test]
+fn bootstrap_throughput_rejects_increasing_formatter() {
+    use airbug_bench::measurement::{FormattedValues, ValueFormatter, format_bootstrap_metric};
+    struct Invalid;
+    impl ValueFormatter for Invalid {
+        fn scale_values(&self, _: f64, values: &[f64]) -> Result<FormattedValues> {
+            Ok(FormattedValues {
+                values: values.to_vec(),
+                unit: "ticks".into(),
+            })
+        }
+        fn scale_throughputs(
+            &self,
+            _: f64,
+            _: f64,
+            _: &str,
+            values: &[f64],
+        ) -> Result<FormattedValues> {
+            Ok(FormattedValues {
+                values: values.to_vec(),
+                unit: "invalid".into(),
+            })
+        }
+        fn scale_for_machines(&self, _: &[f64]) -> Result<FormattedValues> {
+            unreachable!()
+        }
+    }
+    let metric = ManualValue.metric();
+    let mut recorder = airbug_bench::Recorder::new();
+    recorder
+        .case(airbug_bench::Case {
+            id: "bad".into(),
+            contract: [("work.counter.items".into(), "2".into())].into(),
+            metrics: vec![metric.clone()],
+        })
+        .unwrap();
+    for value in [4, 8, 16, 32] {
+        recorder.observe("bad", &metric.id, value).unwrap();
+    }
+    let run = recorder.finish().unwrap();
+    let mut report = airbug_bench::bootstrap::analyze(
+        &run,
+        &airbug_bench::bootstrap::Config {
+            resamples: 128,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        format_bootstrap_metric(&report, "bad", &metric, &Invalid)
+            .unwrap_err()
+            .to_string()
+            .contains("ordered bounds")
+    );
+    report.rows[0].work_counters.insert("items".into(), None);
+    let formatted = format_bootstrap_metric(&report, "bad", &metric, &Invalid).unwrap();
+    assert!(
+        formatted.rows[0]
+            .throughput
+            .iter()
+            .all(|rate| rate.values.is_none())
+    );
+    assert!(airbug_bench::bootstrap::markdown(&formatted).contains("Dynamic work"));
+}
+
+#[test]
+fn relative_throughput_uses_formatter_on_resampled_measurement_statistics() {
+    use airbug_bench::measurement::{self, FormattedValues, ValueFormatter};
+    struct Rates;
+    impl ValueFormatter for Rates {
+        fn scale_values(&self, _: f64, values: &[f64]) -> Result<FormattedValues> {
+            self.scale_for_machines(values)
+        }
+        fn scale_for_machines(&self, values: &[f64]) -> Result<FormattedValues> {
+            Ok(FormattedValues {
+                values: values.to_vec(),
+                unit: "units".into(),
+            })
+        }
+        fn scale_throughputs(
+            &self,
+            typical: f64,
+            work: f64,
+            unit: &str,
+            values: &[f64],
+        ) -> Result<FormattedValues> {
+            assert_eq!(typical, 6.);
+            assert_eq!(work, 6.);
+            assert_eq!(unit, "items");
+            Ok(FormattedValues {
+                values: values.iter().map(|value| work / (value + 3.)).collect(),
+                unit: "items/<units+3>".into(),
+            })
+        }
+    }
+    fn fixture(value: u64) -> airbug_bench::Run {
+        let mut recorder = airbug_bench::Recorder::new();
+        let mut metric = Metric::duration("custom", "counter", "batch_total");
+        metric.unit = "units".into();
+        recorder
+            .case(airbug_bench::Case {
+                id: "case".into(),
+                contract: [("work.counter.items".into(), "6".into())].into(),
+                metrics: vec![metric],
+            })
+            .unwrap();
+        for _ in 0..3 {
+            recorder.observe("case", "custom", value.into()).unwrap();
+        }
+        let mut run = recorder.finish().unwrap();
+        for row in &mut run.observations {
+            row.operations = 2;
+        }
+        run
+    }
+    let before = fixture(6);
+    let after = fixture(12);
+    let original = serde_json::to_vec(&(&before, &after)).unwrap();
+    let config = airbug_bench::bootstrap::Config {
+        resamples: 32,
+        seed: 7,
+        confidence_level: 0.95,
+    };
+    let rates =
+        measurement::relative_throughput(&before, &after, "case", "custom", &Rates, &config)
+            .unwrap();
+    assert_eq!(rates.len(), 2);
+    for rate in &rates {
+        assert!((rate.point_percent.unwrap() + 100. / 3.).abs() < 1e-12);
+        let (lower, upper) = rate.interval_percent.unwrap();
+        assert_eq!(lower, upper);
+        assert_eq!(lower, rate.point_percent.unwrap());
+        assert_eq!(rate.unit, "items/<units+3>");
+        assert!(
+            rate.method
+                .as_ref()
+                .unwrap()
+                .contains("resampled mean/median")
+        );
+        assert!(rate.unavailable_reason.is_none());
+    }
+    let mut rows = airbug_bench::relative::compare_runs(&before, &after, &config).unwrap();
+    rows[0].throughput = rates.clone();
+    let text = airbug_bench::relative::markdown(&rows);
+    assert!(text.contains("items/&lt;units+3&gt;"));
+    assert!(!text.contains("reverses duration-change"));
+    let restored: Vec<airbug_bench::relative::ThroughputChange> =
+        serde_json::from_slice(&serde_json::to_vec(&rates).unwrap()).unwrap();
+    assert_eq!(rates, restored);
+    assert_eq!(original, serde_json::to_vec(&(&before, &after)).unwrap());
+    let mut process_before = before.clone();
+    let mut process_after = after.clone();
+    for run in [&mut process_before, &mut process_after] {
+        for (process, observation) in run.observations.iter_mut().enumerate() {
+            observation.process = process as u32;
+        }
+    }
+    assert_eq!(
+        measurement::relative_throughput(
+            &process_before,
+            &process_after,
+            "case",
+            "custom",
+            &Rates,
+            &config
+        )
+        .unwrap(),
+        rates
+    );
+    let mut zero_before = before.clone();
+    let mut zero_after = after.clone();
+    for run in [&mut zero_before, &mut zero_after] {
+        run.cases[0]
+            .contract
+            .insert("work.counter.items".into(), "0".into());
+    }
+    let zero = measurement::relative_throughput(
+        &zero_before,
+        &zero_after,
+        "case",
+        "custom",
+        &Rates,
+        &config,
+    )
+    .unwrap();
+    assert!(zero.iter().all(|rate| {
+        rate.point_percent.is_none()
+            && rate
+                .unavailable_reason
+                .as_ref()
+                .unwrap()
+                .contains("Zero work")
+    }));
+    let mut changed = after.clone();
+    changed.cases[0]
+        .contract
+        .insert("work.counter.items".into(), "12".into());
+    assert!(
+        measurement::relative_throughput(&before, &changed, "case", "custom", &Rates, &config)
+            .is_err()
+    );
+    let mut short = before.clone();
+    short.observations.truncate(1);
+    let rates = measurement::relative_throughput(&short, &after, "case", "custom", &Rates, &config)
+        .unwrap();
+    assert!(
+        rates
+            .iter()
+            .all(|rate| rate.point_percent.is_none() && rate.unavailable_reason.is_some())
+    );
+}
+
+#[test]
+fn parameter_formatter_transforms_estimates_after_aggregation_on_shared_scale() {
+    use airbug_bench::measurement::{FormattedValues, ValueFormatter};
+    struct Square;
+    impl ValueFormatter for Square {
+        fn scale_values(&self, typical: f64, values: &[f64]) -> Result<FormattedValues> {
+            assert_eq!(typical, 4.0);
+            Ok(FormattedValues {
+                values: values.iter().map(|v| v * v).collect(),
+                unit: "squared<units>".into(),
+            })
+        }
+        fn scale_throughputs(
+            &self,
+            typical: f64,
+            work: f64,
+            unit: &str,
+            values: &[f64],
+        ) -> Result<FormattedValues> {
+            assert_eq!(typical, 4.0);
+            assert_eq!(unit, "items");
+            Ok(FormattedValues {
+                values: values.iter().map(|v| work / (v * v)).collect(),
+                unit: "items/squared<units>".into(),
+            })
+        }
+        fn scale_for_machines(&self, _: &[f64]) -> Result<FormattedValues> {
+            unreachable!()
+        }
+    }
+    let mut suite = Suite::new("summary");
+    for (size, offset) in [(1, 0), (2, 2)] {
+        let mut invocation = 0;
+        suite
+            .bench_measured_custom(&format!("case-{size}"), ManualValue, move |n| {
+                invocation += 1;
+                vec![n * (offset + if invocation % 2 == 1 { 1 } else { 3 })]
+            })
+            .unwrap();
+        suite.work_units("items", 8 * size);
+        suite.parameter("size", size);
+        suite.summary_family("work");
+        suite.formatter("work", Square).unwrap();
+        suite.sampling(Sampling {
+            iterations: Some(1),
+            ..Default::default()
+        });
+    }
+    suite.config(Config {
+        samples: 2,
+        warmup: Duration::ZERO,
+        sample_time: Duration::from_nanos(1),
+        max_iterations: 1,
+    });
+    let run = suite.run("").unwrap();
+    let raw = serde_json::to_vec(&run).unwrap();
+    let html = suite
+        .html_with_summary(
+            &run,
+            Some(airbug_bench::report::SummaryPlot {
+                parameter: "size",
+                estimator: airbug_bench::summary::Estimator::Mean,
+                scale: airbug_bench::viz::charts::AxisScale::Linear,
+            }),
+        )
+        .unwrap();
+    assert!(html.contains("squared&lt;units&gt;"));
+    assert!(html.contains("case summary/case-1: x = 1, y = 4"));
+    assert!(html.contains("case summary/case-2: x = 2, y = 16"));
+    assert_eq!(raw, serde_json::to_vec(&run).unwrap());
+    let config = airbug_bench::report::SummaryPlot {
+        parameter: "size",
+        estimator: airbug_bench::summary::Estimator::Mean,
+        scale: airbug_bench::viz::charts::AxisScale::Linear,
+    };
+    let mut persisted = run.clone();
+    suite
+        .save_summary_formatting(&mut persisted, &config)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_vec(&run.observations).unwrap(),
+        serde_json::to_vec(&persisted.observations).unwrap()
+    );
+    let mut restored: airbug_bench::Run =
+        serde_json::from_str(&serde_json::to_string(&persisted).unwrap()).unwrap();
+    let saved_chart = airbug_bench::report::parameter_charts(&restored, &config).unwrap();
+    assert!(saved_chart.contains("squared&lt;units&gt;"));
+    assert!(saved_chart.contains("case summary/case-1: x = 1, y = 4"));
+    assert!(saved_chart.contains("case summary/case-2: x = 2, y = 16"));
+    assert!(saved_chart.contains("work / items throughput (items/squared&lt;units&gt;)"));
+    assert!(saved_chart.contains("case summary/case-1: x = 1, y = 2"));
+    assert!(saved_chart.contains("case summary/case-2: x = 2, y = 1"));
+    assert!(html.contains("work / items throughput (items/squared&lt;units&gt;)"));
+
+    let incompatible = airbug_bench::report::SummaryPlot {
+        estimator: airbug_bench::summary::Estimator::ProcessMedian,
+        ..config
+    };
+    assert!(
+        airbug_bench::report::parameter_charts(&restored, &incompatible)
+            .unwrap_err()
+            .to_string()
+            .contains("another parameter or estimator")
+    );
+    restored
+        .observations
+        .iter_mut()
+        .find(|o| o.metric == "work")
+        .unwrap()
+        .value = Some("999".into());
+    assert!(
+        airbug_bench::report::parameter_charts(&restored, &config)
+            .unwrap_err()
+            .to_string()
+            .contains("stale parameter-summary")
+    );
+    let mut stale = run.clone();
+    stale.cases[0]
+        .metrics
+        .iter_mut()
+        .find(|m| m.id == "work")
+        .unwrap()
+        .scope = "different".into();
+    assert!(
+        suite
+            .html_with_summary(
+                &stale,
+                Some(airbug_bench::report::SummaryPlot {
+                    parameter: "size",
+                    estimator: airbug_bench::summary::Estimator::Mean,
+                    scale: airbug_bench::viz::charts::AxisScale::Linear,
+                })
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("contract mismatch")
+    );
+}
+
+#[test]
+fn invalid_summary_formatters_preserve_the_previous_snapshot() {
+    use airbug_bench::measurement::{FormattedValues, ValueFormatter};
+    struct Format {
+        mode: u8,
+        rate: bool,
+    }
+    impl Format {
+        fn output(&self, values: &[f64], rate: bool) -> Result<FormattedValues> {
+            let mode = if self.rate == rate { self.mode } else { 0 };
+            if mode == 6 {
+                return Err(std::io::Error::other("formatter failed").into());
+            }
+            Ok(FormattedValues {
+                unit: match mode {
+                    1 => "",
+                    2 => "different",
+                    _ => "units",
+                }
+                .into(),
+                values: match mode {
+                    3 => vec![],
+                    4 => vec![f64::NAN],
+                    5 => vec![-1.0],
+                    _ => values.to_vec(),
+                },
+            })
+        }
+    }
+    impl ValueFormatter for Format {
+        fn scale_values(&self, _: f64, values: &[f64]) -> Result<FormattedValues> {
+            self.output(values, false)
+        }
+        fn scale_throughputs(
+            &self,
+            _: f64,
+            _: f64,
+            _: &str,
+            values: &[f64],
+        ) -> Result<FormattedValues> {
+            self.output(values, true)
+        }
+        fn scale_for_machines(&self, _: &[f64]) -> Result<FormattedValues> {
+            unreachable!()
+        }
+    }
+    let mut suite = Suite::new("atomic");
+    for size in 1..=2 {
+        suite
+            .bench_measured_custom(&format!("case-{size}"), ManualValue, |n| vec![n])
+            .unwrap();
+        suite.parameter("size", size);
+        suite.work_units("items", size);
+        suite.sampling(Sampling {
+            iterations: Some(1),
+            ..Default::default()
+        });
+    }
+    suite.config(Config {
+        samples: 2,
+        warmup: Duration::ZERO,
+        sample_time: Duration::from_nanos(1),
+        max_iterations: 1,
+    });
+    let mut run = suite.run("").unwrap();
+    let cases = run.cases.clone();
+    let metrics: Vec<_> = cases
+        .iter()
+        .map(|c| c.metrics.iter().find(|m| m.id == "work").unwrap())
+        .collect();
+    let config = airbug_bench::report::SummaryPlot {
+        parameter: "size",
+        estimator: airbug_bench::summary::Estimator::Mean,
+        scale: airbug_bench::viz::charts::AxisScale::Linear,
+    };
+    let valid = Format {
+        mode: 0,
+        rate: false,
+    };
+    let refs: Vec<_> = cases
+        .iter()
+        .zip(&metrics)
+        .map(|(c, m)| (c.id.as_str(), *m, &valid as &dyn ValueFormatter))
+        .collect();
+    airbug_bench::summary_format::save(&mut run, &config, &refs).unwrap();
+    let previous = serde_json::to_vec(&run).unwrap();
+    let chart = airbug_bench::report::parameter_charts(&run, &config).unwrap();
+    assert!(airbug_bench::summary_format::save(&mut run, &config, &refs[..1]).is_err());
+    assert_eq!(previous, serde_json::to_vec(&run).unwrap());
+    for rate in [false, true] {
+        for mode in 1..=6 {
+            let bad = Format { mode, rate };
+            let mut refs = refs.clone();
+            refs[1].2 = &bad;
+            assert!(
+                airbug_bench::summary_format::save(&mut run, &config, &refs).is_err(),
+                "mode {mode}, rate {rate}"
+            );
+            assert_eq!(previous, serde_json::to_vec(&run).unwrap());
+            assert_eq!(
+                chart,
+                airbug_bench::report::parameter_charts(&run, &config).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
+fn plain_measured_single_batch_brackets_all_operations_and_output_drops() {
+    struct Output(Rc<Cell<u64>>);
+    impl Drop for Output {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+    for asynchronous in [false, true] {
+        let value = Rc::new(Cell::new(0));
+        let waves = Rc::new(RefCell::new(vec![]));
+        let measurement = Counter {
+            value: value.clone(),
+            waves: waves.clone(),
+            invalid: false,
+        };
+        let work = value.clone();
+        let batch = BatchPolicy::Batches(1.try_into().unwrap());
+        let mut suite = Suite::new("single_batch");
+        if asynchronous {
+            suite
+                .bench_async_measured(
+                    "work",
+                    measurement,
+                    batch,
+                    || airbug_bench::workloads::LocalExecutor,
+                    async move || {
+                        work.set(work.get() + 1);
+                        Output(work.clone())
+                    },
+                )
+                .unwrap();
+        } else {
+            suite
+                .bench_measured("work", measurement, batch, move || {
+                    work.set(work.get() + 1);
+                    Output(work.clone())
+                })
+                .unwrap();
+        }
+        suite.sampling(Sampling {
+            iterations: Some(7),
+            ..Default::default()
+        });
+        suite.config(Config {
+            samples: 2,
+            warmup: Duration::ZERO,
+            sample_time: Duration::from_nanos(1),
+            max_iterations: 7,
+        });
+        let run = suite.run("").unwrap();
+        assert_eq!(*waves.borrow(), [14, 14]);
+        assert_eq!(value.get(), 28);
+        let measured: Vec<_> = run
+            .observations
+            .iter()
+            .filter(|o| o.metric == "instructions")
+            .map(|o| (o.operations, o.value.as_deref()))
+            .collect();
+        assert_eq!(measured, [(7, Some("14")), (7, Some("14"))]);
+    }
+}
+
+#[test]
+fn measured_batch_policies_keep_remainders_and_total_work() {
+    for (batch, iterations, expected) in [
+        (BatchPolicy::PerIteration, 3, vec![1, 1, 1]),
+        (BatchPolicy::SmallInput, 23, vec![3, 3, 3, 3, 3, 3, 3, 2]),
+        (BatchPolicy::LargeInput, 2001, vec![3; 667]),
+        (
+            BatchPolicy::Batches(3.try_into().unwrap()),
+            8,
+            vec![3, 3, 2],
+        ),
+        (
+            BatchPolicy::Iterations(4.try_into().unwrap()),
+            9,
+            vec![4, 4, 1],
+        ),
+        (BatchPolicy::Iterations(20.try_into().unwrap()), 3, vec![3]),
+    ] {
+        let value = Rc::new(Cell::new(0));
+        let waves = Rc::new(RefCell::new(vec![]));
+        let work = value.clone();
+        let mut suite = Suite::new("batch_policy");
+        suite
+            .bench_measured(
+                "work",
+                Counter {
+                    value,
+                    waves: waves.clone(),
+                    invalid: false,
+                },
+                batch,
+                move || work.set(work.get() + 1),
+            )
+            .unwrap();
+        suite.sampling(Sampling {
+            iterations: Some(iterations),
+            ..Default::default()
+        });
+        suite.config(Config {
+            samples: 1,
+            warmup: Duration::ZERO,
+            sample_time: Duration::from_nanos(1),
+            max_iterations: iterations,
+        });
+        let run = suite.run("").unwrap();
+        assert_eq!(*waves.borrow(), expected, "{batch:?}");
+        let observation = run
+            .observations
+            .iter()
+            .find(|o| o.metric == "instructions")
+            .unwrap();
+        assert_eq!(observation.operations, iterations);
+        assert_eq!(
+            observation.value.as_deref(),
+            Some(iterations.to_string().as_str())
+        );
+    }
+}
+
+#[test]
+fn decreasing_statistical_display_reverses_bounds_without_changing_raw_data() {
+    use airbug_bench::measurement::{FormattedValues, ValueFormatter, format_bootstrap_metric};
+    struct Reverse;
+    impl ValueFormatter for Reverse {
+        fn scale_throughputs(&self, _: f64, _: f64, _: &str, _: &[f64]) -> Result<FormattedValues> {
+            panic!("fixture has no throughput counters")
+        }
+
+        fn scale_values(&self, _: f64, values: &[f64]) -> Result<FormattedValues> {
+            Ok(FormattedValues {
+                values: values.iter().map(|v| 100.0 - v).collect(),
+                unit: "remaining".into(),
+            })
+        }
+        fn scale_for_machines(&self, values: &[f64]) -> Result<FormattedValues> {
+            Ok(FormattedValues {
+                values: values.to_vec(),
+                unit: "units".into(),
+            })
+        }
+    }
+    let metric = Metric::duration("custom", "counter", "batch_total");
+    let mut recorder = airbug_bench::Recorder::new();
+    recorder
+        .case(airbug_bench::Case {
+            id: "case".into(),
+            contract: Default::default(),
+            metrics: vec![metric.clone()],
+        })
+        .unwrap();
+    for value in [2, 4, 8, 16] {
+        recorder.observe("case", "custom", value).unwrap();
+    }
+    let run = recorder.finish().unwrap();
+    let report = airbug_bench::bootstrap::analyze_with_distributions(
+        &run,
+        &airbug_bench::bootstrap::Config {
+            resamples: 64,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let original = serde_json::to_vec(&report).unwrap();
+    let overlay = airbug_bench::statistic_format::comparison_charts(
+        &report, &report, "case", &metric, &Reverse,
+    )
+    .unwrap();
+    assert!(overlay.contains("formatter(mean) comparison"));
+    assert!(overlay.contains("baseline") && overlay.contains("candidate"));
+    assert!(overlay.contains("<svg"));
+    let mut incompatible = report.clone();
+    incompatible.rows[0].resampling_unit = "different population".into();
+    assert!(
+        airbug_bench::statistic_format::comparison_charts(
+            &report,
+            &incompatible,
+            "case",
+            &metric,
+            &Reverse,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("populations differ")
+    );
+
+    let no_draws = airbug_bench::bootstrap::analyze(&run, &Default::default()).unwrap();
+    assert!(
+        airbug_bench::statistic_format::comparison_charts(
+            &no_draws, &report, "case", &metric, &Reverse,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("retained bootstrap draws")
+    );
+    let display = format_bootstrap_metric(&report, "case", &metric, &Reverse).unwrap();
+    let raw = report.rows[0].estimates.as_ref().unwrap();
+    let mean = display
+        .presentation
+        .iter()
+        .find(|p| p.statistic == "mean")
+        .unwrap();
+    assert_eq!(mean.estimate.point, 100.0 - raw.mean.point);
+    assert_eq!(mean.estimate.lower, 100.0 - raw.mean.upper);
+    assert_eq!(mean.estimate.upper, 100.0 - raw.mean.lower);
+    assert_eq!(
+        mean.draws,
+        report.rows[0]
+            .distributions
+            .as_ref()
+            .unwrap()
+            .mean
+            .iter()
+            .map(|v| 100.0 - v)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        (mean.estimate.standard_error.unwrap() - raw.mean.standard_error.unwrap()).abs() < 1e-12
+    );
+    assert_eq!(display.rows[0].estimates, report.rows[0].estimates);
+    assert_eq!(serde_json::to_vec(&report).unwrap(), original);
+    let restored = serde_json::from_slice(&serde_json::to_vec(&display).unwrap()).unwrap();
+    let html = airbug_bench::bootstrap::html(&restored);
+    assert!(html.contains("formatter(mean)"));
+    assert!(!html.contains("saved statistical display does not match"));
 }

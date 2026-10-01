@@ -446,6 +446,22 @@ impl Document {
                     report::comparison(std::slice::from_ref(&row.comparison))
                 ));
             }
+            if !e.comparisons.is_empty() {
+                if let (Some(baseline), Some(candidate)) = (&e.baseline_run, &e.run) {
+                    let analysis = airbug_bench::bootstrap::analyze_saved(
+                        candidate,
+                        Default::default(),
+                        false,
+                    )?;
+                    let relative = airbug_bench::relative::compare_runs_with_case_configs(
+                        baseline,
+                        candidate,
+                        &analysis.config,
+                        &analysis.case_configs,
+                    )?;
+                    out.push_str(&airbug_bench::relative::markdown(&relative));
+                }
+            }
             if let Some(r) = &e.run {
                 out.push_str(&report::markdown(r)?);
             }
@@ -533,14 +549,10 @@ impl Document {
             for issue in &e.issues {
                 content.push_str(&format!("<p class=\"issue\">{}</p>", esc(issue)));
             }
-            let config = airbug_bench::bootstrap::Config {
-                confidence_level: (1. - self.alpha_family).clamp(f64::EPSILON, 1. - f64::EPSILON),
-                ..Default::default()
-            };
             let candidate_analysis = e
                 .run
                 .as_ref()
-                .map(|run| airbug_bench::bootstrap::analyze(run, &config));
+                .map(|run| airbug_bench::bootstrap::analyze_saved(run, Default::default(), false));
             if let Some(analysis) = &candidate_analysis {
                 match analysis {
                     Ok(report) => {
@@ -580,14 +592,34 @@ impl Document {
                         airbug_bench::hypothesis::Config::default(),
                     )?;
                     content.push_str(&airbug_bench::hypothesis_plot::fragment(&retained)?);
-                    content.push_str(&airbug_bench::relative::charts(
-                        &airbug_bench::relative::compare_runs(baseline, candidate, &config)?,
-                        self.threshold_percent,
-                    )?);
-                    let baseline = airbug_bench::bootstrap::analyze(baseline, &config)?;
-                    if let Some(Ok(candidate)) = &candidate_analysis {
+                    if let Some(Ok(analysis)) = &candidate_analysis {
+                        let relative = airbug_bench::relative::compare_runs_with_case_configs(
+                            baseline,
+                            candidate,
+                            &analysis.config,
+                            &analysis.case_configs,
+                        )?;
+                        content.push_str(&airbug_bench::relative::charts(
+                            &relative,
+                            self.threshold_percent,
+                        )?);
+                        content.push_str(&report::html_fragment(
+                            &airbug_bench::relative::markdown(&relative),
+                        ));
+                        content.push_str(&airbug_bench::regression_format::charts(
+                            baseline,
+                            candidate,
+                            &analysis.config,
+                            &analysis.case_configs,
+                        )?);
+                        let baseline = airbug_bench::bootstrap::analyze_with_case_configs(
+                            baseline,
+                            &analysis.config,
+                            &analysis.case_configs,
+                            false,
+                        )?;
                         content.push_str(&airbug_bench::bootstrap::comparison_charts(
-                            &baseline, candidate,
+                            &baseline, analysis,
                         ));
                     }
                 }

@@ -1,0 +1,200 @@
+{
+  "upstream": "Divan 0.1.21",
+  "source": "src/tree_painter.rs",
+  "source_sha256": "525a9ee813a6f32db870d47b724b7b0f7d6a2f1765cd2794788d024e98a37ee5",
+  "status": "field_mapping_with_focused_validation",
+  "fields": [
+    {
+      "upstream": "fastest / slowest / median / mean time",
+      "airbug": "DescriptiveRow summary minimum/maximum/median/mean; tree and descriptive tables",
+      "scope": "Normalized aggregate batch durations and separate complete worker-slot timing distributions in tree. Worker samples sum waves before normalization; allocation summaries label worker-wave records separately."
+    },
+    {
+      "upstream": "samples / iters",
+      "airbug": "summary.count / exact decimal operations total; sample_count_unit supports worker sampling",
+      "scope": "Tree exposes both; unavailable observations separately counted."
+    },
+    {
+      "upstream": "items/bytes/chars/cycles throughput at duration-ranked samples",
+      "airbug": "Tree uses associated_counters divided by matching duration summary; mean rate is aggregate work divided by aggregate duration",
+      "scope": "Tree now includes worker-slot rates with duration-paired counts; aggregate worker rate uses total work over total worker time, not aggregate parallel wall time. Missing pairs omit rates and legacy missing weighted means remain unavailable."
+    },
+    {
+      "upstream": "decimal/binary byte format",
+      "airbug": "Tree honors --bytes-format and environment choice, scales each displayed rate with explicit units",
+      "scope": "Raw observations are untouched."
+    },
+    {
+      "upstream": "cycle throughput in Hertz",
+      "airbug": "Shared display_throughput uses Hz through EHz; tree and Markdown reports",
+      "scope": "Machine counter unit remains cycles."
+    },
+    {
+      "upstream": "max alloc count/size",
+      "airbug": "alloc.peak_above_start_count / alloc.peak_above_start_bytes",
+      "scope": "Tree distinguishes absolute sample peak from separately labelled per-operation view. Peak lifecycle semantics tracked under allocation audit."
+    },
+    {
+      "upstream": "alloc/dealloc/grow/shrink count and size",
+      "airbug": "alloc.count/bytes, alloc.dealloc_count/dealloc_bytes, alloc.grow_count/grown_bytes, alloc.shrink_count/shrunk_bytes",
+      "scope": "Tree prints timing-associated metrics as well as independent metric distributions; incomplete pairing explicit."
+    }
+  ],
+  "validation": [
+    "console::tree_tests::tree_preserves_time_pairing_rates_peaks_and_missing_allocations: opposite ordering of time/counts, exact rates, decimal/binary units, Hz, known zero, missing allocation pairs, sample peaks, raw source unchanged",
+    "All five console tests passed (.airbug/runs/678e742e-20ab-456d-9129-4b652f8c85da)",
+    "All-target library Clippy passed",
+    "bench/scripts/test-allocated-thread-inheritance.py passed including actual tree throughput/allocation/peak rows through Cargo",
+    "Inspected plain stdout from attributed sort_only/64: case hierarchy, bytes in GiB/s, cycles in GHz, item rate, exact sample/operation counts. One-sample fixture is output verification only, not a performance result.",
+    "console::tree_tests::worker_tree_preserves_population_and_weighted_throughput: 4 slots with unequal operations, weighted mean 30 vs unweighted 25 ns/op, exact min/max/median and aggregate rate, legacy unavailable mean and raw immutability; all 6 console tests passed (.airbug/runs/6b474fd6-890c-4aea-8e85-2e638c3b628a).",
+    "All 9 worker_timings tests passed, including separate process means (.airbug/runs/a6d32b7a-3782-44aa-9ba5-f739fa996406).",
+    "Expanded test-allocated-thread-inheritance.py passed real Cargo tree output: complete worker slots, per-worker throughput, worker-wave allocations, distinct wave/sample peaks and independence disclaimer.",
+    "All-target library/CLI Clippy passed after worker tree changes."
+  ],
+  "remaining": [
+    "Visual terminal review for large/deep trees; worker-slot time/counter and worker-wave allocation output has focused functional coverage.",
+    "Criterion mapping above records fixed-work custom relative formatter integration; dynamic paired-rate and visual coverage remain separate."
+  ],
+  "criterion": {
+    "version": "0.8.2",
+    "source": "src/report.rs::CliReport::measurement_complete",
+    "source_sha256": "d24473242b382fae9bae51bf962a27e4aff10e051d0e92c221798cbc6c86f7f8",
+    "status": "field_mapping_partial",
+    "fields": [
+      {
+        "upstream": "Typical time point and confidence bounds",
+        "airbug": "Ordinary Suite::main/cargo bench measurement enables 95% bootstrap estimates with 10000 resamples by default, including linked JSON/HTML artifacts. Group/case and explicit CLI fields override defaults; --no-bootstrap disables automatic and inherited analysis. Smoke/profiling do not automatically enable it.",
+        "status": "focused_validation",
+        "remaining": "Mean/median and sampling units are explicitly labelled; complete visual output audit remains separate.",
+        "evidence": [
+          "test-selection.py passed default estimate JSON/HTML and navigation, opt-out, conflicts before setup; full Cargo gate tracked in validation.json.",
+          "Full test-cargo-bench.py passed automatic estimates and tree/quiet policy; bootstrap report-capture test covers compact mean/interval, ns/op units, population and per-case confidence."
+        ]
+      },
+      {
+        "upstream": "Throughput point and confidence bounds, inverse duration bounds",
+        "airbug": "bootstrap::Row.throughput stores reciprocal mean/median duration and per-process slope intervals for fixed work counters; Markdown/HTML show points, ordered bounds and explicit units. Legacy JSON defaults to no rate rows.",
+        "status": "focused_validation",
+        "remaining": "Browser visual verification and full standalone report-entrypoint audit remain; custom formatted-rate Cargo artifacts are now verified. Dynamic paired rate intervals are an Airbug extension and explicitly unavailable here.",
+        "evidence": [
+          "13 bootstrap tests passed: .airbug/runs/ff260ba9-1a5e-485f-8f5a-650abbd9f128",
+          "Real cargo bench attributed collections/sum --exact with fixed items counter, resamples and discard rendered rate point/interval; functional fixture only",
+          "All-target library Clippy passed",
+          "format_bootstrap_metric now calls custom throughput scale/text callbacks with original estimates and persisted source counters; 16 bootstrap-focused tests passed including raw preservation, JSON text roundtrip, escaping and invalid interval rejection.",
+          "test-formatted-bootstrap.py passed actual Cargo/save/reanalysis and custom interval scale/text JSON/HTML with and without plots; source count 6 remains authoritative despite --items-count 12 on reanalysis."
+        ]
+      },
+      {
+        "upstream": "Relative mean change point/interval with significance and practical threshold explanation",
+        "airbug": "relative::markdown renders mean and median changes, point/interval, unit populations, confidence, seed and missing-data reasons. Runner compare includes it in plain and HTML/no-plots output; named-baseline Cargo bootstrap path includes it in console and statistical comparison HTML.",
+        "status": "focused_validation",
+        "remaining": "Broader cross-entrypoint verbosity and custom metric formatting remain separately audited.",
+        "evidence": [
+          "4 relative tests passed in .airbug/runs/8dd2ab65-4e55-4d6a-afe3-1c9e13418cc8",
+          "CLI compare_relative_export_preserves_process_units_and_check_decisions passed in .airbug/runs/643d2c3f-e124-42c2-8780-e313e4e7d509: text, HTML with/without plots, unchanged JSON and check codes",
+          "Library and CLI all-target Clippy passed",
+          "Full test-cargo-bench.py passed after correcting stale Duration::MAX precision expectation; /tmp/airbug-cargo-parity-current.log. This run preceded the single-process fallback change.",
+          "test-relative-cargo.py passed after single-process fallback: actual Cargo save/compare, 3 normalized batches per side, intervals/rates, no-plots HTML, quiet/JSON and lazy reanalysis.",
+          "5 relative tests passed in .airbug/runs/6b7b7586-44fc-4f8c-8817-9d7d1a6d7847: batch normalization, warnings, insufficient one-batch data and no mixing of batch/process units.",
+          "12 history tests passed (.airbug/runs/0266d580-a532-4ea4-9d91-e0cf1d02434a): compact relative summaries, settings, legacy JSON, publication failures, incompatible latest history and concurrent writers.",
+          "Expanded test-relative-cargo.py passed after automatic history integration and quiet fix: automatic text, quiet, BENCH_COMPARISON JSON, main report.html and omitted resample arrays.",
+          "All-target library/CLI Clippy passed."
+        ]
+      },
+      {
+        "upstream": "Relative throughput change with inverse time-change bounds",
+        "airbug": "relative::Comparison.throughput stores inverse mean/median duration percentage changes for equal fixed work; bounds reverse. relative::markdown renders rate changes in text/HTML, JSON retains structured fields and legacy reports default to empty rates. Custom metrics now use ValueFormatter on paired bootstrap mean/median statistics, on a shared scale, with an explicit method label. Named baseline and automatic previous-run exports retain these custom rate changes.",
+        "status": "focused_validation",
+        "remaining": "Dynamic paired-rate comparisons and full visual verification remain separate. Custom formatter rates use percentile intervals of transformed draws, explicitly distinct from reciprocal wall-time interval bounds.",
+        "evidence": [
+          "5 relative tests passed (.airbug/runs/1c675240-ef0e-4e96-8ae1-6993ee1f9f9f): -50% time to +100% rate, reversed bounds, undefined ratios, zero work, mismatched work contracts, legacy JSON and roundtrip",
+          "CLI compare_relative_export_preserves_process_units_and_check_decisions passed (.airbug/runs/dc0e6066-1def-4a16-974c-e7ecb0bf6c2f): doubled time gives -50% rate in text and JSON; HTML with and without plots; check codes unchanged",
+          "Library/CLI all-target Clippy passed",
+          "20 measurement tests passed (.airbug/runs/ffba2591-aa53-4fee-be91-1461fbf98e15): nonlinear formatter gives -33.333% rather than reciprocal -50%, normalized samples/process medians, zero-work/insufficient samples, escaping, roundtrip and unchanged raw runs.",
+          "5 relative tests passed (.airbug/runs/29b707b8-1212-4c65-b0ec-b8c2b86a9ecd) after extracting shared sampling and bootstrap transform policies.",
+          "13 history tests passed (.airbug/runs/6598c37a-384a-40b7-b799-7fe8a751ea80), including formatter hook failure before export/commit and no baseline advancement.",
+          "Expanded test-formatted-bootstrap.py passed actual named-baseline and automatic-history custom rate JSON/HTML, exact -50% oracle and committed report equivalence.",
+          "All-target library/CLI Clippy passed."
+        ]
+      },
+      {
+        "upstream": "Tukey outlier counts and percentages",
+        "airbug": "bootstrap::markdown and HTML render all five class counts and percentages, total population and resampling unit; no observations discarded",
+        "status": "focused_validation",
+        "remaining": "Cross-entrypoint verbosity review remains separate.",
+        "evidence": [
+          "11 bootstrap tests passed in .airbug/runs/10e20eda-910d-46c5-84ae-7ef5e438a833; 4 normal and 1 severe outlier produce 80%/20%; unbalanced process fixture reports 2 independent process medians rather than 6 batches"
+        ]
+      },
+      {
+        "upstream": "Verbose mean, standard deviation, median and scaled MAD intervals",
+        "airbug": "bootstrap::markdown renders point/interval/standard error and sampling unit; HTML uses same content",
+        "status": "implemented",
+        "remaining": "Cross-entrypoint verbosity review remains separate."
+      },
+      {
+        "upstream": "Verbose slope interval and R-squared at both slope interval endpoints",
+        "airbug": "regression::Fit stores centered R-squared at point and slope bounds; bootstrap::markdown labels endpoint diagnostics explicitly",
+        "status": "focused_validation",
+        "evidence": [
+          "regression::endpoint_tests (residual oracle, scale invariance, constant totals, negative R-squared, legacy JSON)",
+          "bootstrap::tests::report_capture_uses_process_units_and_reads_legacy_json passed in .airbug/runs/dbcadca8-635f-4605-8058-26e9cb1d73be"
+        ]
+      }
+    ]
+  },
+  "completion_validation": {
+    "command": "python3 bench/scripts/test-relative-cargo.py",
+    "exit_code": 0,
+    "coverage": "Named/automatic baseline intervals/rates, no-plots HTML, quiet/JSON isolation, compact history and lazy reanalysis",
+    "log": ".airbug/validation/cargo-point-labels/relative-final.log"
+  },
+  "comparison_selection_validation": {
+    "implementation": "Empty case/metric selections fail explicitly before comparison; --check cannot report success for zero selected cases. Plain comparison JSON does not load optional bootstrap presentation settings.",
+    "test": "compare_raw_json_ignores_unused_bootstrap_settings_and_explains_empty_selection passed: malformed optional metadata accepted by raw JSON, rejected by relative analysis; empty case and metric filters fail with explanatory error and no JSON output."
+  },
+  "tree_label_validation": {
+    "problem": "Newlines, tabs and terminal control characters in case labels or formatted values broke the tree structure.",
+    "change": "Tree rendering escapes control characters per label/value, preserving Unicode and full long names. Stored identities and raw reports are unchanged.",
+    "test": "console::tree_tests::tree_labels_keep_unicode_and_escape_control_characters",
+    "validation": "All seven console tests passed; library/test all-feature Clippy passed.",
+    "scope": "Functional terminal-text validation; does not establish browser visuals or terminal readability at narrow widths."
+  },
+  "console_policy_audit": {
+    "status": "direct_harness_verified_runner_difference_documented",
+    "sources": [
+      "criterion-0.8.2/src/lib.rs:775-785",
+      "bench/src/suite.rs::main",
+      "bench/src/console.rs::ConsoleColor::enabled",
+      "bench/cli/src/args.rs::Cli",
+      "bench/cli/src/cmd.rs::output"
+    ],
+    "evidence": "bench/scripts/test-console-policy.py passed on macOS: Cargo-built deterministic harness, default/quiet/verbose, JSON in each detail mode, color override with NO_COLOR, plain saved artifacts, list and quiet tree. Log: .airbug/validation/parity-current/console-policy.log. Added to CI.",
+    "native_differences": [
+      "Quiet retains concise results, comparisons and report paths; it does not mean silence. Verbose adds environment and measurement contracts.",
+      "Separate process runner has command-specific output and live UI, with no global quiet/verbose/color options. Direct cargo bench supplies the upstream authoring/output capability.",
+      "Large/deep terminal layout still requires separate review."
+    ]
+  },
+  "deep_tree_validation": {
+    "test": "console::tree_tests::deep_tree_preserves_long_labels_and_every_leaf",
+    "scope": "64 group levels, 256 sibling leaves, each with 40 repetitions of a Unicode label. Exact order, branch placement and untruncated labels verified.",
+    "validation": "8 console tests passed on Linux ARM64",
+    "log": ".airbug/validation/parity-current/deep-console-linux.log",
+    "limitation": "Emitted text is verified; actual terminal visual review remains open. Long labels are preserved and may wrap at the terminal edge."
+  },
+  "terminal_depth_compaction": {
+    "behavior": "On stdout TTY, detect terminal width and cap indentation to approximately one third of the columns. Deeper rows include [N] with original nesting depth and an explanatory header. Labels and result text are preserved. Pipes retain the complete tree. Applies to tree listing and tree result output.",
+    "tests": "console::tree_tests::narrow_terminal_caps_indentation_without_losing_identity_or_values; widths 40, 80, 120, depth 64/65, Unicode labels, unchanged pipe and shallow tree",
+    "validation": "9 console tests passed on Linux ARM64",
+    "log": ".airbug/validation/parity-current/compact-console-linux.log",
+    "remaining": "PTY integration verified on Linux ARM64. Actual visual acceptance in a terminal emulator and Windows console behavior remain unverified.",
+    "pty_validation": {
+      "script": "bench/scripts/test-terminal-tree.py",
+      "platform": "Linux ARM64",
+      "result": "Release-built external Cargo harness: --list and measured results at 40, 80, 120 columns through PTY; full depth and Unicode identity in pipe output; deterministic 3 ns/op results preserved.",
+      "log": ".airbug/validation/parity-current/terminal-tree-linux-final.log",
+      "ci": "Added Unix-only fixture step; remote CI not run."
+    }
+  }
+}

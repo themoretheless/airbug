@@ -1024,7 +1024,7 @@ fn allocated_coordinator_setup_accepts_local_state_and_preserves_drop_threads() 
     iterations = 3, warmup_ms = 0)]
 mod attributed_coordinator_allocations {
     #[bench(setup = || vec![1u8; 128], input_bytes = |v: &Vec<u8>| v.len() as u64)]
-    fn borrowed(input: &mut Vec<u8>) -> Vec<u8> {
+    fn borrowed(input: &mut [u8]) -> Vec<u8> {
         std::hint::black_box(input);
         vec![std::hint::black_box(7u8); 64]
     }
@@ -1381,6 +1381,26 @@ fn worker_allocation_reports_pair_metrics_by_worker_time() {
         .as_ref()
         .unwrap();
     assert_eq!(summary.samples, 4);
+    let timing = summary.wall_per_operation.as_ref().unwrap();
+    assert_eq!(
+        (
+            timing.count,
+            timing.minimum,
+            timing.maximum,
+            timing.mean,
+            timing.median
+        ),
+        (4, 10.0, 40.0, 25.0, 25.0)
+    );
+    assert!(
+        airbug_bench::report::descriptive_markdown(&rows)
+            .contains("Worker wall time per operation")
+    );
+    let mut legacy = serde_json::to_value(summary).unwrap();
+    legacy.as_object_mut().unwrap().remove("wall_per_operation");
+    let decoded: airbug_bench::report::WorkerAllocationSummary =
+        serde_json::from_value(legacy).unwrap();
+    assert!(decoded.wall_per_operation.is_none());
     let bytes = summary.allocations["alloc.bytes"].as_ref().unwrap();
     assert_eq!(
         (bytes.fastest, bytes.slowest, bytes.median, bytes.mean),
@@ -1438,6 +1458,11 @@ fn worker_allocation_reports_pair_metrics_by_worker_time() {
         .worker_allocations
         .as_ref()
         .unwrap();
+    let timing = uneven_summary.wall_per_operation.as_ref().unwrap();
+    assert_eq!(timing.minimum, 0.1);
+    assert_eq!(timing.maximum, 30.0);
+    assert!((timing.mean - 12.625).abs() < 1e-12);
+    assert!((timing.median - 10.2).abs() < 1e-12);
     let bytes = uneven_summary.allocations["alloc.bytes"].as_ref().unwrap();
     assert_eq!(
         (bytes.fastest, bytes.slowest, bytes.median),
@@ -1650,6 +1675,648 @@ fn runtime_workers_update_sync_async_allocations_and_dynamic_input_totals() {
             if case.contract.contains_key("work.input.bytes") {
                 let wall = observations.iter().find(|o| o.metric == "wall").unwrap();
                 assert_eq!(wall.work_totals["bytes"], (130 * 128).to_string());
+                assert_eq!(wall.worker_work_totals.len(), 2);
+                assert!(
+                    wall.worker_work_totals
+                        .values()
+                        .all(|totals| totals["bytes"] == (65 * 128).to_string())
+                );
+                let slots = run.worker_slot_samples().unwrap();
+                assert!(
+                    slots
+                        .iter()
+                        .filter(|slot| slot.case == case.id)
+                        .all(|slot| slot.work_totals["bytes"] == (65 * 128).to_string())
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn worker_identity_json_preserves_full_u64_and_legacy_indices() {
+    for worker in [0, u32::MAX as u64, u32::MAX as u64 + 1, u64::MAX] {
+        let record = airbug_bench::WorkerAllocation {
+            case: "identity".into(),
+            variant: "candidate".into(),
+            process: 0,
+            sequence: 0,
+            wave: 0,
+            worker,
+            operations: 1,
+            wall_ns: "1".into(),
+            adjusted_wall_ns: None,
+            metrics: Default::default(),
+        };
+        let bytes = serde_json::to_vec(&record).unwrap();
+        let decoded: airbug_bench::WorkerAllocation = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(decoded.worker, worker);
+        let reference = airbug_bench::report::WorkerSampleRef {
+            sequence: 0,
+            wave: 0,
+            worker,
+        };
+        let bytes = serde_json::to_vec(&reference).unwrap();
+        let decoded: airbug_bench::report::WorkerSampleRef =
+            serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(decoded, reference);
+    }
+    let legacy: airbug_bench::report::WorkerSampleRef =
+        serde_json::from_str(r#"{"sequence":0,"wave":1,"worker":2}"#).unwrap();
+    assert_eq!(legacy.worker, 2);
+}
+
+#[test]
+fn ordinary_worker_timing_records_validate_waves_and_roundtrip_without_allocations() {
+    let mut suite = Suite::new("timing-records");
+    suite.bench_threads_allocated_with_local_input(
+        "case",
+        &ALLOCATOR,
+        2,
+        || (),
+        |_| (),
+        airbug_bench::DropPolicy::InsideTiming,
+    );
+    suite.config(Config {
+        samples: 2,
+        warmup: Duration::ZERO,
+        ..Default::default()
+    });
+    suite.sampling(Sampling {
+        iterations: Some(65),
+        worker_start: Some(airbug_bench::timer::WorkerStart::Local),
+        ..Default::default()
+    });
+    let mut run = suite.run("").unwrap();
+    run.worker_timings = run
+        .worker_allocations
+        .iter()
+        .map(|w| airbug_bench::WorkerTiming {
+            case: w.case.clone(),
+            variant: w.variant.clone(),
+            process: w.process,
+            sequence: w.sequence,
+            wave: w.wave,
+            worker: w.worker,
+            operations: w.operations,
+            wall_ns: w.wall_ns.clone(),
+            adjusted_wall_ns: w.adjusted_wall_ns.clone(),
+        })
+        .collect();
+    assert_eq!(run.worker_timings.len(), 8);
+    let both_charts = airbug_bench::report::worker_timing_charts(&run).unwrap();
+    assert_eq!(both_charts.matches("<svg").count(), 1);
+    assert!(both_charts.contains("4 samples") || both_charts.contains("4 identical samples"));
+    let mut allocation_only = run.clone();
+    allocation_only.worker_timings.clear();
+    assert_eq!(
+        airbug_bench::report::worker_timing_charts(&allocation_only).unwrap(),
+        both_charts
+    );
+    run.worker_allocations.clear();
+    for case in &mut run.cases {
+        case.contract.remove("alloc.worker_records");
+        case.contract
+            .insert("threads.timing_records".into(), "wave-v1".into());
+        case.metrics.retain(|m| !m.id.starts_with("alloc."));
+    }
+    run.observations.retain(|o| !o.metric.starts_with("alloc."));
+    run.validate().unwrap();
+    let saved = serde_json::to_vec(&run).unwrap();
+    let decoded: airbug_bench::Run = serde_json::from_slice(&saved).unwrap();
+    decoded.validate().unwrap();
+    assert_eq!(decoded.worker_timings.len(), 8);
+    for mutation in 0..6 {
+        let mut invalid = run.clone();
+        match mutation {
+            0 => {
+                invalid.worker_timings.pop();
+            }
+            1 => invalid
+                .worker_timings
+                .push(invalid.worker_timings[0].clone()),
+            2 => invalid.worker_timings[0].sequence = u64::MAX,
+            3 => invalid.worker_timings[0].worker = 2,
+            4 => invalid.worker_timings[0].operations += 1,
+            _ => invalid.worker_timings[0].wall_ns = u128::MAX.to_string(),
+        }
+        assert!(invalid.validate().is_err(), "mutation {mutation}");
+    }
+    let mut legacy = serde_json::to_value(&run).unwrap();
+    legacy.as_object_mut().unwrap().remove("worker_timings");
+    let mut decoded: airbug_bench::Run = serde_json::from_value(legacy).unwrap();
+    assert!(decoded.worker_timings.is_empty());
+    assert!(
+        decoded.validate().is_err(),
+        "declared capture must not silently disappear"
+    );
+    decoded.cases[0].contract.remove("threads.timing_records");
+    decoded.validate().unwrap();
+}
+
+#[airbug_bench::group(allocator = &crate::ALLOCATOR, samples = 1, iterations = 3, warmup_ms = 0)]
+mod inherited_plain_allocated {
+    #[bench]
+    fn vector() -> Vec<u8> {
+        vec![std::hint::black_box(7); std::hint::black_box(64)]
+    }
+    #[bench]
+    async fn local_output() -> std::rc::Rc<u8> {
+        std::rc::Rc::new(std::hint::black_box(7))
+    }
+    #[bench(threads = false)]
+    fn sequential() -> Vec<u8> {
+        vec![std::hint::black_box(1); std::hint::black_box(32)]
+    }
+}
+
+#[airbug_bench::group(groups = [crate::inherited_plain_allocated], threads = [1, 2])]
+mod allocated_parent {}
+
+#[test]
+fn imported_threads_enable_plain_allocated_sync_and_async_cases() {
+    for runtime in [false, true] {
+        let mut suite = Suite::new("inherited-alloc");
+        if runtime {
+            suite.registration_threads(&[3]).unwrap();
+        }
+        allocated_parent::__airbug_register_group(&mut suite);
+        assert_eq!(suite.list("").len(), if runtime { 3 } else { 5 });
+        let run = suite.run("").unwrap();
+        for case in &run.cases {
+            let workers = case
+                .contract
+                .get("threads")
+                .map(|s| s.parse::<u64>().unwrap())
+                .unwrap_or(1);
+            let row = |metric| {
+                run.observations
+                    .iter()
+                    .find(|o| o.case == case.id && o.metric == metric)
+                    .unwrap()
+            };
+            assert_eq!(row("wall").operations, workers * 3);
+            // LocalExecutor allocates one Arc-backed waker per block_on, in
+            // addition to the workload's Rc. Both are inside the allocator phase.
+            let allocations_per_call = if case.id.contains("local_output") {
+                2
+            } else {
+                1
+            };
+            assert_eq!(
+                row("alloc.count").value.as_deref(),
+                Some((workers * 3 * allocations_per_call).to_string().as_str())
+            );
+            assert_eq!(row("alloc.dealloc_count").value, row("alloc.count").value);
+            if case.id.contains("vector") {
+                assert_eq!(
+                    row("alloc.bytes").value.as_deref(),
+                    Some((workers * 3 * 64).to_string().as_str())
+                );
+            }
+            if case.id.contains("sequential") {
+                assert!(!case.contract.contains_key("threads"));
+            } else {
+                assert!(case.id.ends_with(&format!("threads={workers}")));
+                assert_eq!(
+                    run.worker_allocations
+                        .iter()
+                        .filter(|r| r.case == case.id)
+                        .count() as u64,
+                    workers
+                );
+            }
+        }
+    }
+}
+
+#[airbug_bench::group(allocator = &crate::ALLOCATOR, samples = 1, iterations = 2, warmup_ms = 0)]
+mod inherited_allocated_values {
+    #[bench(args = [16usize, 32])]
+    fn shared(size: usize) -> Vec<u8> {
+        vec![std::hint::black_box(1); std::hint::black_box(size)]
+    }
+    #[bench(args = [std::rc::Rc::new(24usize)])]
+    fn local(size: &std::rc::Rc<usize>) -> Vec<u8> {
+        vec![std::hint::black_box(1); std::hint::black_box(**size)]
+    }
+}
+
+#[test]
+fn allocated_parameter_threads_preserve_local_fallback_and_selected_execution() {
+    let mut inherited = Suite::new("parent-allocated-args");
+    inherited.with_thread_defaults(Some(vec![1]), |suite| {
+        inherited_allocated_values::__airbug_register_group(suite);
+    });
+    let inherited_run = inherited.run("").unwrap();
+    assert_eq!(inherited_run.cases.len(), 3);
+    assert!(
+        inherited_run
+            .cases
+            .iter()
+            .all(|case| case.id.ends_with("threads=1"))
+    );
+    let mut suite = Suite::new("allocated-args");
+    suite.registration_threads(&[1, 2]).unwrap();
+    inherited_allocated_values::__airbug_register_group(&mut suite);
+    assert_eq!(suite.list("").len(), 6);
+    let shared = suite.run("shared").unwrap();
+    assert_eq!(shared.cases.len(), 4);
+    for case in &shared.cases {
+        let workers: u64 = case.contract["threads"].parse().unwrap();
+        let size = if case.id.contains("/16/") { 16 } else { 32 };
+        let bytes = shared
+            .observations
+            .iter()
+            .find(|o| o.case == case.id && o.metric == "alloc.bytes")
+            .unwrap();
+        assert_eq!(bytes.operations, workers * 2);
+        assert_eq!(
+            bytes.value.as_deref(),
+            Some((workers * 2 * size).to_string().as_str())
+        );
+    }
+    let local_id = suite
+        .list("local")
+        .into_iter()
+        .find(|id| id.ends_with("threads=1"))
+        .unwrap()
+        .to_owned();
+    let local = suite.run(&local_id).unwrap();
+    assert_eq!(local.cases[0].contract["threads.execution"], "caller");
+    let bytes = local
+        .observations
+        .iter()
+        .find(|o| o.metric == "alloc.bytes")
+        .unwrap();
+    assert_eq!(bytes.value.as_deref(), Some("48"));
+    assert_eq!(bytes.operations, 2);
+    assert!(
+        suite
+            .run("local")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot share")
+    );
+}
+
+#[airbug_bench::group(allocator = &crate::ALLOCATOR, samples = 1, iterations = 2, warmup_ms = 0)]
+mod inherited_async_allocated_values {
+    #[bench(args = [String::from("hello")])]
+    async fn shared(input: &String) -> Vec<u8> {
+        let mut pending = true;
+        std::future::poll_fn(|cx| {
+            if std::mem::take(&mut pending) {
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            } else {
+                std::task::Poll::Ready(())
+            }
+        })
+        .await;
+        input.as_bytes().to_vec()
+    }
+    #[bench(args = [std::rc::Rc::new(24usize)])]
+    async fn local(size: &std::rc::Rc<usize>) -> Vec<u8> {
+        std::future::ready(()).await;
+        vec![std::hint::black_box(1); std::hint::black_box(**size)]
+    }
+}
+
+#[test]
+fn async_allocated_arguments_borrow_across_await_and_retain_local_worker() {
+    let mut suite = Suite::new("async-allocated-args");
+    suite.registration_threads(&[1, 2]).unwrap();
+    inherited_async_allocated_values::__airbug_register_group(&mut suite);
+    assert_eq!(suite.list("").len(), 4);
+    let run = suite.run("shared").unwrap();
+    let mut bytes_per_worker = None;
+    for case in &run.cases {
+        let workers: u64 = case.contract["threads"].parse().unwrap();
+        let row = |metric| {
+            run.observations
+                .iter()
+                .find(|o| o.case == case.id && o.metric == metric)
+                .unwrap()
+        };
+        assert_eq!(row("wall").operations, workers * 2);
+        assert_eq!(
+            row("alloc.count").value.as_deref(),
+            Some((workers * 4).to_string().as_str())
+        );
+        assert_eq!(row("alloc.dealloc_count").value, row("alloc.count").value);
+        let bytes: u64 = row("alloc.bytes").value.as_ref().unwrap().parse().unwrap();
+        let per_worker = bytes / workers;
+        assert_eq!(bytes, per_worker * workers);
+        assert_eq!(*bytes_per_worker.get_or_insert(per_worker), per_worker);
+        assert_eq!(
+            run.worker_allocations
+                .iter()
+                .filter(|r| r.case == case.id)
+                .count() as u64,
+            workers
+        );
+    }
+    let id = suite
+        .list("local")
+        .into_iter()
+        .find(|id| id.ends_with("threads=1"))
+        .unwrap()
+        .to_owned();
+    let run = suite.run(&id).unwrap();
+    assert_eq!(run.cases[0].contract["threads.execution"], "caller");
+    assert_eq!(
+        run.observations
+            .iter()
+            .find(|o| o.metric == "alloc.count")
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("4")
+    );
+    assert!(
+        suite
+            .run("local")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot share")
+    );
+}
+
+#[airbug_bench::group(allocator = &crate::ALLOCATOR, samples = 1, iterations = 3, warmup_ms = 0)]
+mod inherited_allocated_setup {
+    #[bench(setup = || vec![9u8; 128])]
+    fn borrowed(input: &mut [u8]) -> Vec<u8> {
+        assert_eq!(input[0], 9);
+        input[0] = 1;
+        vec![std::hint::black_box(input[0]); 16]
+    }
+    #[bench(setup = || vec![9u8; 128])]
+    fn owned(input: Vec<u8>) -> Vec<u8> {
+        assert_eq!(input.len(), 128);
+        vec![std::hint::black_box(input[0]); 16]
+    }
+    #[bench(setup = || std::rc::Rc::new(9u8))]
+    fn local(input: &mut std::rc::Rc<u8>) -> Vec<u8> {
+        vec![std::hint::black_box(**input); 16]
+    }
+}
+
+#[test]
+fn allocated_setup_inherits_threads_without_counting_preparation() {
+    for runtime in [false, true] {
+        let mut suite = Suite::new("allocated-setup");
+        if runtime {
+            suite.registration_threads(&[1, 2]).unwrap();
+            inherited_allocated_setup::__airbug_register_group(&mut suite);
+        } else {
+            suite.with_thread_defaults(Some(vec![1]), |suite| {
+                inherited_allocated_setup::__airbug_register_group(suite);
+            });
+        }
+        // Listing must not prepare inputs or execute the benchmark.
+        assert_eq!(suite.list("").len(), if runtime { 6 } else { 3 });
+        for filter in ["borrowed", "owned"] {
+            let run = suite.run(filter).unwrap();
+            for case in &run.cases {
+                let workers: u64 = case.contract["threads"].parse().unwrap();
+                let row = |metric| {
+                    run.observations
+                        .iter()
+                        .find(|o| o.case == case.id && o.metric == metric)
+                        .unwrap()
+                };
+                assert_eq!(row("wall").operations, workers * 3);
+                assert_eq!(
+                    row("alloc.count").value.as_deref(),
+                    Some((workers * 3).to_string().as_str())
+                );
+                assert_eq!(
+                    row("alloc.bytes").value.as_deref(),
+                    Some((workers * 3 * 16).to_string().as_str())
+                );
+            }
+        }
+        let id = suite
+            .list("local")
+            .into_iter()
+            .find(|id| id.ends_with("threads=1"))
+            .unwrap()
+            .to_owned();
+        let run = suite.run(&id).unwrap();
+        assert_eq!(run.cases[0].contract["threads.execution"], "caller");
+        assert_eq!(
+            run.observations
+                .iter()
+                .find(|o| o.metric == "alloc.bytes")
+                .unwrap()
+                .value
+                .as_deref(),
+            Some("48")
+        );
+        if runtime {
+            assert!(
+                suite
+                    .run("local")
+                    .unwrap_err()
+                    .to_string()
+                    .contains("cannot transfer")
+            );
+        }
+    }
+}
+
+#[airbug_bench::group(allocator = &crate::ALLOCATOR, samples = 1, iterations = 3, warmup_ms = 0)]
+mod inherited_async_allocated_setup {
+    async fn suspend() {
+        let mut pending = true;
+        std::future::poll_fn(|cx| {
+            if std::mem::take(&mut pending) {
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            } else {
+                std::task::Poll::Ready(())
+            }
+        })
+        .await;
+    }
+    #[bench(setup = || vec![9u8; 128], input_bytes = |input: &Vec<u8>| input.len() as u64)]
+    async fn borrowed(input: &mut [u8]) -> Vec<u8> {
+        assert_eq!(input[0], 9);
+        suspend().await;
+        input[0] = 1;
+        vec![std::hint::black_box(input[0]); 16]
+    }
+    #[bench(setup = || std::rc::Rc::new(vec![9u8; 128]))]
+    async fn owned(input: std::rc::Rc<Vec<u8>>) -> Vec<u8> {
+        suspend().await;
+        assert_eq!(input.len(), 128);
+        vec![std::hint::black_box(input[0]); 16]
+    }
+}
+
+#[test]
+#[allow(clippy::needless_borrow)] // Exercise the same autoref fallback emitted by the macro.
+fn async_allocated_setup_inherits_workers_and_borrows_across_suspension() {
+    for runtime in [false, true] {
+        let mut suite = Suite::new("async-allocated-setup");
+        if runtime {
+            suite.registration_threads(&[1, 2]).unwrap();
+            inherited_async_allocated_setup::__airbug_register_group(&mut suite);
+        } else {
+            suite.with_thread_defaults(Some(vec![1]), |suite| {
+                inherited_async_allocated_setup::__airbug_register_group(suite);
+            });
+        }
+        assert_eq!(suite.list("").len(), if runtime { 4 } else { 2 });
+        for filter in ["borrowed", "owned"] {
+            let run = suite.run(filter).unwrap();
+            for case in &run.cases {
+                let workers: u64 = case.contract["threads"].parse().unwrap();
+                let row = |metric| {
+                    run.observations
+                        .iter()
+                        .find(|o| o.case == case.id && o.metric == metric)
+                        .unwrap()
+                };
+                assert_eq!(row("wall").operations, workers * 3);
+                if filter == "borrowed" {
+                    assert_eq!(
+                        row("wall").work_totals["bytes"],
+                        (workers * 3 * 128).to_string()
+                    );
+                }
+                // One Vec plus LocalExecutor's waker per operation; preparation
+                // allocates a large Vec (and an Rc for owned), both excluded.
+                assert_eq!(
+                    row("alloc.count").value.as_deref(),
+                    Some((workers * 6).to_string().as_str())
+                );
+                assert_eq!(
+                    run.worker_allocations
+                        .iter()
+                        .filter(|r| r.case == case.id)
+                        .count(),
+                    workers as usize
+                );
+            }
+        }
+    }
+    use airbug_bench::threads::RegisterInheritedAsyncAllocatedSetup as _;
+    let mut suite = Suite::new("local-setup");
+    for workers in [1, 2] {
+        let state = std::rc::Rc::new(128usize);
+        (&&airbug_bench::threads::inherited_async_setup(
+            std::marker::PhantomData::<std::rc::Rc<usize>>,
+            || airbug_bench::workloads::LocalExecutor,
+            move || vec![9u8; *state],
+            async |input: &mut Vec<u8>| input.len(),
+        ))
+            .register_inherited_async_allocated_setup(
+                &mut suite,
+                &format!("local/threads={workers}"),
+                &ALLOCATOR,
+                workers,
+                airbug_bench::DropPolicy::InsideTiming,
+            );
+    }
+    let run = suite.run("local/threads=1").unwrap();
+    assert_eq!(run.cases[0].contract["threads.execution"], "caller");
+    assert!(
+        suite
+            .run("local/threads=2")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot share")
+    );
+}
+
+#[airbug_bench::group(samples = 1, iterations = 3, warmup_ms = 0)]
+mod inherited_worker_setup {
+    pub struct Input {
+        bytes: std::rc::Rc<Vec<u8>>,
+        origin: std::thread::ThreadId,
+    }
+    impl Drop for Input {
+        fn drop(&mut self) {
+            assert_eq!(self.origin, std::thread::current().id());
+        }
+    }
+    fn input() -> Input {
+        Input {
+            bytes: std::rc::Rc::new(vec![9; 128]),
+            origin: std::thread::current().id(),
+        }
+    }
+    fn work(input: &Input) -> Vec<u8> {
+        assert_eq!(input.origin, std::thread::current().id());
+        assert_eq!(input.bytes.len(), 128);
+        vec![std::hint::black_box(input.bytes[0]); 16]
+    }
+    #[bench(setup = input, setup_thread = "worker", input_bytes = |i: &Input| i.bytes.len() as u64)]
+    fn borrowed(input: &mut Input) -> Vec<u8> {
+        work(input)
+    }
+    #[bench(setup = input, setup_thread = "worker")]
+    fn owned(input: Input) -> Vec<u8> {
+        work(&input)
+    }
+    #[bench(allocator = &crate::ALLOCATOR, setup = input, setup_thread = "worker", input_bytes = |i: &Input| i.bytes.len() as u64)]
+    fn allocated_borrowed(input: &mut Input) -> Vec<u8> {
+        work(input)
+    }
+    #[bench(allocator = &crate::ALLOCATOR, setup = input, setup_thread = "worker")]
+    fn allocated_owned(input: Input) -> Vec<u8> {
+        work(&input)
+    }
+}
+
+#[airbug_bench::group(groups = [crate::inherited_worker_setup], threads = [1, 2])]
+mod inherited_worker_setup_parent {}
+
+#[test]
+fn worker_local_setup_uses_inherited_or_runtime_threads_without_send_inputs() {
+    for mode in 0..3 {
+        let mut suite = Suite::new("worker-setup");
+        match mode {
+            0 => inherited_worker_setup::__airbug_register_group(&mut suite),
+            1 => inherited_worker_setup_parent::__airbug_register_group(&mut suite),
+            _ => {
+                suite.registration_threads(&[1, 3]).unwrap();
+                inherited_worker_setup_parent::__airbug_register_group(&mut suite);
+            }
+        }
+        assert_eq!(suite.list("").len(), if mode == 0 { 4 } else { 8 });
+        let run = suite.run("").unwrap();
+        for case in &run.cases {
+            let workers: u64 = case
+                .contract
+                .get("threads")
+                .map(|s| s.parse().unwrap())
+                .unwrap_or(1);
+            assert!(mode != 2 || workers == 1 || workers == 3);
+            let row = |metric| {
+                run.observations
+                    .iter()
+                    .find(|o| o.case == case.id && o.metric == metric)
+                    .unwrap()
+            };
+            assert_eq!(row("wall").operations, workers * 3);
+            if case.id.contains("borrowed") {
+                assert_eq!(
+                    row("wall").work_totals["bytes"],
+                    (workers * 3 * 128).to_string()
+                );
+            }
+            if case.id.contains("allocated") {
+                assert_eq!(
+                    row("alloc.count").value.as_deref(),
+                    Some((workers * 3).to_string().as_str())
+                );
+                assert_eq!(
+                    row("alloc.bytes").value.as_deref(),
+                    Some((workers * 3 * 16).to_string().as_str())
+                );
             }
         }
     }

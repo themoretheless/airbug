@@ -1,4 +1,4 @@
-use airbug_bench::{Result, error, model::write_new};
+use airbug_bench::{Result, error};
 use serde::Serialize;
 use std::{
     fs,
@@ -119,8 +119,28 @@ pub fn build_at(target: &Target, offline: bool, target_dir: Option<&Path>) -> Re
     }
     executable.ok_or_else(|| error("Cargo returned no benchmark executable"))
 }
-pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
-    let manifest = fs::canonicalize(manifest)?;
+pub fn init(manifest: Option<&Path>, library: Option<&Path>, name: &str) -> Result<()> {
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+    {
+        return Err(error(
+            "benchmark name must contain only letters, digits, underscores or hyphens",
+        ));
+    }
+    let manifest = match manifest {
+        Some(path) => fs::canonicalize(path)?,
+        None => {
+            let output = Command::new("cargo")
+                .args(["locate-project", "--message-format", "plain"])
+                .output()?;
+            if !output.status.success() {
+                return Err(error(String::from_utf8_lossy(&output.stderr)));
+            }
+            fs::canonicalize(String::from_utf8(output.stdout)?.trim())?
+        }
+    };
     let root = manifest.parent().unwrap();
     let original = fs::read_to_string(&manifest)?;
     let mut doc = original
@@ -131,20 +151,18 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
             "virtual workspace: select a member with --manifest-path",
         ));
     }
-    let example = root.join("benches/bench.rs");
-    let config = root.join("bench.json");
+    let example = root.join("benches").join(format!("{name}.rs"));
     if example.exists()
-        || config.exists()
         || doc
             .get("bench")
             .and_then(|v| v.as_array_of_tables())
             .is_some_and(|a| {
                 a.iter()
-                    .any(|t| t.get("name").and_then(|v| v.as_str()) == Some("bench"))
+                    .any(|t| t.get("name").and_then(|v| v.as_str()) == Some(name))
             })
     {
         return Err(error(
-            "init would replace existing bench files/target; nothing changed",
+            "benchmark file or target already exists; choose another --name; nothing changed",
         ));
     }
     // Honor renamed dependencies and explicitly enable attributes even when defaults are off.
@@ -196,7 +214,7 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
         features.push("macros");
     }
     let mut bench = toml_edit::Table::new();
-    bench["name"] = toml_edit::value("bench");
+    bench["name"] = toml_edit::value(name);
     bench["harness"] = toml_edit::value(false);
     if doc.get("bench").is_none() {
         doc["bench"] = toml_edit::Item::ArrayOfTables(toml_edit::ArrayOfTables::new());
@@ -211,7 +229,7 @@ pub fn init(manifest: &Path, library: Option<&Path>) -> Result<()> {
     }
     slot.as_array_mut()
         .ok_or_else(|| error("metadata.bench.targets must be an array"))?
-        .push("bench");
+        .push(name);
     fs::create_dir_all(example.parent().unwrap())?;
     let source = r#"#[AIRBUG::suite]
 mod example {
@@ -227,27 +245,28 @@ mod example {
         .create_new(true)
         .open(&example)?
         .write_all(source.as_bytes())?;
-    if let Err(e) = write_new(
-        &config,
-        &serde_json::json!({"budgets":[{"case":"example/sort/32","metric":"wall","unit":"ns","max":1000000.0}]}),
-    ) {
-        let _ = fs::remove_file(&example);
-        return Err(e);
-    }
     // Check concurrent edits before committing the manifest; preserve all existing TOML comments.
     if fs::read_to_string(&manifest)? != original {
         let _ = fs::remove_file(&example);
-        let _ = fs::remove_file(&config);
         return Err(error("manifest changed during init"));
     }
     if let Err(e) = fs::write(&manifest, doc.to_string()) {
         let _ = fs::remove_file(example);
-        let _ = fs::remove_file(config);
         return Err(e.into());
     }
+    let invocation = if fs::canonicalize(std::env::current_dir()?)? == root {
+        format!("cargo bench --bench {name}")
+    } else {
+        // PowerShell uses doubled apostrophes in literal strings; POSIX shells
+        // require ending the literal and escaping the apostrophe separately.
+        let quoted = manifest
+            .to_string_lossy()
+            .replace('\'', if cfg!(windows) { "''" } else { "'\\''" });
+        format!("cargo bench --manifest-path '{quoted}' --bench {name}")
+    };
     println!(
-        "Created benches/bench.rs and bench.json; registered Cargo target.\nRun: cargo bench --manifest-path \"{}\" --bench bench",
-        manifest.display()
+        "Created {}\nEdit the sort function to benchmark your code.\n\nRun: {invocation}\nCheck once: {invocation} -- --test\nList cases: {invocation} -- --list\n\nMeasurements save an HTML report and automatically compare with the previous successful run.",
+        example.display()
     );
     Ok(())
 }

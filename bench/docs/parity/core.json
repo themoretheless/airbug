@@ -1,0 +1,166 @@
+{
+  "scope": "Primary Criterion/Divan workflows, following the user priority on core features. Full upstream requirements remain in requirements.json; this file does not declare complete parity.",
+  "status": "functional_gates_passed_current_host_with_explicit_remaining_audits",
+  "host": "macOS ARM64",
+  "upstream_versions": {
+    "criterion": "0.8.2",
+    "divan": "0.1.21"
+  },
+  "capabilities": [
+    {
+      "feature": "Existing Cargo package, attribute registration, init, filtering and listing",
+      "evidence": [
+        "CLI init/discovery tests in historical 482-test gate",
+        "test-cargo-test-benches.py passed current debug/release and protocol entrypoints",
+        "Full test-cargo-bench.py passed after custom relative formatter and worker tree changes; external package, renamed dependency, inherited settings and native Cargo execution."
+      ]
+    },
+    {
+      "feature": "Arguments, types/consts, groups, setup outside timing, owned/borrowed inputs, drop/batch policies",
+      "evidence": [
+        "Current library/macros all-feature integration tests passed",
+        "External Cargo gate verifies actual setup/operation boundaries and inherited field overrides"
+      ]
+    },
+    {
+      "feature": "Sync/async, executors, ordinary worker matrices, local inputs, fixed/dynamic counters and allocations",
+      "evidence": [
+        "Current all-feature tests include worker timings and allocation suites",
+        "Expanded test-allocated-thread-inheritance.py passed after worker tree output changes"
+      ],
+      "limits": [
+        "Custom Measurement with built-in worker/allocation combinations remains an extension audit. Explicit batches and constructed async counter closures have focused coverage in groups.json."
+      ]
+    },
+    {
+      "feature": "Warmup, fixed iterations, sample/time budgets, quick mode, timer selection and profiling",
+      "evidence": [
+        "Current all-feature sampling/contracts/profiling tests passed",
+        "External Cargo gate exercises exact numeric previews and collected budgets"
+      ],
+      "limits": [
+        "Standard/quick calibration differences are documented in criterion-runner.json; worker scheduling and lifetime differences are documented in thread-sampling.json. Cross-platform runtime remains open."
+      ]
+    },
+    {
+      "feature": "Descriptive statistics, bootstrap intervals, regression, outliers and significance",
+      "evidence": [
+        "Current all-feature statistics suites passed",
+        "test-selection.py verifies default intervals, explicit opt-out and artifacts"
+      ],
+      "limits": [
+        "Native sampling populations/methods are labelled; no claim of numerical identity to upstream estimators"
+      ]
+    },
+    {
+      "feature": "Named baselines, automatic previous run, immutable history and custom fixed-work relative rates",
+      "evidence": [
+        "Current 521-test MSRV gate includes history and measurement integration suites",
+        "test-relative-cargo.py and test-formatted-bootstrap.py passed after custom rate integration"
+      ],
+      "limits": [
+        "Dynamic paired-work relative estimator remains unsupported"
+      ]
+    },
+    {
+      "feature": "Console table/tree, quiet/verbose, JSON/CSV, numerical HTML and plot generation",
+      "evidence": [
+        "Current CLI/report tests passed",
+        "Current external formatted CSV, rate, tree and no-plots scenarios passed",
+        "artifacts.json and test-formatted-bootstrap.py verify --no-html JSON/CSV-only persistence, including custom metric snapshots and baseline reload."
+      ],
+      "limits": [
+        "Browser visual review, large-report behavior and complete entrypoint audit remain open"
+      ]
+    }
+  ],
+  "not_completed": [
+    "Windows runtime and native x86 timing. Latest Windows cross-check passed; current x86/QEMU test attempt was interrupted after compiler-spawn stalls. Previous successful gates are historical (platforms.json).",
+    "Full rendered HTML and interaction review; previous browser denial remains in effect.",
+    "Remaining report-entrypoint, large-output and final public-API semantic acceptance listed in completion.json.",
+    "Final requirement-by-requirement completion audit."
+  ],
+  "external_gate": {
+    "command": "python3 -u bench/scripts/test-cargo-bench.py",
+    "result": "passed; exit 0 after line/scatter point label changes",
+    "log": ".airbug/validation/cargo-point-labels/tests.log",
+    "sha256": "bfceba5dddde4229eb11fd292f482e665e3110c861dc67c52ea9966f4556ae61"
+  },
+  "measurement_budget_followup": {
+    "behavior": "Explicit total measurement time uses calibrated cost to choose ceil(target * calibration_iterations / (calibration_elapsed * schedule_factor)), bounded by the iteration cap. Flat uses sample count; linear uses the triangular sum. Intermediate products retain full precision.",
+    "regression": "Three flat samples at 100 ns/op with a 900 ns target now collect 3 operations each instead of the calibration power of two (4).",
+    "checks": [
+      "12 sampling tests passed",
+      "Deterministic flat/linear collection contract passed",
+      "All-target/all-feature Clippy passed",
+      "External cargo bench measurement-target script passed, including a non-power-of-two iteration target"
+    ],
+    "semantics": "Airbug estimates cost from its final doubling calibration, whereas Criterion 0.8.2 uses aggregate warmup elapsed/iterations. Integer rounding, iteration caps and changing operation cost mean measurement_time is a target, not a hard elapsed-time limit.",
+    "upstream_reference": "Criterion 0.8.2 src/routine.rs sampling and src/lib.rs ActualSamplingMode::iteration_counts",
+    "report": ".airbug/runs/0b2a0b4e-69e9-48ae-b95c-2235c6010a66/index.html"
+  },
+  "persistent_worker_followup": {
+    "status": "implemented with native OS threads and nested Rayon isolation",
+    "evidence": "thread-sampling.json worker_lifecycle_audit",
+    "gate": "491 tests passed; all three pool tests passed under Miri; Clippy passed",
+    "report": ".airbug/runs/d76424dd-c02b-449a-ab4b-08ba32a1d2a8/index.html",
+    "external": "test-worker-runtime.py: ordinary cargo bench verifies native worker context, separate global Rayon pool and multi-wave records",
+    "remaining": "Wave splitting/population audit, report visual checks and cross-platform execution remain outside this focused verification."
+  },
+  "threaded_batch_followup": {
+    "status": "implemented for explicit registration, lexical/imported defaults and non-Send local fallback",
+    "evidence": "groups.json threaded_batch_policies",
+    "validation": "496 all-feature tests, 5 focused batch tests, expanded external Cargo fixture and all-target Clippy passed",
+    "remaining": "Other custom measurement/counter cross-products and platform/visual checks remain separately tracked."
+  },
+  "linux_followup": {
+    "result": "496 all-feature benchmark tests, both new worker/batch Cargo fixtures and the full test-cargo-bench.py script passed on Linux ARM64, Rust 1.97.1",
+    "evidence": "platforms.json linux_current_validation",
+    "scope": "Does not establish Windows, Linux x86_64 or the full configured toolchain matrix."
+  },
+  "linux_x86_followup": {
+    "result": "496 passed, 0 failed, 0 ignored; all-feature library/macros/CLI including doctests; Cargo exit 0",
+    "host": "Linux x86_64 under QEMU on ARM64 macOS, Rust 1.97.1",
+    "log": ".airbug/validation/linux-amd64-2026-10-01/tests.log",
+    "scope": "Functional execution only. No native x86 timing equivalence or Windows runtime claim. Live-report wrapper hit Docker disk capacity; successful direct Cargo output is retained."
+  },
+  "historical_gate_506": {
+    "command": "cargo airbug test -- --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features",
+    "result": "506 passed, 0 failed, 0 ignored, 0 not run; process exit 0 and progress state=passed",
+    "report": ".airbug/runs/1c5cda43-cd71-44e9-8d79-57fa3238e47e/index.html",
+    "scope": "Historical macOS ARM64 gate before later changes; not current acceptance evidence.",
+    "progress": ".airbug/runs/1c5cda43-cd71-44e9-8d79-57fa3238e47e/progress.json",
+    "progress_sha256": "baa485957e97ea0f3bcae6b821a7e80016bcd477fa081309dba8722606f467e1",
+    "duration_s": 70.289695167
+  },
+  "current_gate": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      527,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/parity-current/tests.log",
+    "sha256": "f35003e7b95db87cf03d29d7eaf75212930bb7107f60231db14565fff4105acf",
+    "source_fingerprint_sha256": "4fa2903f75ad0e1df661d7defdd96e55762db854c360b0a07deb656f50628801",
+    "scope": "Current macOS all-feature benchmark package tests after nonlinear formatter/history persistence and no-plots validation fix; does not prove other platform runtime or browser behavior.",
+    "evidence_registry": "platforms.json latest_msrv_gate"
+  },
+  "completion_checklist": "completion.json",
+  "historical_gate_521": {
+    "toolchain": "1.96.0",
+    "command": "RUSTUP_TOOLCHAIN=1.96.0 cargo test --offline --locked -p airbug-bench -p airbug-bench-macros -p cargo-airbug-bench --all-features --no-fail-fast",
+    "exit_code": 0,
+    "passed_failed_ignored": [
+      521,
+      0,
+      0
+    ],
+    "log": ".airbug/validation/msrv-current/latest-tests.log",
+    "sha256": "57b907b972d37c68cd82f1338b522c84ea7dc95cd24b556c4057ee32375adb10",
+    "scope": "Latest full macOS benchmark package tests on Rust 1.96.0; does not prove Linux/Windows runtime or browser behavior.",
+    "evidence_registry": "platforms.json latest_msrv_gate"
+  }
+}
