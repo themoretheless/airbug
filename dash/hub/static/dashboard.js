@@ -1306,7 +1306,7 @@
       const res = await fetch("/api/v1/status", { cache: "no-store" });
       const data = await res.json();
       lastHubId = data.hub_id || "";
-      metaEl.innerHTML = `<span>hub <code>${escapeHtml(lastHubId)}</code></span><span>root <code>${escapeHtml(data.root)}</code></span><span>generated <code>${escapeHtml(data.generated)}</code></span><span><button type="button" id="reload">refresh</button></span>`;
+      metaEl.innerHTML = `<span title="hub_id ${escapeAttr(lastHubId)}">hub <code>${escapeHtml(lastHubId.slice(0, 8))}</code></span><span title="Project root this hub serves">root <code>${escapeHtml(data.root)}</code></span><span><button type="button" id="reload" title="Reload everything now">refresh</button></span>`;
       document.getElementById("reload").onclick = () => {
         refresh(); refreshLogs(); refreshMetrics(); refreshIssues();
         showRoute();

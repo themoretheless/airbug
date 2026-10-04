@@ -8,15 +8,17 @@
   <link rel="stylesheet" href="/static/testrun.css" />
 </head>
 <body>
+  <header class="top">
+    <div class="top-in">
+      <h1 class="brand"><a href="#/now">airbug <em>hub</em></a></h1>
+      <nav class="cats" id="cats" aria-label="Sections"></nav>
+      <div class="meta" id="meta">loading…</div>
+    </div>
+  </header>
   <main class="shell">
-    <header class="top">
-      <h1 class="brand">airbug <em>hub</em></h1>
-      <nav class="cats" id="cats" aria-label="Categories"></nav>
-    </header>
     <div class="health" id="health" aria-live="polite"></div>
     <nav class="subnav" id="subnav" aria-label="Section" hidden></nav>
     <p class="lede" id="lede">Local developer hub — pick a category.</p>
-    <div class="meta" id="meta">loading…</div>
 
     <section class="panel atr" data-cat="now" id="panel-now" hidden>
       <div class="now-grid">

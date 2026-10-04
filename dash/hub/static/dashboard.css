@@ -923,3 +923,82 @@
     .tests-picker .pick.on { color: var(--deep); background: #f7fbf8; border-color: var(--glow); }
     .tests-picker .atr-dot { width: 0.55rem; height: 0.55rem; }
     .tests-view .now-empty { padding: 1.1rem 1.2rem; background: #f7fbf8; border: 1px solid #0b3d2e22; }
+
+    /* ---- theme: quiet neutral surface, one accent, dark header (wireframes v1) -------- */
+    :root {
+      --ink: #1b1b1a;
+      --paper: #f4f4f2;
+      --mist: #d9d9d4;
+      --deep: #1b1b1a;
+      --leaf: #2f7d4f;
+      --glow: #1f4fd1;
+      --warn: #b35c00;
+      --bad: #c2410c;
+      --mute: #5c5c58;
+      --card: #ffffff;
+      --line: #d9d9d4;
+      --sans: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    body { background: var(--paper); font-family: var(--sans); font-size: 15px; }
+    *, *::before, *::after { animation: none !important; }
+    h1, h2, h3, .now-card h2 { font-family: var(--sans) !important; letter-spacing: 0; }
+    h2 { font-size: 1.15rem; font-weight: 600; }
+    h3 { font-size: 0.95rem; font-weight: 600; }
+    code, pre, .api-method, .run-sub, .run-when { font-family: var(--mono); }
+    a { color: var(--glow); }
+    .shell { max-width: 1216px; padding: 0 2rem 4rem; }
+
+    .top { position: sticky; top: 0; z-index: 20; background: var(--ink); color: var(--paper); }
+    .top-in {
+      max-width: 1216px; margin: 0 auto; padding: 0.6rem 2rem;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.5rem;
+    }
+    .brand { font-size: 1.1rem; line-height: 1; font-weight: 700; }
+    .brand a { color: inherit; text-decoration: none; }
+    .brand em { font-style: normal; font-weight: 400; color: #a9a9a3; }
+    .cats { gap: 0.25rem; }
+    .cats a {
+      font-size: 0.9rem; letter-spacing: 0; text-transform: none;
+      color: #d6d6d0; background: transparent; border: 0; border-radius: 6px;
+      padding: 0.45rem 0.85rem; min-height: 36px; display: inline-flex; align-items: center; gap: 0.4rem;
+    }
+    .cats a:hover { color: #fff; background: #2c2c2a; }
+    .cats a.active { color: var(--ink); background: var(--paper); }
+    .cat-badge { font: 600 0.7rem var(--mono); padding: 0.05rem 0.35rem; border-radius: 4px; background: var(--glow); color: #fff; }
+    .meta {
+      margin: 0 0 0 auto; gap: 0.25rem 1rem; font: 0.75rem var(--mono); color: #a9a9a3;
+    }
+    .meta code { color: #e6e6e1; background: transparent; padding: 0; }
+    .meta button { font: inherit; color: #e6e6e1; background: #2c2c2a; border: 1px solid #44443f; border-radius: 4px; padding: 0.15rem 0.5rem; cursor: pointer; }
+
+    .health { margin-top: 1rem; border-radius: 8px; }
+    .subnav { margin-top: 1.25rem; }
+    .lede { margin: 0.9rem 0 0; max-width: none; font-size: 0.9rem; color: var(--mute); }
+    .panel { margin-top: 1.25rem; }
+
+    .now-card, .domain, .issues-panel, .issue-detail, .logs-panel, .metrics-panel, .runs-list,
+    .bench-list, .bench-detail, .api-list li, .tests-view > div {
+      background: var(--card);
+      border-color: var(--line);
+    }
+    .now-card, .domain, .issues-panel, .logs-panel, .metrics-panel { border-radius: 10px; }
+
+    .atr {
+      --atr-ink: var(--ink); --atr-mute: var(--mute); --atr-line: var(--line); --atr-card: var(--card);
+      --atr-deep: var(--ink); --atr-pass: var(--leaf); --atr-fail: var(--bad); --atr-norun: var(--warn);
+      --atr-glow: var(--glow); --atr-mono: var(--mono);
+    }
+
+    @media (max-width: 720px) {
+      .top-in, .shell { padding-left: 1rem; padding-right: 1rem; }
+      .meta { margin-left: 0; width: 100%; }
+      .meta span:nth-child(3) { display: none; }
+    }
+    .now-grid { gap: 1rem; background: none; border: 0; }
+    .now-card { border: 1px solid var(--line); padding: 1.25rem; }
+    .top { display: block; }
+    .brand, .brand a { color: #f4f4f2; }
+    .top-in .meta { margin-left: auto; margin-top: 0; }
+    .domains { display: grid; gap: 1rem; background: none; border: 0; }
+    .domain { border: 1px solid var(--line); border-radius: 10px; }
