@@ -18,10 +18,20 @@
       { id: "metrics", label: "Metrics" },
       { id: "system", label: "System" },
     ];
-    /** Old routes keep working: package tabs folded into System, overview became Now. */
+    /** Four questions, not eight packages: what is happening, which run, which signal, is the hub healthy. */
+    const GROUPS = [
+      { id: "now", label: "Now", cats: ["now"] },
+      { id: "runs", label: "Runs", cats: ["runs", "tests", "bench"],
+        sub: [["runs", "All"], ["tests", "Tests"], ["bench", "Bench"]] },
+      { id: "signals", label: "Signals", cats: ["issues", "logs", "metrics"],
+        sub: [["issues", "Issues"], ["logs", "Logs"], ["metrics", "Metrics"]] },
+      { id: "health", label: "Health", cats: ["system"] },
+    ];
+    const groupOf = cat => GROUPS.find(g => g.cats.includes(cat)) || GROUPS[0];
+    /** Old routes keep working: package tabs folded into Health, overview became Now. */
     const ALIASES = {
       launches: "tests", overview: "now", unit: "tests", mon: "system", otel: "system", err: "system",
-      collector: "system", apis: "system",
+      collector: "system", apis: "system", health: "system", signals: "issues",
     };
     const CAT_LEDE = {
       now: "What is running, what just broke, and what changed since the last run.",
@@ -31,7 +41,7 @@
       issues: "Issue inbox from airbug-err events.",
       logs: "OTLP log tail and filters.",
       metrics: "OTLP metrics visualizations.",
-      system: "Package status, collector, and the local API catalog.",
+      system: "Is the hub wired up: collector, packages, and the local API catalog.",
     };
     const START_TESTS = "cargo airbug test -- --workspace --exclude airbug-mon";
     const START_BENCH = "AIRBUG_HUB=http://127.0.0.1:8790 cargo airbug-bench run -p airbug-bench --bench workloads";
@@ -96,9 +106,11 @@
       currentCat = cat;
       currentRunId = runId;
       ledeEl.textContent = CAT_LEDE[cat] || CAT_LEDE.now;
+      const group = groupOf(cat);
       catsEl.querySelectorAll("a").forEach(a => {
-        a.classList.toggle("active", a.getAttribute("data-cat") === cat);
+        a.classList.toggle("active", a.getAttribute("data-group") === group.id);
       });
+      renderSubnav(group, cat);
       document.querySelectorAll(".panel").forEach(p => {
         p.hidden = p.getAttribute("data-cat") !== cat;
       });
@@ -120,13 +132,57 @@
     }
 
     function renderCats() {
-      catsEl.innerHTML = CATS.map(c =>
-        `<a href="#/${c.id}" data-cat="${c.id}">${escapeHtml(c.label)}<span class="cat-badge" data-badge="${c.id}" hidden></span></a>`
+      catsEl.innerHTML = GROUPS.map(g =>
+        `<a href="#/${g.cats[0]}" data-group="${g.id}">${escapeHtml(g.label)}<span class="cat-badge" data-badge="${g.id}" hidden></span></a>`
       ).join("");
     }
 
+    let lastProbe = { jaeger: false, jaegerHref: "" };
+
+    function renderSubnav(group, cat) {
+      const el = document.getElementById("subnav");
+      if (!group.sub) {
+        el.hidden = true;
+        el.innerHTML = "";
+        return;
+      }
+      el.hidden = false;
+      const items = group.sub.map(([id, label]) =>
+        `<a href="#/${id}" class="${id === cat ? "on" : ""}">${escapeHtml(label)}</a>`);
+      if (group.id === "signals") {
+        items.push(lastProbe.jaeger
+          ? `<a href="${escapeAttr(lastProbe.jaegerHref)}" target="_blank" rel="noopener">Traces ↗</a>`
+          : `<span class="off" title="Traces render only in Jaeger, which the Docker collector brings up">Traces — Jaeger not running</span>`);
+      }
+      el.innerHTML = items.join("");
+    }
+
+    /** One line that says out loud why a panel would otherwise stay empty. */
+    function renderHealth(apis) {
+      const up = name => (apis || []).some(a => a.name === name && a.available);
+      const jaeger = (apis || []).find(a => a.name === "Jaeger UI");
+      lastProbe = { jaeger: up("Jaeger UI"), jaegerHref: jaeger ? jaeger.href : "" };
+      const checks = [
+        ["OTLP :4318", up("OTLP HTTP"), "logs and metrics panels stay empty — start with --collector"],
+        ["errors ingest", up("Hub errors ingest"), "airbug-err events are not received"],
+        ["Jaeger", lastProbe.jaeger, "no trace UI (otelcol binary mode or no collector)"],
+      ];
+      const bad = checks.filter(c => !c[1]);
+      const el = document.getElementById("health");
+      el.classList.toggle("warn", bad.length > 0);
+      el.innerHTML = checks.map(([label, ok, why]) =>
+        `<span class="${ok ? "ok" : "bad"}" title="${escapeAttr(ok ? "ok" : why)}">${escapeHtml(label)} ${ok ? "✓" : "✗"}</span>`
+      ).join("") + (bad.length
+        ? `<span class="why">${escapeHtml(bad[0][2])}</span><a href="#/health">details</a>`
+        : "");
+      setBadge("health", bad.length ? "!" : "");
+      const { cat } = parseRoute();
+      renderSubnav(groupOf(cat), cat);
+    }
+
     function setBadge(cat, text) {
-      const el = catsEl.querySelector(`[data-badge="${cat}"]`);
+      const group = GROUPS.some(g => g.id === cat) ? cat : groupOf(cat).id;
+      const el = catsEl.querySelector(`[data-badge="${group}"]`);
       if (!el) return;
       el.hidden = !text;
       el.textContent = text || "";
@@ -1256,6 +1312,7 @@
         showRoute();
       };
       renderApis(data.apis);
+      renderHealth(data.apis);
       lastDomains = data.domains || {};
       const order = ["unit", "bench", "mon", "otel", "err", "collector"];
       domainsEl.innerHTML = order.filter(k => lastDomains[k]).map(k => card(lastDomains[k])).join("");

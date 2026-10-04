@@ -68,6 +68,36 @@
       background: #f7fbf8;
       border-color: var(--glow);
     }
+    .health {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem 1rem;
+      font: 0.75rem ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--mute);
+    }
+    .health:empty, .subnav[hidden] { display: none; }
+    .health.warn { padding: 0.55rem 0.75rem; background: #fff3e0; border: 1px solid #e8c48a; color: #5c3a00; }
+    .health .bad { color: #9a4b00; font-weight: 600; }
+    .health .why { flex: 1 1 14rem; }
+    .subnav {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      border-bottom: 1px solid #0b3d2e22;
+    }
+    .subnav a, .subnav span {
+      font-size: 0.85rem;
+      padding: 0.5rem 0.8rem;
+      text-decoration: none;
+      color: var(--mute);
+      border-bottom: 2px solid transparent;
+    }
+    .subnav a.on { color: var(--deep); border-bottom-color: var(--deep); font-weight: 600; }
+    .subnav a:hover { color: var(--deep); }
+    .subnav .off { opacity: 0.65; cursor: help; }
     .panel[hidden] { display: none !important; }
     .panel { margin-top: 1.75rem; }
     .lede {
@@ -755,7 +785,7 @@
       background: var(--glow);
     }
     .cat-badge[hidden] { display: none; }
-    .cats a[data-cat="issues"] .cat-badge { color: #fff; background: var(--bad); }
+    .cats a[data-group="signals"] .cat-badge, .cats a[data-group="health"] .cat-badge { color: #fff; background: var(--bad); }
 
     /* ---- now ------------------------------------------------------------------------- */
     .now-grid {
