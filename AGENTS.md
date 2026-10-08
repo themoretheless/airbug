@@ -51,7 +51,7 @@ cargo run -p airbug-hub -- serve --root . --collector
 
 `http://127.0.0.1:8790/` is the page that fills itself in while things run: status every
 15 s, OTLP logs every 4 s, metrics every 4 s, issues every 5 s
-(`dash/hub/static/dashboard.js:720`). Unlike the bench live UI the port is fixed and
+(`FEEDS` in `dash/hub/static/js/main.js`). Unlike the bench live UI the port is fixed and
 there is no token, so the link stays valid across restarts. Hand it over anyway only
 after the checks below — every one of them degrades silently to an empty page.
 
