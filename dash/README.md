@@ -109,8 +109,24 @@ dash/hub/src/
   otlp/            shared file tail + logs/metrics parsers
   issues.rs        IssueStore + SqliteIssueStore + http:// webhook (reqwest)
   runs.rs          GUID hub_id + bench run registry (runs.sqlite)
-  static/          dashboard.html + dashboard.css + dashboard.js
+  assets.rs        embedded static files, one table (add a row per new file)
+  static/          dashboard.html + dashboard.css + js/ (ES modules, no build step)
 ```
+
+The client is one module per responsibility under `static/js/`:
+
+```
+main.js          registers sections, starts the background feeds
+shell.js         routes, nav groups, badges; dispatches to registered sections
+api.js           every request (no-store, throws on non-2xx)
+dom.js · format.js · charts.js   shared helpers, pure where possible
+runs.js          run timeline + row renderer shared by Now, Runs and Tests
+sections/*.js    one per tab: { cats, show(route, changed), hide?(), tick?(n) }
+```
+
+A new tab is a new `sections/*.js` registered in `main.js`, a panel in `dashboard.html`, and a
+row in `assets.rs`; the shell does not change. `assets.rs` tests fail when a module or one of its
+imports is not served.
 
 Paths are centralized in `config::RootPaths` (collector data, issues DB, unit report). OTLP JSON helpers live once under `otlp/` (DRY). Severity normalization is server-side in Rust (`otlp::normalize_severity`); the UI displays labels as returned.
 
@@ -122,7 +138,7 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 |--------|------|------|
 | GET | `/` | Dashboard HTML |
 | GET | `/static/dashboard.css` | Styles |
-| GET | `/static/dashboard.js` | Client UI |
+| GET | `/static/js/*.js` | Client UI (ES modules; entry `main.js`) |
 | GET | `/api/v1/status` | Domain snapshot + Local APIs + `hub_id` |
 | GET | `/api/v1` | API catalog only |
 | GET | `/api/v1/logs?limit=&run_id=` | OTLP log tail (+ `by_severity`, `services`); filter by `airbug.run_id` |

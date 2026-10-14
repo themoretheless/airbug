@@ -45,7 +45,7 @@ fn main() -> ab::Result<()> {
     env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", RAYON_NUM_THREADS="3",
                CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
-    output = subprocess.run(["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"),
+    output = subprocess.run(["cargo", "bench", "--manifest-path", str(root / "Cargo.toml"),
         "--bench", "runtime", "--", "--samples", "2", "--iterations", "65", "--warmup-ms", "5",
         "--no-bootstrap", "--json"], env=env, capture_output=True, text=True, timeout=180)
     assert output.returncode == 0, output.stdout + output.stderr

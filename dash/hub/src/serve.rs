@@ -1,12 +1,11 @@
 //! Localhost-only dashboard server (route table).
 use crate::{
     app::HubApp,
-    config,
+    assets, config,
     error::HubError,
     event_model::{EVENT_MODEL_VERSION, EventEnvelope, EventPayload},
     http::{self, Request},
     issues, otlp, runs, scan, store,
-    testrun::html::{TESTRUN_CSS, TESTRUN_JS},
 };
 use std::{
     net::{TcpListener, TcpStream},
@@ -52,29 +51,13 @@ fn api_path(path: &str) -> Option<&str> {
 fn handle(stream: &mut TcpStream, app: &HubApp) -> std::io::Result<()> {
     let req = http::read_request(stream)?;
     let path_only = req.path.as_str();
+    if req.method == "GET"
+        && let Some((mime, body)) = assets::lookup(path_only)
+    {
+        return http::respond(stream, "200 OK", mime, body);
+    }
 
     match (req.method.as_str(), path_only) {
-        ("GET", "/") | ("GET", "/index.html") => {
-            http::respond(stream, "200 OK", "text/html; charset=utf-8", PAGE)
-        }
-        ("GET", "/static/dashboard.css") => {
-            http::respond(stream, "200 OK", "text/css; charset=utf-8", DASHBOARD_CSS)
-        }
-        ("GET", "/static/dashboard.js") => http::respond(
-            stream,
-            "200 OK",
-            "text/javascript; charset=utf-8",
-            DASHBOARD_JS,
-        ),
-        ("GET", "/static/testrun.css") => {
-            http::respond(stream, "200 OK", "text/css; charset=utf-8", TESTRUN_CSS)
-        }
-        ("GET", "/static/testrun.js") => http::respond(
-            stream,
-            "200 OK",
-            "text/javascript; charset=utf-8",
-            TESTRUN_JS,
-        ),
         ("GET", p) if p.starts_with("/runs/") => serve_run_file(stream, app, &p["/runs/".len()..]),
         (method, path) if api_path(path).is_some() => {
             let rest = api_path(path).unwrap_or("");
@@ -656,7 +639,3 @@ pub fn status_json(root: &Path) -> String {
     let snap = scan::scan_with_hub(root, config::DEFAULT_PORT, &hub_id);
     serde_json::to_string_pretty(&snap).unwrap_or_default()
 }
-
-const PAGE: &str = include_str!("../static/dashboard.html");
-const DASHBOARD_CSS: &str = include_str!("../static/dashboard.css");
-const DASHBOARD_JS: &str = include_str!("../static/dashboard.js");

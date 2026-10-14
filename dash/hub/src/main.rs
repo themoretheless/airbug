@@ -1,4 +1,5 @@
 mod app;
+mod assets;
 mod benchcmp;
 mod collector;
 mod config;
