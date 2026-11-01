@@ -110,6 +110,7 @@ pub enum ConsoleOutput {
 }
 /// Registration is lazy: `--list` never runs workloads.
 pub struct Suite<'a> {
+    worker_pool: crate::suite_measure::PoolOwner,
     profiler: Option<Box<dyn crate::profiling::Profiler + 'a>>,
     name: String,
     entries: Vec<Entry<'a>>,
@@ -137,6 +138,7 @@ pub struct Suite<'a> {
 impl<'a> Suite<'a> {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
+            worker_pool: Default::default(),
             profiler: None,
             name: name.into(),
             entries: vec![],
@@ -3561,6 +3563,7 @@ impl<'a> Suite<'a> {
         output: &std::path::Path,
         mut live: Option<&mut airbug::report::live::Run>,
     ) -> Result<crate::profiling::ProfileReport> {
+        let _workers = crate::suite_measure::WorkerSession::enter(Some(self.worker_pool.clone()));
         use crate::profiling::{self, ProfileCase, ProfileReport};
         selection.validate()?;
         profiling::validate_duration(duration)?;
@@ -3693,6 +3696,7 @@ impl<'a> Suite<'a> {
         mut live: Option<&mut airbug::report::live::Run>,
         test_mode: bool,
     ) -> Result<Run> {
+        let _workers = crate::suite_measure::WorkerSession::enter(Some(self.worker_pool.clone()));
         selection.validate()?;
         self.config.validate()?;
         if let Some(quick) = self.quick {

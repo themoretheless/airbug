@@ -33,9 +33,9 @@
     "CLI all-target Clippy and diff check passed"
   ],
   "unverified": [
-    "Full remote matrix remains incomplete: Linux nextest fixture and macOS stable Clippy failed; Windows stable stopped at console policy and Windows MSRV timed out.",
-    "Browser visual acceptance and native timing accuracy are not established by functional CI tests.",
-    "Local CI fixes need a new remote run; see ci-validation.json for exact previous commit and completed steps."
+    "Windows worker shutdown fix needs a new remote run.",
+    "Windows MSRV full job has not completed.",
+    "Visual acceptance remains open."
   ],
   "toolchain_selection": "Job-level RUSTUP_TOOLCHAIN selects the matrix version for every Python fixture and nested Cargo subprocess, including selection and relative-baseline scripts that previously lacked a step-level override.",
   "worker_pool_miri_job": {
@@ -467,13 +467,52 @@
     "next_requirement": "Native Linux x86_64 host or changed emulation environment is needed for a complete current runtime gate; do not repeat unchanged QEMU retries."
   },
   "latest_remote_validation": {
-    "evidence": "ci-validation.json",
-    "commit": "bf526e8d1babeb20c397b4525b9c1a44a575a69c",
-    "url": "https://github.com/themoretheless/airbug/actions/runs/38619017557",
-    "macos_msrv": "Entire job passed, including external fixtures, docs and Clippy.",
-    "linux_x86_64": "Both toolchains passed debug/release workspace tests and external fixtures through nonlinear statistical display; nextest fixture failed.",
-    "windows_stable": "Debug/release workspace tests and option domains passed; console fixture failed.",
-    "windows_msrv": "Workspace test step cancelled after six-hour job timeout.",
-    "miri": "Borrowed worker callbacks and unwind cleanup job passed."
+    "evidence": "ci-validation.json::followup_run",
+    "commit": "c10e0ac6954422bdefa801e2c0d3f7a6fd786b16",
+    "url": "https://github.com/themoretheless/airbug/actions/runs/41357631088",
+    "macos": "Both MSRV and stable jobs passed in full.",
+    "linux_x86_64": "Both MSRV and stable jobs passed in full, including nextest.",
+    "windows_stable": "Console policy and feature matrix passed; threaded profiling completed but aborted at process teardown in cargo harness fixture.",
+    "windows_msrv": "Still running in workspace debug tests at observation time.",
+    "miri": "Worker pool job passed."
+  },
+  "worker_shutdown_fix": {
+    "cause": "A cached thread-local pool joined workers during TLS destruction; Windows TLS teardown may hold the loader lock or occur after other threads have terminated.",
+    "reference": "https://doc.rust-lang.org/std/thread/struct.LocalKey.html#platform-specific-behavior",
+    "change": "Suite owns the pool across repeated runs. A session temporarily lends it to the coordinating thread-local slot and returns it to the owner on normal exit or unwind; Suite drop joins workers before process shutdown. Unscoped internal calls use a temporary pool.",
+    "regressions": [
+      "Nested sessions retain workers until outer exit; normal return and unwind join worker TLS destructors.",
+      "Real Cargo fixture checks worker reuse and TLS destruction before Suite::main returns, for measurements and profiling."
+    ],
+    "status": "local_focused_checks_passed_remote_pending",
+    "validation": [
+      "202 all-feature library tests passed",
+      "20 integration tests passed across profiling, thread_batches and worker_timings, including repeated-run worker identity",
+      "Real Cargo worker fixture passed measurement and profiling with worker TLS exit assertions",
+      "Stable all-feature library Clippy passed",
+      "Full test-cargo-bench.py passed after final pool ownership and UTF-8 changes, exit 0"
+    ],
+    "logs": [
+      {
+        "path": "/tmp/airbug-suite-owner-tests.log",
+        "sha256": "2f75d3c54919c63102ef9dde7f6979e7f1cd4cb707b74d497861a5efde071918"
+      },
+      {
+        "path": "/tmp/airbug-owner-unwind.log",
+        "sha256": "c073ce313659f0b6ea02250308294b730be48996f96bdbb6252ccb677de08037"
+      },
+      {
+        "path": "/tmp/airbug-suite-owner-cargo.log",
+        "sha256": "2b8ddc154aa04409f76c8b6637a60fa34f24c91028dfb72957115c89de98a461"
+      },
+      {
+        "path": "/tmp/airbug-suite-owner-clippy.log",
+        "sha256": "d8ccce7d5d52499504db6e586806525532841fc7fb1505470952b01d3467dbea"
+      },
+      {
+        "path": "/tmp/airbug-owner-full-cargo.log",
+        "sha256": "8188a5ebbdcdbd3564631a06d562cf379208a7defb4d51ea74b22ac5f4527f6b"
+      }
+    ]
   }
 }

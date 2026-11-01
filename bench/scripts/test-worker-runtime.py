@@ -24,12 +24,19 @@ harness = false
 ''')
     (root / "benches/runtime.rs").write_text('''
 use std::{cell::Cell, collections::HashSet, rc::Rc, sync::{Arc, Mutex}};
+static EXITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+struct WorkerExit;
+impl Drop for WorkerExit {
+    fn drop(&mut self) { EXITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst); }
+}
+thread_local! { static EXIT: WorkerExit = const { WorkerExit }; }
 thread_local! { static CALLS: Cell<usize> = const { Cell::new(0) }; }
 fn main() -> ab::Result<()> {
     let workers = Arc::new(Mutex::new(HashSet::new()));
     let captured = workers.clone();
     let mut suite = ab::Suite::new("runtime");
     suite.bench_threads_with_local_input("nested", 2, || Rc::new(()), move |_| {
+        EXIT.with(|_| ());
         assert_eq!(rayon_core::current_thread_index(), None);
         assert_eq!(rayon_core::current_num_threads(), 3);
         let nested = rayon_core::join(|| rayon_core::current_num_threads(), || 42);
@@ -39,6 +46,7 @@ fn main() -> ab::Result<()> {
     }, ab::DropPolicy::OutsideTiming);
     suite.main()?;
     assert_eq!(workers.lock().unwrap().len(), 2);
+    assert_eq!(EXITS.load(std::sync::atomic::Ordering::SeqCst), 2, "workers must exit before main returns");
     Ok(())
 }
 ''')
@@ -47,11 +55,19 @@ fn main() -> ab::Result<()> {
                CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
     output = subprocess.run(["cargo", "bench", "--manifest-path", str(root / "Cargo.toml"),
         "--bench", "runtime", "--", "--samples", "2", "--iterations", "65", "--warmup-ms", "5",
-        "--no-bootstrap", "--json"], env=env, capture_output=True, text=True, timeout=180)
+        "--no-bootstrap", "--json"], env=env, capture_output=True, text=True, encoding="utf-8", timeout=180)
     assert output.returncode == 0, output.stdout + output.stderr
     run = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in output.stdout.splitlines()
                           if line.startswith("BENCH_RESULT=")))
     assert run["cases"][0]["contract"]["threads.executor"] == "os-pool-v1", run
     assert len(run["worker_timings"]) == 8, run
     assert sum(row["operations"] for row in run["worker_timings"]) == 260, run
+    profile = subprocess.run(["cargo", "bench", "--manifest-path", str(root / "Cargo.toml"),
+        "--bench", "runtime", "--", "--profile-time-ms", "3", "--iterations", "2",
+        "--output", str(root / "profile"), "--json"], env=env, capture_output=True,
+        text=True, encoding="utf-8", timeout=180)
+    assert profile.returncode == 0, profile.stdout + profile.stderr
+    report = json.loads(next(line.removeprefix("PROFILE_RESULT=") for line in profile.stdout.splitlines()
+                             if line.startswith("PROFILE_RESULT=")))
+    assert report["complete"] and len(report["cases"]) == 1, report
 print("cargo bench: stable OS workers across warmup/waves; nested Rayon keeps its separate three-thread global pool")

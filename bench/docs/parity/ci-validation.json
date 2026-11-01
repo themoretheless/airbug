@@ -1063,5 +1063,80 @@
       "Windows UTF-8 correction and Linux concurrent log correction require remote confirmation.",
       "Full cargo fmt sees preexisting untracked bench/examples/cache-benchmark.rs formatting differences; that file is outside this change."
     ]
+  },
+  "followup_run": {
+    "commit": "c10e0ac6954422bdefa801e2c0d3f7a6fd786b16",
+    "url": "https://github.com/themoretheless/airbug/actions/runs/41357631088",
+    "status": "in_progress",
+    "jobs": [
+      {
+        "name": "airbug-mon",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "worker-pool-miri",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "test (windows-latest, stable)",
+        "conclusion": "failure",
+        "status": "completed",
+        "failed_steps": [
+          "Check cargo bench attribute harness"
+        ]
+      },
+      {
+        "name": "test (macos-latest, 1.96.0)",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "airbug-otel",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "report",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "test (windows-latest, 1.96.0)",
+        "conclusion": "",
+        "status": "in_progress",
+        "failed_steps": []
+      },
+      {
+        "name": "airbug-err",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "test (macos-latest, stable)",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "test (ubuntu-latest, stable)",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      },
+      {
+        "name": "test (ubuntu-latest, 1.96.0)",
+        "conclusion": "success",
+        "status": "completed",
+        "failed_steps": []
+      }
+    ]
   }
 }

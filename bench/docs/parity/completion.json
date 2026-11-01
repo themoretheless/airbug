@@ -46,7 +46,7 @@
         "bench/docs/parity/numeric-domains.json"
       ],
       "acceptance": "Сопоставить default/quiet/verbose/JSON у прямого harness и process runner; проверить глубокое дерево и длинные имена в терминале.",
-      "current": "Console policy Cargo fixture and Linux ARM64 PTY listing/results at 40/80/120 columns passed. Deep indentation adapts to terminal width, full pipe identity preserved. Actual terminal-emulator visual acceptance and Windows console remain unverified."
+      "current": "Console policy fixture passed on Windows stable in c10e0ac CI; both macOS/Linux toolchains passed full CLI fixtures, including PTY checks where enabled. Actual terminal-emulator visual acceptance remains open. The larger cargo harness fixture now explicitly decodes UTF-8 for its later Windows tree assertions; remote confirmation pending."
     },
     {
       "id": "visual_acceptance",
@@ -67,7 +67,7 @@
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "CI at bf526e8d1babeb20c397b4525b9c1a44a575a69c provides native Linux x86_64 and Windows stable debug/release workspace execution, plus a fully passing macOS MSRV job. Full matrix remains open: Linux nextest fixture, Windows console decoding, macOS stable Clippy and cancelled Windows MSRV. See ci-validation.json; local fixes require remote confirmation."
+      "current": "c10e0ac CI passed both macOS and native Linux toolchains in full. Windows stable passed console/feature checks but exposed a worker-pool TLS teardown abort after profiling; suite-owned shutdown passed local library/integration and real Cargo worker tests; remote confirmation is pending. Windows MSRV job remains incomplete. See platforms.json and ci-validation.json."
     },
     {
       "id": "final_gate",

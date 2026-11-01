@@ -22,7 +22,7 @@ environment = dict(os.environ, AIRBUG_BENCH_HISTORY="0", AIRBUG_DASHBOARD="1", A
 
 def run(*args, success=True):
     result = subprocess.run(
-        [*COMMAND, *args], cwd=ROOT, capture_output=True, text=True, env=environment,
+        [*COMMAND, *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=environment,
     )
     assert (result.returncode == 0) == success, result.stdout + result.stderr
     return result.stdout + result.stderr
@@ -30,7 +30,7 @@ def run(*args, success=True):
 
 # Version queries are independent of measurement configuration and never execute work.
 for version_flag in ["--version", "-V"]:
-    version = subprocess.run([*COMMAND, "--", version_flag], cwd=ROOT, capture_output=True, text=True,
+    version = subprocess.run([*COMMAND, "--", version_flag], cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, AIRBUG_BENCH_SAMPLES="invalid", AIRBUG_BENCH_THREADS="invalid"))
     assert version.returncode == 0, version.stdout + version.stderr
     assert version.stdout.strip().startswith("airbug-bench "), version.stdout
@@ -454,7 +454,7 @@ for clock in ["os", "cpu"]:
     result = subprocess.run(
         [*COMMAND, "collections/sum", "--", "--exact", "--timer", clock,
          "--samples", "1", "--iterations", "2", "--warmup-ms", "0", "--json"],
-        cwd=ROOT, capture_output=True, text=True, env=environment,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=environment,
     )
     if clock == "cpu" and result.returncode != 0:
         assert any(reason in result.stderr for reason in [
@@ -744,7 +744,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     )
     result = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--test", "--json"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -758,7 +758,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     for flags, samples, iterations in [([], 2, 3), (["--samples", "1", "--iterations", "2"], 1, 2)]:
         result = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--json", "--include-ignored", *flags],
-            cwd=ROOT, capture_output=True, text=True,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
             env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
         )
         assert result.returncode == 0, result.stdout + result.stderr
@@ -774,7 +774,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     for override in [[], ["--significance-level", "0.03", "--noise-threshold-percent", "1"]]:
         result = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--json", "--baseline-lenient", "absent", "--baseline-store", str(fixture / "baselines"), *override],
-            cwd=ROOT, capture_output=True, text=True,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
             env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
         )
         assert result.returncode == 0, result.stdout + result.stderr
@@ -793,7 +793,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     for flags in [["--dry-run"], ["--timer", "os", "--overhead", "raw", "--json"], ["--timer", "os", "--json"]]:
         result = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags],
-            cwd=ROOT, capture_output=True, text=True,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
             env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
         )
         assert result.returncode == 0, result.stdout + result.stderr
@@ -815,7 +815,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     for override in [[], ["--overhead", "raw"]]:
         profiled = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--timer", "os", "--profile-time-ms", "1", "--output", str(profile_destination), *override],
-            cwd=ROOT, capture_output=True, text=True,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
             env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
         )
         if not override:
@@ -829,7 +829,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     )
     invalid = subprocess.run(
         ["cargo", "check", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert invalid.returncode != 0 and "timer must be os or cpu" in invalid.stderr, invalid.stdout + invalid.stderr
@@ -838,7 +838,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     )
     invalid = subprocess.run(
         ["cargo", "check", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert invalid.returncode != 0 and "overhead must be raw or subtract" in invalid.stderr, invalid.stdout + invalid.stderr
@@ -848,7 +848,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     (fixture / "src/lib.rs").write_text(original_library.replace("[2usize, 4]", "[2usize, 2]"))
     result = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--dry-run"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert result.returncode != 0, result.stdout + result.stderr
@@ -875,7 +875,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
         for target, expected_count in [("imported", 4), ("standalone", 2)]:
             result = subprocess.run(
                 ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", target, "--offline", "--", "--test", "--json"],
-                cwd=ROOT, capture_output=True, text=True,
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                 env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
             )
             assert result.returncode == 0, result.stdout + result.stderr
@@ -889,7 +889,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     )
     result = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "standalone", "--offline", "--", "--test", "--json"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -909,7 +909,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
         env.update(env_overrides or {})
         if lazy:
             env["QUICK_MUST_NOT_RUN"] = "1"
-        return subprocess.run(["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags], cwd=ROOT, capture_output=True, text=True, env=env)
+        return subprocess.run(["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=env)
     preserved_source = (fixture / "benches/imported.rs").read_text()
     for option in ["executor = missing_executor()", "allocator = &MISSING_ALLOCATOR", 'setup_thread = "worker"', "input_bytes = |v| v.len() as u64", "input_items = |v| 1", "input_chars = |v| 1", "input_cycles = |v| 1"]:
         (fixture / "benches/imported.rs").write_text(f'#[ab::suite(groups = [external_fixture::cases], {option})] mod rejected {{}}')
@@ -1363,7 +1363,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-bootstrap-options-") as director
     for flags, count, capture in [([], 32, False), ([], 32, True), (["--resamples", "64"], 64, True)]:
         completed = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--no-history", "--json", *(["--bootstrap-distributions"] if capture else []), *flags],
-            cwd=ROOT, capture_output=True, text=True,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
             env=dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
         )
         assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1403,7 +1403,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
     )
     completed = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--test", "--json", "--no-history"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1418,7 +1418,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
     )
     completed = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--threads", "2,3", "--test", "--json", "--no-history"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1437,7 +1437,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
     )
     completed = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--dry-run"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1494,7 +1494,7 @@ pub mod imported {
             completed = subprocess.run(
                 ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", *flags, *report_flags,
                  *(["--test"] if smoke else []), "--json", "--no-history"],
-                cwd=ROOT, capture_output=True, text=True,
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                 env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
             )
             assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1513,7 +1513,7 @@ pub mod imported {
         if mode == "cli":
             rejected = subprocess.run(
                 ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--threads", "2", "--test", "--no-history"],
-                cwd=ROOT, capture_output=True, text=True,
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                 env=dict(os.environ, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
             )
             assert rejected.returncode != 0

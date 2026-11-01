@@ -100,14 +100,63 @@ pub(crate) fn input_batch_sized<I, O>(
     Ok(total)
 }
 
-// One pool per coordinating thread, reused across calibration, warmup and samples.
+// A suite lends its pool to the coordinating thread during a run, reusing it
+// across calibration, warmup and samples. Idle pools are owned by the suite.
 // Replacing the worker count replaces the pool; nested work on a worker gets its
 // own pool, so blocking rendezvous never occupy the pool they are waiting on.
 thread_local! {
+    static POOL_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static WORKER_POOL: std::cell::RefCell<Option<crate::worker_pool::Pool>> = const { std::cell::RefCell::new(None) };
 }
 
+pub(crate) type PoolOwner = std::sync::Arc<std::sync::Mutex<Option<crate::worker_pool::Pool>>>;
+
+/// Keep TLS empty outside a call. The suite owns idle workers between runs and
+/// joins them when dropped, before Windows process/TLS teardown begins.
+pub(crate) struct WorkerSession {
+    owner: Option<PoolOwner>,
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl WorkerSession {
+    pub(crate) fn enter(owner: Option<PoolOwner>) -> Self {
+        let outer = POOL_DEPTH.with(|depth| {
+            let outer = depth.get() == 0;
+            depth.set(depth.get() + 1);
+            outer
+        });
+        if outer {
+            if let Some(owner) = &owner {
+                let pool = owner.lock().unwrap().take();
+                WORKER_POOL.with(|slot| *slot.borrow_mut() = pool);
+            }
+        }
+        Self {
+            owner,
+            _thread: std::marker::PhantomData,
+        }
+    }
+}
+impl Drop for WorkerSession {
+    fn drop(&mut self) {
+        if POOL_DEPTH.with(|depth| {
+            depth.set(depth.get() - 1);
+            depth.get() == 0
+        }) {
+            // Release the RefCell borrow before returning or joining workers.
+            let pool = WORKER_POOL.with(|slot| slot.borrow_mut().take());
+            if let Some(owner) = &self.owner {
+                *owner.lock().unwrap() = pool;
+            } else {
+                drop(pool);
+            }
+        }
+    }
+}
+
 fn broadcast<R: Send>(workers: usize, work: impl Fn(usize) -> R + Sync) -> crate::Result<Vec<R>> {
+    if POOL_DEPTH.with(|depth| depth.get() == 0) {
+        return crate::worker_pool::Pool::new(workers)?.broadcast(work);
+    }
     WORKER_POOL.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.as_ref().is_none_or(|pool| pool.len() != workers) {
@@ -376,7 +425,67 @@ mod batch_tests {
     use super::*;
 
     #[test]
+    fn sessions_join_workers_before_return_and_during_unwind() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        struct Exit(Arc<AtomicUsize>);
+        impl Drop for Exit {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        thread_local! {
+            static EXIT: std::cell::RefCell<Option<Exit>> = const { std::cell::RefCell::new(None) };
+        }
+        let exits = Arc::new(AtomicUsize::new(0));
+        for unwind in [false, true] {
+            let before = exits.load(Ordering::SeqCst);
+            let result = std::panic::catch_unwind(|| {
+                let outer = WorkerSession::enter(None);
+                let inner = WorkerSession::enter(None);
+                broadcast(2, |_| {
+                    EXIT.with(|slot| *slot.borrow_mut() = Some(Exit(exits.clone())))
+                })
+                .unwrap();
+                drop(inner);
+                assert_eq!(exits.load(Ordering::SeqCst), before);
+                if unwind {
+                    panic!("coordinator panic");
+                }
+                drop(outer);
+            });
+            assert_eq!(result.is_err(), unwind);
+            assert_eq!(exits.load(Ordering::SeqCst), before + 2);
+            WORKER_POOL.with(|slot| assert!(slot.borrow().is_none()));
+        }
+        // Internal callers without a session must not leave a pool in TLS either.
+        broadcast(2, |_| {
+            EXIT.with(|slot| *slot.borrow_mut() = Some(Exit(exits.clone())))
+        })
+        .unwrap();
+        assert_eq!(exits.load(Ordering::SeqCst), 6);
+        let owner = PoolOwner::default();
+        let result = std::panic::catch_unwind(|| {
+            let _session = WorkerSession::enter(Some(owner.clone()));
+            broadcast(2, |_| {
+                EXIT.with(|slot| *slot.borrow_mut() = Some(Exit(exits.clone())))
+            })
+            .unwrap();
+            panic!("return workers to suite on unwind");
+        });
+        assert!(result.is_err());
+        WORKER_POOL.with(|slot| assert!(slot.borrow().is_none()));
+        assert!(owner.lock().unwrap().is_some());
+        assert_eq!(exits.load(Ordering::SeqCst), 6);
+        drop(owner);
+        assert_eq!(exits.load(Ordering::SeqCst), 8);
+    }
+
+    #[test]
     fn pool_reuses_slots_after_panic_and_rejects_impossible_counts() {
+        let _session = WorkerSession::enter(None);
         let first = broadcast(2, |_| std::thread::current().id()).unwrap();
         let error = broadcast(2, |worker| {
             assert_ne!(worker, 0, "intentional worker failure");
