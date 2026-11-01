@@ -1,0 +1,1067 @@
+{
+  "reviewed_on": "2026-11-02",
+  "commit": "bf526e8d1babeb20c397b4525b9c1a44a575a69c",
+  "url": "https://github.com/themoretheless/airbug/actions/runs/38619017557",
+  "scope": "Remote results for the named commit, before the local CI fixes. Completed steps are evidence; failed/cancelled jobs are not full platform acceptance.",
+  "jobs": [
+    {
+      "name": "report",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Generate web report (per-test run, same format the hub shows live)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "test (windows-latest, 1.96.0)",
+      "conclusion": "cancelled",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install 1.96.0 --profile minimal --component clippy --component rustfmt",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 fmt --all --check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast",
+          "conclusion": "cancelled"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked -p airbug --no-default-features",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check benchmark option domains",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Native console policies",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Native tree in a terminal",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check benchmark help and terminal width",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check independent benchmark features",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check cargo bench attribute harness",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check worker sample budgets",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check persistent worker runtime isolation",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check threaded batch inheritance",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check manual worker matrices",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check multiple benchmark filters",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Cargo relative baseline intervals",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Cargo custom bootstrap formatters",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Cargo nonlinear statistical display",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check nextest benchmark integration",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check Cargo test benchmark harness",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check allocated thread inheritance",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check total measurement targets",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 doc --locked --workspace --all-features --no-deps --exclude airbug-mon",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example native_service",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --example top50",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- success",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- decline",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- store-failure",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "airbug-err",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug-err",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug-hub",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "test (macos-latest, stable)",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal --component clippy --component rustfmt",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable fmt --all --check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug --no-default-features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark option domains",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native console policies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native tree in a terminal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark help and terminal width",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check independent benchmark features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check cargo bench attribute harness",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check worker sample budgets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check persistent worker runtime isolation",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check threaded batch inheritance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check manual worker matrices",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check multiple benchmark filters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo relative baseline intervals",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo custom bootstrap formatters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo nonlinear statistical display",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check nextest benchmark integration",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check Cargo test benchmark harness",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check allocated thread inheritance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check total measurement targets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable doc --locked --workspace --all-features --no-deps --exclude airbug-mon",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example native_service",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --example top50",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- success",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- decline",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- store-failure",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "test (ubuntu-latest, stable)",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal --component clippy --component rustfmt",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable fmt --all --check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug --no-default-features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark option domains",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native console policies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native tree in a terminal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark help and terminal width",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check independent benchmark features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check cargo bench attribute harness",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check worker sample budgets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check persistent worker runtime isolation",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check threaded batch inheritance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check manual worker matrices",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check multiple benchmark filters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo relative baseline intervals",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo custom bootstrap formatters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo nonlinear statistical display",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check nextest benchmark integration",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Check Cargo test benchmark harness",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check allocated thread inheritance",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check total measurement targets",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable doc --locked --workspace --all-features --no-deps --exclude airbug-mon",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example native_service",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --example top50",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- success",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- decline",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- store-failure",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "worker-pool-miri",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install nightly --profile minimal --component miri --component rust-src",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check borrowed worker callbacks and unwind cleanup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "airbug-otel",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug-otel",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable check --locked -p airbug-otel --no-default-features --features otlp-grpc",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "test (macos-latest, 1.96.0)",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install 1.96.0 --profile minimal --component clippy --component rustfmt",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 fmt --all --check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked -p airbug --no-default-features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark option domains",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native console policies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native tree in a terminal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark help and terminal width",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check independent benchmark features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check cargo bench attribute harness",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check worker sample budgets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check persistent worker runtime isolation",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check threaded batch inheritance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check manual worker matrices",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check multiple benchmark filters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo relative baseline intervals",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo custom bootstrap formatters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo nonlinear statistical display",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check nextest benchmark integration",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check Cargo test benchmark harness",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check allocated thread inheritance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check total measurement targets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 doc --locked --workspace --all-features --no-deps --exclude airbug-mon",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example native_service",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --example top50",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- success",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- decline",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- store-failure",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "airbug-mon",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug-mon",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "test (windows-latest, stable)",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install stable --profile minimal --component clippy --component rustfmt",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable fmt --all --check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked -p airbug --no-default-features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +stable test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark option domains",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native console policies",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Native tree in a terminal",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check benchmark help and terminal width",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check independent benchmark features",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check cargo bench attribute harness",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check worker sample budgets",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check persistent worker runtime isolation",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check threaded batch inheritance",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check manual worker matrices",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check multiple benchmark filters",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Cargo relative baseline intervals",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Cargo custom bootstrap formatters",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Cargo nonlinear statistical display",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check nextest benchmark integration",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check Cargo test benchmark harness",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check allocated thread inheritance",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check total measurement targets",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable doc --locked --workspace --all-features --no-deps --exclude airbug-mon",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example native_service",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --example top50",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- success",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- decline",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable run --locked -p airbug --features macros --example checkout_pilot -- store-failure",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +stable clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "test (ubuntu-latest, 1.96.0)",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run rustup toolchain install 1.96.0 --profile minimal --component clippy --component rustfmt",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 fmt --all --check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked --workspace --all-features --exclude airbug-mon --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked -p airbug --no-default-features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run cargo +1.96.0 test --locked --workspace --all-features --exclude airbug-mon --release --no-fail-fast",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark option domains",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native console policies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native tree in a terminal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check benchmark help and terminal width",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check independent benchmark features",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check cargo bench attribute harness",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check worker sample budgets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check persistent worker runtime isolation",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check threaded batch inheritance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check manual worker matrices",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check multiple benchmark filters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo relative baseline intervals",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo custom bootstrap formatters",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cargo nonlinear statistical display",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run taiki-e/install-action@v2",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check nextest benchmark integration",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Check Cargo test benchmark harness",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check allocated thread inheritance",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Check total measurement targets",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 doc --locked --workspace --all-features --no-deps --exclude airbug-mon",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example native_service",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --example top50",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- success",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- decline",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 run --locked -p airbug --features macros --example checkout_pilot -- store-failure",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run cargo +1.96.0 clippy --locked --workspace --all-features --all-targets --exclude airbug-mon -- -D warnings",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "local_followup": {
+    "date": "2026-11-02",
+    "changes": [
+      "Capture Rust console output as UTF-8 instead of the Windows locale codec.",
+      "Preformat each nextest call-log record before appending; exercise eight parallel runs and include observed records on failure.",
+      "Remove needless borrow of baseline loader rejected by stable Clippy."
+    ],
+    "passed": [
+      "RUSTUP_TOOLCHAIN=1.96.0 python3 bench/scripts/test-console-policy.py",
+      "RUSTUP_TOOLCHAIN=1.96.0 AIRBUG_NEXTEST=<verified cargo-nextest 0.9.146> python3 bench/scripts/test-nextest.py (real runner, eight parallel runs, ignored and failure cases)",
+      "cargo +stable clippy --offline --locked -p cargo-airbug-bench --bin cargo-airbug-bench --all-features -- -D warnings"
+    ],
+    "limits": [
+      "Windows UTF-8 correction and Linux concurrent log correction require remote confirmation.",
+      "Full cargo fmt sees preexisting untracked bench/examples/cache-benchmark.rs formatting differences; that file is outside this change."
+    ]
+  }
+}

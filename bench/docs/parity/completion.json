@@ -67,7 +67,7 @@
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "Current scale_intervals source: macOS ARM64 Rust 1.96 and Linux ARM64 full gates each 537 passed; Windows MSVC all-target compile passed. Independent Linux/MSRV feature matrices each 35 passed across seven configurations on the same fingerprint. Windows runtime and current complete Linux x86_64 runtime remain unverified; QEMU one-codegen-unit retry repeated the child-spawn stall."
+      "current": "CI at bf526e8d1babeb20c397b4525b9c1a44a575a69c provides native Linux x86_64 and Windows stable debug/release workspace execution, plus a fully passing macOS MSRV job. Full matrix remains open: Linux nextest fixture, Windows console decoding, macOS stable Clippy and cancelled Windows MSRV. See ci-validation.json; local fixes require remote confirmation."
     },
     {
       "id": "final_gate",
@@ -78,7 +78,7 @@
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Свежие локальные проверки фиксируются с областью покрытия. Полная приёмка зависит от предыдущих пяти пунктов; коммит/публикация не входят в авторизацию."
+      "current": "Changes through 964e5eb were published; current checkout includes later hub changes. Final acceptance remains open until platform CI, semantic and visual checks complete. Local CI repairs and evidence reconciliation are in progress."
     }
   ],
   "latest_evidence": {
@@ -160,7 +160,8 @@
       "result": "Every distinct bench/**/*.rs::symbol reference in parity JSON points to an existing file containing the named declaration or reexport.",
       "scope": "Checks leaf declaration names in the specified file, including test modules and public types. Does not prove module-path resolution, runtime execution, semantic coverage or visual acceptance.",
       "source_fingerprint_sha256": "61590a4d30de93930fb47ea1782992fbe277ad608c56f896ba3e335e9759bc22"
-    }
+    },
+    "remote_ci": "ci-validation.json: reviewed 2026-11-02; exact commit, job results and per-step conclusions. Supersedes historical claims that no Windows/native Linux runtime was available."
   },
   "time_budget_followup": {
     "status": "macos_gate_passed",

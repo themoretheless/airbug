@@ -33,10 +33,9 @@
     "CLI all-target Clippy and diff check passed"
   ],
   "unverified": [
-    "Modified CI workflow has not been pushed or executed.",
-    "Windows execution (including PowerShell behavior) and native Linux x86_64 timing behavior remain unverified; Linux x86_64 functional tests passed under QEMU.",
-    "Linux ARM64 was tested with Rust 1.97.1, not the entire configured toolchain matrix.",
-    "Passing the tested hosts does not establish full cross-platform feature parity."
+    "Full remote matrix remains incomplete: Linux nextest fixture and macOS stable Clippy failed; Windows stable stopped at console policy and Windows MSRV timed out.",
+    "Browser visual acceptance and native timing accuracy are not established by functional CI tests.",
+    "Local CI fixes need a new remote run; see ci-validation.json for exact previous commit and completed steps."
   ],
   "toolchain_selection": "Job-level RUSTUP_TOOLCHAIN selects the matrix version for every Python fixture and nested Cargo subprocess, including selection and relative-baseline scripts that previously lacked a step-level override.",
   "worker_pool_miri_job": {
@@ -466,5 +465,15 @@
     "sha256": "7dbc1754e9009e2e2c56e85be7a01cdae1ec8883b52851eccf671f992d174d48",
     "process_snapshot": ".airbug/validation/parity-current/x86-single-codegen-processes.txt",
     "next_requirement": "Native Linux x86_64 host or changed emulation environment is needed for a complete current runtime gate; do not repeat unchanged QEMU retries."
+  },
+  "latest_remote_validation": {
+    "evidence": "ci-validation.json",
+    "commit": "bf526e8d1babeb20c397b4525b9c1a44a575a69c",
+    "url": "https://github.com/themoretheless/airbug/actions/runs/38619017557",
+    "macos_msrv": "Entire job passed, including external fixtures, docs and Clippy.",
+    "linux_x86_64": "Both toolchains passed debug/release workspace tests and external fixtures through nonlinear statistical display; nextest fixture failed.",
+    "windows_stable": "Debug/release workspace tests and option domains passed; console fixture failed.",
+    "windows_msrv": "Workspace test step cancelled after six-hour job timeout.",
+    "miri": "Borrowed worker callbacks and unwind cleanup job passed."
   }
 }

@@ -448,7 +448,7 @@ pub(crate) fn execute() -> Result<i32> {
         } => {
             let config = serde_json::from_slice(&std::fs::read(config)?)?;
             let run = load(run)?;
-            let baseline = baseline.map(&load).transpose()?;
+            let baseline = baseline.map(load).transpose()?;
             let rows = budget::evaluate(&config, &run, baseline.as_ref())?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&rows)?);

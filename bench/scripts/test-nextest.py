@@ -30,7 +30,8 @@ mod cases {
         assert!(std::env::var_os("NO_WORK").is_none());
         let mut file = std::fs::OpenOptions::new().append(true).create(true)
             .open(std::env::var("CALL_LOG").unwrap()).unwrap();
-        writeln!(file,"{value}").unwrap();
+        // Format once: parallel nextest processes must not interleave value/newline writes.
+        file.write_all(format!("{value}\\n").as_bytes()).unwrap();
     }
     #[bench(args=[1usize,2])]
     fn value(n: usize) { record(&n.to_string()); }
@@ -43,7 +44,7 @@ mod cases {
     env = {k:v for k,v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"), CALL_LOG=str(root/"calls"))
     def call(command, extra=None, success=True):
-        result = subprocess.run(command, cwd=root, env=dict(env, **(extra or {})), capture_output=True, text=True)
+        result = subprocess.run(command, cwd=root, env=dict(env, **(extra or {})), capture_output=True, text=True, encoding="utf-8")
         assert (result.returncode==0)==success, result.stdout+result.stderr
         return result
     cargo = ["cargo","test","--offline","--manifest-path",str(root/"Cargo.toml"),"--bench","cases","--"]
@@ -65,9 +66,13 @@ mod cases {
         tests = {name:case for suite in listing["rust-suites"].values() for name,case in suite["testcases"].items()}
         assert set(tests) == {"cases/value/1","cases/value/2","cases/fails","cases/ignored"}, tests
         assert tests["cases/ignored"]["ignored"]
-        call([*base,"run",*options,"-E","test(value)"])
-        assert sorted((root/"calls").read_text().splitlines()) == ["1","2"]
-        (root/"calls").unlink()
+        # Exercise parallel child processes repeatedly: the call log must preserve
+        # exactly one complete record per case, regardless of scheduling.
+        for _ in range(8):
+            call([*base,"run",*options,"--test-threads","2","-E","test(value)"])
+            observed = (root/"calls").read_text().splitlines()
+            assert sorted(observed) == ["1","2"], observed
+            (root/"calls").unlink()
         call([*base,"run",*options,"--run-ignored","only","-E","test(ignored)"])
         assert (root/"calls").read_text().splitlines() == ["ignored"]
         (root/"calls").unlink()

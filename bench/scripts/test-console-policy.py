@@ -32,11 +32,11 @@ mod cases {
 ''')
     env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(CARGO_TARGET_DIR=str(ROOT / "target/parity-external"), AIRBUG_DASHBOARD="0", NO_COLOR="1")
-    built = subprocess.run(["cargo", "bench", "--offline", "--no-run", "--message-format=json"], cwd=root, env=env, capture_output=True, text=True, check=True)
+    built = subprocess.run(["cargo", "bench", "--offline", "--no-run", "--message-format=json"], cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", check=True)
     executable = next(item["executable"] for line in built.stdout.splitlines() if (item := json.loads(line)).get("executable"))
     common = ["--bench", "--iterations", "3", "--samples", "2", "--warmup-ms", "0", "--no-history", "--resamples", "16"]
     def run(*args):
-        result = subprocess.run([executable, *common, *args], cwd=root, env=env, capture_output=True, text=True, timeout=120)
+        result = subprocess.run([executable, *common, *args], cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         return result
     ordinary = run()
@@ -64,7 +64,7 @@ mod cases {
             assert b"\x1b" not in path.read_bytes(), path
     assert run("--list", "--color", "always").stdout.strip() == "cases/fixed"
     tree = run("--quiet", "--output-format", "tree")
-    assert "└── cases" in tree.stdout and "bench: " not in tree.stderr
+    assert "└── cases" in tree.stdout and "bench: " not in tree.stderr, (tree.stdout, tree.stderr)
     assert "95.00% interval" not in tree.stdout
     for kind in ("directory", "file"):
         occupied = root / ("occupied-" + kind)
@@ -75,13 +75,13 @@ mod cases {
             sentinel = occupied
         sentinel.write_text("previous result")
         rejected = subprocess.run([executable, *common, "--output", str(occupied)], cwd=root,
-                                  env=dict(env, NO_WORK="1"), capture_output=True, text=True, timeout=120)
+                                  env=dict(env, NO_WORK="1"), capture_output=True, text=True, encoding="utf-8", timeout=120)
         assert rejected.returncode != 0
         assert "output path already exists" in rejected.stderr, rejected.stderr
         assert "workload executed before output validation" not in rejected.stderr
         assert sentinel.read_text() == "previous result"
         preview = subprocess.run([executable, *common, "--output", str(occupied), "--dry-run"], cwd=root,
-                                 env=dict(env, NO_WORK="1"), capture_output=True, text=True, timeout=120)
+                                 env=dict(env, NO_WORK="1"), capture_output=True, text=True, encoding="utf-8", timeout=120)
         assert preview.returncode == 0, preview.stderr
     assert not (root / ".airbug").exists()
     print("Console policy: default/quiet/verbose, machine output, color override, plain artifacts, listing and quiet tree passed")
