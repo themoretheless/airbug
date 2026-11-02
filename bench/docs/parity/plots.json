@@ -241,7 +241,16 @@
     "status": "implemented_not_browser_verified",
     "implementation": "Shared offline HTML template builds searchable contents from heading levels 1-6 and figure captions. Links clear row/outcome filters, open ancestor details and focus the target; bookmarked fragments reveal collapsed ancestors. Generated IDs avoid collisions, labels use textContent and IDs are fragment-encoded. Contents are hidden in print. Markdown renderer now preserves heading levels 1-6 instead of rendering ##/### as paragraphs. Standalone Welch comparison HTML now uses the same offline template, includes the numerical comparison table, and preserves the requested escaped title. Runner compare and captured history exports therefore share contents/search/print controls.",
     "remaining": "Browser interaction and visual review; thumbnail equivalents and non-benchmark templates still need audit.",
-    "validation": "Embedded JavaScript passes node --check. Heading test checks all supported levels, HTML escaping and invalid heading prefixes. Two hypothesis_plot tests passed (.airbug/runs/411433c9-62f5-4f1d-b9f9-fe004ff53a99), including shared controls, one HTML document, table presence and user text/title escaping. Three runner compare tests passed (.airbug/runs/34c22a85-4a78-4437-a57c-7af0b627499b), plus library/CLI all-target Clippy. Browser interaction remains unverified."
+    "validation": "Embedded JavaScript passes node --check. Heading test checks all supported levels, HTML escaping and invalid heading prefixes. Two hypothesis_plot tests passed (.airbug/runs/411433c9-62f5-4f1d-b9f9-fe004ff53a99), including shared controls, one HTML document, table presence and user text/title escaping. Three runner compare tests passed (.airbug/runs/34c22a85-4a78-4437-a57c-7af0b627499b), plus library/CLI all-target Clippy. Browser interaction remains unverified.",
+    "history_followup": {
+      "status": "logic_verified_browser_acceptance_open",
+      "problem": "Fragment reveal ran only once at page load. Back/forward navigation could target collapsed or filtered content.",
+      "fix": "Shared template handles hashchange, clears row/outcome filters for existing targets, opens all ancestor details, focuses and scrolls the target. Missing, empty and malformed fragments preserve current filters and expansion.",
+      "test": "bench/scripts/test-report-navigation.cjs",
+      "validation": "Shipped full inline script executed in Node 22 with a small DOM test double. Unicode IDs, nested details, initial bookmark, history transitions and invalid/missing fragments passed. Previous HEAD template fails the same test. Rust heading/escaping test also passed.",
+      "ci": ".github/workflows/ci.yml report job",
+      "limits": "Tests DOM state transitions without a browser; does not establish rendered layout, actual browser focus/scroll behavior or visual acceptance."
+    }
   },
   "exported_svg_validation": {
     "evidence": "measurement.json::exported_svg_validation",

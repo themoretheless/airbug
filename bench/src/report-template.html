@@ -37,8 +37,16 @@ function filterSections(){
 }
 sectionSearch.addEventListener('input',filterSections);filterSections();
 document.getElementById('report-index').hidden=sections.length===0;
-// A bookmarked chart can be inside a collapsed case or comparison.
-try{const target=document.getElementById(decodeURIComponent(location.hash.slice(1)));if(target){revealSection(target);target.scrollIntoView();}}catch(_){/* Ignore malformed fragment encodings. */}
+// Bookmarks and history navigation can target a collapsed or filtered chart.
+function revealFragment(){
+  let id;try{id=decodeURIComponent(location.hash.slice(1));}catch(_){return;}
+  if(!id)return;
+  const target=document.getElementById(id);
+  if(!target)return;
+  input.value='';outcome.value='';filter();revealSection(target);
+  target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView();
+}
+window.addEventListener('hashchange',revealFragment);revealFragment();
 document.getElementById('print').addEventListener('click',()=>{const closed=Array.from(document.querySelectorAll('details:not([open])')).filter(d=>!d.closest('article[hidden]'));closed.forEach(d=>d.open=true);try{window.print();}finally{closed.forEach(d=>d.open=false);}});
 document.querySelectorAll('th button').forEach(button=>button.addEventListener('click',()=>{const th=button.parentElement,table=th.closest('table'),index=Array.from(th.parentElement.children).indexOf(th),asc=th.getAttribute('aria-sort')!=='ascending';table.querySelectorAll('th').forEach(h=>h.removeAttribute('aria-sort'));th.setAttribute('aria-sort',asc?'ascending':'descending');const rows=Array.from(table.tBodies[0].rows);rows.sort((a,b)=>{const x=a.cells[index].textContent,y=b.cells[index].textContent;const numeric=x.trim()!==''&&y.trim()!==''&&Number.isFinite(Number(x))&&Number.isFinite(Number(y));return (asc?1:-1)*(numeric?Number(x)-Number(y):x.localeCompare(y));});rows.forEach(row=>table.tBodies[0].appendChild(row));}));
 </script></body></html>
