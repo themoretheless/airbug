@@ -762,9 +762,10 @@
         "bench/docs/parity/platforms.json",
         ".github/workflows/ci.yml",
         "platforms.json::linux_latest_validation: current source 506-test gate passed in native Linux ARM64 container with source hashes and durable log; initial disk-full linker failure resolved by rebuilding dedicated cache without debug symbols.",
-        "platforms.json::linux_x86_latest_validation: current source 506-test all-feature library/macros/CLI/doctest gate passed under QEMU, source hashes and complete log retained."
+        "platforms.json::linux_x86_latest_validation: current source 506-test all-feature library/macros/CLI/doctest gate passed under QEMU, source hashes and complete log retained.",
+        "ci-validation.json::worker_shutdown_run and platforms.json::latest_remote_validation: completed remote jobs and exact remaining Windows failure on cc28c4a."
       ],
-      "remaining": "Current macOS Rust 1.96.0 and Linux ARM64 all-feature gates: 532 passed each. Current Windows MSVC all-target/all-feature compile check passed. Windows execution and complete current Linux x86_64 runtime remain unverified; QEMU compiler-spawn blocker is documented. Remote CI has not run."
+      "remaining": "cc28c4a remote CI passed all Linux x86_64/macOS jobs and both Windows workspace debug/release test stages. Windows worker shutdown and MSRV hang no longer recur. Both Windows jobs stop at Unicode history comparison in the Cargo fixture; explicit UTF-8 I/O corrections require remote verification. Later Windows external fixture steps remain unverified."
     },
     {
       "id": "audit",

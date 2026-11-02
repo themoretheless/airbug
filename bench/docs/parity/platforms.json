@@ -33,8 +33,8 @@
     "CLI all-target Clippy and diff check passed"
   ],
   "unverified": [
-    "Windows worker shutdown fix needs a new remote run.",
-    "Windows MSRV full job has not completed.",
+    "Explicit UTF-8 across CI fixture text I/O needs a new remote run.",
+    "Windows external fixtures after cargo harness still have no complete passing run.",
     "Visual acceptance remains open."
   ],
   "toolchain_selection": "Job-level RUSTUP_TOOLCHAIN selects the matrix version for every Python fixture and nested Cargo subprocess, including selection and relative-baseline scripts that previously lacked a step-level override.",
@@ -467,13 +467,12 @@
     "next_requirement": "Native Linux x86_64 host or changed emulation environment is needed for a complete current runtime gate; do not repeat unchanged QEMU retries."
   },
   "latest_remote_validation": {
-    "evidence": "ci-validation.json::followup_run",
-    "commit": "c10e0ac6954422bdefa801e2c0d3f7a6fd786b16",
-    "url": "https://github.com/themoretheless/airbug/actions/runs/41357631088",
+    "evidence": "ci-validation.json::worker_shutdown_run",
+    "commit": "cc28c4a127fd3dc4b9828f4ae670b6b4f1bf3fe5",
+    "url": "https://github.com/themoretheless/airbug/actions/runs/41363896638",
     "macos": "Both MSRV and stable jobs passed in full.",
-    "linux_x86_64": "Both MSRV and stable jobs passed in full, including nextest.",
-    "windows_stable": "Console policy and feature matrix passed; threaded profiling completed but aborted at process teardown in cargo harness fixture.",
-    "windows_msrv": "Still running in workspace debug tests at observation time.",
+    "linux_x86_64": "Both MSRV and stable jobs passed in full.",
+    "windows": "Both MSRV and stable passed debug/release workspace tests, feature matrix and threaded profiling in the Cargo fixture. Both then failed the Unicode history-name equality assertion at test-cargo-bench.py:615. Neither runtime teardown failure nor the previous six-hour MSRV hang recurred.",
     "miri": "Worker pool job passed."
   },
   "worker_shutdown_fix": {
@@ -484,7 +483,7 @@
       "Nested sessions retain workers until outer exit; normal return and unwind join worker TLS destructors.",
       "Real Cargo fixture checks worker reuse and TLS destruction before Suite::main returns, for measurements and profiling."
     ],
-    "status": "local_focused_checks_passed_remote_pending",
+    "status": "windows_runtime_fix_confirmed_full_matrix_still_open",
     "validation": [
       "202 all-feature library tests passed",
       "20 integration tests passed across profiling, thread_batches and worker_timings, including repeated-run worker identity",
@@ -512,6 +511,28 @@
       {
         "path": "/tmp/airbug-owner-full-cargo.log",
         "sha256": "8188a5ebbdcdbd3564631a06d562cf379208a7defb4d51ea74b22ac5f4527f6b"
+      }
+    ]
+  },
+  "utf8_fixture_fix": {
+    "cause": "Python locale-dependent file reads compared mojibake case names from UTF-8 run.json with correctly decoded subprocess names on Windows.",
+    "change": "All text reads/writes and captured text subprocess calls in CI benchmark fixtures explicitly use UTF-8, including CSV reads. Assertions remain unchanged except smaller history set-difference diagnostics.",
+    "validation": [
+      "Full test-cargo-bench.py passed with Path.open and subprocess default encodings forced to CP1252.",
+      "test-formatted-bootstrap.py passed under the same CP1252 simulation.",
+      "Exact non-ASCII history name reproducer fails equality with CP1252 and preserves equality with UTF-8.",
+      "Changed fixtures parse; AST comparison confirms other changes are explicit encoding arguments."
+    ],
+    "scope": "Simulation on macOS; no claim of a new passing Windows CI run.",
+    "wrapper": ".airbug/validation/ci-utf8/cp1252-fixture.py",
+    "logs": [
+      {
+        "path": ".airbug/validation/ci-utf8/cargo.log",
+        "sha256": "8188a5ebbdcdbd3564631a06d562cf379208a7defb4d51ea74b22ac5f4527f6b"
+      },
+      {
+        "path": ".airbug/validation/ci-utf8/formatter.log",
+        "sha256": "471fa38d58bd7e71091bb87921fed4a11b3fe557ef130be02cfeb09a520587c3"
       }
     ]
   }

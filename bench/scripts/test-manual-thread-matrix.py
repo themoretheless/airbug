@@ -20,7 +20,7 @@ ab = {{ package = "airbug-bench", path = {json.dumps(str(ROOT / 'bench'))} }}
 [[bench]]
 name = "manual"
 harness = false
-''')
+''', encoding="utf-8")
     (root / "benches/manual.rs").write_text('''
 fn main() -> ab::Result<()> {
     ab::Suite::new("manual").main_registered(|suite| {
@@ -32,7 +32,7 @@ fn main() -> ab::Result<()> {
         }).unwrap();
     })
 }
-''')
+''', encoding="utf-8")
     def run(flags, counts, lazy=False, extra_env=None, iterations=1, waves=None):
         env = dict(os.environ, AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0",
                    CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
@@ -40,7 +40,7 @@ fn main() -> ab::Result<()> {
         if lazy:
             env["MUST_NOT_RUN"] = "1"
         result = subprocess.run(["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"),
-                                 "--bench", "manual", "--", *flags], capture_output=True, text=True, env=env)
+                                 "--bench", "manual", "--", *flags], capture_output=True, text=True, env=env, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         if lazy:
             cases = json.JSONDecoder().raw_decode(result.stdout.lstrip())[0]["cases"]
@@ -88,7 +88,7 @@ fn main() -> ab::Result<()> {
     assert_eq!(CALLS.load(Ordering::SeqCst), expected);
     Ok(())
 }
-''')
+''', encoding="utf-8")
     run(["--dry-run"], [1, 2], lazy=True, extra_env={"EXPECTED_CALLS": "0"})
     run(["manual/work/threads=1", "--exact", "--test", "--json"], [1],
         extra_env={"EXPECTED_CALLS": "1", "FORBIDDEN_WORKERS": "2"})

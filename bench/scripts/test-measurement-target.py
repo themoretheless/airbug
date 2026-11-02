@@ -21,7 +21,7 @@ ab={{package="airbug-bench",path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="target"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "src/lib.rs").write_text('''
 #[ab::group(samples=3, measurement_ms=12, warmup_ms=0)]
 pub mod work {
@@ -36,15 +36,15 @@ pub mod work {
         std::time::Duration::from_millis(n)
     }
 }
-''')
-    (root / "benches/target.rs").write_text('#[ab::suite(groups=[measurement_target::work])] mod cases {}')
+''', encoding="utf-8")
+    (root / "benches/target.rs").write_text('#[ab::suite(groups=[measurement_target::work])] mod cases {}', encoding="utf-8")
     def invoke(flags, env=None, success=True, lazy=True):
         environment = {k:v for k,v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
         environment.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
         environment.update(env or {})
         if lazy:
             environment["MUST_NOT_RUN"]="1"
-        output = subprocess.run(["cargo","bench","--offline","--manifest-path",str(root / "Cargo.toml"),"--bench","target","--",*flags],capture_output=True,text=True,env=environment)
+        output = subprocess.run(["cargo","bench","--offline","--manifest-path",str(root / "Cargo.toml"),"--bench","target","--",*flags],capture_output=True,text=True,env=environment, encoding="utf-8")
         assert (output.returncode==0)==success, output.stdout+output.stderr
         return output.stdout+output.stderr
     def preview(flags=(), env=None):
@@ -103,11 +103,11 @@ pub mod work {
     run=json.loads(next(line.removeprefix("BENCH_RESULT=") for line in output.splitlines() if line.startswith("BENCH_RESULT=")))
     assert len(run["observations"])==6
     assert all(row["operations"]==3 and row["value"]=="3000000" for row in run["observations"])
-    source = (root / "src/lib.rs").read_text()
+    source = (root / "src/lib.rs").read_text(encoding="utf-8")
     fractional_source = "const TARGET: f64 = 0.000007;\n" + source.replace(
         "measurement_ms=12, warmup_ms=0", 'measurement_ms=crate::TARGET, warmup_ms="0.000001", min_time_ms=0.000002, max_time_ms=0.5'
     ).replace("sample_ms=1", "sample_ms=0.125")
-    (root / "src/lib.rs").write_text(fractional_source)
+    (root / "src/lib.rs").write_text(fractional_source, encoding="utf-8")
     values = {row["id"].split("/")[-1]: row["contract"] for row in preview()["cases"]}
     assert values["inherited"]["sampling.measurement_target_ns"] == "7"
     assert values["inherited"]["sample_target_ns"] == "3"
@@ -119,9 +119,9 @@ pub mod work {
     for row in preview(["--warmup-ms", "0.25"])["cases"]:
         assert row["contract"]["warmup_ns"] == "250000"
     for value, expected in [('(1 << 40)', (1 << 40)*1_000_000), ('18446744073709551615', (2**64 - 1)*1_000_000), ('"18446744073709551615999.999999"', (2**64 - 1)*1_000_000_000+999_999_999)]:
-        (root / "src/lib.rs").write_text(source.replace("warmup_ms=0", "warmup_ms="+value))
+        (root / "src/lib.rs").write_text(source.replace("warmup_ms=0", "warmup_ms="+value), encoding="utf-8")
         assert all(row["contract"]["warmup_ns"] == str(expected) for row in preview()["cases"])
     for value in ["-0.5", "f64::NAN", "0.0000001"]:
-        (root / "src/lib.rs").write_text(source.replace("warmup_ms=0", "warmup_ms="+value))
+        (root / "src/lib.rs").write_text(source.replace("warmup_ms=0", "warmup_ms="+value), encoding="utf-8")
         assert "invalid millisecond duration" in invoke(["--dry-run"], success=False)
 print("measurement target: imported inheritance, local override, CLI/environment precedence, conflicts, lazy preview and exact collection passed")

@@ -24,7 +24,7 @@ edition="2021"
 [workspace]
 [dependencies]
 airbug-bench={{path={json.dumps(str(ROOT / 'bench'))}}}
-''')
+''', encoding="utf-8")
     (root / "src/main.rs").write_text('''fn main() -> airbug_bench::Result<()> {
     let mut suite = airbug_bench::Suite::new("terminal");
     let mut name = (0..64).map(|i| format!("level-{i:02}")).collect::<Vec<_>>().join("/");
@@ -32,17 +32,17 @@ airbug-bench={{path={json.dumps(str(ROOT / 'bench'))}}}
     suite.bench_custom(&name, |n| std::time::Duration::from_nanos(n * 3));
     suite.main()
 }
-''')
+''', encoding="utf-8")
     env = dict(os.environ, CARGO_TARGET_DIR=str(ROOT / "target/parity-external"),
                AIRBUG_DASHBOARD="0", NO_COLOR="1")
     built = subprocess.run(["cargo", "build", "--release", "--offline", "--message-format=json"],
-                           cwd=root, env=env, capture_output=True, text=True, check=True)
+                           cwd=root, env=env, capture_output=True, text=True, check=True, encoding="utf-8")
     exe = next(x["executable"] for line in built.stdout.splitlines()
                if (x := json.loads(line)).get("executable"))
     args = [exe, "--output-format", "tree", "--no-history", "--color", "never"]
     for mode in [["--list"], ["--quiet", "--samples", "2", "--iterations", "3", "--warmup-ms", "0", "--resamples", "16"]]:
         pipe = subprocess.run(args + mode, cwd=root, env=env, capture_output=True,
-                              text=True, timeout=120)
+                              text=True, timeout=120, encoding="utf-8")
         assert pipe.returncode == 0, pipe.stdout + pipe.stderr
         pipe = pipe.stdout
         assert "Deep tree:" not in pipe and "    " * 65 + "└── длинное имя 🦀" in pipe, pipe

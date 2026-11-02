@@ -25,8 +25,8 @@ airbug-bench={{path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="custom"
 harness=false
-''')
-    source = (ROOT / "bench/examples/custom_measurement.rs").read_text()
+''', encoding="utf-8")
+    source = (ROOT / "bench/examples/custom_measurement.rs").read_text(encoding="utf-8")
     source = source.replace('unit: "groups".into()', 'unit: "groups<&>".into()')
     source = source.replace("    fn scale_for_machines(", '''    fn format_throughput(&self, value: f64, _: &str) -> Result<Option<String>> {
         Ok(Some(format!("<rate {value:.2}>")))
@@ -35,13 +35,13 @@ harness=false
     source = source.replace("        counter.set(counter.get() + 3);", '''        assert!(std::env::var_os("NO_WORK").is_none());
         counter.set(counter.get() + std::env::var("WORK_STEP").ok().map(|value| value.parse::<u64>().unwrap()).unwrap_or(3));''')
     source = source.replace('    suite.work_units("items", 6);', '    suite.parameter("size", 1);\n    suite.work_units("items", 6);')
-    (root / "benches/custom.rs").write_text(source)
+    (root / "benches/custom.rs").write_text(source, encoding="utf-8")
     base = ["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"), "--bench", "custom", "--", "--samples", "3", "--iterations", "2", "--warmup-ms", "0", "--resamples", "32", "--baseline-store", str(root / "baselines"), "--no-plots"]
     def run(name, flags, lazy=False, plots=False, step=None):
         invocation = [arg for arg in base if not (plots and arg == "--no-plots")]
         if plots and "--no-html" not in flags:
             invocation += ["--summary-parameter", "size", "--summary-estimator", "mean"]
-        result = subprocess.run([*invocation, "--output", str(root / name), *flags], cwd=ROOT, env=dict(env, **({"NO_WORK": "1"} if lazy else {}), **({"WORK_STEP": str(step)} if step else {})), capture_output=True, text=True)
+        result = subprocess.run([*invocation, "--output", str(root / name), *flags], cwd=ROOT, env=dict(env, **({"NO_WORK": "1"} if lazy else {}), **({"WORK_STEP": str(step)} if step else {})), capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         return root / name
     first = run("first", ["--save-baseline", "saved"])
@@ -49,8 +49,8 @@ harness=false
     # New registration overrides must not rewrite the saved measurement's work contract.
     for name, flags, plots in [("first", None, False), ("loaded", ["--load-baseline", "saved", "--items-count", "12"], False), ("plots", ["--load-baseline", "saved"], True)]:
         output = first if flags is None else run(name, flags, lazy=True, plots=plots)
-        saved = json.loads((output / "run.json").read_text())
-        rows = list(csv.DictReader((output / "formatted.csv").open()))
+        saved = json.loads((output / "run.json").read_text(encoding="utf-8"))
+        rows = list(csv.DictReader((output / "formatted.csv").open(encoding="utf-8")))
         assert rows and all(row["operations"] == "2" for row in rows), rows
         for row in rows:
             raw_observation = next(o for o in saved["observations"] if o["case"] == row["case"] and o["metric"] == row["metric"] and str(o["process"]) == row["process"] and str(o["sequence"]) == row["sequence"] and o["variant"] == row["variant"])
@@ -59,8 +59,8 @@ harness=false
             assert json.loads(row["case_contract"]) == case["contract"]
             assert row["normalized_per_operation"] == "true"
             assert json.loads(row["case_contract"])["work.counter.items"] == "6"
-        formatted = json.loads((output / "formatted-estimates.json").read_text())["rows"][0]
-        raw = next(row for row in json.loads((output / "estimates.json").read_text())["rows"] if row["metric"] == "work_units")
+        formatted = json.loads((output / "formatted-estimates.json").read_text(encoding="utf-8"))["rows"][0]
+        raw = next(row for row in json.loads((output / "estimates.json").read_text(encoding="utf-8"))["rows"] if row["metric"] == "work_units")
         assert raw["estimates"]["mean"]["point"] == 3
         assert formatted["estimates"]["mean"]["point"] == 1
         assert raw["work_counters"] == {"items": 6}
@@ -69,11 +69,11 @@ harness=false
             assert rate["unit"] == "items/unit"
             assert rate["values"] == [2, 2, 2]
             assert rate["display"] == ["<rate 2.00>"] * 3
-        html = (output / "formatted-estimates.html").read_text()
+        html = (output / "formatted-estimates.html").read_text(encoding="utf-8")
         assert "&lt;rate 2.00&gt;" in html and "<rate 2.00>" not in html
         assert ("<svg" in html) == plots
         if plots:
-            summary_html = (output / "report.html").read_text()
+            summary_html = (output / "report.html").read_text(encoding="utf-8")
             assert "size vs work_units (groups&lt;&amp;&gt;" in summary_html
             assert "x = 1, y = 1" in summary_html
             assert "work_units / items throughput (items/unit)" in summary_html
@@ -83,16 +83,16 @@ harness=false
                 "cargo", "run", "--offline", "--locked", "-p", "cargo-airbug-bench", "--",
                 "report", str(output / "run.json"), "--summary-parameter", "size",
                 "--summary-estimator", "mean", "--output", str(restored_path),
-            ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target")), capture_output=True, text=True)
+            ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target")), capture_output=True, text=True, encoding="utf-8")
             assert restored.returncode == 0, restored.stdout + restored.stderr
-            restored_html = restored_path.read_text()
+            restored_html = restored_path.read_text(encoding="utf-8")
             assert "size vs work_units (groups&lt;&amp;&gt;" in restored_html
             assert "x = 1, y = 1" in restored_html
             assert "work_units / items throughput (items/unit)" in restored_html
             assert "x = 1, y = 2" in restored_html
 
     compared = run("compared", ["--baseline", "saved"], step=6)
-    relative = json.loads((compared / "relative-distributions.json").read_text())
+    relative = json.loads((compared / "relative-distributions.json").read_text(encoding="utf-8"))
     custom = next(row for row in relative if row["metric"] == "work_units")
     assert custom["resampling_unit"] == "normalized_observation"
     assert len(custom["throughput"]) == 2
@@ -110,9 +110,9 @@ harness=false
             "report", str(plotted_comparison / "run.json"), "--baseline", str(first / "run.json"),
             "--summary-parameter", "size", "--summary-estimator", "mean",
             "--summary-scale", scale, "--output", str(report_path),
-        ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True)
+        ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
-        rendered = report_path.read_text()
+        rendered = report_path.read_text(encoding="utf-8")
         assert "size vs work_units (groups&lt;&amp;&gt;" in rendered
         assert "x = 1, y = 2" in rendered
         assert "work_units / items throughput (items/unit)" in rendered
@@ -125,30 +125,30 @@ harness=false
             "cargo", "run", "--offline", "--locked", "-p", "cargo-airbug-bench", "--",
             "report", str(plotted_comparison / "run.json"), "--baseline", str(first / "run.json"),
             "--output", str(report_path), *flags,
-        ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True)
+        ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
-        numerical = report_path.read_text()
+        numerical = report_path.read_text(encoding="utf-8")
         assert "throughput mean (items/unit)" in numerical and "-50.000000" in numerical
         assert "<svg" not in numerical
 
     # Invalid saved summary metadata must not replace an existing report.
-    stale = json.loads((plotted_comparison / "run.json").read_text())
+    stale = json.loads((plotted_comparison / "run.json").read_text(encoding="utf-8"))
     snapshot_key = "airbug.presentation.parameter-summary.v1"
     snapshot = json.loads(stale["provenance"][snapshot_key])
     snapshot["source"] = "0" * 64
     stale["provenance"][snapshot_key] = json.dumps(snapshot)
     stale_path = plotted_comparison / "stale.json"
-    stale_path.write_text(json.dumps(stale))
+    stale_path.write_text(json.dumps(stale), encoding="utf-8")
     preserved_path = plotted_comparison / "preserved.html"
-    preserved_path.write_text("previous report")
+    preserved_path.write_text("previous report", encoding="utf-8")
     result = subprocess.run([
         "cargo", "run", "--offline", "--locked", "-p", "cargo-airbug-bench", "--",
         "report", str(stale_path), "--summary-parameter", "size",
         "--summary-estimator", "mean", "--output", str(preserved_path),
-    ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True)
+    ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True, encoding="utf-8")
     assert result.returncode != 0, result.stdout + result.stderr
     assert "stale parameter-summary" in result.stderr, result.stderr
-    assert preserved_path.read_text() == "previous report"
+    assert preserved_path.read_text(encoding="utf-8") == "previous report"
     # Saved-run filtering preserves the custom raw metric comparison. These
     # CLI paths cannot execute the formatter code registered in the bench binary.
     compare_base = [
@@ -159,7 +159,7 @@ harness=false
     for mode, flags in (("json", ["--json", "--relative-distributions"]),
                         ("html", ["--html"]), ("plain-html", ["--html", "--no-plots"])):
         result = subprocess.run([*compare_base, *flags], cwd=ROOT,
-            env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True)
+            env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         if mode == "json":
             data = json.loads(result.stdout)
@@ -172,15 +172,15 @@ harness=false
         else:
             assert "work_units" in result.stdout
             assert ("<svg" in result.stdout) == (mode == "html")
-            (compared / f"standalone-{mode}.html").write_text(result.stdout)
+            (compared / f"standalone-{mode}.html").write_text(result.stdout, encoding="utf-8")
     default_comparison = subprocess.run([*compare_base[:-2], "--json", "--relative-distributions"], cwd=ROOT,
-        env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target")), capture_output=True, text=True)
+        env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target")), capture_output=True, text=True, encoding="utf-8")
     assert default_comparison.returncode == 0, default_comparison.stdout + default_comparison.stderr
     restored_default = json.loads(default_comparison.stdout)["relative"][0]
     assert restored_default["report"]["config"]["resamples"] == 32
     assert all(rate["point_percent"] == -50 for rate in restored_default["throughput"])
     changed_settings = subprocess.run([*compare_base[:-1], "33", "--json", "--relative-distributions"], cwd=ROOT,
-        env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target")), capture_output=True, text=True)
+        env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target")), capture_output=True, text=True, encoding="utf-8")
     assert changed_settings.returncode == 0, changed_settings.stdout + changed_settings.stderr
     unavailable = json.loads(changed_settings.stdout)["relative"][0]["throughput"]
     assert len(unavailable) == 2
@@ -190,15 +190,15 @@ harness=false
             *compare_base[:compare_base.index("compare") + 1], str(before), str(after),
             "--metric", "work_units", "--hypothesis-resamples", "32",
             "--json", "--relative-distributions", *extra,
-        ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True)
+        ], cwd=ROOT, env=dict(env, CARGO_TARGET_DIR=str(ROOT / "target"), NO_WORK="1"), capture_output=True, text=True, encoding="utf-8")
 
     # Changing baseline data must not reuse rates computed against the old one.
-    alternate = json.loads((first / "run.json").read_text())
+    alternate = json.loads((first / "run.json").read_text(encoding="utf-8"))
     for observation in alternate["observations"]:
         if observation["metric"] == "work_units":
             observation["value"] = str(int(observation["value"]) * 3)
     alternate_path = root / "alternate-baseline.json"
-    alternate_path.write_text(json.dumps(alternate))
+    alternate_path.write_text(json.dumps(alternate), encoding="utf-8")
     result = saved_compare(alternate_path, compared / "run.json")
     assert result.returncode == 0, result.stdout + result.stderr
     rates = json.loads(result.stdout)["relative"][0]["throughput"]
@@ -207,19 +207,19 @@ harness=false
                and "another baseline" in rate["unavailable_reason"] for rate in rates)
 
     # A modified candidate is stale, and errors must not replace an existing artifact.
-    changed = json.loads((compared / "run.json").read_text())
+    changed = json.loads((compared / "run.json").read_text(encoding="utf-8"))
     for observation in changed["observations"]:
         if observation["metric"] == "work_units":
             observation["value"] = str(int(observation["value"]) + 1)
     changed_path = root / "changed-candidate.json"
-    changed_path.write_text(json.dumps(changed))
+    changed_path.write_text(json.dumps(changed), encoding="utf-8")
     preserved_compare = root / "previous-comparison.json"
-    preserved_compare.write_text("previous comparison")
+    preserved_compare.write_text("previous comparison", encoding="utf-8")
     result = saved_compare(first / "run.json", changed_path, ("--output", str(preserved_compare)))
     assert result.returncode != 0, result.stdout + result.stderr
     assert "stale custom throughput comparison snapshot" in result.stderr, result.stderr
-    assert preserved_compare.read_text() == "previous comparison"
-    comparison_html = (compared / "regression-comparison.html").read_text()
+    assert preserved_compare.read_text(encoding="utf-8") == "previous comparison"
+    comparison_html = (compared / "regression-comparison.html").read_text(encoding="utf-8")
     assert "throughput mean (items/unit)" in comparison_html and "-50.000000" in comparison_html
     assert "formatter applied" in comparison_html
     assert "<svg" not in comparison_html
@@ -227,17 +227,17 @@ harness=false
     automatic = ["--history-dir", str(root / "history"), "--hypothesis-resamples", "32"]
     run("history-first", automatic)
     automatic_output = run("history-second", automatic, step=6)
-    history = json.loads((automatic_output / "comparison.json").read_text())
+    history = json.loads((automatic_output / "comparison.json").read_text(encoding="utf-8"))
     custom = next(row for row in history["cases"][0]["relative"] if row["metric"] == "work_units")
     assert all(rate["point_percent"] == -50 for rate in custom["throughput"])
     assert len(custom["throughput"]) == 2
-    assert "formatter applied" in (automatic_output / "report.html").read_text()
-    committed = [json.loads(path.read_text()) for path in (root / "history").glob("*/*/comparison.json")]
+    assert "formatter applied" in (automatic_output / "report.html").read_text(encoding="utf-8")
+    committed = [json.loads(path.read_text(encoding="utf-8")) for path in (root / "history").glob("*/*/comparison.json")]
     assert history in committed
     committed_pair = []
     for directory in (root / "history").glob("*/*"):
         if (directory / "comparison.json").is_file():
-            value = json.loads((directory / "comparison.json").read_text())
+            value = json.loads((directory / "comparison.json").read_text(encoding="utf-8"))
             committed_pair.append((value, directory / "run.json"))
     current_path = next(path for value, path in committed_pair if value == history)
     previous_path = next(path for value, path in committed_pair if value != history)
@@ -246,7 +246,7 @@ harness=false
     restored_rates = json.loads(result.stdout)["relative"][0]["throughput"]
     assert len(restored_rates) == 2 and all(rate["point_percent"] == -50 for rate in restored_rates)
     # The usual output file must carry exactly the same enriched run as history.
-    assert json.loads(current_path.read_text()) == json.loads((automatic_output / "run.json").read_text())
+    assert json.loads(current_path.read_text(encoding="utf-8")) == json.loads((automatic_output / "run.json").read_text(encoding="utf-8"))
     result = saved_compare(previous_path, automatic_output / "run.json")
     assert result.returncode == 0, result.stdout + result.stderr
     assert all(rate["point_percent"] == -50 for rate in json.loads(result.stdout)["relative"][0]["throughput"])
@@ -266,7 +266,7 @@ harness=false
         if name == "raw-named":
             assert (output / "relative-distributions.json").is_file()
     result = subprocess.run([*base, "--no-html", "--json", "--hypothesis-distribution", *automatic], cwd=ROOT,
-                            env=env, capture_output=True, text=True)
+                            env=env, capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "BENCH_REPORT=" not in result.stdout, result.stdout
     latest = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
@@ -278,7 +278,7 @@ harness=false
     parsed_charts = 0
     custom_axis = False
     for path in root.rglob("*.html"):
-        for svg in re.findall(r"<svg\b.*?</svg>", path.read_text(), flags=re.DOTALL):
+        for svg in re.findall(r"<svg\b.*?</svg>", path.read_text(encoding="utf-8"), flags=re.DOTALL):
             chart = ET.fromstring(svg)
             parsed_charts += 1
             # The XML text must recover the literal user unit, with no invented

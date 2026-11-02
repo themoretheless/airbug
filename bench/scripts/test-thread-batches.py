@@ -20,7 +20,7 @@ ab={{package="airbug-bench",path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="batches"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "benches/batches.rs").write_text('''
 #[ab::suite(threads=2, batch=ab::BatchPolicy::Iterations(2.try_into().unwrap()), samples=1, iterations=5, warmup_ms=0)]
 mod cases {
@@ -31,13 +31,13 @@ mod cases {
     #[bench(setup=|| std::rc::Rc::new(1))]
     async fn asynchronous(v: &mut std::rc::Rc<i32>) -> std::rc::Rc<i32> { v.clone() }
 }
-''')
+''', encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
     command = ["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"), "--bench", "batches", "--"]
     for workers in [2, 3]:
         result = subprocess.run(command + ["--threads", str(workers), "--no-bootstrap", "--json"],
-                                env=env, capture_output=True, text=True, timeout=180)
+                                env=env, capture_output=True, text=True, timeout=180, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         run = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
         assert len(run["cases"]) == 3, run
@@ -48,7 +48,7 @@ mod cases {
             assert len(records) == workers * (1 if whole else 3), records
             for worker in range(workers):
                 assert [r["operations"] for r in records if r["worker"] == worker] == ([5] if whole else [2, 2, 1]), records
-    result = subprocess.run(command + ["--dry-run"], env=dict(env, MUST_NOT_RUN="1"), capture_output=True, text=True, timeout=180)
+    result = subprocess.run(command + ["--dry-run"], env=dict(env, MUST_NOT_RUN="1"), capture_output=True, text=True, timeout=180, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
     preview = json.JSONDecoder().raw_decode(result.stdout.lstrip())[0]
     assert all("threads.batch_policy" in c["contract"] for c in preview["cases"])
@@ -73,14 +73,14 @@ pub mod local {
         let n=state.get()+1; assert!(n<=2); state.set(n); Output(state.clone())
     }
 }
-''')
+''', encoding="utf-8")
     for group, workers in [("shared", 3), ("local", 1)]:
         (root / "benches/batches.rs").write_text(f'''
 #[ab::suite(groups=[thread_batches::{group}], threads={workers},
     batch=ab::BatchPolicy::Iterations(2.try_into().unwrap()), samples=1, iterations=5, warmup_ms=0)]
 mod cases {{}}
-''')
-        result = subprocess.run(command + ["--no-bootstrap", "--json"], env=env, capture_output=True, text=True, timeout=180)
+''', encoding="utf-8")
+        result = subprocess.run(command + ["--no-bootstrap", "--json"], env=env, capture_output=True, text=True, timeout=180, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         run = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
         assert len(run["cases"]) == (3 if group == "shared" else 1), run

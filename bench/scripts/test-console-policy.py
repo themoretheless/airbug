@@ -20,7 +20,7 @@ airbug-bench={{path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="console"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "benches/console.rs").write_text('''#[airbug_bench::suite]
 mod cases {
     #[bench(custom = true)]
@@ -29,7 +29,7 @@ mod cases {
         std::time::Duration::from_nanos(iterations * 3)
     }
 }
-''')
+''', encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(CARGO_TARGET_DIR=str(ROOT / "target/parity-external"), AIRBUG_DASHBOARD="0", NO_COLOR="1")
     built = subprocess.run(["cargo", "bench", "--offline", "--no-run", "--message-format=json"], cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", check=True)
@@ -73,13 +73,13 @@ mod cases {
             sentinel = occupied / "previous.txt"
         else:
             sentinel = occupied
-        sentinel.write_text("previous result")
+        sentinel.write_text("previous result", encoding="utf-8")
         rejected = subprocess.run([executable, *common, "--output", str(occupied)], cwd=root,
                                   env=dict(env, NO_WORK="1"), capture_output=True, text=True, encoding="utf-8", timeout=120)
         assert rejected.returncode != 0
         assert "output path already exists" in rejected.stderr, rejected.stderr
         assert "workload executed before output validation" not in rejected.stderr
-        assert sentinel.read_text() == "previous result"
+        assert sentinel.read_text(encoding="utf-8") == "previous result"
         preview = subprocess.run([executable, *common, "--output", str(occupied), "--dry-run"], cwd=root,
                                  env=dict(env, NO_WORK="1"), capture_output=True, text=True, encoding="utf-8", timeout=120)
         assert preview.returncode == 0, preview.stderr

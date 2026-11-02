@@ -20,7 +20,7 @@ ab={{package="airbug-bench",path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="cases"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "benches/cases.rs").write_text('''
 #[ab::suite(samples=2, iterations=3, warmup_ms=0)]
 mod cases {
@@ -35,11 +35,11 @@ mod cases {
     #[bench]
     fn other() { assert!(std::env::var_os("ONLY_SORT").is_none()); }
 }
-''')
+''', encoding="utf-8")
     env = {k:v for k,v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
     def call(command, extra=None):
-        result = subprocess.run(command, cwd=root, env=dict(env, **(extra or {})), capture_output=True, text=True)
+        result = subprocess.run(command, cwd=root, env=dict(env, **(extra or {})), capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout+result.stderr
         return result.stdout
     def run(output):
@@ -71,7 +71,7 @@ mod cases {
     assert all(o["operations"] == 1 for o in run(call([binary,"--test","--json"], {"AIRBUG_BENCH_RUNNER":"1"}))["observations"])
     output = root / "runner"
     call(["cargo", "run", "--offline", "--manifest-path", str(ROOT / "Cargo.toml"), "-p", "cargo-airbug-bench", "--", "run", "--program", binary, "--protocol", "--repetitions", "1", "--no-ui", "--output", str(output), "--", "--json"])
-    saved = json.loads((output / "run.json").read_text())
+    saved = json.loads((output / "run.json").read_text(encoding="utf-8"))
     assert len(saved["observations"]) == 4
     assert all(o["operations"] == 3 for o in saved["observations"])
     assert not (root / "target/airbug-bench/reports").exists()

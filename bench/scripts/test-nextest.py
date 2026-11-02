@@ -21,7 +21,7 @@ ab={{package="airbug-bench",path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="cases"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "benches/cases.rs").write_text('''
 #[ab::suite(samples=2, iterations=3, warmup_ms=0)]
 mod cases {
@@ -40,7 +40,7 @@ mod cases {
     #[bench]
     fn fails() { record("fails"); panic!("intentional fixture failure"); }
 }
-''')
+''', encoding="utf-8")
     env = {k:v for k,v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"), CALL_LOG=str(root/"calls"))
     def call(command, extra=None, success=True):
@@ -55,7 +55,7 @@ mod cases {
     call([*cargo,"--format","terse"], {"NO_WORK":"1"}, success=False)
     call([*cargo,"--list","--format","terse","--output-format","tree"], {"NO_WORK":"1"}, success=False)
     call([*cargo,"cases/value/2","--exact","--nocapture"], {"NEXTEST":"1"})
-    assert (root/"calls").read_text().splitlines() == ["2"]
+    assert (root/"calls").read_text(encoding="utf-8").splitlines() == ["2"]
     (root/"calls").unlink()
     nextest = os.environ.get("AIRBUG_NEXTEST") or shutil.which("cargo-nextest")
     if nextest:
@@ -70,15 +70,15 @@ mod cases {
         # exactly one complete record per case, regardless of scheduling.
         for _ in range(8):
             call([*base,"run",*options,"--test-threads","2","-E","test(value)"])
-            observed = (root/"calls").read_text().splitlines()
+            observed = (root/"calls").read_text(encoding="utf-8").splitlines()
             assert sorted(observed) == ["1","2"], observed
             (root/"calls").unlink()
         call([*base,"run",*options,"--run-ignored","only","-E","test(ignored)"])
-        assert (root/"calls").read_text().splitlines() == ["ignored"]
+        assert (root/"calls").read_text(encoding="utf-8").splitlines() == ["ignored"]
         (root/"calls").unlink()
         result = call([*base,"run",*options,"-E","test(fails)"], success=False)
         assert "intentional fixture failure" in result.stdout+result.stderr
-        assert (root/"calls").read_text().splitlines() == ["fails"]
+        assert (root/"calls").read_text(encoding="utf-8").splitlines() == ["fails"]
         print("nextest: actual discovery, parameter cases, ignored selection, once-only execution and failure propagation passed")
     else:
         print("nextest: listing/launch protocol passed; real runner unavailable (set AIRBUG_NEXTEST)")

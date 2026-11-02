@@ -1138,5 +1138,72 @@
         "failed_steps": []
       }
     ]
+  },
+  "worker_shutdown_run": {
+    "commit": "cc28c4a127fd3dc4b9828f4ae670b6b4f1bf3fe5",
+    "url": "https://github.com/themoretheless/airbug/actions/runs/41363896638",
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs": [
+      {
+        "name": "airbug-err",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "airbug-otel",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "worker-pool-miri",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "test (ubuntu-latest, stable)",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "test (windows-latest, 1.96.0)",
+        "conclusion": "failure",
+        "failed_steps": [
+          "Check cargo bench attribute harness"
+        ]
+      },
+      {
+        "name": "test (macos-latest, 1.96.0)",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "test (ubuntu-latest, 1.96.0)",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "test (windows-latest, stable)",
+        "conclusion": "failure",
+        "failed_steps": [
+          "Check cargo bench attribute harness"
+        ]
+      },
+      {
+        "name": "report",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "test (macos-latest, stable)",
+        "conclusion": "success",
+        "failed_steps": []
+      },
+      {
+        "name": "airbug-mon",
+        "conclusion": "success",
+        "failed_steps": []
+      }
+    ]
   }
 }

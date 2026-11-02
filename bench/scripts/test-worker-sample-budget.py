@@ -17,7 +17,7 @@ for unit, expected in [("workers", 2), ("batches", 5)]:
         if unit == "batches":
             args += ["--sample-count-unit", unit, "--worker-start", "shared"]
         args += ["--dry-run"] if preview else ["--json"]
-        result = subprocess.run(COMMAND + args, cwd=ROOT, env=env, text=True, capture_output=True)
+        result = subprocess.run(COMMAND + args, cwd=ROOT, env=env, text=True, capture_output=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         try:
             payload = result.stdout.lstrip() if preview else next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT="))
@@ -39,7 +39,7 @@ print("cargo bench: worker budgets, full-batch rounding, preview and CLI/environ
 env = dict(os.environ, AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0")
 result = subprocess.run(COMMAND + ["--filter", "collections/sort_only/64", "--threads", "3",
     "--samples", "2", "--sample-count-unit", "batches", "--iterations", "65", "--warmup-ms", "0",
-    "--worker-start", "local", "--no-history", "--json"], cwd=ROOT, env=env, text=True, capture_output=True)
+    "--worker-start", "local", "--no-history", "--json"], cwd=ROOT, env=env, text=True, capture_output=True, encoding="utf-8")
 assert result.returncode == 0, result.stdout + result.stderr
 run = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
 assert len(run["cases"]) == 1, run
@@ -58,7 +58,7 @@ for flag in ["--samples", "--iterations"]:
         args = ["--filter", "collections/sum", flag, "0", "--include-ignored", "--no-history", mode]
         if mode == "--test":
             args += ["--json"]
-        result = subprocess.run(COMMAND + args, cwd=ROOT, env=env, text=True, capture_output=True)
+        result = subprocess.run(COMMAND + args, cwd=ROOT, env=env, text=True, capture_output=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         payload = result.stdout.lstrip() if mode == "--dry-run" else next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT="))
         run, _ = json.JSONDecoder().raw_decode(payload)
@@ -72,7 +72,7 @@ for variable, flag in [("AIRBUG_BENCH_SAMPLES", "--samples"), ("AIRBUG_BENCH_ITE
     env = dict(os.environ, AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0")
     env[variable] = "0"
     result = subprocess.run(COMMAND + ["--filter", "collections/sum", "--samples", "1", "--iterations", "1",
-        "--warmup-ms", "0", "--no-history", "--json"], cwd=ROOT, env=env, text=True, capture_output=True)
+        "--warmup-ms", "0", "--no-history", "--json"], cwd=ROOT, env=env, text=True, capture_output=True, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
     run = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in result.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
     assert len(run["observations"]) == 1 and run["observations"][0]["operations"] == 1, run

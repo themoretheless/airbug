@@ -13,7 +13,7 @@ def call(flags, lazy=True, success=True):
     current = dict(env)
     if lazy:
         current.update(AIRBUG_TEST_NO_SETUP="1", AIRBUG_TEST_NO_EXECUTION="1")
-    result = subprocess.run([*base, *flags], cwd=ROOT, env=current, capture_output=True, text=True)
+    result = subprocess.run([*base, *flags], cwd=ROOT, env=current, capture_output=True, text=True, encoding="utf-8")
     assert (result.returncode == 0) == success, result.stdout+result.stderr
     return result.stdout+result.stderr
 
@@ -68,15 +68,15 @@ with TemporaryDirectory() as directory:
     root = Path(directory)
     flags = ["collections/sum", "--exact", "--samples", "3", "--iterations", "2", "--warmup-ms", "0", "--no-plots"]
     call([*flags, "--output", str(root / "default")], lazy=False)
-    report = json.loads((root / "default/estimates.json").read_text())
+    report = json.loads((root / "default/estimates.json").read_text(encoding="utf-8"))
     assert report["config"] == {"resamples": 10000, "confidence_level": 0.95, "seed": 0}
     assert report["rows"] and report["rows"][0]["estimates"]["mean"] is not None
     assert (root / "default/estimates.html").exists()
-    assert "estimates.html" in (root / "default/report.html").read_text()
+    assert "estimates.html" in (root / "default/report.html").read_text(encoding="utf-8")
     call([*flags, "--no-bootstrap", "--output", str(root / "disabled")], lazy=False)
     assert (root / "disabled/run.json").exists()
     assert not (root / "disabled/estimates.json").exists()
-    assert "estimates.html" not in (root / "disabled/report.html").read_text()
+    assert "estimates.html" not in (root / "disabled/report.html").read_text(encoding="utf-8")
     for options in [["--no-bootstrap", "--resamples", "4"], ["--resamples", "4", "--no-bootstrap"], ["--no-bootstrap", "--bootstrap-distributions"]]:
         assert "--no-bootstrap cannot combine" in call([*flags, *options, "--json"], success=False)
 print("Default statistics: confidence intervals and linked artifacts; explicit opt-out and conflicts before work")

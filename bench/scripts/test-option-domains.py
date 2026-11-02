@@ -23,13 +23,13 @@ airbug-bench={{path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="domains"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "benches/domains.rs").write_text('''#[airbug_bench::suite]
 mod cases { #[bench] fn never() { panic!("domain preview executed workload"); } }
-''')
+''', encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(CARGO_TARGET_DIR=str(ROOT / "target/parity-external"), AIRBUG_DASHBOARD="1")
-    built = subprocess.run(["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"), "--bench", "domains", "--no-run", "--message-format=json"], cwd=root, env=env, capture_output=True, text=True, check=True)
+    built = subprocess.run(["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"), "--bench", "domains", "--no-run", "--message-format=json"], cwd=root, env=env, capture_output=True, text=True, check=True, encoding="utf-8")
     executable = next(item["executable"] for line in built.stdout.splitlines() if (item := json.loads(line)).get("executable"))
     integer_max = "18446744073709551615"
     integer_overflow = "18446744073709551616"
@@ -58,7 +58,7 @@ mod cases { #[bench] fn never() { panic!("domain preview executed workload"); } 
     for option, (valid, invalid) in cases.items():
         for expected, values in ((True, valid), (False, invalid)):
             for value in values:
-                result = subprocess.run([executable, "--bench", "--dry-run", "--json", option, value], cwd=root, env=env, capture_output=True, text=True, timeout=120)
+                result = subprocess.run([executable, "--bench", "--dry-run", "--json", option, value], cwd=root, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8")
                 assert (result.returncode == 0) == expected, (option, value, expected, result.stdout, result.stderr)
                 assert "domain preview executed workload" not in result.stdout + result.stderr
                 if expected:
@@ -80,9 +80,9 @@ mod cases { #[bench] fn never() { panic!("domain preview executed workload"); } 
                 checked += 1
     for key, option in [("AIRBUG_BENCH_SAMPLES", "--samples"), ("AIRBUG_BENCH_ITERATIONS", "--iterations"), ("AIRBUG_BENCH_WARMUP_MS", "--warmup-ms")]:
         invalid_env = dict(env, **{key: "invalid"})
-        rejected = subprocess.run([executable, "--bench", "--dry-run"], cwd=root, env=invalid_env, capture_output=True, text=True)
+        rejected = subprocess.run([executable, "--bench", "--dry-run"], cwd=root, env=invalid_env, capture_output=True, text=True, encoding="utf-8")
         assert rejected.returncode != 0
-        overridden = subprocess.run([executable, "--bench", "--dry-run", option, "1"], cwd=root, env=invalid_env, capture_output=True, text=True)
+        overridden = subprocess.run([executable, "--bench", "--dry-run", option, "1"], cwd=root, env=invalid_env, capture_output=True, text=True, encoding="utf-8")
         assert overridden.returncode == 0, overridden.stderr
         checked += 2
     modes = {
@@ -98,7 +98,7 @@ mod cases { #[bench] fn never() { panic!("domain preview executed workload"); } 
         "--profile": ["quick", "normal", "thorough"],
     }
     def preview(flags, expected, diagnostic=None):
-        result = subprocess.run([executable, "--bench", "--dry-run", "--json", *flags], cwd=root, env=env, capture_output=True, text=True, timeout=120)
+        result = subprocess.run([executable, "--bench", "--dry-run", "--json", *flags], cwd=root, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8")
         assert (result.returncode == 0) == expected, (flags, result.stdout, result.stderr)
         assert "domain preview executed workload" not in result.stdout + result.stderr
         if diagnostic:
@@ -157,7 +157,7 @@ mod cases { #[bench] fn never() { panic!("domain preview executed workload"); } 
         preview(["--profile-time-ms", "1", *extra], False)
         checked += 1
     for option in ("--baseline", "--load-baseline"):
-        result = subprocess.run([executable, "--bench", option, "missing", "--baseline-store", store], cwd=root, env=env, capture_output=True, text=True, timeout=120)
+        result = subprocess.run([executable, "--bench", option, "missing", "--baseline-store", store], cwd=root, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8")
         assert result.returncode != 0, result.stdout
         assert "domain preview executed workload" not in result.stdout + result.stderr
         checked += 1

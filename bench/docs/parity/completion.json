@@ -67,7 +67,7 @@
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "c10e0ac CI passed both macOS and native Linux toolchains in full. Windows stable passed console/feature checks but exposed a worker-pool TLS teardown abort after profiling; suite-owned shutdown passed local library/integration and real Cargo worker tests; remote confirmation is pending. Windows MSRV job remains incomplete. See platforms.json and ci-validation.json."
+      "current": "cc28c4a CI confirms Windows worker shutdown repair on MSRV and stable: both passed workspace debug/release tests and profiling, then failed Unicode history comparison in the Python fixture. All macOS/Linux jobs passed. Explicit UTF-8 fixture I/O is verified by full Cargo and custom-formatter fixtures under CP1252 simulation; full Windows external fixture acceptance remains open."
     },
     {
       "id": "final_gate",

@@ -132,7 +132,7 @@ print("cargo bench: listing, filtering, measurement and argument errors passed")
 
 reports = list(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))
 assert len(reports) == 1, reports
-report = json.loads(reports[0].read_text())
+report = json.loads(reports[0].read_text(encoding="utf-8"))
 assert report["state"] == "passed" and report["kind"] == "bench", report
 assert len(report["tests"]) == 1 and report["tests"][0]["name"] == "collections/sum", report
 assert report["tests"][0]["ns_per_op"] is not None, report
@@ -162,10 +162,10 @@ with tempfile.TemporaryDirectory(prefix="airbug-previous-run-") as directory:
         comparison = json.loads(next(line.removeprefix("BENCH_COMPARISON=") for line in value.splitlines() if line.startswith("BENCH_COMPARISON=")))
         report_path = pathlib.Path(json.loads(next(line.removeprefix("BENCH_REPORT=") for line in value.splitlines() if line.startswith("BENCH_REPORT="))))
         assert report_path.is_file(), value
-        html = report_path.read_text()
+        html = report_path.read_text(encoding="utf-8")
         assert "Previous run comparison" in html and case in html, html
         assert report_path.parent.parent == history_root / "reports"
-        assert json.loads((report_path.parent / "run.json").read_text())["id"] == result["id"]
+        assert json.loads((report_path.parent / "run.json").read_text(encoding="utf-8"))["id"] == result["id"]
         return result, comparison
     first, comparison = previous()
     assert comparison["cases"][0]["status"] == "first_run", comparison
@@ -212,10 +212,10 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     original = run("collections/sum", "--", *common)
     data = next(line.removeprefix("BENCH_RESULT=") for line in original.splitlines() if line.startswith("BENCH_RESULT="))
     source = store / "run.json"
-    source.write_text(data)
+    source.write_text(data, encoding="utf-8")
     (store / "baselines").mkdir()
     pointer = store / "baselines/main.json"
-    pointer.write_text(json.dumps({"run": str(source), "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}))
+    pointer.write_text(json.dumps({"run": str(source), "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}), encoding="utf-8")
     before = pointer.read_bytes()
     def named(case, name="main", mode="--baseline"):
         text = run(case, "--", *common, mode, name)
@@ -259,11 +259,11 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     sort_output = run("collections/sort", "--", *common)
     sort_data = next(line.removeprefix("BENCH_RESULT=") for line in sort_output.splitlines() if line.startswith("BENCH_RESULT="))
     sort_source = store / "sort.json"
-    sort_source.write_text(sort_data)
+    sort_source.write_text(sort_data, encoding="utf-8")
     (store / "baselines/mixed.cases.json").write_text(json.dumps({"version": 1, "cases": {
         "collections/sum": json.loads(saved_pointer.read_bytes())["cases"]["collections/sum"],
         "collections/sort": {"run": str(sort_source), "sha256": hashlib.sha256(sort_source.read_bytes()).hexdigest()}
-    }}))
+    }}), encoding="utf-8")
     mixed = named("collections/sort", "mixed")
     assert mixed["report"]["cases"][0]["previous_run"] == json.loads(sort_data)["id"], mixed
     assert mixed["report"]["cases"][0]["status"] == "compared", mixed
@@ -307,8 +307,8 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
                 observations.append(observation)
         independent["observations"] = observations
         artifact = store / f"{baseline_name}.json"
-        artifact.write_text(json.dumps(independent))
-        (store / "baselines" / f"{baseline_name}.json").write_text(json.dumps({"run": str(artifact), "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}))
+        artifact.write_text(json.dumps(independent), encoding="utf-8")
+        (store / "baselines" / f"{baseline_name}.json").write_text(json.dumps({"run": str(artifact), "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}), encoding="utf-8")
     hypotheses = []
     for _ in range(2):
         result = run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--hypothesis-resamples", "128", "--hypothesis-seed", "73")
@@ -321,28 +321,28 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     distribution_output = store / "distribution-export"
     exported = run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--hypothesis-resamples", "128", "--hypothesis-seed", "73", "--hypothesis-distribution", "--summary-parameter", "size", "--summary-scale", "logarithmic", "--output", str(distribution_output))
     exported_report = json.loads(next(line.removeprefix("BENCH_BASELINE=") for line in exported.splitlines() if line.startswith("BENCH_BASELINE=")))["report"]
-    assert json.loads((distribution_output / "comparison.json").read_text()) == exported_report
-    summary_html = (distribution_output / "report.html").read_text()
+    assert json.loads((distribution_output / "comparison.json").read_text(encoding="utf-8")) == exported_report
+    summary_html = (distribution_output / "report.html").read_text(encoding="utf-8")
     assert "Input parameter summaries" in summary_html and "X: size" in summary_html
     assert "Iteration time comparison" in summary_html
     assert "baseline /" in summary_html and "candidate /" in summary_html
     plain_output = store / "plain-comparison-export"
     run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--no-bootstrap", "--output", str(plain_output))
-    assert "Iteration time comparison" in (plain_output / "report.html").read_text()
+    assert "Iteration time comparison" in (plain_output / "report.html").read_text(encoding="utf-8")
     assert not (plain_output / "estimates.json").exists()
     tables_output = store / "tables-comparison-export"
     run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--hypothesis-resamples", "128", "--hypothesis-seed", "73", "--hypothesis-distribution", "--resamples", "128", "--bootstrap-distributions", "--no-plots", "--output", str(tables_output))
-    assert json.loads((tables_output / "comparison.json").read_text()) == exported_report
+    assert json.loads((tables_output / "comparison.json").read_text(encoding="utf-8")) == exported_report
     for html_file in tables_output.glob("*.html"):
-        assert "<svg" not in html_file.read_text(), html_file
+        assert "<svg" not in html_file.read_text(encoding="utf-8"), html_file
     assert (tables_output / "estimates.json").is_file()
     assert (tables_output / "relative-distributions.json").is_file()
     assert not (tables_output / "comparison.html").exists()
-    relative_tables = (tables_output / "regression-comparison.html").read_text()
+    relative_tables = (tables_output / "regression-comparison.html").read_text(encoding="utf-8")
     assert "Relative bootstrap estimates" in relative_tables
     assert "throughput inverse mean duration (items/s)" in relative_tables
     assert "12 / 12" in relative_tables
-    rates = json.loads((tables_output / "relative-distributions.json").read_text())[0]
+    rates = json.loads((tables_output / "relative-distributions.json").read_text(encoding="utf-8"))[0]
     duration_change = rates["report"]["mean"]["point_percent"]
     assert abs(rates["throughput"][0]["point_percent"] + duration_change / (100 + duration_change) * 100) < 1e-10
     text_common = [flag for flag in common if flag != "--json"]
@@ -352,12 +352,12 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
         assert ("Relative bootstrap estimates" in text) == (not quiet), text
         if not quiet:
             assert "throughput inverse mean duration (items/s)" in text
-        assert "Relative bootstrap estimates" in (text_output / "regression-comparison.html").read_text()
+        assert "Relative bootstrap estimates" in (text_output / "regression-comparison.html").read_text(encoding="utf-8")
 
 
 
     assert "0 series omitted" in summary_html
-    exported_html = (distribution_output / "comparison.html").read_text()
+    exported_html = (distribution_output / "comparison.html").read_text(encoding="utf-8")
     assert "<svg " in exported_html and "128 null draws" in exported_html
     hypothesis_export = exported_report["cases"][0]["comparisons"][0]["hypothesis"]
     assert len(hypothesis_export["null_distribution"]) == 128
@@ -375,16 +375,16 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
                     observation.update(process=process, sequence=count, operations=count, value=str((slope + process) * count))
                     fixture["observations"].append(observation)
         artifact = store / f"{name}.json"
-        artifact.write_text(json.dumps(fixture))
-        (store / "baselines" / f"{name}.json").write_text(json.dumps({"run": str(artifact), "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}))
+        artifact.write_text(json.dumps(fixture), encoding="utf-8")
+        (store / "baselines" / f"{name}.json").write_text(json.dumps({"run": str(artifact), "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}), encoding="utf-8")
     regression_comparison_dir = store / "regression-comparison-export"
     run("collections/sum", "--", *common, "--load-baseline", "regression-new", "--baseline", "regression-old",
         "--resamples", "128", "--output", str(regression_comparison_dir))
-    overlay = (regression_comparison_dir / "regression-comparison.html").read_text()
+    overlay = (regression_comparison_dir / "regression-comparison.html").read_text(encoding="utf-8")
     assert overlay.count("<polygon") == 8, overlay
     assert "relative mean change" in overlay and "relative median change" in overlay
     assert "Practical noise region" in overlay
-    relative = json.loads((regression_comparison_dir / "relative-distributions.json").read_text())
+    relative = json.loads((regression_comparison_dir / "relative-distributions.json").read_text(encoding="utf-8"))
     assert len(relative) == 1
     assert relative[0]["baseline_units"] == 2 and relative[0]["candidate_units"] == 2
     assert len(relative[0]["report"]["mean"]["draws_percent"]) == 128
@@ -396,18 +396,18 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     for observation in zero_fixture["observations"]:
         observation["value"] = "0"
     zero_artifact = store / "zero-violin.json"
-    zero_artifact.write_text(json.dumps(zero_fixture))
-    (store / "baselines" / "zero-violin.json").write_text(json.dumps({"run": str(zero_artifact), "sha256": hashlib.sha256(zero_artifact.read_bytes()).hexdigest()}))
+    zero_artifact.write_text(json.dumps(zero_fixture), encoding="utf-8")
+    (store / "baselines" / "zero-violin.json").write_text(json.dumps({"run": str(zero_artifact), "sha256": hashlib.sha256(zero_artifact.read_bytes()).hexdigest()}), encoding="utf-8")
     zero_output = store / "zero-violin-export"
     run("collections/sum", "--", *common, "--load-baseline", "zero-violin", "--summary-scale", "logarithmic", "--output", str(zero_output))
-    assert "population contains nonpositive values; no subset was plotted" in (zero_output / "estimates.html").read_text()
+    assert "population contains nonpositive values; no subset was plotted" in (zero_output / "estimates.html").read_text(encoding="utf-8")
     large_margin = run("collections/sum", "--", *common, "--load-baseline", "hypothesis-new", "--baseline", "hypothesis-old", "--noise-threshold-percent", "250", "--hypothesis-resamples", "128")
     large_margin_report = json.loads(next(line.removeprefix("BENCH_BASELINE=") for line in large_margin.splitlines() if line.startswith("BENCH_BASELINE=")))
     large_margin_case = large_margin_report["report"]["cases"][0]
     assert large_margin_case["config"]["noise_threshold_percent"] == 250.0
     assert large_margin_case["comparisons"][0]["decision"] == "within_margin", large_margin_case
     partial_before_repair = partial_path.read_bytes()
-    pathlib.Path(new_cases["collections/sum"]["run"]).write_text("{}")
+    pathlib.Path(new_cases["collections/sum"]["run"]).write_text("{}", encoding="utf-8")
     blocked = run("collections/sort", "--", *common, "--replace-baseline", "partial", success=False)
     assert "artifact changed" in blocked, blocked
     assert partial_path.read_bytes() == partial_before_repair
@@ -422,22 +422,22 @@ with tempfile.TemporaryDirectory(prefix="airbug-named-baseline-") as directory:
     mixed_results = [json.loads(line.removeprefix("BENCH_RESULT=")) for line in mixed_loaded.splitlines() if line.startswith("BENCH_RESULT=")]
     assert len(mixed_results) == 2, mixed_loaded
     assert {case["id"] for result in mixed_results for case in result["cases"]} == {"collections/sum", "collections/sort"}
-    exported = [json.loads(path.read_text()) for path in mixed_export.glob("*/run.json")]
+    exported = [json.loads(path.read_text(encoding="utf-8")) for path in mixed_export.glob("*/run.json")]
     assert sorted(result["id"] for result in exported) == sorted(result["id"] for result in mixed_results)
     loaded = run("collections/sum", "--", *common, "--load-baseline", "saved", "--baseline", "main")
     assert "BENCH_BASELINE=" in loaded and "BENCH_RESULT=" in loaded, loaded
     loaded_result = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in loaded.splitlines() if line.startswith("BENCH_RESULT=")))
-    saved_result = json.loads(pathlib.Path(json.loads(saved_pointer.read_bytes())["cases"]["collections/sum"]["run"]).read_text())
+    saved_result = json.loads(pathlib.Path(json.loads(saved_pointer.read_bytes())["cases"]["collections/sum"]["run"]).read_text(encoding="utf-8"))
     assert loaded_result == saved_result
     export = store / "reanalyzed"
     run("collections/sum", "--", *common, "--load-baseline", "saved", "--output", str(export))
-    assert json.loads((export / "run.json").read_text()) == saved_result
+    assert json.loads((export / "run.json").read_text(encoding="utf-8")) == saved_result
     for extra in [["--test"], ["--replace-baseline", "saved"], ["--profile-time-ms", "1"]]:
         run("collections/sum", "--", *common, "--load-baseline", "saved", *extra, success=False)
     missing = run("collections/unselected", "--", *common, "--load-baseline", "saved", success=False)
     assert "has no case" in missing and "unselected setup ran" not in missing, missing
     environment.pop("AIRBUG_TEST_NO_EXECUTION")
-    source.write_text("{}")
+    source.write_text("{}", encoding="utf-8")
     for mode in ["--baseline", "--baseline-lenient"]:
         failure = run("collections/unselected", "--", *common, mode, "main", success=False)
         assert "baseline artifact changed" in failure, failure
@@ -508,7 +508,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-summary-") as directory:
     assert stats["minimum"] == stats["maximum"] == stats["mean"] == stats["median"], stats
     assert summary[0]["operations"] == "100", summary
     assert summary[0]["operation_weighted_mean"] == stats["mean"], summary
-    assert json.loads((destination / "summary.json").read_text()) == summary
+    assert json.loads((destination / "summary.json").read_text(encoding="utf-8")) == summary
     assert "BENCH_ESTIMATES=" in output
     assert (destination / "estimates.json").exists()
 text_summary = run("collections/sum", "--", "--exact", "--test")
@@ -537,12 +537,12 @@ with tempfile.TemporaryDirectory(prefix="airbug-profile-cli-") as directory:
     assert case["id"] == "collections/contended/threads=2" and case["error"] is None, case
     assert int(case["stats"]["elapsed_ns"]) >= 3000000, case
     assert int(case["stats"]["operations"]) == case["stats"]["batches"] * 4, case
-    assert json.loads((destination / "profile.json").read_text()) == profile
-    assert json.loads((destination / case["directory"] / "summary.json").read_text()) == case
+    assert json.loads((destination / "profile.json").read_text(encoding="utf-8")) == profile
+    assert json.loads((destination / case["directory"] / "summary.json").read_text(encoding="utf-8")) == case
     assert not (destination / "report.json").exists()
     profile_history = sorted(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))
     assert len(profile_history) == history_before_profile + 1, profile_history
-    recorded = json.loads(profile_history[-1].read_text())
+    recorded = json.loads(profile_history[-1].read_text(encoding="utf-8"))
     assert recorded["state"] == "passed" and len(recorded["tests"]) == 1, recorded
     assert recorded["tests"][0]["ns_per_op"] is None, recorded
 
@@ -610,9 +610,10 @@ for case in complete["cases"]:
     if "async_" in case["id"]:
         assert "async.scope" in case["contract"], case
 report_paths = sorted(pathlib.Path(history.name).glob("target/airbug-report/runs/*/run.json"))
-full_history = json.loads(report_paths[-1].read_text())
+full_history = json.loads(report_paths[-1].read_text(encoding="utf-8"))
 assert full_history["state"] == "passed", full_history
-assert {case["name"] for case in full_history["tests"]} == set(ids), full_history
+history_ids = {case["name"] for case in full_history["tests"]}
+assert history_ids == set(ids), {"missing": sorted(set(ids) - history_ids), "unexpected": sorted(history_ids - set(ids))}
 print("cargo bench: types, consts, async, threads, manual timing, sampling overrides and full history passed")
 assert "collections/nested/plain" in listed and "collections/nested/child/multiple" in listed, listed
 assert "collections/nested/ignored" not in listed, listed
@@ -734,14 +735,14 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
         '[package]\nname = "external-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
         '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ', features = ["macros"] }\n'
         '[[bench]]\nname = "imported"\nharness = false\n'
-    )
+    , encoding="utf-8")
     (fixture / "src/lib.rs").write_text(
         '#[airbug_bench::group(name = "shared", samples = 2, warmup_ms = 0, items = 2)]\n'
         'pub mod shared { #[bench(args = [2usize, 4])] fn work(n: usize) -> usize { std::hint::black_box(n) } }\n'
-    )
+    , encoding="utf-8")
     (fixture / "benches/imported.rs").write_text(
         '#[airbug_bench::suite(groups = [external_fixture::shared])] mod imported {}\n'
-    )
+    , encoding="utf-8")
     result = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--test", "--json"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -754,7 +755,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     assert len(imported["observations"]) == 2, imported
     (fixture / "benches/imported.rs").write_text(
         '#[airbug_bench::suite(groups = [external_fixture::shared], samples = 5, iterations = 3, sample_ms = 1, ignore = true, bytes = 128, items = 9)] mod imported {}\n'
-    )
+    , encoding="utf-8")
     for flags, samples, iterations in [([], 2, 3), (["--samples", "1", "--iterations", "2"], 1, 2)]:
         result = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--json", "--include-ignored", *flags],
@@ -767,10 +768,10 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
         assert all(o["operations"] == iterations for o in inherited["observations"]), inherited
         assert all(c["contract"]["ignored"] == "true" and c["contract"]["work.counter.bytes"] == "128" and c["contract"]["work.counter.items"] == "2" for c in inherited["cases"]), inherited
     print("cargo bench: imported group sampling inherits across crate boundaries and CLI overrides win")
-    comparison_library = (fixture / "src/lib.rs").read_text()
-    comparison_bench = (fixture / "benches/imported.rs").read_text()
-    (fixture / "src/lib.rs").write_text(comparison_library.replace('name = "shared",', 'name = "shared", significance_level = 0.02, hypothesis_seed = 0, hypothesis_resamples = 128,'))
-    (fixture / "benches/imported.rs").write_text('#[airbug_bench::suite(significance_level = 0.01, noise_threshold_percent = 8.0, hypothesis_seed = 19, hypothesis_resamples = 256, samples = 1, iterations = 1, warmup_ms = 0, groups = [external_fixture::shared])] mod imported {}\n')
+    comparison_library = (fixture / "src/lib.rs").read_text(encoding="utf-8")
+    comparison_bench = (fixture / "benches/imported.rs").read_text(encoding="utf-8")
+    (fixture / "src/lib.rs").write_text(comparison_library.replace('name = "shared",', 'name = "shared", significance_level = 0.02, hypothesis_seed = 0, hypothesis_resamples = 128,'), encoding="utf-8")
+    (fixture / "benches/imported.rs").write_text('#[airbug_bench::suite(significance_level = 0.01, noise_threshold_percent = 8.0, hypothesis_seed = 19, hypothesis_resamples = 256, samples = 1, iterations = 1, warmup_ms = 0, groups = [external_fixture::shared])] mod imported {}\n', encoding="utf-8")
     for override in [[], ["--significance-level", "0.03", "--noise-threshold-percent", "1"]]:
         result = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--json", "--baseline-lenient", "absent", "--baseline-store", str(fixture / "baselines"), *override],
@@ -783,13 +784,13 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
             assert case["config"]["significance_level"] == (0.03 if override else 0.02), case
             assert case["config"]["noise_threshold_percent"] == (1.0 if override else 8.0), case
             assert case["config"]["hypothesis"] == {"resamples": 128, "seed": 0}, case
-    (fixture / "src/lib.rs").write_text(comparison_library)
-    (fixture / "benches/imported.rs").write_text(comparison_bench)
+    (fixture / "src/lib.rs").write_text(comparison_library, encoding="utf-8")
+    (fixture / "benches/imported.rs").write_text(comparison_bench, encoding="utf-8")
     print("cargo bench: comparison attributes inherit per-field across crates and CLI overrides only specified fields")
-    original_bench = (fixture / "benches/imported.rs").read_text()
+    original_bench = (fixture / "benches/imported.rs").read_text(encoding="utf-8")
     (fixture / "benches/imported.rs").write_text(
         '#[airbug_bench::suite(timer = "cpu", overhead = "subtract", samples = 1, iterations = 1, warmup_ms = 0, groups = [external_fixture::shared])] mod imported {}\n'
-    )
+    , encoding="utf-8")
     for flags in [["--dry-run"], ["--timer", "os", "--overhead", "raw", "--json"], ["--timer", "os", "--json"]]:
         result = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags],
@@ -823,10 +824,10 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
             assert not profile_destination.exists()
         else:
             assert profiled.returncode == 0, profiled.stdout + profiled.stderr
-            assert json.loads((profile_destination / "profile.json").read_text())["complete"]
+            assert json.loads((profile_destination / "profile.json").read_text(encoding="utf-8"))["complete"]
     (fixture / "benches/imported.rs").write_text(
         '#[airbug_bench::suite(timer = "invalid")] mod imported { #[bench] fn work() {} }\n'
-    )
+    , encoding="utf-8")
     invalid = subprocess.run(
         ["cargo", "check", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -835,17 +836,17 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     assert invalid.returncode != 0 and "timer must be os or cpu" in invalid.stderr, invalid.stdout + invalid.stderr
     (fixture / "benches/imported.rs").write_text(
         '#[airbug_bench::suite(overhead = "invalid")] mod imported { #[bench] fn work() {} }\n'
-    )
+    , encoding="utf-8")
     invalid = subprocess.run(
         ["cargo", "check", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
         env=dict(environment, CARGO_TARGET_DIR=str(ROOT / "target/parity-external")),
     )
     assert invalid.returncode != 0 and "overhead must be raw or subtract" in invalid.stderr, invalid.stdout + invalid.stderr
-    (fixture / "benches/imported.rs").write_text(original_bench)
+    (fixture / "benches/imported.rs").write_text(original_bench, encoding="utf-8")
     print("cargo bench: imported timer/overhead inheritance, lazy CPU preview, CLI precedence and invalid attributes passed")
-    original_library = (fixture / "src/lib.rs").read_text()
-    (fixture / "src/lib.rs").write_text(original_library.replace("[2usize, 4]", "[2usize, 2]"))
+    original_library = (fixture / "src/lib.rs").read_text(encoding="utf-8")
+    (fixture / "src/lib.rs").write_text(original_library.replace("[2usize, 4]", "[2usize, 2]"), encoding="utf-8")
     result = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", "--dry-run"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -853,25 +854,25 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     )
     assert result.returncode != 0, result.stdout + result.stderr
     assert "duplicate benchmark ID: imported/shared/work/2" in result.stderr, result.stderr
-    (fixture / "src/lib.rs").write_text(original_library)
-    manifest = (fixture / "Cargo.toml").read_text().replace('airbug-bench = { path =', 'ab = { package = "airbug-bench", path =')
+    (fixture / "src/lib.rs").write_text(original_library, encoding="utf-8")
+    manifest = (fixture / "Cargo.toml").read_text(encoding="utf-8").replace('airbug-bench = { path =', 'ab = { package = "airbug-bench", path =')
     manifest += '\n[[bench]]\nname = "standalone"\nharness = false\n'
-    (fixture / "Cargo.toml").write_text(manifest)
+    (fixture / "Cargo.toml").write_text(manifest, encoding="utf-8")
     for explicit in [False, True]:
         override = "crate = crate::api, " if explicit else ""
         (fixture / "src/lib.rs").write_text(
             'pub use ab as api;\n#[ab::group(' + override + 'name = "shared")]\n'
             'pub mod shared { #[ab::bench(args = [2usize, 4])] fn work(n: usize) -> usize { n } }\n'
-        )
+        , encoding="utf-8")
         (fixture / "benches/imported.rs").write_text(
             'pub use ab as api;\n#[ab::suite(' + override + 'groups = [external_fixture::shared])] mod imported {\n'
             '#[ab::bench(types = [u32], consts = [2], drop_output = "outside")] async fn typed<T: Default + Copy, const N: usize>() -> [T; N] { [T::default(); N] }\n'
             '#[ab::group(name = "renamed")] mod nested { #[ab::bench] fn leaf() {} } }\n'
-        )
+        , encoding="utf-8")
         (fixture / "benches/standalone.rs").write_text(
             'pub use ab as api;\n#[ab::bench(' + override + 'types = [u16, u32])] fn independent<T: Default>() -> T { T::default() }\n'
             'fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("standalone"); register_independent(&mut suite); suite.main() }\n'
-        )
+        , encoding="utf-8")
         for target, expected_count in [("imported", 4), ("standalone", 2)]:
             result = subprocess.run(
                 ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", target, "--offline", "--", "--test", "--json"],
@@ -886,7 +887,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     (fixture / "benches/standalone.rs").write_text(
         '#[global_allocator] static ALLOC: ab::alloc::TrackingAllocator<std::alloc::System> = ab::alloc::TrackingAllocator::new(std::alloc::System);\n'
         '#[ab::suite] mod allocated { #[bench(allocator = &crate::ALLOC)] fn vector() -> Vec<u8> { vec![std::hint::black_box(7); std::hint::black_box(64)] } }\n'
-    )
+    , encoding="utf-8")
     result = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "standalone", "--offline", "--", "--test", "--json"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -903,31 +904,31 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     (fixture / "benches/imported.rs").write_text(
         '#[ab::suite] mod quick { #[bench(custom = true, quick = false)] fn exact(n: u64) -> std::time::Duration { '
         'assert!(std::env::var_os("QUICK_MUST_NOT_RUN").is_none()); std::time::Duration::from_nanos(n * 100) } }\n'
-    )
+    , encoding="utf-8")
     def quick_run(*flags, lazy=False, env_overrides=None):
         env = dict(environment, AIRBUG_DASHBOARD="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
         env.update(env_overrides or {})
         if lazy:
             env["QUICK_MUST_NOT_RUN"] = "1"
         return subprocess.run(["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--bench", "imported", "--offline", "--", *flags], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=env)
-    preserved_source = (fixture / "benches/imported.rs").read_text()
+    preserved_source = (fixture / "benches/imported.rs").read_text(encoding="utf-8")
     for option in ["executor = missing_executor()", "allocator = &MISSING_ALLOCATOR", 'setup_thread = "worker"', "input_bytes = |v| v.len() as u64", "input_items = |v| 1", "input_chars = |v| 1", "input_cycles = |v| 1"]:
-        (fixture / "benches/imported.rs").write_text(f'#[ab::suite(groups = [external_fixture::cases], {option})] mod rejected {{}}')
+        (fixture / "benches/imported.rs").write_text(f'#[ab::suite(groups = [external_fixture::cases], {option})] mod rejected {{}}', encoding="utf-8")
         rejected = quick_run("--list")
         assert rejected.returncode != 0, option
         assert "defaults cannot yet cross imported groups" in rejected.stderr, rejected.stderr
         assert "declare these options on the imported group" in rejected.stderr, rejected.stderr
-    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("manual"); suite.bench_threads("work", 2, || panic!("must not execute")); suite.main() }')
+    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("manual"); suite.bench_threads("work", 2, || panic!("must not execute")); suite.main() }', encoding="utf-8")
     repeated = quick_run("--threads", "1", "--threads", "2", "--list")
     assert repeated.returncode != 0 and "thread lists require main_registered" in repeated.stderr, repeated.stderr
     single = quick_run("--threads", "3", "--dry-run")
     assert single.returncode == 0, single.stderr
     assert json.JSONDecoder().raw_decode(single.stdout.lstrip())[0]["cases"][0]["contract"]["threads"] == "3"
-    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("manual"); suite.registration_threads(&[1, 2])?; suite.main() }')
+    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("manual"); suite.registration_threads(&[1, 2])?; suite.main() }', encoding="utf-8")
     mismatch = quick_run("--threads", "4", "--list")
     assert mismatch.returncode != 0 and "CLI thread matrix differs" in mismatch.stderr, mismatch.stderr
     print("cargo bench: manual registration rejects unapplied thread matrices and retains single overrides")
-    (fixture / "benches/imported.rs").write_text(preserved_source)
+    (fixture / "benches/imported.rs").write_text(preserved_source, encoding="utf-8")
     print("cargo bench: unsupported imported defaults fail explicitly before benchmark execution")
     adaptive = quick_run("--quick", "--quick-min-ms", "0", "--quick-max-ms", "1000", "--json")
     assert adaptive.returncode == 0, adaptive.stdout + adaptive.stderr
@@ -948,8 +949,8 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     assert smoke.returncode == 0, smoke.stdout + smoke.stderr
     smoke_result = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in smoke.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
     assert len(smoke_result["observations"]) == 1 and smoke_result["observations"][0]["operations"] == 1, smoke_result
-    source = (fixture / "benches/imported.rs").read_text()
-    (fixture / "benches/imported.rs").write_text(source.replace("quick = false", "quick = true, quick_config = ab::QuickConfig { min_time: std::time::Duration::ZERO, ..Default::default() }"))
+    source = (fixture / "benches/imported.rs").read_text(encoding="utf-8")
+    (fixture / "benches/imported.rs").write_text(source.replace("quick = false", "quick = true, quick_config = ab::QuickConfig { min_time: std::time::Duration::ZERO, ..Default::default() }"), encoding="utf-8")
     attributed = quick_run("--json")
     assert attributed.returncode == 0, attributed.stdout + attributed.stderr
     attributed_result = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in attributed.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
@@ -962,59 +963,59 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
         '#[ab::group] pub mod plots { '
         '#[bench(custom = true)] fn inherited(_: u64) -> std::time::Duration { std::time::Duration::ZERO } '
         '#[bench(custom = true, summary_scale = "linear")] fn explicit(_: u64) -> std::time::Duration { std::time::Duration::ZERO } }\n'
-    )
+    , encoding="utf-8")
     (fixture / "benches/imported.rs").write_text(
         '#[ab::suite(summary_scale = "logarithmic", groups = [external_fixture::plots])] mod plotting {}\n'
-    )
+    , encoding="utf-8")
     plot_flags = ["--iterations", "1", "--samples", "2", "--warmup-ms", "0", "--resamples", "128"]
     for label, extra, missing in [("inherited", [], 1), ("override", ["--summary-scale", "linear"], 0)]:
         destination = fixture / f"plot-{label}"
         result = quick_run(*plot_flags, *extra, "--output", str(destination))
         assert result.returncode == 0, result.stdout + result.stderr
-        html = (destination / "estimates.html").read_text()
+        html = (destination / "estimates.html").read_text(encoding="utf-8")
         assert html.count("population contains nonpositive values; no subset was plotted") == missing, html
         assert "plotting/plots/explicit" in html and "plotting/plots/inherited" in html
-        saved = json.loads((destination / "run.json").read_text())
+        saved = json.loads((destination / "run.json").read_text(encoding="utf-8"))
         scales = json.loads(saved["provenance"]["airbug.presentation.summary_scales.v1"])
         assert scales["plotting/plots/explicit"] == "linear"
         assert scales["plotting/plots/inherited"] == ("logarithmic" if missing else "linear")
-    original = (fixture / "benches/imported.rs").read_text()
-    (fixture / "benches/imported.rs").write_text(original.replace('summary_scale = "logarithmic"', 'summary_scale = "log"'))
+    original = (fixture / "benches/imported.rs").read_text(encoding="utf-8")
+    (fixture / "benches/imported.rs").write_text(original.replace('summary_scale = "logarithmic"', 'summary_scale = "log"'), encoding="utf-8")
     invalid = quick_run("--list", lazy=True)
     assert invalid.returncode != 0 and "summary_scale must be linear or logarithmic" in invalid.stderr, invalid.stdout + invalid.stderr
     print("cargo bench: cross-crate summary scale defaults, explicit linear, CLI override and invalid attribute passed")
     (fixture / "src/lib.rs").write_text(
         '#[ab::group] pub mod rates { #[bench(custom = true, args = [1024u64, 16, 128], bytes = |n| n)] '
         'fn sized(iterations: u64, size: u64) -> std::time::Duration { std::time::Duration::from_nanos(iterations * size * 2) } }\n'
-    )
+    , encoding="utf-8")
     (fixture / "benches/imported.rs").write_text(
         '#[ab::suite(summary_family = "sizes", groups = [external_fixture::rates])] mod family {}\n'
-    )
+    , encoding="utf-8")
     line_output = fixture / "input-lines"
     line_result = quick_run("--iterations", "2", "--samples", "2", "--warmup-ms", "0", "--summary-parameter", "arg", "--summary-estimator", "mean", "--summary-scale", "logarithmic", "--output", str(line_output))
-    assert "arithmetic mean of normalized observations" in (line_output / "report.html").read_text()
-    assert "ratio of means" in (line_output / "report.html").read_text()
+    assert "arithmetic mean of normalized observations" in (line_output / "report.html").read_text(encoding="utf-8")
+    assert "ratio of means" in (line_output / "report.html").read_text(encoding="utf-8")
     assert line_result.returncode == 0, line_result.stdout + line_result.stderr
-    line_html = (line_output / "report.html").read_text()
+    line_html = (line_output / "report.html").read_text(encoding="utf-8")
     assert "Throughput input summaries" in line_html and "MiB/s" in line_html
     assert line_html.count("Lines connect observed estimates") == 2
     assert "family family/rates/sizes / candidate" in line_html
-    line_run = json.loads((line_output / "run.json").read_text())
+    line_run = json.loads((line_output / "run.json").read_text(encoding="utf-8"))
     families = json.loads(line_run["provenance"]["airbug.presentation.summary_families.v1"])
     assert len(families) == 3 and set(families.values()) == {"family/rates/sizes"}
     for observation in line_run["observations"]:
         assert int(observation["value"]) == observation["operations"] * int(observation["case"].rsplit("/", 1)[1]) * 2
     print("cargo bench: cross-crate family attributes and dynamic-byte time/throughput line exports passed")
-    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("plot_defaults"); suite.plots(false); suite.bench("value", || std::hint::black_box(1u64)); suite.main() }')
+    (fixture / "benches/imported.rs").write_text('fn main() -> ab::Result<()> { let mut suite = ab::Suite::new("plot_defaults"); suite.plots(false); suite.bench("value", || std::hint::black_box(1u64)); suite.main() }', encoding="utf-8")
     for mode, flags, expect_svg in [("default", [], False), ("on", ["--plots"], True), ("off", ["--no-plots"], False)]:
         destination = fixture / ("plot-" + mode)
         result = quick_run("--iterations", "2", "--samples", "2", "--warmup-ms", "0", "--output", str(destination), *flags)
         assert result.returncode == 0, result.stdout + result.stderr
-        assert ("<svg" in (destination / "report.html").read_text()) == expect_svg
+        assert ("<svg" in (destination / "report.html").read_text(encoding="utf-8")) == expect_svg
     assert quick_run("--plots", "--no-plots", "--list").returncode != 0
     print("cargo bench: suite plot default and explicit CLI enable/disable passed")
-    measurement_source = (ROOT / "bench/examples/custom_measurement.rs").read_text().replace("airbug_bench::", "ab::")
-    (fixture / "benches/imported.rs").write_text(measurement_source)
+    measurement_source = (ROOT / "bench/examples/custom_measurement.rs").read_text(encoding="utf-8").replace("airbug_bench::", "ab::")
+    (fixture / "benches/imported.rs").write_text(measurement_source, encoding="utf-8")
     measurement_store = fixture / "measurement-baselines"
     measurement_flags = ["--iterations", "130", "--samples", "3", "--warmup-ms", "0", "--baseline-store", str(measurement_store), "--json"]
     first = quick_run(*measurement_flags, "--save-baseline", "counter")
@@ -1025,9 +1026,9 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     measurement_output = fixture / "measurement-report"
     loaded = quick_run(*measurement_flags, "--load-baseline", "counter", "--baseline", "counter", "--resamples", "128", "--output", str(measurement_output))
     assert loaded.returncode == 0, loaded.stdout + loaded.stderr
-    assert json.loads((measurement_output / "run.json").read_text())["observations"] == first_run["observations"]
-    formatted = json.loads((measurement_output / "formatted.json").read_text())
-    with (measurement_output / "formatted.csv").open(newline="") as csv_file:
+    assert json.loads((measurement_output / "run.json").read_text(encoding="utf-8"))["observations"] == first_run["observations"]
+    formatted = json.loads((measurement_output / "formatted.json").read_text(encoding="utf-8"))
+    with (measurement_output / "formatted.csv").open(newline="", encoding="utf-8") as csv_file:
         csv_rows = list(csv.DictReader(csv_file))
     assert len(csv_rows) == len(formatted[0]["machine"])
     for csv_row, machine_row in zip(csv_rows, formatted[0]["machine"]):
@@ -1042,30 +1043,30 @@ with tempfile.TemporaryDirectory(prefix="airbug-external-crate-") as directory:
     assert formatted[0]["throughput"]["items"]["work_per_operation"] == 6
     assert formatted[0]["throughput"]["items"]["observations"][0]["value"] == 2
     assert formatted[0]["throughput"]["items"]["observations"][0]["unit"] == "items/unit"
-    assert "Formatted throughput:" in (measurement_output / "report.html").read_text()
+    assert "Formatted throughput:" in (measurement_output / "report.html").read_text(encoding="utf-8")
     assert json.loads(next(line.removeprefix("BENCH_FORMATTED=") for line in loaded.stdout.splitlines() if line.startswith("BENCH_FORMATTED="))) == formatted
-    assert "Formatted metric:" in (measurement_output / "report.html").read_text()
-    assert "formatted comparison (groups)" in (measurement_output / "report.html").read_text()
-    assert "formatted throughput comparison: items (items/unit)" in (measurement_output / "report.html").read_text()
-    comparison = json.loads((measurement_output / "comparison.json").read_text())
+    assert "Formatted metric:" in (measurement_output / "report.html").read_text(encoding="utf-8")
+    assert "formatted comparison (groups)" in (measurement_output / "report.html").read_text(encoding="utf-8")
+    assert "formatted throughput comparison: items (items/unit)" in (measurement_output / "report.html").read_text(encoding="utf-8")
+    comparison = json.loads((measurement_output / "comparison.json").read_text(encoding="utf-8"))
     assert any(row["metric"] == "work_units" for case in comparison["cases"] for row in case["comparisons"])
-    estimates = json.loads((measurement_output / "estimates.json").read_text())
+    estimates = json.loads((measurement_output / "estimates.json").read_text(encoding="utf-8"))
     counter_estimate = next(row for row in estimates["rows"] if row["metric"] == "work_units")
     assert counter_estimate["unit"] == "units"
     assert counter_estimate["estimates"]["mean"]["point"] == 3
-    display_estimates = json.loads((measurement_output / "formatted-estimates.json").read_text())
+    display_estimates = json.loads((measurement_output / "formatted-estimates.json").read_text(encoding="utf-8"))
     assert len(display_estimates["rows"]) == 1
     assert display_estimates["rows"][0]["unit"] == "groups"
     assert display_estimates["rows"][0]["estimates"]["mean"]["point"] == 1
-    assert "groups" in (measurement_output / "formatted-estimates.html").read_text()
-    report_html = (measurement_output / "report.html").read_text()
+    assert "groups" in (measurement_output / "formatted-estimates.html").read_text(encoding="utf-8")
+    report_html = (measurement_output / "report.html").read_text(encoding="utf-8")
     for artifact in ("estimates.html", "formatted-estimates.html", "regression-comparison.html", "formatted.csv", "run.json"):
         assert f'href="{artifact}"' in report_html
         assert (measurement_output / artifact).is_file()
 
 
-    assert "work_units" in (measurement_output / "report.html").read_text()
-    assert "work_units" in (measurement_output / "regression-comparison.html").read_text()
+    assert "work_units" in (measurement_output / "report.html").read_text(encoding="utf-8")
+    assert "work_units" in (measurement_output / "regression-comparison.html").read_text(encoding="utf-8")
     print("cargo bench: custom measurement across crate boundary, baseline reload, normalized estimates and HTML passed")
     attributed_source = measurement_source.split("fn main() -> Result<()>")[0] + r"""
 thread_local! { static TICKS: Rc<Cell<u64>> = Rc::new(Cell::new(0)); }
@@ -1076,7 +1077,7 @@ mod measured {
     fn work() { super::TICKS.with(|c| c.set(c.get() + 3)); }
 }
 """
-    (fixture / "benches/imported.rs").write_text(attributed_source)
+    (fixture / "benches/imported.rs").write_text(attributed_source, encoding="utf-8")
     attributed = quick_run(*measurement_flags, "--no-history")
     assert attributed.returncode == 0, attributed.stdout + attributed.stderr
     attributed_format = json.loads(next(line.removeprefix("BENCH_FORMATTED=") for line in attributed.stdout.splitlines() if line.startswith("BENCH_FORMATTED=")))
@@ -1087,21 +1088,21 @@ mod measured {
         ("formatter = super::Groups", "formatter requires measurement"),
     ]:
         broken = attributed_source.replace("measurement = super::shared_counter(), formatter = super::Groups", replacement)
-        (fixture / "benches/imported.rs").write_text(broken)
+        (fixture / "benches/imported.rs").write_text(broken, encoding="utf-8")
         rejected = quick_run("--list", lazy=True)
         assert rejected.returncode != 0 and diagnostic in rejected.stderr, rejected.stdout + rejected.stderr
-    (fixture / "benches/imported.rs").write_text(attributed_source)
+    (fixture / "benches/imported.rs").write_text(attributed_source, encoding="utf-8")
     print("cargo bench: measurement/formatter attributes with renamed dependency and invalid combinations passed")
     for async_keyword in ["", "async "]:
         manual_source = attributed_source.replace("measurement = super::shared_counter(),", "custom = true, measurement = super::shared_counter(),").replace("fn work() { super::TICKS.with(|c| c.set(c.get() + 3)); }", async_keyword + "fn work(n: u64) -> u64 { n * 3 }")
-        (fixture / "benches/imported.rs").write_text(manual_source)
+        (fixture / "benches/imported.rs").write_text(manual_source, encoding="utf-8")
         manual = quick_run("--iterations", "7", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
         assert manual.returncode == 0, manual.stdout + manual.stderr
         manual_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in manual.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
         assert next(o for o in manual_data["observations"] if o["metric"] == "work_units")["value"] == "21"
         manual_format = json.loads(next(line.removeprefix("BENCH_FORMATTED=") for line in manual.stdout.splitlines() if line.startswith("BENCH_FORMATTED=")))
         assert manual_format[0]["human"][0]["value"] == 1
-    (fixture / "benches/imported.rs").write_text(attributed_source)
+    (fixture / "benches/imported.rs").write_text(attributed_source, encoding="utf-8")
     print("cargo bench: sync/async caller-defined custom totals preserve formatter output")
 
     sampling_env = {"AIRBUG_BENCH_SAMPLES": "2", "AIRBUG_BENCH_ITERATIONS": "3", "AIRBUG_BENCH_WARMUP_MS": "0", "AIRBUG_BENCH_SAMPLE_MS": "1", "AIRBUG_BENCH_EXCLUDE_EXTERNAL_TIME": "true"}
@@ -1141,8 +1142,8 @@ mod measured {
     colored = quick_run(*console_flags, "--color", "always", "--output", str(color_output), env_overrides={"NO_COLOR": "1"})
     assert colored.returncode == 0, colored.stdout + colored.stderr
     assert "\x1b[1;36m" in colored.stdout
-    assert "\x1b" not in (color_output / "report.html").read_text()
-    assert "\x1b" not in (color_output / "run.json").read_text()
+    assert "\x1b" not in (color_output / "report.html").read_text(encoding="utf-8")
+    assert "\x1b" not in (color_output / "run.json").read_text(encoding="utf-8")
     for choice in ["auto", "never"]:
         plain = quick_run(*console_flags, "--color", choice)
         assert plain.returncode == 0 and "\x1b" not in plain.stdout, plain.stdout + plain.stderr
@@ -1168,13 +1169,13 @@ mod measured {
     assert tree_json.returncode == 0 and "BENCH_RESULT=" in tree_json.stdout and "└──" not in tree_json.stdout
     assert quick_run("--list", "--output-format", "unknown").returncode != 0
     print("cargo bench: hierarchical result/list output, quiet tree and unchanged JSON passed")
-    (fixture / "benches/imported.rs").write_text('const SHARED: &[u64] = &[2, 7]; #[ab::suite] mod slices { #[bench(args = super::SHARED, custom = true)] fn owned(n: u64, value: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * value) } }')
+    (fixture / "benches/imported.rs").write_text('const SHARED: &[u64] = &[2, 7]; #[ab::suite] mod slices { #[bench(args = super::SHARED, custom = true)] fn owned(n: u64, value: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * value) } }', encoding="utf-8")
     sliced = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
     assert sliced.returncode == 0, sliced.stdout + sliced.stderr
     slice_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in sliced.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
     assert [o["value"] for o in slice_data["observations"]] == ["6", "21"]
     print("cargo bench: shared argument slice supplies owned Copy values across crate boundary")
-    (fixture / "benches/imported.rs").write_text('const SHARED: &[usize] = &[2, 7]; #[ab::suite] mod slices { #[bench(args = super::SHARED, setup = |n: usize| vec![1u8; n], input_bytes = |v: &Vec<u8>| v.len() as u64)] fn prepared(v: &mut [u8]) { assert_eq!(v[0], 1); v[0] = 9; } }')
+    (fixture / "benches/imported.rs").write_text('const SHARED: &[usize] = &[2, 7]; #[ab::suite] mod slices { #[bench(args = super::SHARED, setup = |n: usize| vec![1u8; n], input_bytes = |v: &Vec<u8>| v.len() as u64)] fn prepared(v: &mut [u8]) { assert_eq!(v[0], 1); v[0] = 9; } }', encoding="utf-8")
     prepared = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
     assert prepared.returncode == 0, prepared.stdout + prepared.stderr
     prepared_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in prepared.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
@@ -1192,14 +1193,14 @@ impl std::fmt::Display for Label {
     #[bench(types = [super::Label], args = [T::default()], custom = true)]
     fn generic<T: Copy + Default + ToString>(n: u64, _: T) -> std::time::Duration { std::time::Duration::from_nanos(n) }
 }
-""")
+""", encoding="utf-8")
     labelled = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history")
     assert labelled.returncode == 0, labelled.stdout + labelled.stderr
     labelled_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in labelled.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
     assert [o["value"] for o in labelled_data["observations"]] == ["6", "21", "3"]
     assert [c["contract"]["param.arg"] for c in labelled_data["cases"]] == ["len-2", "len-7", "len-0"]
     print("cargo bench: Display-only value and generic ToString argument labels passed")
-    (fixture / "benches/imported.rs").write_text('#[ab::suite] mod runtime { #[bench(args = [2u64, 7], bytes = |n| n * 1048576, custom = true)] fn value(n: u64, _: u64) -> std::time::Duration { std::time::Duration::from_secs(n) } }')
+    (fixture / "benches/imported.rs").write_text('#[ab::suite] mod runtime { #[bench(args = [2u64, 7], bytes = |n| n * 1048576, custom = true)] fn value(n: u64, _: u64) -> std::time::Duration { std::time::Duration::from_secs(n) } }', encoding="utf-8")
     runtime_env = {"AIRBUG_BENCH_TIMER": "os", "AIRBUG_BENCH_SORT": "natural", "AIRBUG_BENCH_REVERSE": "true", "AIRBUG_BENCH_BYTES_FORMAT": "binary"}
     runtime_run = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history", env_overrides=runtime_env)
     assert runtime_run.returncode == 0, runtime_run.stdout + runtime_run.stderr
@@ -1212,7 +1213,7 @@ impl std::fmt::Display for Label {
     assert overridden.returncode == 0, overridden.stdout + overridden.stderr
     assert overridden.stdout.splitlines() == ["runtime/value/2", "runtime/value/7"]
     print("cargo bench: environment timer/sort/direction/byte formatting and CLI overrides passed")
-    (fixture / "benches/imported.rs").write_text('#[ab::suite] mod counts { #[bench(args = [2usize, 7], setup = |n: usize| vec![1u8; n], input_bytes = |v: &Vec<u8>| v.len() as u64, input_items = |_: &Vec<u8>| 1, input_bits = |v: &Vec<u8>| ab::counters::bits_from_bytes(v.len() as u64))] fn work(v: &mut [u8]) { std::hint::black_box(v); } }')
+    (fixture / "benches/imported.rs").write_text('#[ab::suite] mod counts { #[bench(args = [2usize, 7], setup = |n: usize| vec![1u8; n], input_bytes = |v: &Vec<u8>| v.len() as u64, input_items = |_: &Vec<u8>| 1, input_bits = |v: &Vec<u8>| ab::counters::bits_from_bytes(v.len() as u64))] fn work(v: &mut [u8]) { std::hint::black_box(v); } }', encoding="utf-8")
     counter_run = quick_run("--iterations", "3", "--samples", "1", "--warmup-ms", "0", "--json", "--no-history", "--bytes-count", "13", "--bits-count", "104", env_overrides={"AIRBUG_BENCH_BITS_COUNT": "invalid", "AIRBUG_BENCH_BYTES_COUNT": "invalid", "AIRBUG_BENCH_CHARS_COUNT": "0", "AIRBUG_BENCH_CYCLES_COUNT": "7"})
     assert counter_run.returncode == 0, counter_run.stdout + counter_run.stderr
     counter_data = json.loads(next(line.removeprefix("BENCH_RESULT=") for line in counter_run.stdout.splitlines() if line.startswith("BENCH_RESULT=")))
@@ -1248,7 +1249,7 @@ output_dir = pathlib.Path(history.name) / "bootstrap-result"
 output = run("collections/sum", "--", "--exact", "--iterations", "50", "--samples", "6", "--warmup-ms", "0",
              "--resamples", "200", "--confidence-level", "0.9", "--analysis-seed", "123", "--bootstrap-distributions", "--output", str(output_dir), "--json")
 estimates = json.loads(next(line.removeprefix("BENCH_ESTIMATES=") for line in output.splitlines() if line.startswith("BENCH_ESTIMATES=")))
-assert estimates == json.loads((output_dir / "estimates.json").read_text()), estimates
+assert estimates == json.loads((output_dir / "estimates.json").read_text(encoding="utf-8")), estimates
 for statistic in ["mean", "median", "standard_deviation", "median_absolute_deviation"]:
     draws = estimates["rows"][0]["distributions"][statistic]
     assert len(draws) == 200, statistic
@@ -1264,7 +1265,7 @@ for statistic in ["mean", "median", "standard_deviation", "median_absolute_devia
 
 assert sum(estimates["rows"][0]["outliers"]["counts"]) == 6, estimates
 assert len(estimates["rows"][0]["outliers"]["points"]) == 6, estimates
-html = (output_dir / "estimates.html").read_text()
+html = (output_dir / "estimates.html").read_text(encoding="utf-8")
 assert "<svg" in html and "Tukey fences" in html and "No observations discarded" in html, html
 assert ("Gaussian KDE bandwidth" in html or "point mass" in html) and "Observation rug at zero" in html, html
 assert "<!--CHARTS-->" not in html and "<!--DETAILS-->" not in html, html
@@ -1291,8 +1292,8 @@ assert len(regressions) == 1 and regressions[0]["fit"]["samples"] == 5, regressi
 assert regressions[0]["fit"]["slope"]["point"] > 0, regression_report
 assert len(regressions[0]["slope_distribution"]) == 200
 assert regressions[0]["fit"]["slope"]["lower"] <= regressions[0]["fit"]["slope"]["upper"], regression_report
-assert json.loads((regression_dir / "estimates.json").read_text()) == regression_report
-recorded = json.loads((regression_dir / "run.json").read_text())
+assert json.loads((regression_dir / "estimates.json").read_text(encoding="utf-8")) == regression_report
+recorded = json.loads((regression_dir / "run.json").read_text(encoding="utf-8"))
 paired = regressions[0]["samples"]
 assert len(paired) == 5
 expected_pairs = [{"operations": o["operations"], "total": float(o["value"])}
@@ -1302,7 +1303,7 @@ expected_pairs = [{"operations": o["operations"], "total": float(o["value"])}
                   and o["variant"] == regression_report["rows"][0]["variant"]
                   and o["process"] == regressions[0]["process"]]
 assert paired == expected_pairs, (paired, expected_pairs)
-regression_html = (regression_dir / "estimates.html").read_text()
+regression_html = (regression_dir / "estimates.html").read_text(encoding="utf-8")
 assert "<polygon" in regression_html and "Slope confidence interval" in regression_html
 assert "Violin summaries" in regression_html and "normalized_observation" in regression_html
 assert "process 0 regression" in regression_html and "not a prediction interval" in regression_html
@@ -1313,11 +1314,11 @@ print("cargo bench: regression JSON retains exact paired batches and HTML includ
 single_dir = pathlib.Path(history.name) / "single-resample"
 single_output = run("collections/sum", "--", "--exact", "--sampling", "linear", "--samples", "3", "--sample-ms", "1", "--warmup-ms", "0", "--resamples", "1", "--bootstrap-distributions", "--json", "--output", str(single_dir))
 single = json.loads(next(line.removeprefix("BENCH_ESTIMATES=") for line in single_output.splitlines() if line.startswith("BENCH_ESTIMATES=")))
-assert single == json.loads((single_dir / "estimates.json").read_text())
+assert single == json.loads((single_dir / "estimates.json").read_text(encoding="utf-8"))
 assert single["rows"][0]["estimates"]["mean"]["standard_error"] is None
 assert single["rows"][0]["regressions"][0]["fit"]["slope"]["standard_error"] is None
 assert len(single["rows"][0]["distributions"]["mean"]) == 1
-assert "Standard error is unavailable" in (single_dir / "estimates.html").read_text()
+assert "Standard error is unavailable" in (single_dir / "estimates.html").read_text(encoding="utf-8")
 print("cargo bench: single bootstrap draw persists null standard errors in estimates and regression")
 
 unicode = measured_run("collections/unicode_text/", "--", "--test")
@@ -1330,7 +1331,7 @@ for byte_format in ["decimal", "binary"]:
     # shorter than the host timer resolution in smoke mode.
     formatted = run("collections/unicode_text/", "--", "--iterations", "1000", "--samples", "1", "--warmup-ms", "0", "--bytes-format", byte_format, "--json", "--output", str(formatted_dir))
     rates = json.loads(next(line.removeprefix("BENCH_THROUGHPUT=") for line in formatted.splitlines() if line.startswith("BENCH_THROUGHPUT=")))
-    assert rates == json.loads((formatted_dir / "throughput.json").read_text()), rates
+    assert rates == json.loads((formatted_dir / "throughput.json").read_text(encoding="utf-8")), rates
     assert len(rates) == 4, rates
     zero_rates = [r for r in rates if r["case"].endswith('/""')]
     assert {r["unit"] for r in zero_rates} == {"B", "chars"}, zero_rates
@@ -1351,15 +1352,15 @@ with tempfile.TemporaryDirectory(prefix="airbug-bootstrap-options-") as director
         '[package]\nname = "bootstrap-options-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
         '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ' }\n'
         '[[bench]]\nname = "cases"\nharness = false\n'
-    )
+    , encoding="utf-8")
     (fixture / "src/lib.rs").write_text(
         '#[airbug_bench::group(confidence_level = 0.9, analysis_seed = 7)] '
         'pub mod imported { #[bench(custom = true)] fn work(n: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * 3) } }'
-    )
+    , encoding="utf-8")
     (fixture / "benches/cases.rs").write_text(
         '#[airbug_bench::suite(groups = [bootstrap_options_fixture::imported], resamples = 32, confidence_level = 0.8, samples = 4, iterations = 3, warmup_ms = 0)] '
         'mod cases { #[bench(custom = true, confidence_level = 0.99, analysis_seed = 0)] fn local(n: u64) -> std::time::Duration { std::time::Duration::from_nanos(n * 5) } }'
-    )
+    , encoding="utf-8")
     for flags, count, capture in [([], 32, False), ([], 32, True), (["--resamples", "64"], 64, True)]:
         completed = subprocess.run(
             ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--no-history", "--json", *(["--bootstrap-distributions"] if capture else []), *flags],
@@ -1388,7 +1389,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
         '[package]\nname = "imported-threads-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
         '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ' }\n'
         '[[bench]]\nname = "cases"\nharness = false\n'
-    )
+    , encoding="utf-8")
     (fixture / "src/lib.rs").write_text(
         '#[airbug_bench::group] pub mod imported { '
         '#[bench] fn work() -> std::rc::Rc<()> { std::rc::Rc::new(()) } '
@@ -1397,10 +1398,10 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
         '#[bench(args = [2usize], setup = |n| vec![n; n])] fn prepared(v: &mut [usize]) -> usize { v.len() } '
         '#[bench(setup = || std::rc::Rc::new(3usize))] async fn async_prepared(v: std::rc::Rc<usize>) -> std::rc::Rc<usize> { std::future::ready(v).await } '
         '#[bench(threads = false)] fn local() {} }'
-    )
+    , encoding="utf-8")
     (fixture / "benches/cases.rs").write_text(
         '#[airbug_bench::suite(groups = [imported_threads_fixture::imported], threads = [1, 2])] mod cases {}'
-    )
+    , encoding="utf-8")
     completed = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--test", "--json", "--no-history"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -1415,7 +1416,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
     # Remove attribute threading: CLI alone must select concurrent registration.
     (fixture / "benches/cases.rs").write_text(
         '#[airbug_bench::suite(groups = [imported_threads_fixture::imported])] mod cases {}'
-    )
+    , encoding="utf-8")
     completed = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--threads", "2,3", "--test", "--json", "--no-history"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -1434,7 +1435,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-imported-threads-") as directory
         'let mut suite = airbug_bench::Suite::new("huge-plan"); '
         'suite.config(airbug_bench::Config { samples: u64::MAX, warmup: std::time::Duration::MAX, sample_time: std::time::Duration::MAX, ..Default::default() }); '
         'suite.bench("must_not_run", || panic!("preview executed workload")); suite.main() }'
-    )
+    , encoding="utf-8")
     completed = subprocess.run(
         ["cargo", "bench", "--manifest-path", str(fixture / "Cargo.toml"), "--offline", "--bench", "cases", "--", "--dry-run"],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -1457,7 +1458,7 @@ with tempfile.TemporaryDirectory(prefix="airbug-local-worker-") as directory:
         '[package]\nname = "local-worker-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
         '[dependencies]\nairbug-bench = { path = ' + json.dumps(str(ROOT / "bench")) + ' }\n'
         '[[bench]]\nname = "cases"\nharness = false\n'
-    )
+    , encoding="utf-8")
     (fixture / "src/lib.rs").write_text('''
 #[airbug_bench::group(samples = 1, iterations = 2, warmup_ms = 0)]
 pub mod imported {
@@ -1475,17 +1476,17 @@ pub mod imported {
     #[bench(setup = || Rc::new(6), drop_output = "outside")]
     async fn async_owned(v: Rc<i32>) -> Rc<i32> { std::future::ready(v).await }
 }
-''')
-    library_source = (fixture / "src/lib.rs").read_text()
+''', encoding="utf-8")
+    library_source = (fixture / "src/lib.rs").read_text(encoding="utf-8")
     for mode in ["inherited", "cli", "explicit"]:
         inherited = mode == "inherited"
         (fixture / "src/lib.rs").write_text(
             library_source.replace("#[bench(", "#[bench(threads = 1, ") if mode == "explicit" else library_source
-        )
+        , encoding="utf-8")
         (fixture / "benches/cases.rs").write_text(
             '#[airbug_bench::suite(groups = [local_worker_fixture::imported]'
             + (', threads = [1]' if inherited else '') + ')] mod cases {}'
-        )
+        , encoding="utf-8")
         flags = ["--threads", "1"] if mode == "cli" else []
         for smoke in [True, False]:
             numerical = mode == "explicit" and smoke
@@ -1506,7 +1507,7 @@ pub mod imported {
             assert sum(w["operations"] for w in result["worker_timings"]) == (6 if smoke else 12), result
             assert all(w["worker"] == 0 and w["wave"] == 0 for w in result["worker_timings"]), result
             if numerical:
-                report_html = (report_dir / "report.html").read_text()
+                report_html = (report_dir / "report.html").read_text(encoding="utf-8")
                 assert 'id="worker-timings"' in report_html
                 assert "Case contracts" in report_html
                 assert "<svg" not in report_html and "worker-distributions" not in report_html

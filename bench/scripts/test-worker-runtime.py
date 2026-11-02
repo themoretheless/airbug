@@ -21,7 +21,7 @@ rayon-core = "1.13"
 [[bench]]
 name = "runtime"
 harness = false
-''')
+''', encoding="utf-8")
     (root / "benches/runtime.rs").write_text('''
 use std::{cell::Cell, collections::HashSet, rc::Rc, sync::{Arc, Mutex}};
 static EXITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -49,7 +49,7 @@ fn main() -> ab::Result<()> {
     assert_eq!(EXITS.load(std::sync::atomic::Ordering::SeqCst), 2, "workers must exit before main returns");
     Ok(())
 }
-''')
+''', encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
     env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", RAYON_NUM_THREADS="3",
                CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))

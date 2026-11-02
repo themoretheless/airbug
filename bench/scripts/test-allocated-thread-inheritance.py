@@ -21,7 +21,7 @@ ab={{package="airbug-bench",path={json.dumps(str(ROOT / 'bench'))}}}
 [[bench]]
 name="cases"
 harness=false
-''')
+''', encoding="utf-8")
     (root / "src/lib.rs").write_text('''
 #[global_allocator]
 static ALLOCATOR: ab::alloc::TrackingAllocator<std::alloc::System> = ab::alloc::TrackingAllocator::new(std::alloc::System);
@@ -39,15 +39,15 @@ pub mod work {
         vec![input[0];16]
     }
 }
-''')
-    (root / "benches/cases.rs").write_text('#[ab::suite(groups=[allocated_threads::work], threads=[1,2])] mod cases {}')
+''', encoding="utf-8")
+    (root / "benches/cases.rs").write_text('#[ab::suite(groups=[allocated_threads::work], threads=[1,2])] mod cases {}', encoding="utf-8")
     def invoke(flags, extra=None, lazy=False):
         env = {k: v for k, v in os.environ.items() if not k.startswith("AIRBUG_BENCH_")}
         env.update(AIRBUG_DASHBOARD="0", AIRBUG_BENCH_HISTORY="0", CARGO_TARGET_DIR=str(ROOT / "target/parity-external"))
         env.update(extra or {})
         if lazy:
             env["MUST_NOT_RUN"] = "1"
-        result = subprocess.run(["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"), "--bench", "cases", "--", *flags], env=env, capture_output=True, text=True)
+        result = subprocess.run(["cargo", "bench", "--offline", "--manifest-path", str(root / "Cargo.toml"), "--bench", "cases", "--", *flags], env=env, capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         return result.stdout
     for flags, env, expected in [([], {}, {1,2}), (["--threads", "3,1"], {"AIRBUG_BENCH_THREADS":"invalid"}, {1,3}), ([], {"AIRBUG_BENCH_THREADS":"2"}, {2})]:

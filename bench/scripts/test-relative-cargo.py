@@ -17,18 +17,18 @@ with tempfile.TemporaryDirectory(prefix="airbug-relative-cargo-") as directory:
         if lazy:
             current.update(AIRBUG_TEST_NO_SETUP="1", AIRBUG_TEST_NO_EXECUTION="1")
         output = root / name
-        result = subprocess.run([*command, "--baseline-store", str(root / "baselines"), "--output", str(output), *flags], cwd=ROOT, env=current, capture_output=True, text=True)
+        result = subprocess.run([*command, "--baseline-store", str(root / "baselines"), "--output", str(output), *flags], cwd=ROOT, env=current, capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0, result.stdout + result.stderr
         return output, result.stdout
     run("first", "--save-baseline", "reference", "--json")
     output, text = run("second", "--baseline", "reference", "--json")
     assert "Relative bootstrap estimates" not in text
-    relative = json.loads((output / "relative-distributions.json").read_text())[0]
+    relative = json.loads((output / "relative-distributions.json").read_text(encoding="utf-8"))[0]
     assert relative["resampling_unit"] == "normalized_observation"
     assert (relative["baseline_units"], relative["candidate_units"]) == (3, 3)
     assert relative["report"]["mean"]["interval_percent"] is not None
     assert len(relative["throughput"]) == 2
-    document = (output / "regression-comparison.html").read_text()
+    document = (output / "regression-comparison.html").read_text(encoding="utf-8")
     assert "batches may be autocorrelated" in document
     assert "<svg" not in document
     for layout in ["table", "tree"]:
@@ -36,24 +36,24 @@ with tempfile.TemporaryDirectory(prefix="airbug-relative-cargo-") as directory:
             output, text = run(f"{layout}-{'quiet' if quiet else 'text'}", "--load-baseline", "reference", "--baseline", "reference", "--output-format", layout, *(["--quiet"] if quiet else []), lazy=True)
             assert ("Relative bootstrap estimates" in text) == (not quiet), text
             assert ("└── collections" in text) == (layout == "tree"), text
-            assert "batches may be autocorrelated" in (output / "regression-comparison.html").read_text()
+            assert "batches may be autocorrelated" in (output / "regression-comparison.html").read_text(encoding="utf-8")
     env["AIRBUG_BENCH_HISTORY"] = "1"
     automatic = ["--history-dir", str(root / "history"), "--hypothesis-resamples", "32", "--hypothesis-seed", "7"]
     run("history-first", *automatic, "--json")
     for quiet in [False, True]:
         output, text = run("history-quiet" if quiet else "history-text", *automatic, *(["--quiet"] if quiet else []))
         assert ("Relative bootstrap estimates" in text) == (not quiet)
-        comparison = json.loads((output / "comparison.json").read_text())
+        comparison = json.loads((output / "comparison.json").read_text(encoding="utf-8"))
         relative = comparison["cases"][0]["relative"][0]
         assert relative["resampling_unit"] == "normalized_observation"
         assert relative["report"]["config"]["resamples"] == 32
         assert "draws_percent" not in relative["report"]["mean"]
-        assert "Relative bootstrap estimates" in (output / "report.html").read_text()
+        assert "Relative bootstrap estimates" in (output / "report.html").read_text(encoding="utf-8")
     output, text = run("history-quiet-tree", *automatic, "--quiet", "--output-format", "tree")
     assert "└── collections" in text
     assert "Relative bootstrap estimates" not in text
     assert "Previous run comparison" in text
-    assert "Relative bootstrap estimates" in (output / "report.html").read_text()
+    assert "Relative bootstrap estimates" in (output / "report.html").read_text(encoding="utf-8")
     output, text = run("history-json", *automatic, "--json", "--output-format", "tree", "--color", "always")
     assert "└──" not in text and "\x1b" not in text
     for line in text.splitlines():
