@@ -195,7 +195,7 @@ pub fn format_observations(
             unit: contract.unit.clone(),
         }
     } else {
-        let typical = values.iter().copied().fold(0.0_f64, f64::max);
+        let typical = values.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
         match format {
             Format::Human => formatter.scale_values(typical, &values)?,
             Format::Machine => formatter.scale_for_machines(&values)?,
@@ -785,7 +785,11 @@ pub fn relative_throughput(
         let mut output_unit = None;
         let report = match (count, &samples) {
             (Some(work), Ok((before, after, _))) if work > 0 => {
-                let typical = before.iter().chain(after).copied().fold(0., f64::max);
+                let typical = before
+                    .iter()
+                    .chain(after)
+                    .map(|v| v.abs())
+                    .fold(0., f64::max);
                 crate::relative::bootstrap_by(before, after, config, |before, after, scale| {
                     let rates = formatter.scale_throughputs(
                         typical,
@@ -1065,7 +1069,7 @@ pub fn format_bootstrap_metric(
         .rows
         .iter()
         .filter_map(|row| row.estimates.as_ref())
-        .map(|estimates| estimates.mean.point)
+        .map(|estimates| estimates.mean.point.abs())
         .fold(0.0f64, f64::max);
     let mut references = Vec::new();
     for row in &mut result.rows {
@@ -1125,7 +1129,11 @@ pub fn format_bootstrap_metric(
     // Constant samples alone cannot distinguish a unit conversion from a curve.
     // Probe intermediate totals as well; formatter order preservation remains a
     // contract between evaluated points for arbitrary user functions.
-    let anchor = values.iter().copied().fold(0.0f64, f64::max);
+    let anchor = values
+        .iter()
+        .copied()
+        .max_by(|a, b| a.abs().total_cmp(&b.abs()))
+        .unwrap_or(0.0);
     values.extend([0., anchor * 0.5, anchor * 0.25]);
     let scaled = formatter.scale_values(typical, &values)?;
     if scaled.values.len() != values.len() || scaled.unit.trim().is_empty() {
@@ -1136,10 +1144,11 @@ pub fn format_bootstrap_metric(
     let linear = if let Some((anchor, converted)) = values
         .iter()
         .zip(&scaled.values)
-        .filter(|(value, _)| **value > 0.0)
-        .max_by(|a, b| a.0.total_cmp(b.0))
+        .filter(|(value, _)| **value != 0.0)
+        .max_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
     {
-        *converted > 0.0
+        *converted != 0.0
+            && converted.is_sign_positive() == anchor.is_sign_positive()
             && values.iter().zip(&scaled.values).all(|(raw, display)| {
                 if *raw == 0.0 {
                     return *display == 0.0;

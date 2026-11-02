@@ -424,5 +424,29 @@
       "scope": "Cargo folded formatter with supplied interval images; named baseline; independent coordinate oracle; standalone compare with workload disabled; folded automatic history output/archive equality and standalone restoration; existing monotone, no-plots/no-html and stale-source scenarios still pass."
     }
   },
-  "signed_measurements": "See criterion-extensions.json::measurement_semantic_audit::signed_end_to_end_validation for native capture, JSON/CSV, estimates, regression and baseline evidence. Platform/browser acceptance remains open."
+  "signed_measurements": "See criterion-extensions.json::measurement_semantic_audit::signed_end_to_end_validation for native capture, JSON/CSV, estimates, regression and baseline evidence. Platform/browser acceptance remains open.",
+  "signed_linear_scaling": {
+    "issue": "All-negative constant samples offered no positive anchor, so an ordinary positive unit conversion was mislabeled as nonlinear. Observation/bootstrap typical values also collapsed to zero.",
+    "change": "Use absolute magnitudes for shared typical values and choose a nonzero signed anchor of maximum magnitude. Require matching anchor/output sign and proportionality for a positive linear scale. Probe intermediate values on the selected signed domain.",
+    "tests": [
+      "measurements.rs::signed_custom_totals_survive_statistics_and_roundtrip_without_relaxing_clocks: -3 units becomes -1 groups with direct estimates, shared typical=3, ordered intervals and no nonlinear presentation",
+      "test-signed-measurement.py: formatted estimates use groups for negative, zero and sign-crossing cases; baseline and standalone reports restore successfully"
+    ],
+    "validation": "202 library and 27 measurement tests, focused Clippy and external signed Cargo fixture passed.",
+    "limits": "No browser visual acceptance or completed remote gate for this follow-up.",
+    "logs": [
+      {
+        "path": ".airbug/validation/signed-scale/clippy.log",
+        "sha256": "e7144679dfe36d6f3d7650e585b24168bf1685d9a6ab8cfc186dd31019bec12a"
+      },
+      {
+        "path": ".airbug/validation/signed-scale/cargo.log",
+        "sha256": "83d3ce3e779f4a3662dc07f1033144cdef9fda3bb058c1dfa3c6b37d3743ae10"
+      },
+      {
+        "path": ".airbug/validation/signed-scale/tests.log",
+        "sha256": "90da92aa743c132610580e4e8bc20d7ceec5b89203ea0829d0132286a19a7f86"
+      }
+    ]
+  }
 }

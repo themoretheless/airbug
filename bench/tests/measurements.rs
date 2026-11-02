@@ -2663,6 +2663,66 @@ fn signed_custom_totals_survive_statistics_and_roundtrip_without_relaxing_clocks
         for value in [&estimates.mean, &estimates.median] {
             assert_eq!((value.lower, value.point, value.upper), (-3.0, -3.0, -3.0));
         }
+        struct MagnitudeScale;
+        impl airbug_bench::measurement::ValueFormatter for MagnitudeScale {
+            fn scale_values(
+                &self,
+                typical: f64,
+                values: &[f64],
+            ) -> Result<airbug_bench::measurement::FormattedValues> {
+                assert_eq!(typical, 3.0);
+                Ok(airbug_bench::measurement::FormattedValues {
+                    values: values.iter().map(|v| v / 3.0).collect(),
+                    unit: "groups".into(),
+                })
+            }
+            fn scale_for_machines(
+                &self,
+                values: &[f64],
+            ) -> Result<airbug_bench::measurement::FormattedValues> {
+                self.scale_values(3.0, values)
+            }
+            fn scale_throughputs(
+                &self,
+                _: f64,
+                _: f64,
+                _: &str,
+                _: &[f64],
+            ) -> Result<airbug_bench::measurement::FormattedValues> {
+                unreachable!()
+            }
+        }
+        let displayed = airbug_bench::measurement::format_bootstrap_metric(
+            &report,
+            &restored.cases[0].id,
+            restored.cases[0]
+                .metrics
+                .iter()
+                .find(|m| m.id == "balance")
+                .unwrap(),
+            &MagnitudeScale,
+        )
+        .unwrap();
+        assert!(
+            displayed.presentation.is_empty(),
+            "a linear unit conversion must retain direct estimates"
+        );
+        let shown = &displayed.rows[0];
+        assert_eq!(shown.unit, "groups");
+        let estimate = &shown.estimates.as_ref().unwrap().mean;
+        assert_eq!(
+            (estimate.lower, estimate.point, estimate.upper),
+            (-1.0, -1.0, -1.0)
+        );
+        let human = airbug_bench::measurement::format_observations(
+            &restored,
+            &restored.cases[0].id,
+            "balance",
+            &MagnitudeScale,
+            airbug_bench::measurement::Format::Human,
+        )
+        .unwrap();
+        assert!(human.iter().all(|row| row.value == Some(-1.0)));
         let machine = airbug_bench::measurement::format_observations(
             &restored,
             &restored.cases[0].id,

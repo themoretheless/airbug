@@ -63,6 +63,11 @@ harness=false
         row = next(r for r in estimates['rows'] if r['metric'] == 'work_units')
         for statistic in ['mean', 'median']:
             assert row['estimates'][statistic]['point'] == expected, row
+        display = json.loads((root / name / 'formatted-estimates.json').read_text(encoding='utf-8'))
+        displayed = next(r for r in display['rows'] if r['metric'] == 'work_units')
+        assert displayed['unit'] == 'groups', displayed
+        assert displayed['estimates']['mean']['point'] == expected / 3, displayed
+        assert not display.get('presentation', []), display
         assert row['regressions'], row
         for regression in row['regressions']:
             assert math.isclose(regression['fit']['slope']['point'], expected, abs_tol=1e-10), regression
@@ -92,5 +97,5 @@ harness=false
         execute([*cli, *command, '--output', str(target)], {'NO_WORK': '1'})
         html = target.read_text(encoding='utf-8')
         assert 'Saved formatter comparison' in html and 'work_units' in html
-        assert 'formatted regression comparison' in html
+        assert 'groups' in html
     print('Signed Cargo: negative/zero/sign-crossing totals, saved baseline, statistics and standalone report passed')
