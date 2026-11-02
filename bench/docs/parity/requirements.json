@@ -439,7 +439,7 @@
         "criterion-bencher.json: all 14 sync/async Bencher declarations mapped to typed native APIs; 20 current measurement integration tests passed. Method equality checked by test-upstream-surface.py; full semantic parity remains unproven.",
         "criterion-extensions.json::measurement_semantic_audit::signed_measurement_probe: executed pinned Criterion with negative Measurement values; recorded sample and estimate artifacts."
       ],
-      "remaining": "Signed custom totals and native report/baseline paths are locally verified, including negative/zero/sign-crossing cases. Current remote-platform and browser visual acceptance remain open. Evidence: criterion-extensions.json signed_end_to_end_validation."
+      "remaining": "Signed totals and report/baseline paths passed locally and in both Linux/Windows toolchains. Current full macOS CI and browser visual acceptance remain open."
     },
     {
       "id": "samples",
@@ -766,7 +766,7 @@
         "platforms.json::linux_x86_latest_validation: current source 506-test all-feature library/macros/CLI/doctest gate passed under QEMU, source hashes and complete log retained.",
         "ci-validation.json::worker_shutdown_run and platforms.json::latest_remote_validation: completed remote jobs and exact remaining Windows failure on cc28c4a."
       ],
-      "remaining": "cc28c4a remote CI passed all Linux x86_64/macOS jobs and both Windows workspace debug/release test stages. Windows worker shutdown and MSRV hang no longer recur. Both Windows jobs stop at Unicode history comparison in the Cargo fixture; explicit UTF-8 I/O corrections require remote verification. Later Windows external fixture steps remain unverified."
+      "remaining": "Current published 62d2f00 passed the complete Linux and Windows stable/MSRV jobs in CI 41478939861. macOS jobs remain queued. Current local macOS library/integration tests for both bench packages passed 514 tests and Clippy; see platforms.json for the narrower local scope."
     },
     {
       "id": "audit",

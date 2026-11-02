@@ -67,7 +67,7 @@
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "112b4dd passed all six OS/toolchain jobs and auxiliary jobs in CI 41470453896, including Windows external fixtures and worker shutdown. Signed measurement and formatter changes in 2b17125 are running in CI 41476148675; do not extend older success to those changes."
+      "current": "Current published 62d2f00 passed complete Linux and Windows stable/MSRV jobs in CI 41478939861, including signed measurements and navigation tests. macOS CI remains queued; current local bench library/integration targets passed 514 tests and Clippy. See platforms.json latest_published_gate and latest_local_bench_gate for exact scope."
     },
     {
       "id": "final_gate",
@@ -78,7 +78,7 @@
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Changes through e967d7a published. Current final acceptance requires signed-measurement platform CI, remaining report semantic review and visual checks. Source inventory and focused Divan sampling, selection, counter and console gates passed."
+      "current": "Functional changes through 62d2f00 published and verified on Linux/Windows stable/MSRV. Current local macOS bench library/integration tests and Clippy passed. Full macOS CI and browser/terminal visual acceptance remain open; no full parity completion claim."
     }
   ],
   "latest_evidence": {

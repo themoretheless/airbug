@@ -33,8 +33,8 @@
     "CLI all-target Clippy and diff check passed"
   ],
   "unverified": [
-    "Signed measurements and signed formatter scaling require their own completed remote matrix.",
-    "Visual acceptance remains open."
+    "Full current macOS CI matrix remains queued; focused current local macOS bench tests and Clippy passed.",
+    "Browser and terminal visual acceptance remain open."
   ],
   "toolchain_selection": "Job-level RUSTUP_TOOLCHAIN selects the matrix version for every Python fixture and nested Cargo subprocess, including selection and relative-baseline scripts that previously lacked a step-level override.",
   "worker_pool_miri_job": {
@@ -598,5 +598,92 @@
       }
     ],
     "scope": "Complete six-way OS/toolchain matrix and all auxiliary jobs passed for UTF-8 fixture and Windows worker shutdown fixes. Predates signed measurements and signed formatter scaling."
+  },
+  "latest_published_gate": {
+    "headSha": "62d2f00d36250c0c37cf1262ee92d90a1ef3a14e",
+    "url": "https://github.com/themoretheless/airbug/actions/runs/41478939861",
+    "status": "queued",
+    "conclusion": "",
+    "jobs": [
+      {
+        "name": "airbug-mon",
+        "status": "queued",
+        "conclusion": ""
+      },
+      {
+        "name": "worker-pool-miri",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "airbug-otel",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "test (macos-latest, 1.96.0)",
+        "status": "queued",
+        "conclusion": ""
+      },
+      {
+        "name": "report",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "test (macos-latest, stable)",
+        "status": "queued",
+        "conclusion": ""
+      },
+      {
+        "name": "test (ubuntu-latest, 1.96.0)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "airbug-err",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "test (windows-latest, stable)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "test (ubuntu-latest, stable)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "test (windows-latest, 1.96.0)",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "scope": "Current published code including signed measurements, ignored-selection regression and report history navigation. Both Linux and Windows toolchains passed all job steps. macOS CI jobs remain queued."
+  },
+  "latest_local_bench_gate": {
+    "commit": "62d2f00d36250c0c37cf1262ee92d90a1ef3a14e",
+    "platform": "macOS ARM64",
+    "command": "cargo +1.96.0 test --offline --locked -p airbug-bench -p cargo-airbug-bench --all-features --lib --tests",
+    "passed": 514,
+    "failed": 0,
+    "ignored": 0,
+    "suites": 23,
+    "clippy": "cargo +stable clippy --offline --locked -p airbug-bench -p cargo-airbug-bench --all-features --lib --tests -- -D warnings",
+    "limits": "Library and integration targets for these two packages only; excludes doctests, macro crate unit tests, examples and other workspace packages. Does not replace the queued full macOS CI jobs.",
+    "logs": [
+      {
+        "path": ".airbug/validation/final-macos/tests.log",
+        "sha256": "ab353d26ee89422f0b71de8f0a523363a49e4599226534911edfd275ae88e96d",
+        "exit_code": 0
+      },
+      {
+        "path": ".airbug/validation/final-macos/clippy.log",
+        "sha256": "f3630955530b9dde6d304a988d3485563be9435962d288c9355c1d39a2f5335f",
+        "exit_code": 0
+      }
+    ]
   }
 }
