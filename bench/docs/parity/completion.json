@@ -22,7 +22,7 @@
         "bench/docs/parity/divan-runner.json"
       ],
       "acceptance": "Для каждого сопоставленного API: конкретный поведенческий тест либо документированное нативное различие, сохраняющее возможность пользователя. Отдельно проверить бюджет измерения, batching/drop, groups и profiler.",
-      "current": "Signed custom measurement gap is implemented and locally tested through capture, statistics, regressions, JSON/CSV, baseline and standalone reports. Independent/paired decisions account for denominator sign. Current remote/visual acceptance and final public API review remain open."
+      "current": "All 23 Divan manager methods now have focused behavioral evidence and explicit native differences in divan-runner.json. Signed Criterion measurements are locally verified through capture, statistics, regressions, JSON/CSV, baseline and standalone reports. Final extension/report review and current remote/visual acceptance remain open."
     },
     {
       "id": "report_matrix",
@@ -46,7 +46,7 @@
         "bench/docs/parity/numeric-domains.json"
       ],
       "acceptance": "Сопоставить default/quiet/verbose/JSON у прямого harness и process runner; проверить глубокое дерево и длинные имена в терминале.",
-      "current": "Console policy fixture passed on Windows stable in c10e0ac CI; both macOS/Linux toolchains passed full CLI fixtures, including PTY checks where enabled. Actual terminal-emulator visual acceptance remains open. The larger cargo harness fixture now explicitly decodes UTF-8 for its later Windows tree assertions; remote confirmation pending."
+      "current": "Complete UTF-8 follow-up CI 41470453896 passed all six OS/toolchain jobs and console fixtures. Current local external console fixture confirms default/quiet/verbose, color and plain machine/artifact output. Actual terminal-emulator visual acceptance remains open."
     },
     {
       "id": "visual_acceptance",
@@ -67,7 +67,7 @@
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "cc28c4a CI confirms Windows worker shutdown repair on MSRV and stable: both passed workspace debug/release tests and profiling, then failed Unicode history comparison in the Python fixture. All macOS/Linux jobs passed. Explicit UTF-8 fixture I/O is verified by full Cargo and custom-formatter fixtures under CP1252 simulation; full Windows external fixture acceptance remains open."
+      "current": "112b4dd passed all six OS/toolchain jobs and auxiliary jobs in CI 41470453896, including Windows external fixtures and worker shutdown. Signed measurement and formatter changes in 2b17125 are running in CI 41476148675; do not extend older success to those changes."
     },
     {
       "id": "final_gate",
@@ -78,7 +78,7 @@
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Changes through 964e5eb were published; current checkout includes later hub changes. Final acceptance remains open until platform CI, semantic and visual checks complete. Local CI repairs and evidence reconciliation are in progress."
+      "current": "Changes through e967d7a published. Current final acceptance requires signed-measurement platform CI, remaining report semantic review and visual checks. Source inventory and focused Divan sampling, selection, counter and console gates passed."
     }
   ],
   "latest_evidence": {

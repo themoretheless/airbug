@@ -63,8 +63,9 @@
       "airbug": "Suite::console_color; --color",
       "source": "bench/src/console.rs",
       "evidence": "bench/scripts/test-cargo-bench.py",
-      "status": "mapped",
-      "semantics": "Auto/always/never; machine output and saved artifacts remain plain."
+      "status": "verified_native_color_policy",
+      "semantics": "Auto/always/never; machine output and saved artifacts remain plain.",
+      "focused_validation": "output_semantic_audit in this file; actual external Cargo console fixture and terminal policy unit test passed on macOS ARM64, Rust 1.96.0. Visual layout remains separate."
     },
     {
       "upstream": "run_ignored",
@@ -156,7 +157,7 @@
       "airbug": "Suite::work_units / input_counters; runtime unit overrides",
       "source": "bench/src/suite.rs",
       "evidence": "bench/tests/contracts.rs",
-      "status": "mapped",
+      "status": "verified_native_counter_override",
       "semantics": "Fixed per-case and input-dependent counters plus programmatic fixed override across registered cases; native API intentionally applies overrides after registration.",
       "programmatic_global_override": "Suite::override_work_units(unit, count) after registration; applies to existing cases, removes only matching dynamic declaration and preserves other counters. CLI is applied later and takes precedence.",
       "focused_validation": "contracts::global_builder_counter_override_preserves_other_units_and_is_lazy passed: 2 cases, exact normalized throughput, dynamic byte preservation, zero known count, no execution during override."
@@ -325,5 +326,31 @@
       }
     ],
     "unit_test": "bench/src/threads.rs::scalar_iterable_auto_and_duplicate_selection; passed"
+  },
+  "output_semantic_audit": {
+    "sources": [
+      "divan-0.1.21/src/divan.rs::color",
+      "divan-0.1.21/src/divan.rs::counter",
+      "divan-0.1.21/src/benchmark/options.rs::overwrite",
+      "divan-0.1.21/src/counter/collection.rs::overwrite",
+      "bench/src/console.rs",
+      "bench/tests/contracts.rs::global_builder_counter_override_preserves_other_units_and_is_lazy"
+    ],
+    "verified": [
+      "Auto follows terminal capability and NO_COLOR; explicit always and never override automatic policy.",
+      "Machine output and saved reports remain plain even when terminal color is forced.",
+      "Global counter overrides replace only the specified unit and preserve other fixed and input-dependent counters; zero counts remain known values."
+    ],
+    "native_difference": "Airbug applies programmatic global counter overrides to already registered cases; Divan stores the override for later execution. Use override_work_units after registration to preserve the same user capability.",
+    "validation": {
+      "console_log": ".airbug/validation/divan-output-audit/console.log",
+      "sha256": "e81f62532256c6618c968e7a85ca882b6d5fbc6e8dd52b5aac77ef9dbcbc44f9",
+      "exit_code": 0,
+      "unit_tests": [
+        "console::tests::terminal_policy_and_styling_preserve_plain_text",
+        "global_builder_counter_override_preserves_other_units_and_is_lazy"
+      ],
+      "limits": "Behavioral policy and numerical counter preservation verified; terminal visual acceptance is separate."
+    }
   }
 }
