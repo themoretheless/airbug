@@ -56,7 +56,15 @@
         "bench/docs/parity/plots.json"
       ],
       "acceptance": "Проверить графики, подписи, hover, навигацию, длинные имена, большие наборы и читаемость на двух размерах окна; сохранить перечень просмотренных артефактов.",
-      "current": "Предыдущий доступ браузера к локальным файлам был отклонён; не обходить отказ альтернативным маршрутом. Нужен разрешённый доступ или проверка пользователем."
+      "current": "User explicitly authorized opening local reports. A subsequent cua.createBrowserTab request for the existing nonlinear-regression report was rejected by browser URL policy: file protocol is not allowed (only http/https). The rejection explicitly prohibits equivalent workarounds, alternate browser surfaces and indirect execution. Permission is no longer missing; visual acceptance requires a permitted environment or user-performed review.",
+      "blocked_attempt": {
+        "artifact": ".airbug/validation/nonlinear-regression/report.html",
+        "tool": "cua.createBrowserTab",
+        "surface": "iab",
+        "result": "URL policy denied file protocol before rendering",
+        "visual_evidence": "none",
+        "restriction": "Do not retry through a local server, alternate browser or raw browser commands to bypass this denial."
+      }
     },
     {
       "id": "platform_acceptance",
