@@ -126,5 +126,69 @@
     "validation": "Expanded test-console-policy.py passed: occupied directory and file, workload guard, unchanged previous result, dry-run still succeeds. All-target/all-feature library Clippy passed.",
     "log": ".airbug/validation/parity-current/output-preflight.log",
     "limits": "Focused macOS validation; latest platform gates predate this runtime change."
+  },
+  "report_entrypoint_audit": {
+    "status": "current_linear_nonlinear_and_signed_fixtures_passed_visual_open",
+    "commit": "d87ba3eef99130f482616115d4194069377fa98e",
+    "platform": "macOS ARM64, Rust 1.96.0",
+    "matrix": [
+      {
+        "entrypoint": "direct Cargo",
+        "coverage": "Custom normalized observations, bootstrap estimates and formatted machine exports; named baseline, no-plots and no-html; raw values preserved.",
+        "test": "test-formatted-bootstrap.py"
+      },
+      {
+        "entrypoint": "standalone report with baseline",
+        "coverage": "Custom parameter summaries on linear/logarithmic axes; saved throughput comparisons; numerical Markdown/HTML without SVG; no workload execution.",
+        "test": "test-formatted-bootstrap.py"
+      },
+      {
+        "entrypoint": "standalone compare with metric filter",
+        "coverage": "Raw numerical comparison plus saved custom throughput in JSON, HTML and no-plots HTML; restored resample settings; changed settings produce explicit unavailable values.",
+        "test": "test-formatted-bootstrap.py"
+      },
+      {
+        "entrypoint": "direct nonlinear named baseline and standalone report/compare",
+        "coverage": "Raw statistics remain separate; transformed mean/median and regression snapshots restored without formatter code; shared baseline/candidate coordinates and valid SVG XML.",
+        "test": "test-nonlinear-bootstrap.py"
+      },
+      {
+        "entrypoint": "automatic history and standalone compare",
+        "coverage": "Folded formatter interval images include interior extrema; archive/output snapshots agree; saved comparison restores without workload.",
+        "test": "test-nonlinear-bootstrap.py"
+      },
+      {
+        "entrypoint": "invalid or stale saved data",
+        "coverage": "Wrong baseline or settings never silently reuse custom snapshots; stale candidate/summary metadata rejects without replacing existing output.",
+        "test": "both fixtures"
+      },
+      {
+        "entrypoint": "signed direct Cargo, saved baseline and standalone report/compare",
+        "coverage": "Negative, zero and sign-crossing measurements; statistics and machine-unit scaling; baseline load and standalone rendering without workload.",
+        "test": "test-signed-measurement.py"
+      }
+    ],
+    "validation": [
+      {
+        "log": ".airbug/validation/report-final-audit/formatted.log",
+        "sha256": "471fa38d58bd7e71091bb87921fed4a11b3fe557ef130be02cfeb09a520587c3",
+        "exit_code": 0
+      },
+      {
+        "log": ".airbug/validation/report-final-audit/nonlinear.log",
+        "sha256": "b7bad2cedc04e21645123b37b6e21698441c4b507cc074d08e9ba33fe8360a03",
+        "exit_code": 0
+      },
+      {
+        "log": ".airbug/validation/report-final-audit/signed.log",
+        "sha256": "83d3ce3e779f4a3662dc07f1033144cdef9fda3bb058c1dfa3c6b37d3743ae10",
+        "exit_code": 0
+      }
+    ],
+    "limits": [
+      "This matrix identifies exercised paths, not every Cartesian combination of options.",
+      "SVG parsing and numerical oracles do not prove browser layout, hover, focus or scrolling.",
+      "Signed measurement and navigation edits require current remote CI; older platform success is recorded separately."
+    ]
   }
 }

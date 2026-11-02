@@ -192,7 +192,7 @@
       "entrypoint": "measurement::format_regression_metric; regression::format_series and Presentation::figure",
       "behavior": "All process coordinates share one formatter call. Display snapshots serialize inside ProcessRegression and bootstrap::html restores them without a formatter, validating their source hash and coordinate structure. Raw estimates and tables keep original units. Linear statistical reformatting clears obsolete display snapshots.",
       "validation": "Nine regression tests passed, including full bootstrap JSON roundtrip, unchanged raw report, stale source rejection, malformed band rejection, metric contract mismatch and replacement by linear statistical formatting. All-target/all-feature library Clippy passed. All 24 measurement integration tests passed. regression_report example generated three XML-valid SVG charts including a nonlinear snapshot restored from JSON; no unavailable diagnostics. This is structural, not browser visual validation.",
-      "limits": "Named and automatic pair restoration are verified separately below. Browser/platform acceptance remains open. Renderer samples 65 grid points plus observed x values and requires a finite monotone increasing formatter.",
+      "limits": "Named and automatic pair restoration are verified separately below. Renderer samples 65 grid points plus observed x values. Nonmonotone formatters require scale_intervals to supply interval images; browser acceptance remains open.",
       "example_artifact": ".airbug/validation/nonlinear-regression/report.html"
     },
     "nonlinear_statistic_display": {
@@ -393,7 +393,7 @@
       "For f(y)=y^2, slope=2 and max_iters=3, the transformed line endpoint is 36. A straight line from the origin gives y=12 at x=1; transforming the original fit gives f(2)=4.",
       "For f(y)=(y-4)^2 and original interval [2,6], both transformed endpoints are 4 while the image contains 0 at y=4. Endpoint-only bounds cannot represent this region."
     ],
-    "airbug_status": "Monotone regression curves and confidence bands have explicit transformed coordinates. Nonmonotone statistical intervals use transformed bootstrap percentiles. Nonmonotone regression confidence bands remain unsupported; this audit does not close that gap.",
+    "airbug_status": "Monotone regression curves and confidence bands have explicit transformed coordinates. Nonmonotone statistical intervals use transformed bootstrap percentiles. Nonmonotone regression bands are supported when the formatter supplies scale_intervals; see nonmonotone_regression_intervals. Interior containment is the formatter author contract.",
     "acceptance_boundary": "Do not infer correct arbitrary nonlinear plotting from the permissive formatter trait or upstream endpoint plotting. Distinguish callable formatter domain, visual behavior and statistical interval interpretation in the final comparison."
   },
   "latest_cargo_regression_validation": {
@@ -412,7 +412,7 @@
     "log": ".airbug/validation/parity-current/interval-public-linux.log",
     "remaining": [
       "Formatter guarantees containment of interior values; Airbug can only validate shape and transformed endpoints.",
-      "macOS MSRV and Linux ARM64 full gates each pass 537 tests; Windows compile and external history fixture pass. Windows and current full x86 runtime remain unverified.",
+      "Full six-way OS/toolchain CI passed at 112b4dd, including this interval implementation. Later signed-measurement changes require their own completed remote gate; see platforms.json.",
       "Browser visual acceptance remains open."
     ],
     "external_validation": {
