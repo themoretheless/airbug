@@ -105,24 +105,27 @@
       "airbug": "Sampling::samples + SampleCountUnit::Workers; --samples --sample-count-unit workers",
       "source": "bench/src/sampling.rs",
       "evidence": "bench/scripts/test-worker-sample-budget.py",
-      "status": "mapped",
-      "semantics": "u64 count, zero disables; rounds to complete worker batches. Default unit remains batches."
+      "status": "verified_native_sampling_semantics",
+      "semantics": "u64 count, zero disables; rounds to complete worker batches. Default unit remains batches.",
+      "focused_validation": "sampling_semantic_audit in this file; current macOS ARM64 Rust 1.96.0 Cargo fixtures and thread-resolution unit test passed."
     },
     {
       "upstream": "sample_size",
       "airbug": "Sampling::iterations; --iterations",
       "source": "bench/src/sampling.rs",
       "evidence": "bench/scripts/test-worker-sample-budget.py",
-      "status": "mapped",
-      "semantics": "u64 operations per worker; zero disables; fixed count skips calibration."
+      "status": "verified_native_sampling_semantics",
+      "semantics": "u64 operations per worker; zero disables; fixed count skips calibration.",
+      "focused_validation": "sampling_semantic_audit in this file; current macOS ARM64 Rust 1.96.0 Cargo fixtures and thread-resolution unit test passed."
     },
     {
       "upstream": "threads",
       "airbug": "Suite::registration_threads / thread_matrix; --threads",
       "source": "bench/src/threads.rs",
       "evidence": "bench/scripts/test-manual-thread-matrix.py",
-      "status": "mapped",
-      "semantics": "usize values, zero resolves to available parallelism, ordered deduplication. Lifecycle differences remain in thread-sampling.json."
+      "status": "verified_native_sampling_semantics",
+      "semantics": "usize values, zero resolves to available parallelism, ordered deduplication. Lifecycle differences remain in thread-sampling.json.",
+      "focused_validation": "sampling_semantic_audit in this file; current macOS ARM64 Rust 1.96.0 Cargo fixtures and thread-resolution unit test passed."
     },
     {
       "upstream": "min_time",
@@ -284,5 +287,43 @@
       "Zero maximum time disables cases and produces no observations."
     ],
     "limits": "Native field precedence and Cargo behavior verified; no API signature compatibility or visual/platform-wide equivalence claim."
+  },
+  "sampling_semantic_audit": {
+    "upstream_sources": [
+      "divan-0.1.21/src/divan.rs:647-697",
+      "divan-0.1.21/src/benchmark/mod.rs:630-674",
+      "divan-0.1.21/src/benchmark/mod.rs:798-800",
+      "divan-0.1.21/src/benchmark/mod.rs:1061-1064"
+    ],
+    "verified": [
+      "Worker sample counts consume one count per worker and round to full concurrent batches. Airbug workers mode requests five samples over three workers and records six worker intervals in two batches.",
+      "Fixed sample size is per worker and skips adaptive calibration. The external matrix records exactly 195 calls for 65 operations across two-worker and one-worker cases, including two waves per worker.",
+      "Zero sample count or size disables setup and work in measured, smoke and preview paths; explicit positive CLI settings override zero environment settings.",
+      "Thread count zero resolves to available parallelism; effective duplicate counts are removed. CLI/environment matrices are registered before selection and execution."
+    ],
+    "native_differences": [
+      "Airbug defaults to batch counts; Divan-equivalent worker counts require sample_count_unit=workers.",
+      "Divan sorts requested thread counts before deduplication; Airbug preserves request order and deduplicates effective counts after resolving zero.",
+      "Airbug stores per-worker timing records and aggregate batch observations. Timing, pool ownership and wave aggregation differences remain explicit in thread-sampling.json."
+    ],
+    "validation": [
+      {
+        "script": "bench/scripts/test-worker-sample-budget.py",
+        "log": ".airbug/validation/divan-sampling-audit/worker-budgets.log",
+        "sha256": "3fea3018a6efb1aea285f671cac40d1b1997ebcada317fc40b6e7d84d0a2e726",
+        "exit_code": 0,
+        "host": "macOS ARM64",
+        "toolchain": "1.96.0"
+      },
+      {
+        "script": "bench/scripts/test-manual-thread-matrix.py",
+        "log": ".airbug/validation/divan-sampling-audit/thread-matrix.log",
+        "sha256": "d3ae5629a859cab71f954357b7cf69770c73d7c7e4e80c757f7a76443e0bb5f6",
+        "exit_code": 0,
+        "host": "macOS ARM64",
+        "toolchain": "1.96.0"
+      }
+    ],
+    "unit_test": "bench/src/threads.rs::scalar_iterable_auto_and_duplicate_selection; passed"
   }
 }

@@ -33,7 +33,6 @@
     "CLI all-target Clippy and diff check passed"
   ],
   "unverified": [
-    "Remaining MSRV jobs in the UTF-8 follow-up run have not completed in this snapshot.",
     "Signed measurements and signed formatter scaling require their own completed remote matrix.",
     "Visual acceptance remains open."
   ],
@@ -539,8 +538,8 @@
   "utf8_remote_followup": {
     "headSha": "112b4dded658d9eea274124f7108a831cbd07a1a",
     "url": "https://github.com/themoretheless/airbug/actions/runs/41470453896",
-    "status": "in_progress",
-    "conclusion": "",
+    "status": "completed",
+    "conclusion": "success",
     "jobs": [
       {
         "name": "airbug-err",
@@ -579,8 +578,8 @@
       },
       {
         "name": "test (windows-latest, 1.96.0)",
-        "status": "in_progress",
-        "conclusion": ""
+        "status": "completed",
+        "conclusion": "success"
       },
       {
         "name": "test (ubuntu-latest, 1.96.0)",
@@ -598,6 +597,6 @@
         "conclusion": "success"
       }
     ],
-    "scope": "UTF-8 fixture and Windows worker shutdown fixes; predates signed measurements and signed formatter scaling. In-progress jobs are not passing evidence."
+    "scope": "Complete six-way OS/toolchain matrix and all auxiliary jobs passed for UTF-8 fixture and Windows worker shutdown fixes. Predates signed measurements and signed formatter scaling."
   }
 }
