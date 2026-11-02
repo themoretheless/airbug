@@ -1009,6 +1009,58 @@ fn zero_maximum_time_disables_work_and_positive_override_reenables_it() {
 }
 
 #[test]
+fn ignored_selection_executes_only_eligible_work_with_measurement_counts() {
+    for (include_ignored, only_ignored, expected) in [
+        (false, false, [6, 0, 0]),
+        (true, false, [6, 6, 0]),
+        (false, true, [0, 6, 0]),
+        (true, true, [0, 6, 0]),
+    ] {
+        let calls = std::array::from_fn::<_, 3, _>(|_| AtomicUsize::new(0));
+        let mut suite = Suite::new("selection");
+        for (index, name) in ["normal", "ignored", "disabled"].into_iter().enumerate() {
+            let counter = &calls[index];
+            suite.bench_custom(name, move |operations| {
+                counter.fetch_add(operations as usize, Ordering::SeqCst);
+                Duration::from_nanos(operations)
+            });
+            suite.ignore(index != 0).sampling(Sampling {
+                samples: Some(if index == 2 { 0 } else { 2 }),
+                iterations: Some(3),
+                warmup: Some(Duration::ZERO),
+                ..Default::default()
+            });
+        }
+        let selection = Selection {
+            include_ignored,
+            only_ignored,
+            ..Default::default()
+        };
+        let listed: Vec<_> = suite
+            .list_selected(&selection)
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        assert!(calls.iter().all(|count| count.load(Ordering::SeqCst) == 0));
+        let run = suite.run_selected(&selection).unwrap();
+        assert_eq!(
+            run.cases.iter().map(|case| &case.id).collect::<Vec<_>>(),
+            listed.iter().collect::<Vec<_>>()
+        );
+        assert!(
+            run.observations
+                .iter()
+                .all(|observation| observation.operations == 3)
+        );
+        assert_eq!(run.observations.len(), listed.len() * 2);
+        assert_eq!(
+            calls.each_ref().map(|count| count.load(Ordering::SeqCst)),
+            expected
+        );
+    }
+}
+
+#[test]
 fn zero_duration_measured_budgets_make_progress_without_changing_observations() {
     for (maximum, expected) in [(None, 3), (Some(Duration::from_nanos(2)), 2)] {
         let calls = AtomicUsize::new(0);

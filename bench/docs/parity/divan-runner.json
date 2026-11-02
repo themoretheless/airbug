@@ -19,8 +19,9 @@
       "airbug": "Suite::run / run_selected",
       "source": "bench/src/suite.rs",
       "evidence": "bench/tests/contracts.rs",
-      "status": "mapped",
-      "semantics": "Structured Run instead of mandatory terminal output."
+      "status": "verified_native_execution_semantics",
+      "semantics": "Structured Run instead of mandatory terminal output.",
+      "focused_validation": "contracts::ignored_selection_executes_only_eligible_work_with_measurement_counts: default/include/only/both selections execute exactly two samples of three operations per eligible case; listing executes nothing; zero samples remain disabled. Passed on macOS ARM64, Rust 1.96.0."
     },
     {
       "upstream": "test_benches",
@@ -70,16 +71,18 @@
       "airbug": "Selection::include_ignored; --include-ignored",
       "source": "bench/src/convenience.rs",
       "evidence": "bench/tests/attributes.rs",
-      "status": "mapped",
-      "semantics": "Includes ignored cases; zero sample/iteration disables still apply."
+      "status": "verified_native_execution_semantics",
+      "semantics": "Includes ignored cases; zero sample/iteration disables still apply.",
+      "focused_validation": "contracts::ignored_selection_executes_only_eligible_work_with_measurement_counts: default/include/only/both selections execute exactly two samples of three operations per eligible case; listing executes nothing; zero samples remain disabled. Passed on macOS ARM64, Rust 1.96.0."
     },
     {
       "upstream": "run_only_ignored",
       "airbug": "Selection::only_ignored; --ignored",
       "source": "bench/src/convenience.rs",
       "evidence": "bench/tests/attributes.rs",
-      "status": "mapped",
-      "semantics": "Selects only ignored cases."
+      "status": "verified_native_execution_semantics",
+      "semantics": "Selects only ignored cases.",
+      "focused_validation": "contracts::ignored_selection_executes_only_eligible_work_with_measurement_counts: default/include/only/both selections execute exactly two samples of three operations per eligible case; listing executes nothing; zero samples remain disabled. Passed on macOS ARM64, Rust 1.96.0."
     },
     {
       "upstream": "skip_regex",
@@ -234,7 +237,8 @@
     "additional_evidence": [
       "bench/tests/attributes.rs::nested_groups_inherit_defaults_override_locally_and_select_ignored",
       "bench/tests/attributes.rs::zero_sampling_disables_cases_and_child_values_can_enable_them",
-      "bench/tests/attributes.rs::smoke_mode_executes_each_case_once_and_preserves_correctness_checks"
+      "bench/tests/attributes.rs::smoke_mode_executes_each_case_once_and_preserves_correctness_checks",
+      "bench/tests/contracts.rs::ignored_selection_executes_only_eligible_work_with_measurement_counts"
     ]
   },
   "time_budget_semantic_audit": {
