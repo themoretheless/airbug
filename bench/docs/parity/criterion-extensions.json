@@ -135,7 +135,7 @@
     "Measurement uses mutable start/end and Result for fallible hooks; add consumes values instead of borrowing",
     "Formatter is registered separately; text callbacks receive already scaled values and a unit",
     "Owned formatter units and fallible conversions replace static strings and in-place slices",
-    "Custom metric observations must be finite nonnegative batch totals",
+    "Custom metric observations must be finite batch totals; ValueDomain::Signed explicitly allows negative totals",
     "Executor receives &mut self; futures may borrow local non-Send state",
     "Profiler hooks can return errors; selected cases receive artifact directories; deadline uses wall time"
   ],
@@ -146,6 +146,7 @@
     "bench/docs/parity/features.json: optional executor feature combinations"
   ],
   "remaining": [
+    "Signed native measurement/report/baseline paths are locally verified; remote and visual acceptance remain.",
     "Full graph/report-entrypoint formatter semantics and visual inspection",
     "All-feature gates do not establish every possible user-defined extension combination"
   ],
@@ -187,7 +188,7 @@
     "validation": "Eight all-feature executor integration tests passed on macOS. Windows-specific I/O and runtime remain under platform acceptance."
   },
   "measurement_semantic_audit": {
-    "status": "verified_for_finite_nonnegative_batch_totals",
+    "status": "signed_native_paths_verified_locally_platform_and_visual_acceptance_open",
     "upstream_sources": [
       "criterion-0.8.2/src/measurement.rs:73-101",
       "criterion-0.8.2/src/routine.rs:240-278"
@@ -202,7 +203,7 @@
     "native_differences": [
       "Hooks are fallible and start/end take mutable self; add consumes values rather than borrowing them",
       "Formatter registration is separate from the Measurement implementation",
-      "Airbug requires finite nonnegative totals. Criterion Measurement and sampling code impose no explicit sign check. End-to-end support for signed custom measurements in Criterion has not been established; unrestricted numeric-domain equivalence is not claimed."
+      "Airbug defaults to nonnegative totals; custom measurements opt into finite signed totals with Measurement::value_domain() -> ValueDomain::Signed. The domain is persisted per metric in the case contract. Duration/allocation and unsigned work constraints remain enforced. Native signed report/baseline/formatter paths have local numerical and external Cargo evidence. Browser and remote-platform acceptance remain open."
     ],
     "evidence": [
       "typed_measurement_accumulates_waves_separately_from_wall_clock",
@@ -211,6 +212,92 @@
       "async_owned_measurements_preserve_destruction_boundaries",
       "manual_conversion_failure_never_reuses_a_previous_sample"
     ],
-    "validation": "cargo test --offline --locked -p airbug-bench --all-features --test measurements: 22 passed, 0 failed"
+    "validation": "cargo test --offline --locked -p airbug-bench --all-features --test measurements: 22 passed, 0 failed",
+    "signed_measurement_probe": {
+      "status": "upstream_capability_confirmed_airbug_gap",
+      "upstream": "Criterion 0.8.2 pinned local crate, default features disabled, cargo_bench_support enabled",
+      "command": "cargo +1.96.0 run --offline --manifest-path .airbug/validation/signed-upstream/Cargo.toml --release",
+      "configuration": "Ordinary Bencher::iter with Measurement::end returning negative elapsed nanoseconds; 10 samples, 100 resamples, 5 ms warmup, 10 ms measurement, plots disabled.",
+      "result": "Exit 0; all 10 totals negative; mean, median and slope point estimates and confidence upper bounds negative in saved estimates.json. This establishes sampling/statistical/JSON support, not visual or signed-throughput semantics.",
+      "airbug": "suite.rs rejects negative conversions; model.rs Observation::number rejects every negative value; measurements.rs manual_conversion_failure_never_reuses_a_previous_sample explicitly expects rejection in sync and async paths.",
+      "artifacts": [
+        {
+          "path": ".airbug/validation/signed-upstream/src/main.rs",
+          "sha256": "b13d23e29186f40b5a2f22a097d8e436c5e65fd1f46a3f3b32a7de18a4dd35d7"
+        },
+        {
+          "path": ".airbug/validation/signed-upstream/Cargo.lock",
+          "sha256": "21d10595c1631068fe3687cb4eb8152aef386bad0fec25ee2140f8f3fcf76842"
+        },
+        {
+          "path": ".airbug/validation/signed-upstream/measured.log",
+          "sha256": "9844a06ff84efa2cc5adea9944439a39870f2afe3d99f0d1649f6ec9f0e1cbde"
+        },
+        {
+          "path": ".airbug/validation/signed-upstream/measured-output/signed/new/sample.json",
+          "sha256": "12f8596991fb458a2db7b7b45cc2d34473df30c058b74558b3300098573727e2"
+        },
+        {
+          "path": ".airbug/validation/signed-upstream/measured-output/signed/new/estimates.json",
+          "sha256": "5a22ce6e560da8369b4014fa6d31551d885eacc16051fb2e07446c40cd94a01f"
+        }
+      ]
+    },
+    "signed_capture_validation": {
+      "status": "focused_local_passed",
+      "checks": [
+        "202 library tests, 69 contract tests and 27 measurement tests passed on Rust 1.96.0",
+        "Stable all-feature Clippy for library/measurement/contract targets passed",
+        "Sync/async custom totals, multi-wave accumulation, exact negative mean/median intervals, JSON restoration and machine values tested",
+        "Removing signed domain or assigning it to wall is rejected",
+        "cargo-airbug-bench all-feature binary unit tests passed; cli.log records the exact count."
+      ],
+      "remaining": [
+        "Remote platform gates for current implementation",
+        "Visual acceptance of signed reports"
+      ],
+      "logs": [
+        {
+          "path": ".airbug/validation/signed-airbug/tests.log",
+          "sha256": "0f18974bb127d25f01506e88a2d2331e97aa44613961c1c9e766818ce8a3347b"
+        },
+        {
+          "path": ".airbug/validation/signed-airbug/clippy.log",
+          "sha256": "025639317f6ad6ae824e91bfa967748d8232efa7c8b7f29fafa57f8fcd6b1703"
+        },
+        {
+          "path": ".airbug/validation/signed-airbug/cli.log",
+          "sha256": "61de316744712ace803a474e06a3345a31464eb3561c64f352854567d8b841c9"
+        }
+      ]
+    },
+    "signed_end_to_end_validation": {
+      "test": "bench/scripts/test-signed-measurement.py",
+      "result": "Passed on Rust 1.96.0 macOS; added to the CI matrix.",
+      "coverage": [
+        "Negative, zero and sign-crossing custom sums through cargo bench",
+        "Exact normalized mean/median, regression slopes and machine JSON/CSV",
+        "Named baseline save/load with workload forbidden on load",
+        "Negative baseline relative-bootstrap point and bounds; zero denominator retains all 32 undefined draws",
+        "Saved formatted regression comparison restored through standalone report and compare"
+      ],
+      "decision_semantics": "Ratio percentages retain candidate/baseline-1; negative baseline reverses numeric direction for decisions. Historical intervals use all four ratio corners when the denominator interval excludes zero. Paired ratio intervals require a consistent nonzero baseline sign.",
+      "unit_test": "hypothesis.rs::signed_baselines_preserve_numeric_direction_and_zero_remains_undefined",
+      "validation": "302 library/contract/measurement/hypothesis tests passed; focused all-feature Clippy passed; pinned upstream inventory verifier passed.",
+      "logs": [
+        {
+          "path": ".airbug/validation/signed-airbug/expanded-tests.log",
+          "sha256": "5f5983726dfcf3778c77e7be2c67588104f1a76edb99b860701acedcbe344ad7"
+        },
+        {
+          "path": ".airbug/validation/signed-airbug/cargo.log",
+          "sha256": "83d3ce3e779f4a3662dc07f1033144cdef9fda3bb058c1dfa3c6b37d3743ae10"
+        },
+        {
+          "path": ".airbug/validation/signed-airbug/analysis-clippy.log",
+          "sha256": "ca21babcce3ad70597ef8d4c446397c51e27fd7ea494c1858e85a2f43da7431b"
+        }
+      ]
+    }
   }
 }

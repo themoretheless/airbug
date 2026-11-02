@@ -48,6 +48,8 @@ jobs:
         run: python bench/scripts/test-relative-cargo.py
       - name: Cargo custom bootstrap formatters
         run: python bench/scripts/test-formatted-bootstrap.py
+      - name: Signed custom measurement reports
+        run: python bench/scripts/test-signed-measurement.py
       - name: Cargo nonlinear statistical display
         run: python bench/scripts/test-nonlinear-bootstrap.py
       - uses: taiki-e/install-action@v2

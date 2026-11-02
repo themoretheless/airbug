@@ -137,12 +137,13 @@ impl Observation {
         }
         Ok(())
     }
+    /// Parse a finite value. `Run::validate` enforces the metric domain.
     pub fn number(&self) -> Result<Option<f64>> {
         match (&self.availability, &self.value) {
             (Availability::Available, Some(v)) => {
                 let n: f64 = v.parse()?;
-                if !n.is_finite() || n < 0.0 {
-                    return Err(error("metric must be finite and nonnegative"));
+                if !n.is_finite() {
+                    return Err(error("metric must be finite"));
                 }
                 Ok(Some(n))
             }
@@ -275,6 +276,21 @@ impl Run {
             if c.id.is_empty() || cases.insert(&c.id, c).is_some() {
                 return Err(error("empty/duplicate case ID"));
             }
+            for (key, domain) in &c.contract {
+                if let Some(id) = key.strip_prefix("measurement.domain.") {
+                    if domain != "signed"
+                        || id == "wall"
+                        || id.starts_with("wall.")
+                        || id.starts_with("alloc.")
+                        || !c
+                            .metrics
+                            .iter()
+                            .any(|m| m.id == id && m.statistic == "batch_total")
+                    {
+                        return Err(error("invalid signed custom measurement domain"));
+                    }
+                }
+            }
             let mut ids = BTreeSet::new();
             if c.metrics.is_empty() {
                 return Err(error("case has no metrics"));
@@ -305,7 +321,19 @@ impl Run {
             if !unique.insert((&o.case, &o.metric, &o.variant, o.process, o.sequence)) {
                 return Err(error("duplicate observation"));
             }
-            o.number()?;
+            if o.number()?.is_some_and(|n| n < 0.0)
+                && (o.metric == "wall"
+                    || o.metric.starts_with("wall.")
+                    || o.metric.starts_with("alloc.")
+                    || c.contract
+                        .get(&format!("measurement.domain.{}", o.metric))
+                        .map(String::as_str)
+                        != Some("signed"))
+            {
+                return Err(error(
+                    "negative metric requires a signed custom measurement domain",
+                ));
+            }
             o.validate_work_totals(c)?;
         }
         crate::worker_timing::validate(self)?;

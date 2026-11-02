@@ -173,3 +173,97 @@ fn analysis_attributes_inherit_per_field_across_imported_groups() {
         }
     }
 }
+
+#[test]
+fn signed_baselines_preserve_numeric_direction_and_zero_remains_undefined() {
+    fn signed(value: f64) -> Run {
+        let mut run = run(1, 12, 2);
+        for case in &mut run.cases {
+            case.metrics[0].id = "balance".into();
+            case.metrics[0].unit = "units".into();
+            case.contract
+                .insert("measurement.domain.balance".into(), "signed".into());
+        }
+        for o in &mut run.observations {
+            o.metric = "balance".into();
+            o.value = Some((value * o.operations as f64).to_string());
+        }
+        run.validate().unwrap();
+        run
+    }
+    use analysis::Decision::{Improvement, Inconclusive, Regression};
+    for (before, after, percent, decision) in [
+        (-3.0, -6.0, 100.0, Improvement),
+        (-3.0, 3.0, -200.0, Regression),
+        (3.0, -3.0, -200.0, Improvement),
+    ] {
+        let baseline = signed(before);
+        let candidate = signed(after);
+        for paired in [false, true] {
+            let rows = if paired {
+                let mut joint = baseline.clone();
+                for o in &mut joint.observations {
+                    o.variant = "baseline".into();
+                    o.pair = Some(o.process);
+                }
+                joint
+                    .observations
+                    .extend(candidate.observations.iter().cloned().map(|mut o| {
+                        o.pair = Some(o.process);
+                        o
+                    }));
+                analysis::compare(&joint, None, 5.0, 0.05).unwrap()
+            } else {
+                analysis::compare(&baseline, Some(&candidate), 5.0, 0.05).unwrap()
+            };
+            for row in rows {
+                assert_eq!(row.change_percent, Some(percent));
+                assert_eq!(row.interval_percent, Some((percent, percent)));
+                assert_eq!(row.decision, decision);
+            }
+        }
+    }
+    for sign in [1.0, -1.0] {
+        let mut baseline = signed(3.0);
+        for o in &mut baseline.observations {
+            let value = if o.process < 6 { 3.0 } else { 6.0 };
+            o.value = Some((sign * value * o.operations as f64).to_string());
+        }
+        let candidate = signed(-6.0 * sign);
+        for row in analysis::compare(&baseline, Some(&candidate), 5.0, 0.05).unwrap() {
+            // A denominator spanning 3..6 (or -6..-3) has ratio endpoints
+            // -2 and -1, hence ordered changes of -300% and -200%.
+            assert_eq!(row.interval_percent, Some((-300.0, -200.0)));
+            assert_eq!(
+                row.decision,
+                if sign > 0.0 { Improvement } else { Regression }
+            );
+        }
+    }
+    let mut mixed = signed(3.0);
+    for o in &mut mixed.observations {
+        o.variant = "baseline".into();
+        o.pair = Some(o.process);
+        if o.process < 5 {
+            o.value = Some((-3.0 * o.operations as f64).to_string());
+        }
+    }
+    mixed
+        .observations
+        .extend(signed(6.0).observations.into_iter().map(|mut o| {
+            o.pair = Some(o.process);
+            o
+        }));
+    for row in analysis::compare(&mixed, None, 5.0, 0.05).unwrap() {
+        assert_eq!(row.change_percent, None);
+        assert_eq!(row.interval_percent, None);
+        assert_eq!(row.decision, Inconclusive);
+        assert!(row.note.contains("mixed signs"));
+    }
+    for row in analysis::compare(&signed(0.0), Some(&signed(-3.0)), 5.0, 0.05).unwrap() {
+        assert_eq!(row.change_percent, None);
+        assert_eq!(row.interval_percent, None);
+        assert_eq!(row.decision, Inconclusive);
+        assert!(row.note.contains("zero baseline"));
+    }
+}

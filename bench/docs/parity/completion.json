@@ -22,7 +22,7 @@
         "bench/docs/parity/divan-runner.json"
       ],
       "acceptance": "Для каждого сопоставленного API: конкретный поведенческий тест либо документированное нативное различие, сохраняющее возможность пользователя. Отдельно проверить бюджет измерения, batching/drop, groups и profiler.",
-      "current": "Проверены семантика расширений, регистрация групп, счётчики, baseline, standard/quick sampling и выбор случаев. Описаны нативные различия. Нужна итоговая сверка оставшихся строк публичной карты, включая статистику и форматирование."
+      "current": "Signed custom measurement gap is implemented and locally tested through capture, statistics, regressions, JSON/CSV, baseline and standalone reports. Independent/paired decisions account for denominator sign. Current remote/visual acceptance and final public API review remain open."
     },
     {
       "id": "report_matrix",

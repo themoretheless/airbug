@@ -436,9 +436,10 @@
         "bench/docs/parity/measurement.json (method-level audit against Criterion 0.8.2 measurement.rs and current Suite/timing/report code)",
         "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock",
         "bench/scripts/test-cargo-bench.py (external custom measurement, baseline reload and normalized reports)",
-        "criterion-bencher.json: all 14 sync/async Bencher declarations mapped to typed native APIs; 20 current measurement integration tests passed. Method equality checked by test-upstream-surface.py; full semantic parity remains unproven."
+        "criterion-bencher.json: all 14 sync/async Bencher declarations mapped to typed native APIs; 20 current measurement integration tests passed. Method equality checked by test-upstream-surface.py; full semantic parity remains unproven.",
+        "criterion-extensions.json::measurement_semantic_audit::signed_measurement_probe: executed pinned Criterion with negative Measurement values; recorded sample and estimate artifacts."
       ],
-      "remaining": "Custom summaries, relative rates, regression and statistical distribution snapshots restore through named/automatic reports and standalone compare/report. Increasing/decreasing and signed display have numerical and external Cargo evidence in measurement.json. Nonmonotone regression interval images are supported through scale_intervals, with public-path and external Cargo evidence in measurement.json. Full visual acceptance remains open. Extra Airbug thread/custom-measurement combinations are not automatically upstream requirements."
+      "remaining": "Signed custom totals and native report/baseline paths are locally verified, including negative/zero/sign-crossing cases. Current remote-platform and browser visual acceptance remain open. Evidence: criterion-extensions.json signed_end_to_end_validation."
     },
     {
       "id": "samples",

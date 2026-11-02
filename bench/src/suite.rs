@@ -1809,6 +1809,7 @@ impl<'a> Suite<'a> {
         drop_output: DropPolicy,
     ) -> Result<&mut Self> {
         let metric = measurement.metric();
+        let signed = measurement.value_domain() == crate::measurement::ValueDomain::Signed;
         if metric.id.is_empty()
             || metric.id == "wall"
             || metric.id.starts_with("wall.")
@@ -1853,7 +1854,7 @@ impl<'a> Suite<'a> {
                     remaining -= count;
                 }
                 let value = measurement.to_f64(&total)?;
-                if !value.is_finite() || value < 0.0 {
+                if !value.is_finite() || (value < 0.0 && !signed) {
                     return Err(error(
                         "custom measurement must convert to a finite nonnegative value",
                     ));
@@ -1863,6 +1864,12 @@ impl<'a> Suite<'a> {
             }),
         );
         let entry = self.entries.last_mut().unwrap();
+        if signed {
+            entry
+                .case
+                .contract
+                .insert(format!("measurement.domain.{}", metric.id), "signed".into());
+        }
         entry.measurement_sample = Some((metric.id.clone(), sample));
         entry.case.metrics.push(metric);
         entry
@@ -1887,6 +1894,7 @@ impl<'a> Suite<'a> {
         mut measure: impl FnMut(u64) -> M::Value + 'a,
     ) -> Result<&mut Self> {
         let metric = measurement.metric();
+        let signed = measurement.value_domain() == crate::measurement::ValueDomain::Signed;
         if metric.id.is_empty()
             || metric.id == "wall"
             || metric.id.starts_with("wall.")
@@ -1906,13 +1914,19 @@ impl<'a> Suite<'a> {
                 let total = measure(n);
                 let elapsed = wall.measure(n)?;
                 let value = measurement.to_f64(&total)?;
-                if !value.is_finite() || value < 0.0 {
+                if !value.is_finite() || (value < 0.0 && !signed) {
                     return Err(error("custom measurement must convert to a finite nonnegative value"));
                 }
                 captured.set(Some(value));
                 Ok(elapsed)
             }));
         let entry = self.entries.last_mut().unwrap();
+        if signed {
+            entry
+                .case
+                .contract
+                .insert(format!("measurement.domain.{}", metric.id), "signed".into());
+        }
         entry.measurement_sample = Some((metric.id.clone(), sample));
         entry.case.metrics.push(metric);
         entry

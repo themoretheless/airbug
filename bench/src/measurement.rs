@@ -1,13 +1,26 @@
 //! User-defined measurements independent of the clock used for scheduling.
 use crate::{Metric, Result};
 
+/// Numeric domain of a custom batch total. Existing measurements stay nonnegative.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ValueDomain {
+    #[default]
+    Nonnegative,
+    Signed,
+}
+
 /// A measurement may retain an arbitrary start state and accumulate a custom value.
-/// `metric` must describe a nonnegative batch total. Implementations must include
+/// `metric` describes a batch total; signed values require `value_domain()` to
+/// return `ValueDomain::Signed`. Implementations must include
 /// configuration affecting values in the metric scope to preserve comparability.
 pub trait Measurement {
     type Start;
     type Value;
     fn metric(&self) -> Metric;
+    /// Declare signed custom totals without relaxing duration or work counters.
+    fn value_domain(&self) -> ValueDomain {
+        ValueDomain::Nonnegative
+    }
     fn start(&mut self) -> Result<Self::Start>;
     fn end(&mut self, start: Self::Start) -> Result<Self::Value>;
     fn zero(&self) -> Self::Value;
@@ -227,10 +240,14 @@ pub fn format_observations(
     };
     if scaled.values.len() != values.len()
         || scaled.unit.is_empty()
-        || scaled
-            .values
-            .iter()
-            .any(|v| !v.is_finite() || (*v < 0.0 && !matches!(format, Format::Human)))
+        || scaled.values.iter().any(|v| {
+            !v.is_finite()
+                || (*v < 0.0
+                    && matches!(
+                        format,
+                        Format::Throughput { .. } | Format::InputThroughput { .. }
+                    ))
+        })
     {
         return Err(crate::error(
             "formatter returned invalid values, unit or observation count",
@@ -542,7 +559,7 @@ pub fn load_formatted(run: &crate::Run) -> Result<Vec<FormattedMetric>> {
                 "saved throughput formatting is stale: input work observations changed",
             ));
         }
-        for (rows, allow_negative) in [(&formatted.human, true), (&formatted.machine, false)]
+        for (rows, allow_negative) in [(&formatted.human, true), (&formatted.machine, true)]
             .into_iter()
             .chain(
                 formatted

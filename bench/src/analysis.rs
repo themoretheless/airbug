@@ -249,7 +249,7 @@ fn compare_impl(
             let bm = median(&bv);
             row.baseline = Some(am);
             row.candidate = Some(bm);
-            if am > 0.0 {
+            if am != 0.0 {
                 row.change_percent = Some((bm / am - 1.0) * 100.0);
             }
             row.independent_units = av.len().min(bv.len());
@@ -272,23 +272,34 @@ fn compare_impl(
                 }
                 let ratios: Vec<_> = pa
                     .iter()
-                    .filter(|(_, a)| **a > 0.0)
+                    .filter(|(_, a)| **a != 0.0)
                     .map(|(id, a)| pb[id] / a - 1.0)
                     .collect();
-                if ratios.len() == pa.len() {
+                if ratios.len() == pa.len()
+                    && (pa.values().all(|v| *v > 0.0) || pa.values().all(|v| *v < 0.0))
+                {
                     row.change_percent = Some(median(&ratios) * 100.0);
                     row.interval_percent =
                         median_interval(&ratios, corrected).map(|(l, h)| (l * 100.0, h * 100.0));
+                } else {
+                    row.change_percent = None;
                 }
                 row.note="Median of process-pair ratios; exact median interval, Bonferroni family correction. Independence across pairs assumed; background drift is not controlled.".into();
+                if row.change_percent.is_none() {
+                    row.note.push_str(" Paired baselines contain zero or mixed signs; no common relative direction is reported.");
+                }
             } else {
                 if let (Some((al, ah)), Some((bl, bh))) = (
                     median_interval(&av, corrected / 2.0),
                     median_interval(&bv, corrected / 2.0),
-                ) && al > 0.0
-                    && ah > 0.0
+                ) && (al > 0.0 || ah < 0.0)
                 {
-                    row.interval_percent = Some(((bl / ah - 1.0) * 100.0, (bh / al - 1.0) * 100.0));
+                    // Division is bounded by the four corners when the entire
+                    // denominator interval stays on one side of zero.
+                    let ratios = [bl / al, bl / ah, bh / al, bh / ah];
+                    let low = ratios.iter().copied().fold(f64::INFINITY, f64::min);
+                    let high = ratios.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    row.interval_percent = Some(((low - 1.0) * 100.0, (high - 1.0) * 100.0));
                 }
                 row.note="Ratio of process medians; conservative simultaneous median intervals, Bonferroni correction. Historical runs may be confounded by environment drift.".into();
                 let (test, null_distribution) = if capture_distribution {
@@ -322,9 +333,17 @@ fn compare_impl(
                 row.note
                     .push_str(" Relative effect overflow: no numeric ratio reported.");
             }
+            if am < 0.0 {
+                row.note.push_str(" Negative baseline: ratio percentages reverse numerical direction; decisions account for this sign.");
+            }
+            if row.interval_percent.is_none() && am == 0.0 {
+                row.note
+                    .push_str(" Relative effect is undefined at a zero baseline.");
+            }
             if m.direction == Direction::Neutral {
                 row.decision = Decision::Neutral;
             } else if let Some((lo, hi)) = row.interval_percent {
+                let (lo, hi) = if am < 0.0 { (-hi, -lo) } else { (lo, hi) };
                 row.decision = if lo > threshold {
                     if m.direction == Direction::Lower {
                         Decision::Regression

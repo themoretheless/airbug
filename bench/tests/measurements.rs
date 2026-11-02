@@ -2580,3 +2580,178 @@ fn decreasing_statistical_display_reverses_bounds_without_changing_raw_data() {
     assert!(html.contains("formatter(mean)"));
     assert!(!html.contains("saved statistical display does not match"));
 }
+
+struct SignedTotal;
+impl Measurement for SignedTotal {
+    type Start = ();
+    type Value = f64;
+    fn metric(&self) -> Metric {
+        let mut metric = Metric::duration("balance", "signed synthetic balance", "batch_total");
+        metric.unit = "units".into();
+        metric
+    }
+    fn value_domain(&self) -> airbug_bench::measurement::ValueDomain {
+        airbug_bench::measurement::ValueDomain::Signed
+    }
+    fn start(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn end(&mut self, _: ()) -> Result<f64> {
+        Ok(-6.0)
+    }
+    fn zero(&self) -> f64 {
+        0.0
+    }
+    fn add(&self, a: f64, b: f64) -> Result<f64> {
+        Ok(a + b)
+    }
+    fn to_f64(&self, value: &f64) -> Result<f64> {
+        Ok(*value)
+    }
+}
+
+#[test]
+fn signed_custom_totals_survive_statistics_and_roundtrip_without_relaxing_clocks() {
+    for asynchronous in [false, true] {
+        let mut suite = Suite::new("signed");
+        if asynchronous {
+            suite
+                .bench_async_measured_custom(
+                    "balance",
+                    SignedTotal,
+                    || airbug_bench::workloads::LocalExecutor,
+                    async |n| -(n as f64) * 3.0,
+                )
+                .unwrap();
+        } else {
+            suite
+                .bench_measured_custom("balance", SignedTotal, |n| -(n as f64) * 3.0)
+                .unwrap();
+        }
+        suite.config(Config {
+            samples: 4,
+            warmup: Duration::ZERO,
+            sample_time: Duration::from_nanos(1),
+            max_iterations: 2,
+        });
+        suite.sampling(Sampling {
+            iterations: Some(2),
+            ..Default::default()
+        });
+        let run = suite.run("").unwrap();
+        run.validate().unwrap();
+        assert!(
+            run.observations
+                .iter()
+                .filter(|o| o.metric == "balance")
+                .all(|o| o.number().unwrap() == Some(-6.0))
+        );
+        let restored: airbug_bench::Run =
+            serde_json::from_slice(&serde_json::to_vec(&run).unwrap()).unwrap();
+        restored.validate().unwrap();
+        let report = airbug_bench::bootstrap::analyze(
+            &restored,
+            &airbug_bench::bootstrap::Config::default(),
+        )
+        .unwrap();
+        let row = report
+            .rows
+            .iter()
+            .find(|row| row.metric == "balance")
+            .unwrap();
+        let estimates = row.estimates.as_ref().unwrap();
+        for value in [&estimates.mean, &estimates.median] {
+            assert_eq!((value.lower, value.point, value.upper), (-3.0, -3.0, -3.0));
+        }
+        let machine = airbug_bench::measurement::format_observations(
+            &restored,
+            &restored.cases[0].id,
+            "balance",
+            &SignedTotal,
+            airbug_bench::measurement::Format::Machine,
+        )
+        .unwrap();
+        assert_eq!(machine.len(), 4);
+        assert!(machine.iter().all(|row| row.value == Some(-3.0)));
+        let mut invalid = restored.clone();
+        invalid.cases[0]
+            .contract
+            .remove("measurement.domain.balance");
+        assert!(invalid.validate().is_err());
+        let mut invalid = restored.clone();
+        invalid
+            .observations
+            .iter_mut()
+            .find(|o| o.metric == "wall")
+            .unwrap()
+            .value = Some("-1".into());
+        invalid.cases[0]
+            .contract
+            .insert("measurement.domain.wall".into(), "signed".into());
+        assert!(invalid.validate().is_err());
+    }
+}
+
+impl airbug_bench::measurement::ValueFormatter for SignedTotal {
+    fn scale_values(
+        &self,
+        _: f64,
+        values: &[f64],
+    ) -> Result<airbug_bench::measurement::FormattedValues> {
+        Ok(airbug_bench::measurement::FormattedValues {
+            values: values.to_vec(),
+            unit: "units".into(),
+        })
+    }
+    fn scale_for_machines(
+        &self,
+        values: &[f64],
+    ) -> Result<airbug_bench::measurement::FormattedValues> {
+        self.scale_values(0.0, values)
+    }
+    fn scale_throughputs(
+        &self,
+        _: f64,
+        _: f64,
+        _: &str,
+        _: &[f64],
+    ) -> Result<airbug_bench::measurement::FormattedValues> {
+        Err(airbug_bench::error("balance is not elapsed time"))
+    }
+}
+
+#[test]
+fn signed_wave_totals_accumulate_before_normalization() {
+    let mut suite = Suite::new("signed-waves");
+    suite
+        .bench_measured_with_input(
+            "balance",
+            SignedTotal,
+            BatchPolicy::Iterations(std::num::NonZeroU64::new(2).unwrap()),
+            || (),
+            |_| (),
+            airbug_bench::DropPolicy::OutsideTiming,
+        )
+        .unwrap();
+    suite.config(Config {
+        samples: 2,
+        warmup: Duration::ZERO,
+        sample_time: Duration::from_nanos(1),
+        max_iterations: 5,
+    });
+    suite.sampling(Sampling {
+        iterations: Some(5),
+        ..Default::default()
+    });
+    let run = suite.run("").unwrap();
+    let rows: Vec<_> = run
+        .observations
+        .iter()
+        .filter(|o| o.metric == "balance")
+        .collect();
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|o| o.number().unwrap() == Some(-18.0) && o.operations == 5)
+    );
+}
