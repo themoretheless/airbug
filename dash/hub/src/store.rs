@@ -6,10 +6,7 @@ use crate::{
     error::{HubError, Result},
     runs::RunStore,
     scan,
-    testrun::{
-        RUNS_DIR,
-        model::{Git, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals},
-    },
+    testrun::model::{Git, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -24,7 +21,6 @@ use std::{
 const STALE_AFTER_MS: u64 = 10 * 60 * 1000;
 /// Test runs (current included) that feed history strips and flaky detection.
 const HISTORY_RUNS: usize = 12;
-const MAX_REPORT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_LISTED_CHANGES: usize = 200;
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,23 +48,14 @@ pub struct RunItem {
     pub progress: Option<Value>,
 }
 
-pub fn runs_dir(root: &Path) -> PathBuf {
-    root.join(RUNS_DIR)
-}
+use airbug_run::store::read_json as read;
+pub use airbug_run::store::runs_dir;
 
 fn state_str<T: Serialize>(state: &T) -> String {
     serde_json::to_value(state)
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
         .unwrap_or_else(|| "unknown".into())
-}
-
-fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
-    let meta = fs::metadata(path).ok()?;
-    if meta.len() > MAX_REPORT_BYTES {
-        return None;
-    }
-    serde_json::from_slice(&fs::read(path).ok()?).ok()
 }
 
 fn now_ms() -> u64 {

@@ -8,7 +8,8 @@
 pub mod events;
 pub mod html;
 pub mod libtest;
-pub mod model;
+/// The run format lives in `airbug-run`; this path is kept for the modules that grew up here.
+pub use airbug_run::model;
 pub mod nextest;
 
 use libtest::Collector;
@@ -30,8 +31,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Directory of test runs under the project root.
-pub const RUNS_DIR: &str = ".airbug/runs";
+pub use airbug_run::store::{RUNS_DIR, write_json};
 const DEFAULT_KEEP: usize = 50;
 const WRITE_EVERY: Duration = Duration::from_millis(300);
 /// How long to keep reading after cargo exited (a grandchild may hold the pipe open).
@@ -389,7 +389,7 @@ fn run(options: Options) -> io::Result<i32> {
         in_store.then_some(live_url.as_str()),
     );
     if in_store {
-        prune(&root.join(RUNS_DIR), options.keep, &run_id);
+        airbug_run::store::prune(&root.join(RUNS_DIR), "test", options.keep, &run_id);
     }
     Ok(match collector.report.state {
         RunState::Passed => 0,
@@ -461,27 +461,6 @@ impl Store {
         force_note(write_json(&self.dir.join("report.json"), report, false));
         force_note(write_json(&self.dir.join("progress.json"), &progress, true));
     }
-}
-
-fn write_json(path: &Path, value: &impl serde::Serialize, pretty: bool) -> io::Result<()> {
-    let bytes = if pretty {
-        serde_json::to_vec_pretty(value)
-    } else {
-        serde_json::to_vec(value)
-    }
-    .map_err(io::Error::other)?;
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, bytes)?;
-    // Readers poll these files; a rename never exposes a half-written document.
-    let mut last = Ok(());
-    for _ in 0..5 {
-        last = fs::rename(&tmp, path);
-        if last.is_ok() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
-    last
 }
 
 /// Run cargo with stdout+stderr merged into one pipe (so `Running …` precedes its tests) and
@@ -679,37 +658,6 @@ fn print_summary(report: &Report, dir: &Path, live_url: Option<&str>) {
     }
 }
 
-/// Keep the newest `keep` finished test runs in the store; never touch `current` or runs that
-/// are still going.
-fn prune(runs_dir: &Path, keep: usize, current: &str) {
-    let Ok(entries) = fs::read_dir(runs_dir) else {
-        return;
-    };
-    let mut finished: Vec<(u64, PathBuf)> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some(current))
-        .filter_map(|path| {
-            let manifest: Manifest =
-                serde_json::from_slice(&fs::read(path.join("manifest.json")).ok()?).ok()?;
-            if manifest.schema != MANIFEST_SCHEMA || manifest.kind != "test" {
-                return None;
-            }
-            let progress: Progress =
-                serde_json::from_slice(&fs::read(path.join("progress.json")).ok()?).ok()?;
-            progress
-                .state
-                .is_finished()
-                .then_some((manifest.started_at_ms, path))
-        })
-        .collect();
-    finished.sort_by_key(|a| std::cmp::Reverse(a.0));
-    // `current` is one of the kept runs.
-    for (_, path) in finished.into_iter().skip(keep.saturating_sub(1)) {
-        let _ = fs::remove_dir_all(path);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -805,35 +753,5 @@ mod tests {
     fn unknown_flags_are_rejected() {
         assert!(parse_args(["--bogus"]).is_err());
         assert!(parse_args(["--out"]).is_err());
-    }
-
-    #[test]
-    fn prune_keeps_newest_finished_runs() {
-        let dir = env::temp_dir().join(format!("airbug-prune-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        for (i, state) in ["passed", "failed", "running", "passed"].iter().enumerate() {
-            let run = dir.join(format!("run-{i}"));
-            fs::create_dir_all(&run).unwrap();
-            let manifest = Manifest {
-                schema: MANIFEST_SCHEMA.into(),
-                kind: "test".into(),
-                run_id: format!("run-{i}"),
-                started_at_ms: i as u64,
-                ..Manifest::default()
-            };
-            write_json(&run.join("manifest.json"), &manifest, true).unwrap();
-            fs::write(
-                run.join("progress.json"),
-                format!(r#"{{"run_id":"run-{i}","kind":"test","state":"{state}","totals":{{"total":0,"completed":0,"passed":0,"failed":0,"ignored":0,"not_run":0}}}}"#),
-            )
-            .unwrap();
-        }
-        // keep 2 = current (run-3) + newest other finished (run-1); run-2 is still running.
-        prune(&dir, 2, "run-3");
-        assert!(dir.join("run-3").is_dir());
-        assert!(dir.join("run-2").is_dir());
-        assert!(dir.join("run-1").is_dir());
-        assert!(!dir.join("run-0").exists());
-        let _ = fs::remove_dir_all(&dir);
     }
 }

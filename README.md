@@ -12,6 +12,7 @@ Rust toolkit split by job. One naming rule:
 | `otel/` | `airbug-otel` |
 | `err/` | `airbug-err` |
 | `dash/` | `airbug-hub` (+ `dash/collector` ops assets) |
+| `run/` | `airbug-run` (run format + store shared by runners and the hub) |
 
 ```text
 unit/                      # package: airbug
@@ -27,6 +28,7 @@ mon/                       # package: airbug-mon (host monitor)
 otel/                      # package: airbug-otel (OTLP traces+metrics+logs)
 err/                       # package: airbug-err (panic/error → hub issues)
 dash/hub/                  # package: airbug-hub (+ collector / logs / issues)
+run/                       # package: airbug-run (one on-disk contract for runs)
 ```
 
 ## Architecture (local toolkit)
