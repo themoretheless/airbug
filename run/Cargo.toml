@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
-publish = false
+repository = "https://github.com/themoretheless/airbug"
 description = "The airbug run format and store: one on-disk contract for test and bench runs"
 
 [dependencies]

@@ -212,6 +212,7 @@ fn run(options: Options) -> io::Result<i32> {
         .into(),
         cargo_args: options.cargo_args.clone(),
         test_args: options.test_args.clone(),
+        artifacts: None,
         rerun_of: options.rerun_of.clone(),
     };
     write_json(&dir.join("manifest.json"), &manifest, true)?;

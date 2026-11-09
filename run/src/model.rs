@@ -14,6 +14,8 @@
 use serde::{Deserialize, Serialize};
 
 pub const MANIFEST_SCHEMA: &str = "airbug.run/1";
+pub const KIND_TEST: &str = "test";
+pub const KIND_BENCH: &str = "bench";
 pub const REPORT_SCHEMA: &str = "airbug.test-report/1";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -42,6 +44,10 @@ pub struct Manifest {
     /// Arguments after the second `--` (to the test binaries / nextest filters).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub test_args: Vec<String>,
+    /// Directory holding the run's own artifacts when they are not in the run directory
+    /// (a bench session writes where `--output` says). Absolute, as the writer saw it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifacts: Option<String>,
     /// The run this one re-ran (only its failures, or all of it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rerun_of: Option<String>,

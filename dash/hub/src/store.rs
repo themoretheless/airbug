@@ -6,7 +6,9 @@ use crate::{
     error::{HubError, Result},
     runs::RunStore,
     scan,
-    testrun::model::{Git, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals},
+    testrun::model::{
+        Git, KIND_BENCH, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -138,6 +140,7 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
             });
         }
     }
+    items.extend(announced_bench_runs(root, &mut seen));
     for row in scan::list_bench_dirs(root).runs {
         let id = row.id.replace('\\', "/");
         if seen.contains(&id) {
@@ -166,6 +169,78 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
         });
     }
     items
+}
+
+/// Bench sessions announced in the shared run store by `cargo airbug-bench run`.
+///
+/// The session's files stay in its own output directory; while it runs, live counts come from
+/// the `progress.json` the runner keeps there. Directories under `.airbug-bench` are added to
+/// `seen` so the scan below does not list them twice.
+fn announced_bench_runs(root: &Path, seen: &mut HashSet<String>) -> Vec<RunItem> {
+    let bench_store = root.join(".airbug-bench");
+    airbug_run::store::list(&runs_dir(root), KIND_BENCH)
+        .into_iter()
+        .filter_map(|(dir, manifest)| {
+            let artifacts = manifest.artifacts.as_deref().map(PathBuf::from);
+            let under = artifacts
+                .as_deref()
+                .and_then(|a| a.strip_prefix(&bench_store).ok())
+                .map(|p| p.display().to_string().replace('\\', "/"));
+            if let Some(under) = &under
+                && !seen.insert(under.clone())
+            {
+                return None;
+            }
+            let progress = airbug_run::store::progress(&dir);
+            let state = progress.as_ref().map(|p| p.state).unwrap_or_default();
+            let live: Option<Value> = (!state.is_finished())
+                .then(|| {
+                    artifacts
+                        .as_deref()
+                        .and_then(|a| read(&a.join("progress.json")))
+                })
+                .flatten();
+            let updated = match (&live, &artifacts) {
+                (Some(_), Some(a)) => mtime_ms(&a.join("progress.json")),
+                _ => progress
+                    .as_ref()
+                    .map(|p| p.updated_at_ms)
+                    .unwrap_or(manifest.started_at_ms),
+            };
+            let counts = live.or_else(|| {
+                progress
+                    .as_ref()
+                    .filter(|p| p.totals.total > 0)
+                    .map(|p| json!({"completed": p.totals.completed, "total": p.totals.total}))
+            });
+            // Only files under `.airbug-bench` are served; other sessions are listed without a link.
+            let href = under
+                .as_deref()
+                .zip(artifacts.as_deref())
+                .and_then(|(under, a)| {
+                    ["report.html", "run.json"]
+                        .into_iter()
+                        .find(|file| a.join(file).is_file())
+                        .map(|file| format!("/bench/{under}/{file}"))
+                })
+                .unwrap_or_else(|| "#/runs".into());
+            Some(RunItem {
+                href,
+                run_id: manifest.run_id,
+                kind: "bench",
+                title: manifest.title,
+                state: state_str(&state),
+                started_at_ms: manifest.started_at_ms,
+                updated_at_ms: updated,
+                stale: !state.is_finished() && now_ms().saturating_sub(updated) > STALE_AFTER_MS,
+                git: None,
+                totals: None,
+                duration_s: progress.as_ref().and_then(|p| p.duration_s),
+                activity: None,
+                progress: counts,
+            })
+        })
+        .collect()
 }
 
 /// `"1712345678s unix"` (registry stamps) → milliseconds.

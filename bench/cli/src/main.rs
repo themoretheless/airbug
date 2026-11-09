@@ -12,6 +12,7 @@ mod project;
 mod revisions;
 mod runner;
 mod sessions;
+mod shared_store;
 mod web_ui;
 
 fn init_tracing() {

@@ -566,7 +566,11 @@ pub(crate) fn execute() -> Result<i32> {
             }
             runner::preflight(plan.clone(), &out)?;
             let live = start_interface(&out, &cli.store, ui, no_ui, no_open)?;
+            let announced = crate::shared_store::announce(&out);
             let result = runner::run(plan, &out);
+            if let Some(announced) = announced {
+                announced.finish(&out);
+            }
             if out.join("run.json").is_file() {
                 let doc = experiment_report::build(experiment_report::Options {
                     source: &out,

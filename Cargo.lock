@@ -833,6 +833,7 @@ name = "cargo-airbug-bench"
 version = "0.9.0"
 dependencies = [
  "airbug-bench",
+ "airbug-run",
  "clap",
  "clap_complete",
  "libc",
