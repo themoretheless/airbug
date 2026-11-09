@@ -12,6 +12,7 @@ categories = ["development-tools::profiling", "command-line-utilities"]
 
 [dependencies]
 airbug-bench = { workspace = true, features = ["memory"] }
+airbug-run.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

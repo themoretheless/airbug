@@ -23,6 +23,7 @@ Libraries (`airbug`, `airbug-bench`, `airbug-err`, `airbug-otel`) expose builder
 | Contract | Version field | Notes |
 |----------|---------------|-------|
 | `airbug_err::Event` | `schema_version` (u32, default 1) | Hub rejects unsupported majors |
+| Runs | `schema` in `manifest.json` (`airbug.run/1`) | `airbug-run`: model + store under `.airbug/runs/<id>/`; test runs live there; `cargo airbug-bench run` announces its session there (manifest `artifacts` points at its output directory) |
 | Bench runs | filesystem `run.json` trees under `.airbug-bench` | Scanned, not a shared crate |
 
 ## Threat model

@@ -12,6 +12,7 @@ members = [
     "otel",
     "err",
     "dash/hub",
+    "run",
 ]
 default-members = [
     "unit",
@@ -25,6 +26,7 @@ default-members = [
     "otel",
     "err",
     "dash/hub",
+    "run",
 ]
 exclude = [
     "bench/integrations/forma",
@@ -35,6 +37,7 @@ edition = "2024"
 rust-version = "1.96"
 
 [workspace.dependencies]
+airbug-run = { path = "run", version = "0.1.0" }
 airbug-macros = { path = "unit/macros", version = "0.6.2" }
 airbug-bench = { path = "bench", version = "0.9.0" }
 airbug-bench-macros = { path = "bench/macros", version = "0.9.0" }
