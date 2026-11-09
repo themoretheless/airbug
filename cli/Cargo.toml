@@ -1,0 +1,13 @@
+[package]
+name = "cargo-airbug"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+repository = "https://github.com/themoretheless/airbug"
+description = "One entry point for airbug: cargo airbug test | bench | serve | status"
+publish = false
+
+[[bin]]
+name = "cargo-airbug"
+path = "src/main.rs"

@@ -12,6 +12,7 @@ Rust toolkit split by job. One naming rule:
 | `otel/` | `airbug-otel` |
 | `err/` | `airbug-err` |
 | `dash/` | `airbug-hub` (+ `dash/collector` ops assets) |
+| `cli/` | `cargo-airbug` (`cargo airbug test \| bench \| serve \| status`) |
 | `run/` | `airbug-run` (run format + store shared by runners and the hub) |
 
 ```text
@@ -67,7 +68,8 @@ cargo test -p airbug --all-features
 cargo test -p airbug-otel
 cargo test -p airbug-err
 cargo test -p airbug-hub
-cargo run -p airbug-hub -- serve --root .
+cargo airbug serve                                       # hub on http://127.0.0.1:8790/
+cargo airbug bench run --program ./target/release/mybench --output .airbug-bench/session
 cargo airbug test -- --workspace --exclude airbug-mon    # live per-test run → hub #/tests
 cargo run -p airbug-hub -- serve --root . --collector   # Docker or otelcol on PATH
 ./dash/scripts/smoke_local.sh                           # optional local smoke
