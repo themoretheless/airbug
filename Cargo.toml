@@ -13,6 +13,7 @@ members = [
     "err",
     "dash/hub",
     "run",
+    "cli",
 ]
 default-members = [
     "unit",
@@ -27,6 +28,7 @@ default-members = [
     "err",
     "dash/hub",
     "run",
+    "cli",
 ]
 exclude = [
     "bench/integrations/forma",

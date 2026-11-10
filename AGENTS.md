@@ -119,7 +119,9 @@ write no history. The separate process runner's live dashboard rules above still
 
 ## Tests are live in the hub: `cargo airbug test`
 
-`cargo airbug test` (alias for `airbug-hub test`) wraps `cargo test`, lists tests first
+`cargo airbug` is the one entry point (`cli/`, `cargo-airbug`): it routes `test`, `serve` and
+`status` to `airbug-hub` and `bench …` to `cargo-airbug-bench` (`cargo airbug bench run …` is
+`cargo airbug-bench run …`). `cargo airbug test` wraps `cargo test`, lists tests first
 so progress has a denominator, and writes a run directory the hub reads while it runs.
 
 ```sh
