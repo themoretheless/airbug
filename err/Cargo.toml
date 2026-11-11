@@ -11,15 +11,18 @@ keywords = ["error", "panic", "monitoring", "sentry"]
 categories = ["development-tools", "development-tools::debugging"]
 
 [features]
-default = ["panic"]
+default = ["panic", "otel"]
 ## Install a panic hook that captures and forwards to the previous hook.
 panic = []
 ## Capture `anyhow::Error` via `capture_anyhow`.
 anyhow = ["dep:anyhow"]
+## Automatically correlate captured events with the active OpenTelemetry span and record exceptions on it.
+otel = ["dep:opentelemetry"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
 backtrace = "0.3"
+opentelemetry = { workspace = true, optional = true, default-features = false, features = ["trace"] }
 reqwest = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
@@ -27,6 +30,9 @@ sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 uuid = { workspace = true }
+
+[dev-dependencies]
+opentelemetry_sdk = { workspace = true, default-features = false, features = ["trace", "testing"] }
 
 [[example]]
 name = "capture"

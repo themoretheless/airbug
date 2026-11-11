@@ -15,8 +15,15 @@ use std::{
     fs,
     path::Path,
     process::{Command, Stdio},
+    sync::Mutex,
     thread,
+    time::{Duration, Instant},
 };
+
+/// Guards `start` against TOCTOU races when multiple rerun requests arrive before the first
+/// spawned runner writes its `manifest.json` on disk.
+static RERUN_START_LOCK: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+const PENDING_RERUN_GRACE: Duration = Duration::from_secs(5);
 
 /// More exact filters than this make command lines too long (Windows caps at 32k chars).
 const MAX_FILTERS: usize = 300;
@@ -138,7 +145,11 @@ fn plan_from(manifest: &Manifest, report: &LightReport, failed_only: bool) -> Re
                     .map(|s| s.name.as_str())
                     .filter(|n| !n.is_empty())
                     .unwrap_or(t.suite.as_str());
-                format!("(binary_id(={binary}) & test(={}))", t.name)
+                format!(
+                    "(binary_id(={}) & test(={}))",
+                    filterset_atom(binary),
+                    filterset_atom(&t.name)
+                )
             })
             .collect::<Vec<_>>()
             .join(" | ");
@@ -207,6 +218,18 @@ fn drop_flags(args: &[String], flags: &[&str]) -> Vec<String> {
     out
 }
 
+fn filterset_atom(s: &str) -> String {
+    let plain = !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | ':' | '.'));
+    if plain {
+        s.to_string()
+    } else {
+        let escaped = s.replace('\\', r"\\").replace('"', r#"\""#);
+        format!("\"{escaped}\"")
+    }
+}
+
 fn shell_quote(arg: &str) -> String {
     let plain = !arg.is_empty()
         && arg
@@ -255,6 +278,18 @@ pub fn describe(manifest: &Value, report: &Value) -> Value {
 
 /// Start the rerun in the background; returns the new run id and what was started.
 pub fn start(root: &Path, port: u16, id: &str, failed_only: bool) -> Result<Value> {
+    let mut guard = RERUN_START_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((ref pending_id, started_at)) = *guard
+        && started_at.elapsed() < PENDING_RERUN_GRACE
+        && !store::runs_dir(root)
+            .join(pending_id)
+            .join("manifest.json")
+            .is_file()
+    {
+        return Err(HubError::msg(format!(
+            "busy: test run {pending_id} is starting"
+        )));
+    }
     if let Some(live) = store::test_runs(root, 20)
         .into_iter()
         .find(|r| !r.stale && matches!(r.state.as_str(), "building" | "running"))
@@ -298,6 +333,8 @@ pub fn start(root: &Path, port: u16, id: &str, failed_only: bool) -> Result<Valu
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
+    *guard = Some((run_id.clone(), Instant::now()));
+    drop(guard);
     // Reap it; the run directory is the only interface.
     thread::spawn(move || {
         let _ = child.wait();
@@ -439,6 +476,11 @@ mod tests {
     fn quoting_and_flag_dropping() {
         assert_eq!(shell_quote("it's"), r"'it'\''s'");
         assert_eq!(shell_quote("--workspace"), "--workspace");
+        assert_eq!(filterset_atom("demo::it"), "demo::it");
+        assert_eq!(
+            filterset_atom("demo (src/lib.rs)"),
+            r#""demo (src/lib.rs)""#
+        );
         assert_eq!(
             drop_flags(
                 &["-E".into(), "x".into(), "--filterset=y".into(), "-p".into()],

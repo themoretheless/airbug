@@ -41,8 +41,8 @@ impl eframe::App for MonApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(sample) = self.rx.try_recv() {
             self.state.push(sample);
+            self.alerts.evaluate(&self.state);
         }
-        self.alerts.evaluate(&self.state);
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {

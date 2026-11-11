@@ -11,6 +11,7 @@ description = "Demonstration checkout domain used by the airbug pilot tests and 
 publish = false
 
 [features]
+default = ["macros"]
 # Mirrors airbug's own feature, so enabling macros on airbug does not get forced
 # on by this crate through feature unification.
 macros = ["dep:airbug", "airbug/macros"]

@@ -37,12 +37,15 @@ impl Storage {
             let _ = std::fs::create_dir_all(parent);
         }
         let conn = Connection::open(path)?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         Self::init(conn)
     }
 
     #[cfg(test)]
     pub fn open_in_memory() -> rusqlite::Result<Self> {
-        Self::init(Connection::open_in_memory()?)
+        let conn = Connection::open_in_memory()?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        Self::init(conn)
     }
 
     fn init(conn: Connection) -> rusqlite::Result<Self> {
@@ -60,7 +63,8 @@ impl Storage {
              );
              CREATE TABLE IF NOT EXISTS proc_samples(
                  ts INTEGER, pid INTEGER, name TEXT,
-                 cpu REAL, mem INTEGER, read_b REAL, write_b REAL
+                 cpu REAL, mem INTEGER, read_b REAL, write_b REAL,
+                 PRIMARY KEY (ts, pid)
              );
              CREATE INDEX IF NOT EXISTS idx_proc_ts ON proc_samples(ts);
              CREATE TABLE IF NOT EXISTS samples_min(
@@ -86,7 +90,7 @@ impl Storage {
                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
             )?;
             let mut p_stmt = tx.prepare(
-                "INSERT INTO proc_samples (ts, pid, name, cpu, mem, read_b, write_b)
+                "INSERT OR REPLACE INTO proc_samples (ts, pid, name, cpu, mem, read_b, write_b)
                  VALUES (?1,?2,?3,?4,?5,?6,?7)",
             )?;
             for s in samples {
@@ -127,6 +131,14 @@ impl Storage {
     }
 
     pub fn aggregate_minutes(&self) -> rusqlite::Result<usize> {
+        let cutoff: i64 = self
+            .conn
+            .query_row(
+                "SELECT COALESCE(MAX(ts) - 120, 0) FROM samples_min",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         let n = self.conn.execute(
             "INSERT OR REPLACE INTO samples_min
              SELECT ts - (ts % 60),
@@ -136,8 +148,9 @@ impl Storage {
                     AVG(gpu_util), CAST(AVG(gpu_mem) AS INTEGER),
                     AVG(net_rx), AVG(net_tx), AVG(disk_r), AVG(disk_w)
              FROM samples
+             WHERE ts >= ?1
              GROUP BY ts - (ts % 60)",
-            [],
+            params![cutoff],
         )?;
         Ok(n)
     }
@@ -192,7 +205,7 @@ impl Storage {
     pub fn export_csv(&self, from_ts: i64, aggregated: bool, path: &Path) -> std::io::Result<()> {
         let points = self
             .history(from_ts, aggregated)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
         let mut out = String::from(
             "ts,datetime,cpu_total,mem_used,mem_total,swap_used,gpu_util,gpu_mem,net_rx,net_tx,disk_r,disk_w\n",
         );
@@ -230,6 +243,8 @@ pub fn run_db_writer(rx: crossbeam_channel::Receiver<Vec<Sample>>, mut storage: 
             last_agg = std::time::Instant::now();
         }
     }
+    let _ = storage.aggregate_minutes();
+    let _ = storage.enforce_retention(chrono::Utc::now().timestamp());
 }
 
 #[cfg(test)]

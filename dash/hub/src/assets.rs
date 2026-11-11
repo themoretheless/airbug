@@ -38,8 +38,10 @@ const ASSETS: &[(&str, &str, &str)] = &[
     asset!("js/sections/tests.js", JS),
     asset!("js/sections/bench.js", JS),
     asset!("js/sections/issues.js", JS),
+    asset!("js/sections/traces.js", JS),
     asset!("js/sections/logs.js", JS),
     asset!("js/sections/metrics.js", JS),
+    asset!("js/sections/profiles.js", JS),
     asset!("js/sections/health.js", JS),
 ];
 

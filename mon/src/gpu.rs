@@ -46,7 +46,7 @@ impl GpuProvider for PowermetricsProvider {
             return None;
         }
         let output = std::process::Command::new("powermetrics")
-            .args(["--samplers", "gpu_power", "-i", "1000", "-n", "1"])
+            .args(["--samplers", "gpu_power", "-i", "200", "-n", "1"])
             .output()
             .ok()?;
         if !output.status.success() {
@@ -60,7 +60,7 @@ impl GpuProvider for PowermetricsProvider {
 #[cfg(target_os = "macos")]
 fn parse_powermetrics(text: &str) -> Option<GpuSample> {
     let mut util = None;
-    let mem_used = 0u64;
+    let mut mem_used = 0u64;
     let mut mem_total = 0u64;
     for line in text.lines() {
         let line = line.trim();
@@ -79,6 +79,7 @@ fn parse_powermetrics(text: &str) -> Option<GpuSample> {
                 .collect();
             if let Ok(mb) = num.parse::<f64>() {
                 mem_total = (mb * 1_048_576.0) as u64;
+                mem_used = mem_total;
             }
         }
     }
@@ -113,5 +114,6 @@ mod tests {
         let s = parse_powermetrics(text).unwrap();
         assert!((s.util - 12.34).abs() < 0.01);
         assert_eq!(s.mem_total, 512 * 1_048_576);
+        assert_eq!(s.mem_used, 512 * 1_048_576);
     }
 }

@@ -50,10 +50,10 @@ cargo run -p airbug-hub -- serve --root . --collector
 ```
 
 `http://127.0.0.1:8790/` is the page that fills itself in while things run: status every
-15 s, OTLP logs every 4 s, metrics every 4 s, issues every 5 s
-(`FEEDS` in `dash/hub/static/js/main.js`). Unlike the bench live UI the port is fixed and
-there is no token, so the link stays valid across restarts. Hand it over anyway only
-after the checks below — every one of them degrades silently to an empty page.
+15 s, OTLP traces every 4 s, OTLP logs every 4 s, metrics every 4 s, profiles every 8 s,
+issues every 5 s (`FEEDS` in `dash/hub/static/js/main.js`). Unlike the bench live UI the
+port is fixed and there is no token, so the link stays valid across restarts. Hand it over
+anyway only after the checks below — every one of them degrades silently to an empty page.
 
 **Several hubs at once:** each hub has its own `hub_id`, printed by `/api/v1/status`. A shared
 port is not enough then — a hub started for another project swallows this project's errors. Point
@@ -80,16 +80,18 @@ Checks, in order:
    swallows this project's issues. Wrong root → start yours with `--port 8791` and give
    that URL; never assume the default port was free.
 2. Is OTLP listening? `nc -z 127.0.0.1 4318`, or the `apis[]` entries in the status
-   JSON. Dead collector means the logs and metrics panels stay empty forever.
-   `--collector` tries the `docker compose` plugin, then a standalone `docker-compose`
-   binary, then an `otelcol*` binary on `PATH` (`dash/hub/src/collector.rs`); with none
-   of them the collector does not start and hub carries on serving. A container that is
-   *up* is not enough — read the `collector:` lines on stderr, which say so when
-   `:4318` never opened. Report that instead of claiming a live view.
-3. Traces are not in the hub at all — they render only in Jaeger on
-   `http://127.0.0.1:16686/`, which the Docker path brings up and the otelcol-binary
-   path does not (`dash/README.md:95`). No Jaeger → no trace UI, say so rather than
-   linking a 404.
+   JSON. Dead collector means the traces, logs, metrics, and profiles panels stay empty
+   forever. `--collector` tries the `docker compose` plugin, then a standalone
+   `docker-compose` binary, then an `otelcol*` binary on `PATH`, and finally falls back
+   to the built-in Rust OTLP HTTP (`:4318` + `:8790/v1/*`) & gRPC (`:4317`) receiver
+   (`--collector-mode builtin` forces the built-in receiver directly;
+   `dash/hub/src/collector.rs`). Read the `collector:` lines on stderr and verify `:4318`
+   is open before claiming a live view.
+3. Traces and OTLP Profiles render natively in the hub at `http://127.0.0.1:8790/#/traces`
+   (Critical Path Waterfall, Service Map, RED metrics, zPages `/api/v1/zpages/tracez`) and
+   `http://127.0.0.1:8790/#/profiles` (interactive Flamechart). Jaeger on
+   `http://127.0.0.1:16686/` is optional and only brought up by the Docker path
+   (`dash/README.md`). No Jaeger → link `#/traces` in the hub rather than `:16686`.
 4. For progress in chat without a browser: `cargo run -p airbug-hub -- status --root .`
    prints the same snapshot as JSON.
 5. `serve --collector` runs until SIGINT and tears the stack down on exit; start it in

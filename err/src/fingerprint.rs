@@ -93,8 +93,8 @@ pub(crate) fn normalize_volatile(input: &str) -> String {
             i = end;
             continue;
         }
-        // Hex run of length >= 8
-        if let Some(end) = match_hex_run(bytes, i, 8) {
+        // Hex run of length >= 8 on token boundaries
+        if let Some(end) = match_hex_run(input, bytes, i, 8) {
             out.push_str("<hex>");
             i = end;
             continue;
@@ -105,13 +105,20 @@ pub(crate) fn normalize_volatile(input: &str) -> String {
             i = end;
             continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        if let Some(ch) = input[i..].chars().next() {
+            out.push(ch);
+            i += ch.len_utf8();
+        } else {
+            break;
+        }
     }
     out
 }
 
 fn match_uuid(bytes: &[u8], start: usize) -> Option<usize> {
+    if start > 0 && bytes[start - 1].is_ascii_alphanumeric() {
+        return None;
+    }
     const PATTERN: &[usize] = &[8, 4, 4, 4, 12];
     let mut i = start;
     for (idx, &len) in PATTERN.iter().enumerate() {
@@ -126,15 +133,37 @@ fn match_uuid(bytes: &[u8], start: usize) -> Option<usize> {
             i += 1;
         }
     }
+    if i < bytes.len() && bytes[i].is_ascii_alphanumeric() {
+        return None;
+    }
     Some(i)
 }
 
-fn match_hex_run(bytes: &[u8], start: usize, min: usize) -> Option<usize> {
+fn is_token_boundary_char(c: char) -> bool {
+    !c.is_alphanumeric() && c != '_'
+}
+
+fn match_hex_run(input: &str, bytes: &[u8], start: usize, min: usize) -> Option<usize> {
+    if start > 0
+        && let Some(prev) = input[..start].chars().next_back()
+        && !is_token_boundary_char(prev)
+    {
+        return None;
+    }
     let mut i = start;
     while i < bytes.len() && bytes[i].is_ascii_hexdigit() {
         i += 1;
     }
-    if i - start >= min { Some(i) } else { None }
+    if i - start < min {
+        return None;
+    }
+    if i < bytes.len()
+        && let Some(next) = input[i..].chars().next()
+        && !is_token_boundary_char(next)
+    {
+        return None;
+    }
+    Some(i)
 }
 
 fn match_digit_run(bytes: &[u8], start: usize, min: usize) -> Option<usize> {
@@ -186,6 +215,8 @@ mod tests {
             user: None,
             extra: Default::default(),
             contexts: Default::default(),
+            trace_id: None,
+            span_id: None,
         }
     }
 
@@ -263,6 +294,14 @@ mod tests {
         assert_eq!(
             normalize_volatile("user 12345 deadbeefcafe"),
             "user <n> <hex>"
+        );
+        assert_eq!(
+            normalize_volatile("ошибка подключения 12345 к узлу deadbeef01"),
+            "ошибка подключения <n> к узлу <hex>"
+        );
+        assert_eq!(
+            normalize_volatile("feedback_degraded should not become <hex>"),
+            "feedback_degraded should not become <hex>"
         );
     }
 }

@@ -21,6 +21,7 @@ pub struct ProcessesView {
     sort_desc: bool,
     selected_pid: Option<u32>,
     history: HashMap<u32, VecDequeShim>,
+    last_ts: Option<i64>,
 }
 
 type VecDequeShim = std::collections::VecDeque<(f32, u64)>;
@@ -33,6 +34,7 @@ impl Default for ProcessesView {
             sort_desc: true,
             selected_pid: None,
             history: HashMap::new(),
+            last_ts: None,
         }
     }
 }
@@ -47,12 +49,17 @@ impl ProcessesView {
             }
         };
 
-        for p in &latest.top_procs {
-            let entry = self.history.entry(p.pid).or_default();
-            if entry.len() >= super::RING_CAPACITY {
-                entry.pop_front();
+        if self.last_ts != Some(latest.ts) {
+            self.last_ts = Some(latest.ts);
+            self.history
+                .retain(|pid, _| latest.top_procs.iter().any(|p| p.pid == *pid));
+            for p in &latest.top_procs {
+                let entry = self.history.entry(p.pid).or_default();
+                if entry.len() >= super::RING_CAPACITY {
+                    entry.pop_front();
+                }
+                entry.push_back((p.cpu, p.mem));
             }
-            entry.push_back((p.cpu, p.mem));
         }
 
         ui.horizontal(|ui| {
@@ -136,30 +143,29 @@ impl ProcessesView {
                 }
             });
 
-        if let Some(pid) = self.selected_pid {
-            if let Some(hist) = self.history.get(&pid) {
-                if !hist.is_empty() {
-                    ui.separator();
-                    ui.label(format!("История процесса PID {pid}"));
-                    let cpu_pts: PlotPoints = hist
-                        .iter()
-                        .enumerate()
-                        .map(|(i, (c, _))| [i as f64, *c as f64])
-                        .collect();
-                    let mem_pts: PlotPoints = hist
-                        .iter()
-                        .enumerate()
-                        .map(|(i, (_, m))| [i as f64, *m as f64 / 1_048_576.0])
-                        .collect();
-                    Plot::new("proc_hist")
-                        .height(120.0)
-                        .legend(egui_plot::Legend::default())
-                        .show(ui, |plot_ui| {
-                            plot_ui.line(Line::new("CPU %", cpu_pts));
-                            plot_ui.line(Line::new("RAM MB", mem_pts));
-                        });
-                }
-            }
+        if let Some(pid) = self.selected_pid
+            && let Some(hist) = self.history.get(&pid)
+            && !hist.is_empty()
+        {
+            ui.separator();
+            ui.label(format!("История процесса PID {pid}"));
+            let cpu_pts: PlotPoints = hist
+                .iter()
+                .enumerate()
+                .map(|(i, (c, _))| [i as f64, *c as f64])
+                .collect();
+            let mem_pts: PlotPoints = hist
+                .iter()
+                .enumerate()
+                .map(|(i, (_, m))| [i as f64, *m as f64 / 1_048_576.0])
+                .collect();
+            Plot::new("proc_hist")
+                .height(120.0)
+                .legend(egui_plot::Legend::default())
+                .show(ui, |plot_ui| {
+                    plot_ui.line(Line::new("CPU %", cpu_pts));
+                    plot_ui.line(Line::new("RAM MB", mem_pts));
+                });
         }
     }
 }

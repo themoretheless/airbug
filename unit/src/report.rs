@@ -218,14 +218,7 @@ pub fn attach_bytes(name: &str, media_type: &str, bytes: &[u8]) -> io::Result<()
     let id = id();
     let file = format!("attachment-{}-{id}.bin", std::process::id());
     let path = dir.join(&file);
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)?;
-    output.write_all(bytes)?;
-    *total += bytes.len();
-    drop(total);
-    emit(&format!(
+    let event = format!(
         "{{\"type\":\"attachment\",\"parent\":{},\"name\":{},\"mediaType\":{},\"file\":{},\"size\":{},{}}}",
         parent(),
         quote(clipped(name)),
@@ -233,7 +226,31 @@ pub fn attach_bytes(name: &str, media_type: &str, bytes: &[u8]) -> io::Result<()
         quote(&file),
         bytes.len(),
         origin()
-    ))
+    );
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
+    if let Err(err) = output.write_all(bytes) {
+        drop(output);
+        let _ = fs::remove_file(&path);
+        return Err(err);
+    }
+    drop(output);
+    match emit(&event) {
+        Ok(()) => {
+            *total += bytes.len();
+            Ok(())
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&path);
+            drop(total);
+            let message = format!("Airbug diagnostics could not be recorded: {error}");
+            let _ = writeln!(io::stderr(), "{message}");
+            let _ = fs::write(dir.join("report-error.txt"), message);
+            Err(error)
+        }
+    }
 }
 
 pub(crate) fn comparison(name: &str, expected: &str, actual: &str, passed: bool) {
@@ -343,5 +360,27 @@ mod tests {
         let value = "雪".repeat(MAX_TEXT);
         assert!(clipped(&value).len() <= MAX_TEXT);
         assert_eq!(clipped(&value).chars().last(), Some('雪'));
+    }
+    #[test]
+    fn attach_bytes_rolls_back_file_and_quota_when_emit_fails() {
+        let dir = crate::native::TempDir::new().unwrap();
+        let _env = crate::native::EnvScope::set("AIRBUG_REPORT_DIR", dir.path());
+        // Pre-fill events.jsonl past MAX_EVENTS so emit() fails.
+        let events_path = dir.path().join("events.jsonl");
+        let f = fs::File::create(&events_path).unwrap();
+        f.set_len(MAX_EVENTS).unwrap();
+
+        let before = *ATTACHED_BYTES.lock().unwrap_or_else(|e| e.into_inner());
+        let err = attach_bytes("blob.bin", "application/octet-stream", b"hello").unwrap_err();
+        assert!(err.to_string().contains("event limit exceeded"), "{err}");
+        let after = *ATTACHED_BYTES.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(before, after);
+        assert!(dir.path().join("report-error.txt").is_file());
+        let attachments: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("attachment-"))
+            .collect();
+        assert!(attachments.is_empty(), "{attachments:?}");
     }
 }

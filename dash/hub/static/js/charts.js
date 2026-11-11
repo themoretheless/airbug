@@ -169,6 +169,9 @@ export function pieSvg(seriesList) {
     const a0 = angle;
     const a1 = angle + slice;
     angle = a1;
+    if (slice >= Math.PI * 2 - 1e-6) {
+      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${colors[i % colors.length]}" opacity="0.9"/>`;
+    }
     const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
     const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
     const large = slice > Math.PI ? 1 : 0;

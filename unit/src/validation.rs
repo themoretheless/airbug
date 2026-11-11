@@ -241,7 +241,7 @@ pub struct FieldRule<T, F: ?Sized> {
 }
 impl<T: 'static, F: ?Sized + 'static> FieldRule<T, F> {
     /// Add a custom predicate with a human-readable message. The code defaults
-    /// to `must` unless [`with_code`](FieldRule::with_code) overrides it.
+    /// to `custom` unless [`with_code`](FieldRule::with_code) overrides it.
     pub fn must(
         mut self,
         predicate: impl Fn(&F) -> bool + Send + Sync + 'static,

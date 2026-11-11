@@ -106,10 +106,14 @@ impl MySqlContainer {
     /// MySQL URI (`mysql://user:pass@host:port/db`).
     pub fn get_connection_string(&self) -> Result<String, ContainerError> {
         let port = self.inner.get_mapped_public_port(3306)?;
-        let host = self.inner.hostname();
+        let host = super::format_host(&self.inner.hostname());
         Ok(format!(
             "mysql://{}:{}@{}:{}/{}",
-            self.username, self.password, host, port, self.database
+            super::percent_encode(&self.username),
+            super::percent_encode(&self.password),
+            host,
+            port,
+            super::percent_encode(&self.database)
         ))
     }
 

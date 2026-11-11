@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -80,7 +80,7 @@ pub struct IssuesList {
     pub note: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IssueSummary {
     pub id: String,
     pub title: String,
@@ -92,6 +92,10 @@ pub struct IssueSummary {
     pub release: Option<String>,
     pub environment: Option<String>,
     pub service: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_id: Option<String>,
 }
 
 /// Port for issue persistence (DIP).
@@ -107,6 +111,10 @@ pub trait IssueStore: Send + Sync {
         let _ = rid;
         list.note = format!("{} (run filter requires store support)", list.note);
         list
+    }
+    fn find_by_trace_id(&self, trace_id: &str) -> Vec<IssueSummary> {
+        let _ = trace_id;
+        Vec::new()
     }
     fn get(&self, id: &str) -> Option<Issue>;
     fn set_status(&self, id: &str, status: IssueStatus) -> Result<Issue>;
@@ -195,6 +203,15 @@ impl IssueStore for SqliteIssueStore {
         self.with_conn(|conn| Ok(get_unlocked(conn, id)?)).ok()
     }
 
+    fn find_by_trace_id(&self, trace_id: &str) -> Vec<IssueSummary> {
+        let wanted = trace_id.trim();
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        self.with_conn(|conn| find_by_trace_id_unlocked(conn, wanted))
+            .unwrap_or_default()
+    }
+
     fn set_status(&self, id: &str, status: IssueStatus) -> Result<Issue> {
         self.with_conn(|conn| {
             let n = conn.execute(
@@ -224,6 +241,7 @@ fn open(path: &Path) -> rusqlite::Result<Connection> {
         let _ = fs::create_dir_all(parent);
     }
     let conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(5))?;
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          CREATE TABLE IF NOT EXISTS meta(
@@ -311,11 +329,34 @@ fn fingerprint_key(event: &Event) -> String {
     event.event_id.clone()
 }
 
-fn now_iso() -> String {
+pub(crate) fn now_iso() -> String {
     let dur = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    format!("{}.{:03}Z", dur.as_secs(), dur.subsec_millis())
+    let secs = dur.as_secs();
+    let millis = dur.subsec_millis();
+    let (y, mo, d, h, mi, s) = civil_from_days(secs);
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{millis:03}Z")
+}
+
+fn civil_from_days(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
+    let days = (secs / 86_400) as i64;
+    let tod = (secs % 86_400) as u32;
+    let h = tod / 3600;
+    let mi = (tod % 3600) / 60;
+    let s = tod % 60;
+
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = (yoe as i64 + era * 400) as i32;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let mo = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    let y = if mo <= 2 { y + 1 } else { y };
+    (y, mo, d, h, mi, s)
 }
 
 fn map_issue_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Issue> {
@@ -498,7 +539,89 @@ fn list_unlocked(conn: &Connection) -> Result<Vec<IssueSummary>> {
     list_unlocked_filtered(conn, None)
 }
 
+fn payload_has_run_id(raw: &str, rid: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<Value>(raw) else {
+        return false;
+    };
+    v.pointer("/tags/airbug.run_id")
+        .and_then(|x| x.as_str())
+        .or_else(|| {
+            v.get("tags")
+                .and_then(|t| t.get("airbug.run_id"))
+                .and_then(|x| x.as_str())
+        })
+        == Some(rid)
+}
+
+fn issue_events_match_run_id(conn: &Connection, issue_id: &str, rid: &str) -> bool {
+    let Ok(mut stmt) =
+        conn.prepare("SELECT payload FROM issue_events WHERE issue_id = ?1 ORDER BY id DESC")
+    else {
+        return false;
+    };
+    let Ok(rows) = stmt.query_map(params![issue_id], |row| row.get::<_, String>(0)) else {
+        return false;
+    };
+    for row in rows.flatten() {
+        if payload_has_run_id(&row, rid) {
+            return true;
+        }
+    }
+    false
+}
+
 fn list_unlocked_filtered(conn: &Connection, run_id: Option<&str>) -> Result<Vec<IssueSummary>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service, last_event
+             FROM issues ORDER BY last_seen DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let last_raw: String = row.get(10)?;
+        let (trace_id, span_id) = serde_json::from_str::<Value>(&last_raw)
+            .ok()
+            .map(|v| crate::event_model::extract_trace_context_from_event_json(&v))
+            .unwrap_or((None, None));
+        Ok((
+            IssueSummary {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                level: row.get(2)?,
+                status: IssueStatus::parse(&row.get::<_, String>(3)?),
+                count: row.get::<_, i64>(4)? as u64,
+                first_seen: row.get(5)?,
+                last_seen: row.get(6)?,
+                release: row.get(7)?,
+                environment: row.get(8)?,
+                service: row.get(9)?,
+                trace_id,
+                span_id,
+            },
+            last_raw,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (summary, last_raw) = row?;
+        if let Some(rid) = run_id {
+            let matched = payload_has_run_id(&last_raw, rid)
+                || issue_events_match_run_id(conn, &summary.id, rid);
+            if !matched {
+                continue;
+            }
+        }
+        out.push(summary);
+    }
+    Ok(out)
+}
+
+fn find_matching_trace_in_payload(raw: &str, wanted: &str) -> Option<(String, Option<String>)> {
+    let v = serde_json::from_str::<Value>(raw).ok()?;
+    let (tid, sid) = crate::event_model::extract_trace_context_from_event_json(&v);
+    let tid = tid?;
+    tid.eq_ignore_ascii_case(wanted).then_some((tid, sid))
+}
+
+fn find_by_trace_id_unlocked(conn: &Connection, wanted: &str) -> Result<Vec<IssueSummary>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, level, status, count, first_seen, last_seen, release, environment, service, last_event
              FROM issues ORDER BY last_seen DESC",
@@ -517,31 +640,34 @@ fn list_unlocked_filtered(conn: &Connection, run_id: Option<&str>) -> Result<Vec
                 release: row.get(7)?,
                 environment: row.get(8)?,
                 service: row.get(9)?,
+                trace_id: None,
+                span_id: None,
             },
             last_raw,
         ))
     })?;
+
     let mut out = Vec::new();
     for row in rows {
-        let (summary, last_raw) = row?;
-        if let Some(rid) = run_id {
-            let Ok(v) = serde_json::from_str::<Value>(&last_raw) else {
-                continue;
-            };
-            let matched = v
-                .pointer("/tags/airbug.run_id")
-                .and_then(|x| x.as_str())
-                .or_else(|| {
-                    v.get("tags")
-                        .and_then(|t| t.get("airbug.run_id"))
-                        .and_then(|x| x.as_str())
-                })
-                == Some(rid);
-            if !matched {
-                continue;
+        let (mut summary, last_raw) = row?;
+        let mut matched = find_matching_trace_in_payload(&last_raw, wanted);
+        if matched.is_none()
+            && let Ok(mut ev_stmt) = conn
+                .prepare("SELECT payload FROM issue_events WHERE issue_id = ?1 ORDER BY id DESC")
+            && let Ok(ev_rows) = ev_stmt.query_map(params![summary.id], |r| r.get::<_, String>(0))
+        {
+            for payload in ev_rows.flatten() {
+                if let Some(found) = find_matching_trace_in_payload(&payload, wanted) {
+                    matched = Some(found);
+                    break;
+                }
             }
         }
-        out.push(summary);
+        if let Some((tid, sid)) = matched {
+            summary.trace_id = Some(tid);
+            summary.span_id = sid;
+            out.push(summary);
+        }
     }
     Ok(out)
 }
@@ -559,12 +685,22 @@ fn fire_webhook(url: &str, issue_id: &str, issue: &Issue) {
     });
 }
 
+fn webhook_client() -> Result<&'static reqwest::blocking::Client> {
+    static CLIENT: OnceLock<std::result::Result<reqwest::blocking::Client, String>> =
+        OnceLock::new();
+    let res = CLIENT.get_or_init(|| {
+        reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| e.to_string())
+    });
+    res.as_ref().map_err(|e| HubError::msg(e.clone()))
+}
+
 fn post_json_webhook(url: &str, body: &Value) -> Result<()> {
     validate_webhook_url(url)?;
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .map_err(|e| HubError::msg(e.to_string()))?;
+    let client = webhook_client()?;
     let response = client
         .post(url)
         .json(body)
@@ -586,15 +722,46 @@ pub fn validate_webhook_url(url: &str) -> Result<()> {
     let rest = url
         .strip_prefix("http://")
         .ok_or_else(|| HubError::msg("webhook must be http://…"))?;
-    let authority = rest.split_once('/').map(|(a, _)| a).unwrap_or(rest);
-    let host = authority
-        .rsplit_once(':')
-        .map(|(h, _)| h)
-        .unwrap_or(authority);
+    let authority = rest.split(&['/', '?', '#'][..]).next().unwrap_or(rest);
+    if authority.contains('@') {
+        return Err(HubError::msg("webhook URL must not contain userinfo"));
+    }
+    let host = if let Some(after_open) = authority.strip_prefix('[') {
+        let Some((ipv6, remainder)) = after_open.split_once(']') else {
+            return Err(HubError::msg("invalid bracketed IPv6 host in webhook URL"));
+        };
+        if ipv6.is_empty() {
+            return Err(HubError::msg("webhook URL missing host"));
+        }
+        if !remainder.is_empty() {
+            let Some(port) = remainder.strip_prefix(':') else {
+                return Err(HubError::msg("invalid authority in webhook URL"));
+            };
+            if port.parse::<u16>().is_err() {
+                return Err(HubError::msg("invalid webhook port"));
+            }
+        }
+        &authority[..=1 + ipv6.len()]
+    } else {
+        match authority.rsplit_once(':') {
+            Some((h, p)) => {
+                if h.contains(':') {
+                    return Err(HubError::msg(
+                        "IPv6 webhook host must be bracketed (e.g. [::1])",
+                    ));
+                }
+                if p.parse::<u16>().is_err() {
+                    return Err(HubError::msg("invalid webhook port"));
+                }
+                h
+            }
+            None => authority,
+        }
+    };
     if host.is_empty() {
         return Err(HubError::msg("webhook URL missing host"));
     }
-    let loopback = host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
+    let loopback = host == "127.0.0.1" || host.eq_ignore_ascii_case("localhost") || host == "[::1]";
     if !loopback {
         tracing::warn!(%host, "webhook host is not loopback; local-toolkit threat model assumes localhost");
     }
@@ -636,6 +803,8 @@ mod tests {
             user: None,
             extra: Default::default(),
             contexts: Default::default(),
+            trace_id: None,
+            span_id: None,
         }
     }
 
@@ -738,6 +907,35 @@ mod tests {
     fn webhook_rejects_https() {
         let err = validate_webhook_url("https://example.com/hook").unwrap_err();
         assert!(err.to_string().contains("HTTPS"));
+        assert!(validate_webhook_url("http://127.0.0.1:8080/hook?foo=bar#baz").is_ok());
+        assert!(validate_webhook_url("http://[::1]:8080/hook").is_ok());
+        assert!(validate_webhook_url("http://[::1]/hook").is_ok());
+        assert!(validate_webhook_url("http://user@127.0.0.1/hook").is_err());
+        assert!(validate_webhook_url("http://::1/hook").is_err());
+    }
+
+    #[test]
+    fn run_id_filter_matches_earlier_occurrence() {
+        let dir = env::temp_dir().join(format!("airbug-issues-runid-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
+        let store =
+            SqliteIssueStore::open(crate::config::RootPaths::new(&dir).issues_db()).unwrap();
+
+        let mut e1 = sample_event();
+        e1.event_id = "e1".into();
+        e1.tags.insert("airbug.run_id".into(), "run-1".into());
+        store.ingest(e1, None).unwrap();
+
+        let mut e2 = sample_event();
+        e2.event_id = "e2".into();
+        e2.tags.insert("airbug.run_id".into(), "run-2".into());
+        store.ingest(e2, None).unwrap();
+
+        assert_eq!(store.list_filtered(Some("run-1")).issues.len(), 1);
+        assert_eq!(store.list_filtered(Some("run-2")).issues.len(), 1);
+        assert_eq!(store.list_filtered(Some("run-3")).issues.len(), 0);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -746,5 +944,38 @@ mod tests {
         event.schema_version = 99;
         let err = validate_schema(&event).unwrap_err();
         assert!(err.to_string().contains("schema_version"));
+    }
+
+    #[test]
+    fn find_by_trace_id_matches_occurrences() {
+        let dir = env::temp_dir().join(format!("airbug-issues-trace-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("dash/hub/data")).unwrap();
+        let store =
+            SqliteIssueStore::open(crate::config::RootPaths::new(&dir).issues_db()).unwrap();
+
+        let mut e1 = sample_event();
+        e1.event_id = "ev-trace-1".into();
+        e1.trace_id = Some("5b8efff798038103d269b633813fc60c".into());
+        e1.span_id = Some("eee19b7ec3c1b174".into());
+        store.ingest(e1, None).unwrap();
+
+        let mut e2 = sample_event();
+        e2.event_id = "ev-trace-2".into();
+        e2.tags
+            .insert("trace_id".into(), "11112222333344445555666677778888".into());
+        store.ingest(e2, None).unwrap();
+
+        let found = store.find_by_trace_id("5B8EFFF798038103D269B633813FC60C");
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            found[0].trace_id.as_deref(),
+            Some("5b8efff798038103d269b633813fc60c")
+        );
+        assert_eq!(found[0].span_id.as_deref(), Some("eee19b7ec3c1b174"));
+
+        let found_tag = store.find_by_trace_id("11112222333344445555666677778888");
+        assert_eq!(found_tag.len(), 1);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

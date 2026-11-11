@@ -74,8 +74,9 @@ impl<A> TrackingAllocator<A> {
         self.phase_active
             .compare_exchange(false, true, SeqCst, SeqCst)
             .map_err(|_| crate::error("allocation phase already active"))?;
+        self.phase_peak.store(0, SeqCst);
         let before = self.snapshot();
-        self.phase_peak.store(before.live_bytes, Relaxed);
+        self.phase_peak.fetch_max(before.live_bytes, SeqCst);
         Ok(Phase {
             allocator: self,
             before,

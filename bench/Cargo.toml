@@ -8,6 +8,16 @@ repository = "https://github.com/themoretheless/airbug"
 description = "Explicit, reproducible Rust benchmarks and scenario observations"
 keywords = ["benchmark", "performance", "profiling", "statistics"]
 categories = ["development-tools::profiling", "development-tools::testing"]
+include = [
+    "src/**",
+    "benches/**",
+    "examples/**",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
 
 [features]
 default = ["macros", "parallel-analysis"]

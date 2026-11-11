@@ -25,12 +25,12 @@ fn plot_lines<'a>(
         .allow_scroll(false)
         .allow_zoom(false)
         .allow_drag(false)
+        .y_axis_formatter(move |mark, _| y_fmt(mark.value))
         .show(ui, |plot_ui| {
             for (name, pts) in lines {
                 plot_ui.line(Line::new(name, pts));
             }
         });
-    let _ = y_fmt;
 }
 
 pub fn show(ui: &mut egui::Ui, state: &SharedState) {
@@ -56,7 +56,14 @@ pub fn show(ui: &mut egui::Ui, state: &SharedState) {
             ui.separator();
             match &latest.gpu {
                 Some(g) => ui.label(format!("GPU: {:.1}%", g.util)),
-                None => ui.label("GPU недоступен (нужен sudo)"),
+                None => {
+                    let msg = if cfg!(target_os = "macos") {
+                        "GPU недоступен (нужен sudo)"
+                    } else {
+                        "GPU недоступен"
+                    };
+                    ui.label(msg)
+                }
             };
             ui.separator();
             ui.label(format!(

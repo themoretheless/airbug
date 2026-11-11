@@ -582,7 +582,7 @@ fn fit_impl(samples: &[Sample], config: &Config, capture: bool) -> Result<(Fit, 
             .map(|s| (s.total - candidate * s.operations).powi(2))
             .sum::<f64>();
         (variation > 0.0 && samples.iter().any(|s| s.total != samples[0].total))
-            .then(|| 1.0 - residual / variation)
+            .then_some(1.0 - residual / variation)
             .filter(|v| v.is_finite())
     };
     let r_squared = goodness(point);

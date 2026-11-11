@@ -34,6 +34,29 @@ use uuid::Uuid;
 static CLIENT: OnceLock<Mutex<Option<Client>>> = OnceLock::new();
 static SEND_FAILURES: AtomicU64 = AtomicU64::new(0);
 static LAST_SEND_ERROR: Mutex<Option<String>> = Mutex::new(None);
+static TRACE_CONTEXT_HOOK: OnceLock<Mutex<Option<TraceContextHook>>> = OnceLock::new();
+
+/// Hook signature returning `(trace_id, span_id)` for an outgoing [`Event`].
+pub type TraceContextHook = fn(&Event) -> Option<(String, String)>;
+
+fn trace_hook_slot() -> &'static Mutex<Option<TraceContextHook>> {
+    TRACE_CONTEXT_HOOK.get_or_init(|| Mutex::new(None))
+}
+
+/// Register a global trace-context provider hook invoked when capturing events.
+///
+/// The hook receives a reference to the [`Event`] being captured and may return
+/// `(trace_id, span_id)` (as well as record the exception on an active span).
+pub fn register_trace_context_hook(hook: TraceContextHook) {
+    if let Ok(mut slot) = trace_hook_slot().lock() {
+        *slot = Some(hook);
+    }
+}
+
+/// Alias for [`register_trace_context_hook`].
+pub fn set_trace_context_provider(hook: TraceContextHook) {
+    register_trace_context_hook(hook);
+}
 
 fn client_slot() -> &'static Mutex<Option<Client>> {
     CLIENT.get_or_init(|| Mutex::new(None))
@@ -74,7 +97,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             endpoint: default_endpoint(),
-            hub_id: None,
+            hub_id: default_hub_id(),
             release: None,
             environment: None,
             service: None,
@@ -137,6 +160,38 @@ impl Options {
 fn default_endpoint() -> String {
     std::env::var("AIRBUG_ERR_ENDPOINT")
         .unwrap_or_else(|_| "http://127.0.0.1:8790/api/v1/errors".into())
+}
+
+fn default_hub_id() -> Option<String> {
+    std::env::var("AIRBUG_HUB_ID")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| parse_otel_resource_attr("airbug.hub_id"))
+}
+
+fn default_run_id() -> Option<String> {
+    std::env::var("AIRBUG_RUN_ID")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| parse_otel_resource_attr("airbug.run_id"))
+}
+
+fn parse_otel_resource_attr(key: &str) -> Option<String> {
+    let raw = std::env::var("OTEL_RESOURCE_ATTRIBUTES").ok()?;
+    for pair in raw.split(',') {
+        let pair = pair.trim();
+        if let Some((k, v)) = pair.split_once('=')
+            && k.trim() == key
+        {
+            let val = v.trim();
+            if !val.is_empty() {
+                return Some(val.to_string());
+            }
+        }
+    }
+    None
 }
 
 struct Client {
@@ -288,6 +343,8 @@ fn base_event(level: Severity) -> Event {
         user: None,
         extra: BTreeMap::new(),
         contexts: collect_contexts(),
+        trace_id: None,
+        span_id: None,
     };
 
     scope::with_scope(|s| {
@@ -302,16 +359,134 @@ fn base_event(level: Severity) -> Event {
         if let Some(lvl) = s.level {
             event.level = lvl;
         }
+        if let Some(tid) = &s.trace_id {
+            event.trace_id = Some(tid.clone());
+        }
+        if let Some(sid) = &s.span_id {
+            event.span_id = Some(sid.clone());
+        }
     });
+
+    if !event.tags.contains_key("airbug.run_id")
+        && let Some(run_id) = default_run_id()
+    {
+        event.tags.insert("airbug.run_id".into(), run_id);
+    }
 
     event
 }
 
+thread_local! {
+    static IN_SEND_OR_PANIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+struct ReentrancyGuard(bool);
+
+impl ReentrancyGuard {
+    fn try_enter() -> Option<Self> {
+        let already = IN_SEND_OR_PANIC
+            .try_with(|c| c.replace(true))
+            .unwrap_or(true);
+        if already { None } else { Some(Self(true)) }
+    }
+}
+
+impl Drop for ReentrancyGuard {
+    fn drop(&mut self) {
+        if self.0 {
+            let _ = IN_SEND_OR_PANIC.try_with(|c| c.set(false));
+        }
+    }
+}
+
+fn apply_trace_correlation(event: &mut Event) {
+    let hook = trace_hook_slot().lock().ok().and_then(|slot| *slot);
+    if let Some(hook) = hook
+        && let Some((tid, sid)) = hook(event)
+    {
+        if event.trace_id.is_none() && !tid.trim().is_empty() {
+            event.trace_id = Some(tid);
+        }
+        if event.span_id.is_none() && !sid.trim().is_empty() {
+            event.span_id = Some(sid);
+        }
+    }
+
+    #[cfg(feature = "otel")]
+    {
+        use opentelemetry::KeyValue;
+        use opentelemetry::trace::{Status, TraceContextExt};
+
+        let cx = opentelemetry::Context::current();
+        let span = cx.span();
+        let sc = span.span_context();
+        if sc.is_valid() {
+            if event.trace_id.is_none() {
+                event.trace_id = Some(sc.trace_id().to_string());
+            }
+            if event.span_id.is_none() {
+                event.span_id = Some(sc.span_id().to_string());
+            }
+            if event.exception.is_some() || matches!(event.level, Severity::Error | Severity::Fatal)
+            {
+                let mut attrs = Vec::with_capacity(3);
+                if let Some(ex) = &event.exception {
+                    attrs.push(KeyValue::new("exception.type", ex.ty.clone()));
+                    attrs.push(KeyValue::new("exception.message", ex.value.clone()));
+                    if let Some(st) = &ex.stacktrace
+                        && !st.frames.is_empty()
+                    {
+                        let rendered = st
+                            .frames
+                            .iter()
+                            .take(32)
+                            .map(|f| match (&f.filename, f.lineno) {
+                                (Some(file), Some(line)) => {
+                                    format!("{} ({file}:{line})", f.function)
+                                }
+                                (Some(file), None) => format!("{} ({file})", f.function),
+                                _ => f.function.clone(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        attrs.push(KeyValue::new("exception.stacktrace", rendered));
+                    }
+                } else {
+                    attrs.push(KeyValue::new(
+                        "exception.type",
+                        event.level.as_str().to_string(),
+                    ));
+                    if let Some(msg) = &event.message {
+                        attrs.push(KeyValue::new("exception.message", msg.clone()));
+                    }
+                }
+                span.add_event("exception", attrs);
+                span.set_status(Status::error(event.title()));
+            }
+        }
+    }
+
+    if let Some(tid) = &event.trace_id
+        && !event.contexts.contains_key("trace")
+    {
+        let mut trace_obj = serde_json::Map::new();
+        trace_obj.insert("trace_id".into(), serde_json::Value::String(tid.clone()));
+        if let Some(sid) = &event.span_id {
+            trace_obj.insert("span_id".into(), serde_json::Value::String(sid.clone()));
+        }
+        event
+            .contexts
+            .insert("trace".into(), serde_json::Value::Object(trace_obj));
+    }
+}
+
 fn send_event(mut event: Event) -> Option<String> {
+    let _reentrancy = ReentrancyGuard::try_enter()?;
     if !should_sample() {
         return None;
     }
 
+    apply_trace_correlation(&mut event);
     event.fingerprint = resolve_fingerprint(&event);
 
     let before = with_client(|c| c.options.before_send.clone()).flatten();
@@ -320,10 +495,10 @@ fn send_event(mut event: Event) -> Option<String> {
     }
 
     let id = event.event_id.clone();
-    let result = with_client(|c| c.transport.send(&event));
-    match result {
-        Some(Ok(())) => Some(id),
-        Some(Err(err)) => {
+    let transport = with_client(|c| Arc::clone(&c.transport))?;
+    match transport.send(&event) {
+        Ok(()) => Some(id),
+        Err(err) => {
             SEND_FAILURES.fetch_add(1, Ordering::Relaxed);
             if let Ok(mut slot) = LAST_SEND_ERROR.lock() {
                 *slot = Some(err.to_string());
@@ -331,7 +506,6 @@ fn send_event(mut event: Event) -> Option<String> {
             tracing::warn!(error = %err, event_id = %id, "airbug-err failed to send event");
             None
         }
-        None => None,
     }
 }
 
@@ -409,9 +583,35 @@ fn collect_contexts() -> BTreeMap<String, serde_json::Value> {
 }
 
 fn hostname() -> Result<String, ()> {
-    std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
-        .map_err(|_| ())
+    if let Ok(h) = std::env::var("HOSTNAME").or_else(|_| std::env::var("COMPUTERNAME")) {
+        let trimmed = h.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
+        }
+    }
+    static CACHED_HOST: OnceLock<Option<String>> = OnceLock::new();
+    CACHED_HOST
+        .get_or_init(|| {
+            if let Ok(s) = std::fs::read_to_string("/etc/hostname") {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+            let out = std::process::Command::new("hostname").output().ok()?;
+            if !out.status.success() {
+                return None;
+            }
+            let s = String::from_utf8(out.stdout).ok()?;
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .clone()
+        .ok_or(())
 }
 
 fn collect_frames() -> Vec<Frame> {
@@ -458,23 +658,26 @@ fn install_panic_hook() {
     }
     let prev = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
-        let payload = panic_payload(info);
-        let location = info
-            .location()
-            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
-        let mut event = base_event(Severity::Fatal);
-        event.message = Some(payload.clone());
-        event.exception = Some(Ex {
-            ty: "panic".into(),
-            value: match location {
-                Some(loc) => format!("{payload} at {loc}"),
-                None => payload,
-            },
-            stacktrace: Some(Stacktrace {
-                frames: collect_frames(),
-            }),
-        });
-        let _ = send_event(event);
+        let already_in_send = IN_SEND_OR_PANIC.try_with(|c| c.get()).unwrap_or(true);
+        if !already_in_send && with_client(|_| ()).is_some() {
+            let payload = panic_payload(info);
+            let location = info
+                .location()
+                .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
+            let mut event = base_event(Severity::Fatal);
+            event.message = Some(payload.clone());
+            event.exception = Some(Ex {
+                ty: "panic".into(),
+                value: match location {
+                    Some(loc) => format!("{payload} at {loc}"),
+                    None => payload,
+                },
+                stacktrace: Some(Stacktrace {
+                    frames: collect_frames(),
+                }),
+            });
+            let _ = send_event(event);
+        }
         prev(info);
     }));
 }
@@ -570,5 +773,180 @@ mod tests {
     fn civil_from_days_epoch() {
         let (y, mo, d, h, mi, s) = civil_from_days(0);
         assert_eq!((y, mo, d, h, mi, s), (1970, 1, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn http_transport_dedupes_hub_id_in_endpoint() {
+        let t = HttpTransport::with_hub_id(
+            "http://127.0.0.1:8790/api/v1/errors/abc-123",
+            Some("abc-123".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            t.resolved_url(),
+            "http://127.0.0.1:8790/api/v1/errors/abc-123"
+        );
+
+        let t2 = HttpTransport::with_hub_id(
+            "http://127.0.0.1:8790/api/v1/errors",
+            Some("abc-123".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            t2.resolved_url(),
+            "http://127.0.0.1:8790/api/v1/errors/abc-123"
+        );
+    }
+
+    #[test]
+    fn panic_in_configure_scope_does_not_double_panic() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+        let res = std::panic::catch_unwind(|| {
+            configure_scope(|_s| {
+                panic!("boom inside configure_scope");
+            });
+        });
+        assert!(res.is_err());
+        assert_eq!(transport.len(), usize::from(cfg!(feature = "panic")));
+    }
+
+    #[test]
+    fn panic_in_before_send_does_not_loop() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new()
+                .endpoint("unused")
+                .before_send(|_| panic!("boom inside before_send")),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+        let res = std::panic::catch_unwind(|| {
+            let _ = capture_message("trigger");
+        });
+        assert!(res.is_err());
+        assert_eq!(transport.len(), 0);
+    }
+
+    #[test]
+    fn scope_trace_context_populates_event_and_omits_when_none() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+
+        configure_scope(|s| s.clear());
+        assert!(capture_message("without trace").is_some());
+        let plain = transport.last().unwrap();
+        assert_eq!(plain.trace_id, None);
+        assert_eq!(plain.span_id, None);
+        let json = serde_json::to_value(&plain).unwrap();
+        assert!(json.get("trace_id").is_none());
+        assert!(json.get("span_id").is_none());
+
+        configure_scope(|s| {
+            s.set_trace_context(
+                "4bf92f3577b34da6a3ce929d0e0e4736",
+                Some("00f067aa0ba902b7".into()),
+            );
+        });
+        assert!(capture_message("with scope trace").is_some());
+        configure_scope(|s| s.clear());
+        let traced = transport.last().unwrap();
+        assert_eq!(
+            traced.trace_id.as_deref(),
+            Some("4bf92f3577b34da6a3ce929d0e0e4736")
+        );
+        assert_eq!(traced.span_id.as_deref(), Some("00f067aa0ba902b7"));
+        assert_eq!(
+            traced.contexts["trace"]["trace_id"],
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
+    }
+
+    #[test]
+    fn custom_trace_context_hook_populates_event() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+
+        fn test_hook(_ev: &Event) -> Option<(String, String)> {
+            Some((
+                "11111111111111111111111111111111".into(),
+                "2222222222222222".into(),
+            ))
+        }
+        register_trace_context_hook(test_hook);
+        assert!(capture_message("hooked").is_some());
+        if let Ok(mut slot) = trace_hook_slot().lock() {
+            *slot = None;
+        }
+        let captured = transport.last().unwrap();
+        assert_eq!(
+            captured.trace_id.as_deref(),
+            Some("11111111111111111111111111111111")
+        );
+        assert_eq!(captured.span_id.as_deref(), Some("2222222222222222"));
+    }
+
+    #[cfg(feature = "otel")]
+    #[test]
+    fn active_otel_span_correlates_event_and_records_exception() {
+        use opentelemetry::trace::{Status, TraceContextExt, Tracer as _, TracerProvider as _};
+
+        let _lock = INIT_LOCK.lock().unwrap();
+        let span_exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_simple_exporter(span_exporter.clone())
+            .build();
+        let tracer = provider.tracer("airbug.err.test");
+
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+
+        let (expected_tid, expected_sid) = tracer.in_span("checkout-op", |cx| {
+            let sc = cx.span().span_context().clone();
+            let err = io::Error::other("card declined");
+            assert!(capture_error(&err).is_some());
+            (sc.trace_id().to_string(), sc.span_id().to_string())
+        });
+        provider.force_flush().unwrap();
+
+        let captured = transport.last().unwrap();
+        assert_eq!(captured.trace_id.as_deref(), Some(expected_tid.as_str()));
+        assert_eq!(captured.span_id.as_deref(), Some(expected_sid.as_str()));
+
+        let spans = span_exporter.get_finished_spans().unwrap();
+        assert_eq!(spans.len(), 1);
+        let span = &spans[0];
+        assert!(matches!(span.status, Status::Error { .. }));
+        assert!(
+            span.events.events.iter().any(|ev| {
+                ev.name == "exception"
+                    && ev
+                        .attributes
+                        .iter()
+                        .any(|kv| kv.key.as_str() == "exception.message")
+            }),
+            "expected exception event on OTel span, got {:?}",
+            span.events
+        );
     }
 }

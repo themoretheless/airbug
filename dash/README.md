@@ -7,14 +7,16 @@ Cross-cutting **hub** for the monorepo. Aggregates status from `unit`, `bench`, 
 ## Run
 
 ```bash
-# Dashboard only
+# Dashboard + built-in OTLP HTTP on :8790 (/v1/traces, /v1/metrics, /v1/logs, /v1development/profiles)
 cargo run -p airbug-hub -- serve --root .
 # http://127.0.0.1:8790/
 
-# Dashboard + OpenTelemetry Collector (Docker **or** local otelcol)
+# Dashboard + OpenTelemetry Collector (Docker → local otelcol → built-in Rust :4318 HTTP + :4317 gRPC)
 cargo run -p airbug-hub -- serve --root . --collector
+# Force the zero-dependency built-in Rust collector explicitly:
+cargo run -p airbug-hub -- serve --root . --collector-mode builtin
 # OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317
-# Jaeger http://127.0.0.1:16686/  (Docker mode only)
+# Jaeger http://127.0.0.1:16686/  (Docker mode only; optional external link alongside native Traces tab)
 
 cargo run -p airbug-hub -- status --root .
 cargo test -p airbug-hub
@@ -53,14 +55,17 @@ using the same statistics as `cargo airbug-bench compare` (±5 % threshold).
 
 The dashboard: **Now** (live runs, latest test result, new failures, flaky, bench,
 issues) · **Runs** (tests + bench timeline) · **Tests** (per-test view: failures first,
-output, steps, diffs, attachments, history strip) · **Bench** · Issues · Logs · Metrics ·
-**System** (package cards, API catalog).
+output, steps, diffs, attachments, history strip) · **Bench** · **Signals** (**Issues** ·
+**Traces** — waterfall, Critical Path, Service Map, RED, zPages Tracez · **Logs** ·
+**Metrics** — percentiles & exemplars · **Profiles** — interactive Flamechart) ·
+**Health** (package cards, API catalog).
 
-Collector lives in `dash/collector/`. `--collector` tries, in order:
+Collector config lives in `dash/collector/`. `--collector` (`--collector-mode auto|builtin|docker|binary`) tries, in order:
 
-1. **Docker Compose** — `otel-collector` + Jaeger UI (`docker-compose.yml` + `config.yaml`).
+1. **Docker Compose** — `otel-collector` + Jaeger UI (`docker-compose.yml` + `config.yaml`, writing `traces.json`, `metrics.json`, and `logs.json` plus forwarding spans to Jaeger).
    Reached through the `docker compose` plugin, or a standalone `docker-compose` binary when the plugin is absent.
-2. **Binary** — `otelcol-contrib` or `otelcol` on `PATH` with `config.standalone.yaml` (no Jaeger)
+2. **Binary** — `otelcol-contrib` or `otelcol` on `PATH` with `config.standalone.yaml` (writes `traces.json`, `metrics.json`, `logs.json`; no Jaeger).
+3. **Built-in Native Rust Receiver (`builtin`)** — starts inside `airbug-hub` on `127.0.0.1:4318` (OTLP HTTP `application/x-protobuf` + `application/json` + `gzip` for all 4 signals) and `127.0.0.1:4317` (Tonic OTLP gRPC `TraceService`, `MetricsService`, `LogsService` with `gzip`), rotating NDJSON files at 32 MiB (up to 3 backups). The main hub port (`127.0.0.1:8790`) also always accepts OTLP HTTP at `/v1/{traces,metrics,logs}` and `/v1development/profiles`.
 
 Ctrl+C stops whichever backend was started. Without `--collector` the hub installs no
 signal handler, and a background job started from a non-interactive shell inherits
@@ -103,10 +108,11 @@ dash/hub/src/
   config.rs        RootPaths + limits (DIP for artifact paths)
   error.rs         HubError (thiserror); JSON `{ok:false,error}`
   http.rs          request parse / respond helpers
-  serve.rs         route table (/api/v1 + legacy /api aliases)
-  collector.rs     Docker / otelcol lifecycle
+  serve.rs         route table (/api/v1 + /v1/* OTLP HTTP + legacy /api aliases)
+  collector.rs     Docker / otelcol / built-in Rust OTLP (:4318 HTTP + :4317 gRPC) lifecycle
   scan/            domain cards (unit, bench, mon, otel, err, collector)
-  otlp/            shared file tail + logs/metrics parsers
+  otlp/            receiver (HTTP+gRPC+rotation), traces (waterfall/CP/RED/topology/tracez),
+                   metrics (histograms/quantiles/exemplars), logs (trace correlation), profiles (flamechart)
   issues.rs        IssueStore + SqliteIssueStore + http:// webhook (reqwest)
   runs.rs          GUID hub_id + bench run registry (runs.sqlite)
   assets.rs        embedded static files, one table (add a row per new file)
@@ -141,8 +147,13 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/static/js/*.js` | Client UI (ES modules; entry `main.js`) |
 | GET | `/api/v1/status` | Domain snapshot + Local APIs + `hub_id` |
 | GET | `/api/v1` | API catalog only |
-| GET | `/api/v1/logs?limit=&run_id=` | OTLP log tail (+ `by_severity`, `services`); filter by `airbug.run_id` |
-| GET | `/api/v1/metrics?limit=&run_id=` | OTLP metrics (`series`, `histogram`, `latest`); optional `run_id` filter |
+| GET | `/api/v1/logs?limit=&run_id=&trace_id=` | OTLP log tail (+ `by_severity`, `services`, `trace_id`, `span_id`, `event_name`, `attrs`) |
+| GET | `/api/v1/metrics?limit=&run_id=` | OTLP metrics (`series`, `histogram`, `percentiles` p50/p90/p95/p99, `exemplars`, `latest`) |
+| GET | `/api/v1/traces?limit=&service=&status=&min_ms=&run_id=&q=` | Distributed traces list + `services`, `topology` (Service Map), `red` summary |
+| GET | `/api/v1/traces/:trace_id` | Full trace waterfall + Critical Path + correlated `logs` and `issues` |
+| GET | `/api/v1/zpages/tracez` | OpenTelemetry zPages Tracez latency buckets + running counts + error samples |
+| GET | `/api/v1/profiles?limit=&service=&type=&run_id=&trace_id=` | OTLP Profiles (`v1development`) summaries, Self/Total top functions & merged `flamechart` |
+| POST | `/v1/{traces,metrics,logs}` · `/v1development/profiles` | Built-in OTLP HTTP receiver (`application/x-protobuf`, `application/json`, optional `gzip`; also `/api/v1/otlp/...`) |
 | GET | `/api/v1/runs?kind=&limit=` | Timeline of test + bench runs (`live` count; stale runs flagged) |
 | GET | `/api/v1/runs/:id\|latest?lite=` | Test run: report, `changes` vs previous run, `history`, `flaky`, `rerun` commands (`lite=1` drops per-test data) |
 | GET | `/runs/:id/*` | Files of a test run (`index.html`, `output.log`, `events/…`) |
@@ -191,11 +202,13 @@ sharing the same correlation fields.
 | mon | `~/.local/share/airbug-mon/airbug-mon.db` |
 | otel | `otel/` crate (`airbug-otel` OTLP) |
 | err | `err/` crate (`airbug-err`) + `dash/hub/data/issues.sqlite` |
-| collector | localhost `:4317` / `:4318` / Jaeger `:16686` |
-| logs (Explore-style) | `dash/collector/data/logs.json` via `/api/logs` |
-| metrics (Grafana-like) | `dash/collector/data/metrics.json` via `/api/metrics` — Time series, Gauge, Bar, Histogram, Heatmap, Pie, Table |
-| issues | SQLite via `/api/issues` + ingest `POST /api/errors` |
+| collector | localhost `:4317` (gRPC) / `:4318` (HTTP) / optional Jaeger `:16686` |
+| traces | `dash/collector/data/traces.json` (+ rotated backups) via `/api/v1/traces` & `/api/v1/zpages/tracez` |
+| logs (Explore-style) | `dash/collector/data/logs.json` (+ rotated backups) via `/api/v1/logs` |
+| metrics (Grafana-like) | `dash/collector/data/metrics.json` (+ rotated backups) via `/api/v1/metrics` — Time series, Percentiles (p50/p95/p99), Exemplars, Gauge, Bar, Histogram, Heatmap, Pie, Table |
+| profiles | `dash/collector/data/profiles.json` (+ rotated backups) via `/api/v1/profiles` — interactive SVG Flamechart + Self/Total table |
+| issues | SQLite via `/api/v1/issues` + ingest `POST /api/v1/errors` (linked to `trace_id` / `span_id`) |
 
-Traces are **not** embedded next to logs; open **Jaeger UI** from Local APIs when the Docker collector is up (`http://127.0.0.1:16686/`).
+Distributed traces render natively inside **Signals › Traces** (`#/traces`, `#/traces/<trace_id>`). When the Docker collector is running, **Jaeger ↗** (`http://127.0.0.1:16686/`) also appears as an external link.
 
 Optional new-issue webhook: `--webhook URL` or `AIRBUG_ISSUES_WEBHOOK` (**`http://` only** — HTTPS is refused).

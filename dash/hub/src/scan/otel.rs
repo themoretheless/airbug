@@ -11,7 +11,7 @@ pub(crate) fn scan_otel(root: &Path) -> DomainCard {
             label: "Cargo.toml".into(),
             path: manifest.display().to_string(),
             kind: "crate",
-            detail: "airbug-otel · OTLP traces+metrics+logs".into(),
+            detail: "airbug-otel · OTLP traces+metrics+logs+profiles".into(),
         });
     }
     if readme.is_file() {
@@ -26,14 +26,14 @@ pub(crate) fn scan_otel(root: &Path) -> DomainCard {
     DomainCard {
         id: "otel",
         title: "Otel",
-        blurb: "OpenTelemetry traces+metrics+logs · airbug-otel",
+        blurb: "OpenTelemetry traces+metrics+logs+profiles · airbug-otel",
         status: if ready {
             Status::Ready
         } else {
             Status::Reserved
         },
         summary: if ready {
-            "OTLP traces, metrics, and logs helper crate present.".into()
+            "OTLP traces, metrics, logs, W3C propagation, tracing bridge, and profiles crate present.".into()
         } else {
             "No OpenTelemetry crate yet.".into()
         },

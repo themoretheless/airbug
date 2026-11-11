@@ -9,9 +9,9 @@ const DOMAIN_ORDER = ["unit", "bench", "mon", "otel", "err", "collector"];
 
 /** Signals whose absence leaves a panel silently empty: [API name, label, why]. */
 const CHECKS = [
-  ["OTLP HTTP", "OTLP :4318", "logs and metrics panels stay empty — start with --collector"],
+  ["Hub OTLP HTTP ingest", "OTLP :8790", "hub OTLP HTTP ingest unavailable"],
+  ["OTLP HTTP", "OTLP :4318", "collector :4318 not started — start with --collector (or export to :8790)"],
   ["Hub errors ingest", "errors ingest", "airbug-err events are not received"],
-  ["Jaeger UI", "Jaeger", "no trace UI (otelcol binary mode or no collector)"],
 ];
 
 const listItems = (items, fn) => (items || []).map(fn).join("");
@@ -66,12 +66,15 @@ function renderHealthLine(apis) {
   setTraces(Boolean(jaeger && jaeger.available), jaeger ? jaeger.href : "");
 }
 
+let lastOnReload = null;
+
 function renderMeta(data, onReload) {
+  if (onReload) lastOnReload = onReload;
   const id = data.hub_id || "";
   $("meta").innerHTML = `<span title="hub_id ${escapeAttr(id)}">hub <code>${escapeHtml(id.slice(0, 8))}</code></span>`
     + `<span title="Project root this hub serves">root <code>${escapeHtml(data.root)}</code></span>`
     + `<span><button type="button" id="reload" title="Reload everything now">refresh</button></span>`;
-  $("reload").onclick = onReload;
+  $("reload").onclick = lastOnReload;
 }
 
 export async function refresh(onReload) {
@@ -87,5 +90,5 @@ export async function refresh(onReload) {
 
 export default {
   cats: ["system"],
-  show: () => {},
+  show: (_route, changed) => (changed ? refresh(lastOnReload).catch(() => {}) : null),
 };

@@ -17,7 +17,7 @@ all-features = true
 
 [features]
 default = []
-macros = ["dep:airbug-macros", "airbug-checkout-domain/macros"]
+macros = ["dep:airbug-macros"]
 ## Canonical JSON snapshots (`Snapshots::check_json`).
 json = ["dep:serde_json"]
 

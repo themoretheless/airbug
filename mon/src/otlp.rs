@@ -13,10 +13,8 @@ pub struct OtlpExport {
     mem_used: U64Gauge,
     mem_total: U64Gauge,
     swap_used: U64Gauge,
-    net_rx: F64Gauge,
-    net_tx: F64Gauge,
-    disk_read: F64Gauge,
-    disk_write: F64Gauge,
+    net_io: F64Gauge,
+    disk_io: F64Gauge,
     gpu_util: F64Gauge,
     gpu_mem_used: U64Gauge,
     host: String,
@@ -43,25 +41,23 @@ impl OtlpExport {
                 "Total memory bytes",
             ),
             swap_used: U64Gauge::with_description(SCOPE, "system.paging.usage", "Used swap bytes"),
-            net_rx: F64Gauge::with_description(
+            net_io: F64Gauge::with_description(
                 SCOPE,
                 "system.network.io",
                 "Network bytes per sample interval",
             ),
-            net_tx: F64Gauge::new(SCOPE, "system.network.io"),
-            disk_read: F64Gauge::with_description(
+            disk_io: F64Gauge::with_description(
                 SCOPE,
                 "system.disk.io",
                 "Disk bytes per sample interval",
             ),
-            disk_write: F64Gauge::new(SCOPE, "system.disk.io"),
             gpu_util: F64Gauge::with_description(
                 SCOPE,
                 "system.gpu.utilization",
                 "GPU utilization 0..1",
             ),
             gpu_mem_used: U64Gauge::new(SCOPE, "system.gpu.memory.usage"),
-            host: hostname(),
+            host: resolve_hostname(),
         })
     }
 
@@ -72,28 +68,28 @@ impl OtlpExport {
         self.mem_used.record(sample.mem_used, &host);
         self.mem_total.record(sample.mem_total, &host);
         self.swap_used.record(sample.swap_used, &host);
-        self.net_rx.record(
+        self.net_io.record(
             sample.net_rx_rate,
             &[
                 KeyValue::new("network.io.direction", "receive"),
                 KeyValue::new("host.name", self.host.clone()),
             ],
         );
-        self.net_tx.record(
+        self.net_io.record(
             sample.net_tx_rate,
             &[
                 KeyValue::new("network.io.direction", "transmit"),
                 KeyValue::new("host.name", self.host.clone()),
             ],
         );
-        self.disk_read.record(
+        self.disk_io.record(
             sample.disk_read_rate,
             &[
                 KeyValue::new("disk.io.direction", "read"),
                 KeyValue::new("host.name", self.host.clone()),
             ],
         );
-        self.disk_write.record(
+        self.disk_io.record(
             sample.disk_write_rate,
             &[
                 KeyValue::new("disk.io.direction", "write"),
@@ -112,10 +108,29 @@ impl OtlpExport {
     }
 }
 
-fn hostname() -> String {
-    std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("HOST"))
-        .unwrap_or_else(|_| "localhost".into())
+fn resolve_hostname() -> String {
+    if let Ok(h) = std::env::var("HOSTNAME").or_else(|_| std::env::var("HOST")) {
+        let trimmed = h.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    if let Ok(s) = std::fs::read_to_string("/etc/hostname") {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    if let Ok(out) = std::process::Command::new("hostname").output()
+        && out.status.success()
+        && let Ok(s) = String::from_utf8(out.stdout)
+    {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    "localhost".into()
 }
 
 /// Enable when `--otlp` is passed or `OTEL_EXPORTER_OTLP_ENDPOINT` / `AIRBUG_MON_OTLP=1`.

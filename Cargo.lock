@@ -205,6 +205,8 @@ version = "0.6.1"
 dependencies = [
  "anyhow",
  "backtrace",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "reqwest",
  "serde",
  "serde_json",
@@ -221,12 +223,19 @@ dependencies = [
  "airbug-bench",
  "airbug-err",
  "airbug-run",
+ "base64",
  "ctrlc",
+ "flate2",
+ "hex",
+ "opentelemetry-proto",
+ "prost",
  "reqwest",
  "rusqlite",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tonic",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -244,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-mon"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "airbug-otel",
  "chrono",
@@ -265,11 +274,25 @@ dependencies = [
 name = "airbug-otel"
 version = "0.6.1"
 dependencies = [
+ "airbug-bench",
+ "airbug-err",
+ "async-trait",
+ "flate2",
+ "hex",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry-otlp",
+ "opentelemetry-proto",
  "opentelemetry_sdk",
+ "prost",
+ "reqwest",
+ "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2007,6 +2030,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2029,6 +2058,7 @@ dependencies = [
  "http",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
@@ -2097,7 +2127,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2",
+ "socket2 0.6.5",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3182,6 +3212,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prost",
  "reqwest",
+ "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "tonic",
@@ -3193,9 +3224,12 @@ version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e046fd7660710fe5a05e8748e70d9058dc15c94ba914e7c4faa7c728f0e8ddc"
 dependencies = [
+ "base64",
+ "hex",
  "opentelemetry",
  "opentelemetry_sdk",
  "prost",
+ "serde",
  "tonic",
 ]
 
@@ -4117,6 +4151,16 @@ dependencies = [
 
 [[package]]
 name = "socket2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
@@ -4433,7 +4477,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
- "socket2",
+ "socket2 0.6.5",
  "tokio-macros",
  "windows-sys 0.61.2",
 ]
@@ -4557,6 +4601,8 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "flate2",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
@@ -4566,6 +4612,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost",
+ "socket2 0.5.10",
  "tokio",
  "tokio-stream",
  "tower",

@@ -3,7 +3,9 @@
 Helpers for ordinary Rust tests: keep `#[test]`, `cargo test`, `assert!` and
 `assert_eq!`. Add data generation, trait mocks, named cases, collection checks,
 and reusable validation where they reduce test boilerplate. Rust 1.96 or newer.
-No unsafe code. `airbug-checkout-domain` is a **demo** crate (`publish = false`) used by pilot examples only.
+`#![deny(unsafe_code)]` (zero `unsafe` in the core library; scoped `EnvScope`
+synchronizes test environment mutations). `airbug-checkout-domain` is a **demo**
+crate (`publish = false`) used by pilot examples only.
  The default build has no external dependencies; optional macros
 use a separate procedural-macro crate.
 
@@ -422,8 +424,10 @@ Call `verify` or `assert_verified` explicitly after workers join. Drop never
 verifies; forgetting verification leaves missing calls undetected. Do not capture
 strong clones of a mock in its own answer permanently: that creates an Arc cycle.
 
-The low-level mock API uses owned 'static argument/result types. Borrowed-return
-lifetime modeling and async validators remain outside this release's surface.
+The low-level mock API uses owned `'static` argument/result types (with
+`airbug::mock::borrowed` helpers and `#[airbug::mock]` `ToOwned` adapters for
+shared-reference inputs). Borrowed-return lifetime modeling remains outside
+this release's surface.
 
 ## Verification and release
 

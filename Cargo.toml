@@ -23,7 +23,6 @@ default-members = [
     "bench",
     "bench/macros",
     "bench/cli",
-    "mon",
     "otel",
     "err",
     "dash/hub",

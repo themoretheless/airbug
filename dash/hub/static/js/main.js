@@ -9,18 +9,24 @@ import issues, { refresh as refreshIssues } from "./sections/issues.js";
 import logs, { init as initLogs, refresh as refreshLogs } from "./sections/logs.js";
 import metrics, { refresh as refreshMetrics } from "./sections/metrics.js";
 import now from "./sections/now.js";
+import profiles, { init as initProfiles, refresh as refreshProfiles } from "./sections/profiles.js";
 import runs from "./sections/runs.js";
 import tests from "./sections/tests.js";
+import traces, { init as initTraces, refresh as refreshTraces } from "./sections/traces.js";
 
-[now, runs, tests, bench, issues, logs, metrics, health].forEach(register);
+[now, runs, tests, bench, issues, traces, logs, metrics, profiles, health].forEach(register);
 initLogs();
+initTraces();
+initProfiles();
 start();
 
 const FEEDS = [
   [15000, () => refreshStatus(reloadAll).catch(err => { $("meta").textContent = "failed to load /api/v1/status: " + err; })],
+  [4000, refreshTraces],
   [4000, refreshLogs],
   [4000, refreshMetrics],
   [5000, refreshIssues],
+  [6000, refreshProfiles],
   [6000, () => fetchTimeline("", 40)],
 ];
 

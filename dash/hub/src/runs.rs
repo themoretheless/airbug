@@ -7,7 +7,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 use uuid::Uuid;
 
@@ -110,6 +110,7 @@ impl RunStore {
         }
         fs::create_dir_all(root.join(".airbug-bench/runs"))?;
         let conn = Connection::open(db_path)?;
+        conn.busy_timeout(Duration::from_secs(5))?;
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
              CREATE TABLE IF NOT EXISTS runs (
@@ -194,10 +195,15 @@ impl RunStore {
         drop(conn);
 
         let mut runs = Vec::with_capacity(rows.len());
-        for (run_id, title, command, out_dir, _state, created_at, updated_at) in rows {
+        for (run_id, title, command, out_dir, old_state_str, created_at, mut updated_at) in rows {
             let out = PathBuf::from(&out_dir);
+            let old_state = RunState::parse(&old_state_str);
             let (state, progress) = observe_fs(&out);
-            let _ = self.touch_state(&run_id, &state);
+            if state != old_state
+                && let Ok(new_updated) = self.touch_state(&run_id, &state)
+            {
+                updated_at = new_updated;
+            }
             runs.push(RunSummary {
                 run_id: run_id.clone(),
                 title,
@@ -260,10 +266,15 @@ impl RunStore {
             .ok_or_else(|| HubError::msg("run not found"))?;
         drop(conn);
 
-        let (title, command, out_dir, _state, created_at, updated_at) = row;
+        let (title, command, out_dir, old_state_str, created_at, mut updated_at) = row;
         let out = PathBuf::from(&out_dir);
+        let old_state = RunState::parse(&old_state_str);
         let (state, live) = observe_live(&out);
-        let _ = self.touch_state(run_id, &state);
+        if state != old_state
+            && let Ok(new_updated) = self.touch_state(run_id, &state)
+        {
+            updated_at = new_updated;
+        }
         let has_run_json = out.join("run.json").is_file();
         let has_report_html = out.join("report.html").is_file();
         Ok(RunDetail {
@@ -287,16 +298,17 @@ impl RunStore {
         })
     }
 
-    fn touch_state(&self, run_id: &str, state: &RunState) -> Result<()> {
+    fn touch_state(&self, run_id: &str, state: &RunState) -> Result<String> {
+        let now = iso_now();
         let conn = self
             .conn
             .lock()
             .map_err(|_| HubError::msg("runs db lock"))?;
         conn.execute(
             "UPDATE runs SET state = ?1, updated_at = ?2 WHERE run_id = ?3",
-            params![state.as_str(), iso_now(), run_id],
+            params![state.as_str(), &now, run_id],
         )?;
-        Ok(())
+        Ok(now)
     }
 }
 
@@ -316,7 +328,7 @@ pub fn load_or_create_hub_id(path: &Path) -> Result<String> {
     Ok(id)
 }
 
-fn is_uuidish(s: &str) -> bool {
+pub fn is_uuidish(s: &str) -> bool {
     Uuid::parse_str(s).is_ok()
 }
 
@@ -370,11 +382,7 @@ fn read_json_opt(path: &Path) -> Option<Value> {
 }
 
 fn iso_now() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    format!("{secs}s unix")
+    crate::issues::now_iso()
 }
 
 #[cfg(test)]

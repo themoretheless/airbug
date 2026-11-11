@@ -40,7 +40,7 @@ fn main() -> eframe::Result<()> {
 
     let db_path = storage::default_db_path();
     let storage = storage::Storage::open(&db_path).expect("не удалось открыть БД");
-    std::thread::spawn(move || storage::run_db_writer(db_rx, storage));
+    let writer = std::thread::spawn(move || storage::run_db_writer(db_rx, storage));
 
     let sampler_stop = stop.clone();
     let otlp_sampler = otlp.clone();
@@ -71,6 +71,7 @@ fn main() -> eframe::Result<()> {
     );
     stop.store(true, Ordering::Relaxed);
     let _ = sampler_handle.join();
+    let _ = writer.join();
     shutdown_otlp(otlp);
     result
 }
@@ -138,7 +139,7 @@ fn run_headless(seconds: u64, otlp: Option<Arc<otlp::OtlpExport>>) {
     stop.store(true, Ordering::Relaxed);
     let _ = sampler_handle.join();
     drop(rx);
-    let _ = writer.join().expect("db writer panicked");
+    writer.join().expect("db writer panicked");
     shutdown_otlp(otlp);
     tracing::info!(received, "headless: samples received on UI channel");
     let storage = storage::Storage::open(&db_path).expect("не удалось открыть БД");

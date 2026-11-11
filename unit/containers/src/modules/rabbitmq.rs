@@ -99,15 +99,18 @@ impl RabbitMqContainer {
     /// AMQP URI (`amqp://user:pass@host:port/vhost`).
     pub fn get_connection_string(&self) -> Result<String, ContainerError> {
         let port = self.inner.get_mapped_public_port(5672)?;
-        let host = self.inner.hostname();
+        let host = super::format_host(&self.inner.hostname());
         let vhost = if self.vhost == "/" {
             "%2F".to_string()
         } else {
-            self.vhost.trim_start_matches('/').to_string()
+            super::percent_encode(self.vhost.trim_start_matches('/'))
         };
         Ok(format!(
             "amqp://{}:{}@{}:{}/{vhost}",
-            self.username, self.password, host, port
+            super::percent_encode(&self.username),
+            super::percent_encode(&self.password),
+            host,
+            port
         ))
     }
 

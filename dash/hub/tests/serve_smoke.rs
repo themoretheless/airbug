@@ -847,3 +847,406 @@ fn nextest_runner_reports_the_same_fixture() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+fn http_bytes(
+    port: u16,
+    method: &str,
+    path: &str,
+    content_type: &str,
+    encoding: Option<&str>,
+    body: &[u8],
+) -> (u16, Vec<u8>) {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let mut req = format!(
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        body.len()
+    );
+    if let Some(enc) = encoding {
+        req.push_str(&format!("Content-Encoding: {enc}\r\n"));
+    }
+    req.push_str("\r\n");
+    stream.write_all(req.as_bytes()).unwrap();
+    stream.write_all(body).unwrap();
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).unwrap();
+    let sep = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let head = String::from_utf8_lossy(&buf[..sep]);
+    let status = head
+        .lines()
+        .next()
+        .and_then(|l| l.split_whitespace().nth(1))
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    (status, buf[sep + 4..].to_vec())
+}
+
+fn start_hub_with_builtin_collector(root: &Path) -> (u16, u16, u16, HubProc) {
+    let marker = root.file_name().unwrap().to_string_lossy().into_owned();
+    for _ in 0..10 {
+        let port = free_port();
+        let c_http = free_port();
+        let c_grpc = free_port();
+        if port == c_http || port == c_grpc || c_http == c_grpc {
+            continue;
+        }
+        let child = hub_bin()
+            .args([
+                "serve",
+                "--root",
+                root.to_str().unwrap(),
+                "--port",
+                &port.to_string(),
+                "--collector-mode",
+                "builtin",
+                "--collector-http-port",
+                &c_http.to_string(),
+                "--collector-grpc-port",
+                &c_grpc.to_string(),
+            ])
+            .spawn()
+            .expect("spawn hub with builtin collector");
+        let mut hub = HubProc(child);
+        if serves_root(&mut hub, port, &marker) {
+            return (port, c_http, c_grpc, hub);
+        }
+    }
+    panic!("no hub with builtin collector serves {marker}");
+}
+
+#[test]
+fn serve_native_otlp_collector_traces_metrics_logs_profiles_and_issue_correlation() {
+    use flate2::{Compression, write::GzEncoder};
+    use opentelemetry_proto::tonic::{
+        collector::trace::v1::{
+            ExportTraceServiceRequest, trace_service_client::TraceServiceClient,
+        },
+        common::v1::{AnyValue, KeyValue, any_value::Value as ProtoAny},
+        resource::v1::Resource,
+        trace::v1::{ResourceSpans, ScopeSpans, Span, Status as SpanStatus, span::Event as SpanEv},
+    };
+    use prost::Message as _;
+
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("airbug-hub-otlp-e2e-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dash/hub/data")).unwrap();
+
+    let (port, c_http, c_grpc, _hub) = start_hub_with_builtin_collector(&root);
+
+    let trace_hex = "5b8efff798038103d269b633813fc60c";
+    let root_span_hex = "1111111111111111";
+    let child_span_hex = "2222222222222222";
+    let trace_bytes = hex::decode(trace_hex).unwrap();
+    let root_span_bytes = hex::decode(root_span_hex).unwrap();
+    let child_span_bytes = hex::decode(child_span_hex).unwrap();
+
+    // 1. Ingest parent span on `gateway` over HTTP Protobuf + gzip to Hub `:port/v1/traces`
+    let root_req = ExportTraceServiceRequest {
+        resource_spans: vec![ResourceSpans {
+            resource: Some(Resource {
+                attributes: vec![KeyValue {
+                    key: "service.name".into(),
+                    value: Some(AnyValue {
+                        value: Some(ProtoAny::StringValue("gateway".into())),
+                    }),
+                }],
+                dropped_attributes_count: 0,
+                entity_refs: vec![],
+            }),
+            scope_spans: vec![ScopeSpans {
+                scope: None,
+                spans: vec![Span {
+                    trace_id: trace_bytes.clone(),
+                    span_id: root_span_bytes.clone(),
+                    parent_span_id: vec![],
+                    trace_state: String::new(),
+                    flags: 1,
+                    name: "POST /checkout".into(),
+                    kind: 2, // SERVER
+                    start_time_unix_nano: 1_700_000_000_000_000_000,
+                    end_time_unix_nano: 1_700_000_000_080_000_000, // 80ms
+                    attributes: vec![],
+                    dropped_attributes_count: 0,
+                    events: vec![],
+                    dropped_events_count: 0,
+                    links: vec![],
+                    dropped_links_count: 0,
+                    status: Some(SpanStatus {
+                        message: String::new(),
+                        code: 1,
+                    }),
+                }],
+                schema_url: String::new(),
+            }],
+            schema_url: String::new(),
+        }],
+    };
+    let mut gz = GzEncoder::new(Vec::new(), Compression::default());
+    gz.write_all(&root_req.encode_to_vec()).unwrap();
+    let gz_bytes = gz.finish().unwrap();
+    let (st, _) = http_bytes(
+        port,
+        "POST",
+        "/v1/traces",
+        "application/x-protobuf",
+        Some("gzip"),
+        &gz_bytes,
+    );
+    assert_eq!(st, 200);
+
+    // 2. Ingest child error span on `billing` over Tonic gRPC (`:c_grpc`)
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let mut client = TraceServiceClient::connect(format!("http://127.0.0.1:{c_grpc}"))
+            .await
+            .unwrap()
+            .send_compressed(tonic::codec::CompressionEncoding::Gzip);
+        client
+            .export(ExportTraceServiceRequest {
+                resource_spans: vec![ResourceSpans {
+                    resource: Some(Resource {
+                        attributes: vec![KeyValue {
+                            key: "service.name".into(),
+                            value: Some(AnyValue {
+                                value: Some(ProtoAny::StringValue("billing".into())),
+                            }),
+                        }],
+                        dropped_attributes_count: 0,
+                        entity_refs: vec![],
+                    }),
+                    scope_spans: vec![ScopeSpans {
+                        scope: None,
+                        spans: vec![Span {
+                            trace_id: trace_bytes.clone(),
+                            span_id: child_span_bytes.clone(),
+                            parent_span_id: root_span_bytes.clone(),
+                            trace_state: String::new(),
+                            flags: 1,
+                            name: "charge_card".into(),
+                            kind: 3, // CLIENT
+                            start_time_unix_nano: 1_700_000_000_010_000_000,
+                            end_time_unix_nano: 1_700_000_000_070_000_000, // 60ms
+                            attributes: vec![],
+                            dropped_attributes_count: 0,
+                            events: vec![SpanEv {
+                                time_unix_nano: 1_700_000_000_065_000_000,
+                                name: "exception".into(),
+                                attributes: vec![KeyValue {
+                                    key: "exception.message".into(),
+                                    value: Some(AnyValue {
+                                        value: Some(ProtoAny::StringValue("card declined".into())),
+                                    }),
+                                }],
+                                dropped_attributes_count: 0,
+                            }],
+                            dropped_events_count: 0,
+                            links: vec![],
+                            dropped_links_count: 0,
+                            status: Some(SpanStatus {
+                                message: "declined".into(),
+                                code: 2, // ERROR
+                            }),
+                        }],
+                        schema_url: String::new(),
+                    }],
+                    schema_url: String::new(),
+                }],
+            })
+            .await
+            .unwrap();
+    });
+
+    // 3. Ingest OTLP Histogram + Exemplar via builtin HTTP collector `:c_http/v1/metrics`
+    let metrics_payload = serde_json::json!({
+        "resourceMetrics": [{
+            "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "gateway"}}]},
+            "scopeMetrics": [{
+                "metrics": [{
+                    "name": "http.server.duration",
+                    "unit": "ms",
+                    "histogram": {
+                        "aggregationTemporality": 2,
+                        "dataPoints": [{
+                            "timeUnixNano": "1700000000080000000",
+                            "count": "10",
+                            "sum": 420.0,
+                            "min": 5.0,
+                            "max": 95.0,
+                            "explicitBounds": [10.0, 50.0, 100.0],
+                            "bucketCounts": ["2", "5", "3", "0"],
+                            "exemplars": [{
+                                "timeUnixNano": "1700000000070000000",
+                                "asDouble": 80.0,
+                                "traceId": trace_hex,
+                                "spanId": root_span_hex
+                            }]
+                        }]
+                    }
+                }]
+            }]
+        }]
+    })
+    .to_string();
+    let (st, _) = http_bytes(
+        c_http,
+        "POST",
+        "/v1/metrics",
+        "application/json",
+        None,
+        metrics_payload.as_bytes(),
+    );
+    assert_eq!(st, 200);
+
+    // 4. Ingest correlated OTLP Log via `:c_http/v1/logs`
+    let logs_payload = serde_json::json!({
+        "resourceLogs": [{
+            "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "billing"}}]},
+            "scopeLogs": [{
+                "logRecords": [{
+                    "timeUnixNano": "1700000000065000000",
+                    "severityText": "ERROR",
+                    "body": {"stringValue": "stripe charge declined"},
+                    "traceId": trace_hex,
+                    "spanId": child_span_hex
+                }]
+            }]
+        }]
+    })
+    .to_string();
+    let (st, _) = http_bytes(
+        c_http,
+        "POST",
+        "/v1/logs",
+        "application/json",
+        None,
+        logs_payload.as_bytes(),
+    );
+    assert_eq!(st, 200);
+
+    // 5. Ingest OTLP Profile (`v1development`) linked to `trace_hex` via `:port/v1development/profiles`
+    let profiles_payload = serde_json::json!({
+        "stringTable": ["", "cpu", "nanoseconds", "checkout_handler", "charge_card", "src/billing.rs"],
+        "functionTable": [
+            {"nameStrindex": 3, "filenameStrindex": 5, "startLine": 10},
+            {"nameStrindex": 4, "filenameStrindex": 5, "startLine": 42}
+        ],
+        "locationTable": [
+            {"line": [{"functionIndex": 0, "line": 14}]},
+            {"line": [{"functionIndex": 1, "line": 48}]}
+        ],
+        "linkTable": [
+            {"traceId": trace_hex, "spanId": child_span_hex}
+        ],
+        "resourceProfiles": [{
+            "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "billing"}}]},
+            "scopeProfiles": [{
+                "profiles": [{
+                    "sampleType": [{"typeStrindex": 1, "unitStrindex": 2}],
+                    "locationIndices": [0, 1],
+                    "sample": [{
+                        "locationsStartIndex": 0,
+                        "locationsLength": 2,
+                        "value": [125000],
+                        "linkIndex": 0
+                    }]
+                }]
+            }]
+        }]
+    })
+    .to_string();
+    let (st, _) = http_bytes(
+        port,
+        "POST",
+        "/v1development/profiles",
+        "application/json",
+        None,
+        profiles_payload.as_bytes(),
+    );
+    assert_eq!(st, 200);
+
+    // 6. Post correlated airbug-err Event to `/api/v1/errors`
+    let err_event = serde_json::json!({
+        "schema_version": 1,
+        "event_id": "err-corr-1",
+        "timestamp": "2026-01-01T00:00:00.000Z",
+        "level": "error",
+        "service": "billing",
+        "message": "card declined in checkout",
+        "fingerprint": ["billing:declined"],
+        "trace_id": trace_hex,
+        "span_id": child_span_hex
+    })
+    .to_string();
+    let (st, err_resp) = http(port, "POST", "/api/v1/errors", Some(&err_event));
+    assert_eq!(st, 200, "{err_resp}");
+
+    // 7. Verify `/api/v1/traces` (list + Service Topology edge gateway -> billing + RED)
+    let (st, tr_list_body) = http(port, "GET", "/api/v1/traces", None);
+    assert_eq!(st, 200, "{tr_list_body}");
+    let tr_list: serde_json::Value = serde_json::from_str(&tr_list_body).unwrap();
+    assert_eq!(tr_list["traces"].as_array().unwrap().len(), 1);
+    assert_eq!(tr_list["traces"][0]["status"], "ERROR");
+    assert_eq!(tr_list["topology"]["edges"][0]["caller"], "gateway");
+    assert_eq!(tr_list["topology"]["edges"][0]["callee"], "billing");
+    assert!(!tr_list["red"].as_array().unwrap().is_empty());
+
+    // 8. Verify `/api/v1/traces/:trace_id` joins waterfall + correlated logs + correlated issues!
+    let (st, tr_detail_body) = http(port, "GET", &format!("/api/v1/traces/{trace_hex}"), None);
+    assert_eq!(st, 200, "{tr_detail_body}");
+    let tr_detail: serde_json::Value = serde_json::from_str(&tr_detail_body).unwrap();
+    assert_eq!(tr_detail["trace"]["span_count"], 2);
+    assert!(tr_detail["trace"]["critical_path_ms"].as_f64().unwrap() >= 60.0);
+    assert_eq!(tr_detail["logs"].as_array().unwrap().len(), 1);
+    assert_eq!(tr_detail["logs"][0]["body"], "stripe charge declined");
+    assert_eq!(tr_detail["issues"].as_array().unwrap().len(), 1);
+    assert!(
+        tr_detail["issues"][0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("card declined")
+    );
+
+    // 9. Verify `/api/v1/zpages/tracez`
+    let (st, tz_body) = http(port, "GET", "/api/v1/zpages/tracez", None);
+    assert_eq!(st, 200, "{tz_body}");
+    let tz: serde_json::Value = serde_json::from_str(&tz_body).unwrap();
+    assert_eq!(tz["operations"].as_array().unwrap().len(), 2);
+
+    // 10. Verify `/api/v1/metrics` percentiles + exemplars
+    let (st, m_body) = http(port, "GET", "/api/v1/metrics", None);
+    assert_eq!(st, 200, "{m_body}");
+    let m: serde_json::Value = serde_json::from_str(&m_body).unwrap();
+    assert_eq!(m["percentiles"].as_array().unwrap().len(), 1);
+    assert!(m["percentiles"][0]["p95"].as_f64().unwrap() > 50.0);
+    assert_eq!(m["exemplars"][0]["trace_id"], trace_hex);
+
+    // 11. Verify `/api/v1/profiles?trace_id=...`
+    let (st, p_body) = http(
+        port,
+        "GET",
+        &format!("/api/v1/profiles?trace_id={trace_hex}"),
+        None,
+    );
+    assert_eq!(st, 200, "{p_body}");
+    let p: serde_json::Value = serde_json::from_str(&p_body).unwrap();
+    assert_eq!(p["total_value"], 125000);
+    assert_eq!(p["flamechart"]["children"][0]["name"], "checkout_handler");
+
+    // 12. Static frontend modules for Traces and Profiles are served
+    assert_eq!(
+        http(port, "GET", "/static/js/sections/traces.js", None).0,
+        200
+    );
+    assert_eq!(
+        http(port, "GET", "/static/js/sections/profiles.js", None).0,
+        200
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}

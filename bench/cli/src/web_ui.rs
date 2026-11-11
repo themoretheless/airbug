@@ -93,23 +93,22 @@ impl Live {
         let mut lanes = vec![];
         for name in &names {
             let mut segments = vec![];
-            let mut open: Option<(String, f64)> = None;
-            for w in self.samples.windows(2) {
-                let (from, to) = (&w[0], &w[1]);
-                if from.variant == *name && open.is_none() {
-                    open = Some((name.clone(), from.at));
-                }
-                if open.as_ref().is_some_and(|(v, _)| *v == *name) && to.variant != *name {
-                    if let Some((_, start)) = open.take() {
-                        segments.push(Segment {
-                            start,
-                            stop: to.at.max(start + 0.2),
-                            detail: format!("{} of {} done", from.completed, from.total),
-                        });
+            let mut open: Option<f64> = None;
+            for (idx, sample) in self.samples.iter().enumerate() {
+                if sample.variant == *name {
+                    if open.is_none() {
+                        open = Some(sample.at);
                     }
+                } else if let Some(start) = open.take() {
+                    let prev = &self.samples[idx - 1];
+                    segments.push(Segment {
+                        start,
+                        stop: sample.at.max(start + 0.2),
+                        detail: format!("{} of {} done", prev.completed, prev.total),
+                    });
                 }
             }
-            if let Some((_, start)) = open.take() {
+            if let Some(start) = open.take() {
                 segments.push(Segment {
                     start,
                     stop: end.max(start + 0.2),
@@ -401,14 +400,19 @@ pub fn start_live(root: &Path, store: &Path) -> Result<String> {
 /// agent handing the link over twice, a cron step — otherwise has no way back to the port and
 /// token, which are random per start.
 fn record_url(root: &Path, url: &str) -> Result<()> {
-    let path = format!("{}.live.json", root.display());
-    if let Some(parent) = Path::new(&path)
-        .parent()
-        .and_then(|p| (!p.as_os_str().is_empty()).then_some(p))
-    {
-        use std::fs;
-        fs::create_dir_all(parent)?;
-    }
+    let path = match root.file_name() {
+        Some(name) => {
+            let file_name = format!("{}.live.json", name.to_string_lossy());
+            match root.parent().filter(|p| !p.as_os_str().is_empty()) {
+                Some(parent) => {
+                    std::fs::create_dir_all(parent)?;
+                    parent.join(file_name)
+                }
+                None => std::path::PathBuf::from(file_name),
+            }
+        }
+        None => std::env::temp_dir().join(format!("airbug-bench-{}.live.json", std::process::id())),
+    };
     let body = serde_json::to_string_pretty(&serde_json::json!({
         "url": url,
         "pid": std::process::id(),
@@ -431,6 +435,49 @@ fn listen(listener: TcpListener, root: &Path, store: &Path, live: &Shared) -> Re
     );
     connections(listener, root, store, &token, live)
 }
+fn handle_connection(
+    mut stream: TcpStream,
+    root: &Path,
+    store: &Path,
+    prefix: &str,
+    live: &Shared,
+) -> std::io::Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+    let mut request = Vec::new();
+    let mut byte = [0; 1];
+    while request.len() < 8192 && !request.ends_with(b"\r\n\r\n") {
+        match stream.read(&mut byte) {
+            Ok(1) => request.push(byte[0]),
+            _ => break,
+        }
+    }
+    let text = String::from_utf8_lossy(&request);
+    let parts: Vec<_> = text
+        .lines()
+        .next()
+        .unwrap_or("")
+        .split_whitespace()
+        .collect();
+    if !request.ends_with(b"\r\n\r\n")
+        || parts.len() != 3
+        || parts[0] != "GET"
+        || !parts[1].starts_with(prefix)
+    {
+        let _ = response(&mut stream, "404 Not Found", "text/plain", "Not found");
+        return Ok(());
+    }
+    match route(root, store, live, &parts[1][prefix.len()..]) {
+        Ok((mime, body)) => {
+            let _ = response(&mut stream, "200 OK", &mime, &body);
+        }
+        Err(e) => {
+            let _ = response(&mut stream, "400 Bad Request", "text/plain", &e.to_string());
+        }
+    }
+    Ok(())
+}
+
 fn connections(
     listener: TcpListener,
     root: &Path,
@@ -440,40 +487,14 @@ fn connections(
 ) -> Result<()> {
     let prefix = format!("/{token}/");
     for connection in listener.incoming() {
-        let mut stream = connection?;
-        stream.set_read_timeout(Some(Duration::from_secs(3)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(10)))?;
-        let mut request = Vec::new();
-        let mut byte = [0; 1];
-        while request.len() < 8192 && !request.ends_with(b"\r\n\r\n") {
-            match stream.read(&mut byte) {
-                Ok(1) => request.push(byte[0]),
-                _ => break,
-            }
-        }
-        let text = String::from_utf8_lossy(&request);
-        let parts: Vec<_> = text
-            .lines()
-            .next()
-            .unwrap_or("")
-            .split_whitespace()
-            .collect();
-        if !request.ends_with(b"\r\n\r\n")
-            || parts.len() != 3
-            || parts[0] != "GET"
-            || !parts[1].starts_with(&prefix)
-        {
-            let _ = response(&mut stream, "404 Not Found", "text/plain", "Not found");
-            continue;
-        }
-        match route(root, store, live, &parts[1][prefix.len()..]) {
-            Ok((mime, body)) => {
-                let _ = response(&mut stream, "200 OK", &mime, &body);
-            }
-            Err(e) => {
-                let _ = response(&mut stream, "400 Bad Request", "text/plain", &e.to_string());
-            }
-        }
+        let stream = connection?;
+        let root = root.to_path_buf();
+        let store = store.to_path_buf();
+        let prefix = prefix.clone();
+        let live = std::sync::Arc::clone(live);
+        std::thread::spawn(move || {
+            let _ = handle_connection(stream, &root, &store, &prefix, &live);
+        });
     }
     Ok(())
 }
@@ -681,5 +702,30 @@ mod tests {
             Some(u64::from(std::process::id()))
         );
         assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn record_url_strips_trailing_slash_and_does_not_create_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let session_with_slash = format!("{}/session/", dir.path().display());
+        record_url(Path::new(&session_with_slash), "http://127.0.0.1:8787/tok/").unwrap();
+        assert!(dir.path().join("session.live.json").is_file());
+        assert!(!dir.path().join("session").exists());
+    }
+
+    #[test]
+    fn live_figures_render_single_sample_and_switched_variant() {
+        let mut live = Live::default();
+        live.observe("running", "baseline", 0, 4);
+        let single = live.figures();
+        assert!(single.contains("<svg"), "{single}");
+        assert!(single.contains("baseline"));
+        assert!(single.contains("in progress"));
+
+        live.observe("running", "candidate", 2, 4);
+        let switched = live.figures();
+        assert!(switched.contains("0 of 4 done"), "{switched}");
+        assert!(switched.contains("candidate"));
+        assert!(switched.contains("in progress"));
     }
 }

@@ -45,7 +45,7 @@ struct Hook {
     locked: bool,
 }
 impl Hook {
-    fn enter() -> Self {
+    fn enter_trace() -> Self {
         INSTALLED.store(true, Relaxed);
         if !ACTIVE.load(Relaxed) {
             return Self {
@@ -63,6 +63,20 @@ impl Hook {
         }
         Self { entered, locked }
     }
+    fn enter_free() -> Self {
+        INSTALLED.store(true, Relaxed);
+        if !ACTIVE.load(Relaxed) {
+            return Self {
+                entered: false,
+                locked: false,
+            };
+        }
+        let entered = ENTERED.try_with(|e| !e.replace(true)).unwrap_or(false);
+        Self {
+            entered,
+            locked: false,
+        }
+    }
 }
 impl Drop for Hook {
     fn drop(&mut self) {
@@ -77,38 +91,30 @@ impl Drop for Hook {
 fn record(ptr: usize, old: usize, size: usize) {
     // A profiler failure must never unwind across GlobalAlloc.
     if std::panic::catch_unwind(|| {
-        // A match (not `if let ... else`) keeps the guard's drop scope explicit
-        // and identical under the Rust 2024 temporary-scope rules.
-        match BUFFER.try_lock() {
-            Ok(mut b) => {
-                if b.len == CAPACITY {
-                    DROPPED.fetch_add(1, Relaxed);
-                    return;
+        let mut e = Event {
+            ptr,
+            old,
+            size,
+            ..EMPTY
+        };
+        if ptr != 0 {
+            backtrace::trace(|f| {
+                if e.depth == DEPTH {
+                    return false;
                 }
-                let mut e = Event {
-                    ptr,
-                    old,
-                    size,
-                    ..EMPTY
-                };
-                if ptr != 0 {
-                    backtrace::trace(|f| {
-                        if e.depth == DEPTH {
-                            return false;
-                        }
-                        e.stack[e.depth] = f.ip() as usize;
-                        e.depth += 1;
-                        true
-                    });
-                }
-                let i = b.len;
-                b.events[i] = e;
-                b.len += 1;
-            }
-            _ => {
-                DROPPED.fetch_add(1, Relaxed);
-            }
+                e.stack[e.depth] = f.ip() as usize;
+                e.depth += 1;
+                true
+            });
         }
+        let mut b = BUFFER.lock().unwrap_or_else(|e| e.into_inner());
+        if b.len == CAPACITY {
+            DROPPED.fetch_add(1, Relaxed);
+            return;
+        }
+        let i = b.len;
+        b.events[i] = e;
+        b.len += 1;
     })
     .is_err()
     {
@@ -120,7 +126,7 @@ pub struct Allocator<A>(pub A);
 // dereferences allocations, uses a bounded static buffer and prevents reentry.
 unsafe impl<A: GlobalAlloc> GlobalAlloc for Allocator<A> {
     unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        let hook = Hook::enter();
+        let hook = Hook::enter_trace();
         let p = unsafe { self.0.alloc(l) };
         if hook.locked && !p.is_null() {
             record(p as usize, 0, l.size())
@@ -128,7 +134,7 @@ unsafe impl<A: GlobalAlloc> GlobalAlloc for Allocator<A> {
         p
     }
     unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
-        let hook = Hook::enter();
+        let hook = Hook::enter_trace();
         let p = unsafe { self.0.alloc_zeroed(l) };
         if hook.locked && !p.is_null() {
             record(p as usize, 0, l.size())
@@ -136,22 +142,27 @@ unsafe impl<A: GlobalAlloc> GlobalAlloc for Allocator<A> {
         p
     }
     unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-        let hook = Hook::enter();
-        if hook.locked {
+        let hook = Hook::enter_free();
+        if hook.entered {
             record(0, p as usize, 0);
         }
         unsafe { self.0.dealloc(p, l) }
     }
     unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
-        let hook = Hook::enter();
+        let hook = Hook::enter_trace();
         let q = unsafe { self.0.realloc(p, l, n) };
-        if hook.locked && !q.is_null() {
-            record(q as usize, p as usize, n)
+        if !q.is_null() {
+            if hook.locked {
+                record(q as usize, p as usize, n);
+            } else if hook.entered && q != p {
+                record(0, p as usize, 0);
+            }
         }
         q
     }
 }
-#[derive(Serialize, Deserialize, Default)]
+/// Aggregated allocation statistics for one unique call stack.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Site {
     pub frames: Vec<String>,
     pub allocated_bytes: u64,
@@ -159,7 +170,37 @@ pub struct Site {
     pub live_bytes: u64,
     pub live_blocks: u64,
 }
-#[derive(Serialize, Deserialize)]
+
+impl Site {
+    /// Parse rendered stack frames (`"fn_name (path/to/file.rs:42)"` or `"fn_name"`)
+    /// into `(function_name, filename, line_number)` tuples (root-to-leaf order).
+    pub fn parsed_frames(&self) -> Vec<(String, Option<String>, Option<u32>)> {
+        self.frames
+            .iter()
+            .map(|raw| parse_rendered_frame(raw))
+            .collect()
+    }
+}
+
+fn parse_rendered_frame(raw: &str) -> (String, Option<String>, Option<u32>) {
+    let trimmed = raw.trim();
+    if let Some(open) = trimmed.rfind(" (")
+        && trimmed.ends_with(')')
+    {
+        let func = trimmed[..open].trim().to_string();
+        let loc = &trimmed[open + 2..trimmed.len() - 1];
+        if let Some((file, line_str)) = loc.rsplit_once(':')
+            && let Ok(line) = line_str.parse::<u32>()
+        {
+            return (func, Some(file.to_string()), Some(line));
+        }
+        return (func, Some(loc.to_string()), None);
+    }
+    (trimmed.to_string(), None, None)
+}
+
+/// Allocation profile report captured by [`Session`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Profile {
     pub schema: String,
     pub scope: String,
@@ -167,6 +208,36 @@ pub struct Profile {
     pub events: usize,
     pub peak_tracked_bytes: u64,
     pub sites: Vec<Site>,
+}
+
+/// Alias for [`Site`] used by external profilers / OTLP converters.
+pub type AllocationSite = Site;
+
+impl Profile {
+    /// Slice of recorded allocation stack sites.
+    pub fn sites(&self) -> &[Site] {
+        &self.sites
+    }
+
+    /// Sum of `allocated_bytes` across all tracked sites.
+    pub fn total_allocated_bytes(&self) -> u64 {
+        self.sites.iter().map(|s| s.allocated_bytes).sum()
+    }
+
+    /// Sum of `allocations` across all tracked sites.
+    pub fn total_allocations(&self) -> u64 {
+        self.sites.iter().map(|s| s.allocations).sum()
+    }
+
+    /// Sum of `live_bytes` remaining at session finish across all tracked sites.
+    pub fn total_live_bytes(&self) -> u64 {
+        self.sites.iter().map(|s| s.live_bytes).sum()
+    }
+
+    /// Sum of `live_blocks` remaining at session finish across all tracked sites.
+    pub fn total_live_blocks(&self) -> u64 {
+        self.sites.iter().map(|s| s.live_blocks).sum()
+    }
 }
 pub struct Session(());
 impl Session {
@@ -345,5 +416,41 @@ mod tests {
         assert!(!html.contains("</script><img"));
         assert!(html.contains("\\u003c/script"));
         assert_eq!(p.dropped_events, 10);
+    }
+
+    #[test]
+    fn parsed_frames_and_totals() {
+        let site = Site {
+            frames: vec![
+                "my_crate::run (src/lib.rs:42)".into(),
+                "alloc::raw_vec::finish_grow".into(),
+            ],
+            allocated_bytes: 1024,
+            allocations: 4,
+            live_bytes: 256,
+            live_blocks: 1,
+        };
+        let parsed = site.parsed_frames();
+        assert_eq!(
+            parsed[0],
+            ("my_crate::run".into(), Some("src/lib.rs".into()), Some(42))
+        );
+        assert_eq!(
+            parsed[1],
+            ("alloc::raw_vec::finish_grow".into(), None, None)
+        );
+
+        let p = Profile {
+            schema: "bench.memory/1".into(),
+            scope: "test".into(),
+            dropped_events: 0,
+            events: 4,
+            peak_tracked_bytes: 1024,
+            sites: vec![site],
+        };
+        assert_eq!(p.total_allocated_bytes(), 1024);
+        assert_eq!(p.total_allocations(), 4);
+        assert_eq!(p.total_live_bytes(), 256);
+        assert_eq!(p.total_live_blocks(), 1);
     }
 }

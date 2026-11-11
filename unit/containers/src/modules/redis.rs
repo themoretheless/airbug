@@ -61,7 +61,10 @@ impl RedisContainer {
     /// `redis://host:port` connection URI.
     pub fn get_connection_string(&self) -> Result<String, ContainerError> {
         let port = self.inner.get_mapped_public_port(6379)?;
-        Ok(format!("redis://{}:{port}", self.inner.hostname()))
+        Ok(format!(
+            "redis://{}:{port}",
+            super::format_host(&self.inner.hostname())
+        ))
     }
 
     /// Underlying generic container.

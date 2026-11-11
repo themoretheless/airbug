@@ -10,15 +10,15 @@ const GROUPS = [
   { id: "now", label: "Now", cats: ["now"] },
   { id: "runs", label: "Runs", cats: ["runs", "tests", "bench"],
     sub: [["runs", "All"], ["tests", "Tests"], ["bench", "Bench"]] },
-  { id: "signals", label: "Signals", cats: ["issues", "logs", "metrics"],
-    sub: [["issues", "Issues"], ["logs", "Logs"], ["metrics", "Metrics"]] },
+  { id: "signals", label: "Signals", cats: ["issues", "traces", "logs", "metrics", "profiles"],
+    sub: [["issues", "Issues"], ["traces", "Traces"], ["logs", "Logs"], ["metrics", "Metrics"], ["profiles", "Profiles"]] },
   { id: "health", label: "Health", cats: ["system"] },
 ];
 
 /** Old routes keep working: package tabs folded into Health, overview became Now. */
 const ALIASES = {
   launches: "tests", overview: "now", unit: "tests", mon: "system", otel: "system", err: "system",
-  collector: "system", apis: "system", health: "system", signals: "issues",
+  collector: "system", apis: "system", health: "system", signals: "issues", tracez: "traces",
 };
 
 const LEDE = {
@@ -27,8 +27,10 @@ const LEDE = {
   tests: "Per-test results from cargo airbug test: failures first, steps, diffs, history.",
   bench: "Live and finished bench runs (GUID sessions).",
   issues: "Issue inbox from airbug-err events.",
-  logs: "OTLP log tail and filters.",
-  metrics: "OTLP metrics visualizations.",
+  traces: "Distributed traces, critical-path waterfall, service dependency map, RED metrics, and zPages Tracez.",
+  logs: "OTLP log tail, structured attributes, and trace correlation.",
+  metrics: "OTLP metrics, native histogram quantiles (p50/p95/p99), and trace-linked exemplars.",
+  profiles: "OTLP Profiles (v1development): interactive flamecharts and Self vs Total function rankings.",
   system: "Is the hub wired up: collector, packages, and the local API catalog.",
 };
 
@@ -71,10 +73,8 @@ function renderSubnav(cat) {
   }
   const items = group.sub.map(([id, label]) =>
     `<a href="#/${id}" class="${id === cat ? "on" : ""}">${escapeHtml(label)}</a>`);
-  if (group.id === "signals") {
-    items.push(traces.up
-      ? `<a href="${escapeAttr(traces.href)}" target="_blank" rel="noopener">Traces ↗</a>`
-      : `<span class="off" title="Traces render only in Jaeger, which the Docker collector brings up">Traces — Jaeger not running</span>`);
+  if (group.id === "signals" && traces.up && traces.href) {
+    items.push(`<a href="${escapeAttr(traces.href)}" target="_blank" rel="noopener" title="Open external Jaeger UI">Jaeger ↗</a>`);
   }
   el.innerHTML = items.join("");
 }

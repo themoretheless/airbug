@@ -4,11 +4,15 @@ use std::{
     ffi::{OsStr, OsString},
     fs, io,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Mutex, MutexGuard,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
 static TEMP_SERIAL: AtomicU64 = AtomicU64::new(0);
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 /// Unique temporary directory removed on [`Drop`].
 #[derive(Debug)]
@@ -50,30 +54,39 @@ impl Drop for TempDir {
 }
 
 /// Sets an environment variable and restores the previous value on [`Drop`].
+///
+/// Holds a process-wide lock while alive so concurrent tests using [`EnvScope`]
+/// do not race on environment mutations.
 #[derive(Debug)]
 pub struct EnvScope {
     key: OsString,
     previous: Option<OsString>,
+    _lock: MutexGuard<'static, ()>,
 }
 
 impl EnvScope {
     /// Set `key` to `value` for the lifetime of the returned guard.
     #[allow(unsafe_code)]
     pub fn set(key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+        let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let key = key.as_ref().to_os_string();
         let previous = env::var_os(&key);
-        // SAFETY: test-only scoped mutation; restored on Drop for this process.
+        // SAFETY: serialized by process-wide `ENV_LOCK`; restored on Drop for this process.
         unsafe {
             env::set_var(&key, value.as_ref());
         }
-        Self { key, previous }
+        Self {
+            key,
+            previous,
+            _lock: lock,
+        }
     }
 }
 
 impl Drop for EnvScope {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
-        // SAFETY: restores the value captured in `set` for this process.
+        // SAFETY: serialized by `self._lock` (`ENV_LOCK`); restores the value captured in `set`.
         unsafe {
             match &self.previous {
                 Some(value) => env::set_var(&self.key, value),

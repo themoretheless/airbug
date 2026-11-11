@@ -235,7 +235,7 @@ fn execute(options: &Options, root: &std::path::Path, run: &mut Run) -> Result<b
         let mut docs = cargo(options);
         docs.current_dir(root).arg("--doc");
         let (success, timed_out, output) = capture(docs, options.timeout)?;
-        passed &= success;
+        passed &= !timed_out && success;
         run.finish_case(
             index,
             if timed_out {

@@ -83,21 +83,36 @@ pub fn install_cancel_handler() {
         libc::signal(libc::SIGTERM, cancel as *const () as libc::sighandler_t);
     }
 }
-pub(crate) struct Lease(PathBuf);
-impl Drop for Lease {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+pub(crate) struct Lease(#[allow(dead_code)] File);
+struct ChildGuard {
+    child: std::process::Child,
+    reaped: bool,
+}
+impl ChildGuard {
+    fn new(child: std::process::Child) -> Self {
+        Self {
+            child,
+            reaped: false,
+        }
+    }
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        let status = self.child.try_wait()?;
+        if status.is_some() {
+            self.reaped = true;
+        }
+        Ok(status)
     }
 }
-struct ChildGuard(std::process::Child);
 impl Drop for ChildGuard {
     fn drop(&mut self) {
-        #[cfg(unix)]
-        unsafe {
-            libc::kill(-(self.0.id() as i32), libc::SIGKILL);
+        if !self.reaped {
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+            }
+            let _ = self.child.kill();
+            let _ = self.child.wait();
         }
-        let _ = self.0.kill();
-        let _ = self.0.wait();
     }
 }
 fn resolve(p: &mut Program) -> Result<()> {
@@ -296,10 +311,10 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
             let mut heartbeat = Instant::now();
             // Declare capture before child: error unwinding kills the process group before joining pipes.
             let mut logs = crate::privacy::Logs::new();
-            let mut child = ChildGuard(command.spawn()?);
+            let mut child = ChildGuard::new(command.spawn()?);
             let needles = privacy.as_ref().map(|p| p.needles()).unwrap_or_default();
-            logs.start(child.0.stdout.take().unwrap(), &stdout, needles.clone())?;
-            logs.start(child.0.stderr.take().unwrap(), &stderr, needles)?;
+            logs.start(child.child.stdout.take().unwrap(), &stdout, needles.clone())?;
+            logs.start(child.child.stderr.take().unwrap(), &stderr, needles)?;
             loop {
                 if CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
                     return Err(error("run cancelled"));
@@ -309,7 +324,7 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                 {
                     return Err(error("worker log exceeds 64 MiB limit"));
                 }
-                if let Some(status) = child.0.try_wait()? {
+                if let Some(status) = child.try_wait()? {
                     if !status.success() {
                         return Err(error(format!(
                             "{} process {} exited {status}; see {}",
@@ -713,11 +728,25 @@ fn schedule(plan: &Plan) -> Vec<Entry> {
 pub(crate) fn acquire_lease() -> Result<Lease> {
     // Per-user lock coordinates local bench processes across output directories.
     let uid = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "default".into())
         .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
     let lock = std::env::temp_dir().join(format!("bench-{uid}.lock"));
-    let mut lock_file=OpenOptions::new().write(true).create_new(true).open(&lock).map_err(|e|error(format!("cannot acquire {}: {e}; another runner may be active. Inspect stale lock before removing it",lock.display())))?;
+    let mut lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock)
+        .map_err(|e| error(format!("cannot open {}: {e}", lock.display())))?;
+    lock_file.try_lock().map_err(|e| {
+        error(format!(
+            "cannot acquire {}: {e}; another runner may be active",
+            lock.display()
+        ))
+    })?;
+    let _ = lock_file.set_len(0);
     use std::io::Write;
     writeln!(lock_file, "pid={}", std::process::id())?;
-    Ok(Lease(lock))
+    Ok(Lease(lock_file))
 }

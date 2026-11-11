@@ -6,10 +6,17 @@ pub const DEFAULT_PORT: u16 = 8790;
 
 pub const MAX_HEADER_BYTES: usize = 64 * 1024;
 pub const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_OTLP_DECOMPRESSED_BYTES: usize = 16 * 1024 * 1024;
+pub const OTLP_ROTATE_BYTES: u64 = 32 * 1024 * 1024;
+pub const OTLP_MAX_BACKUPS: usize = 3;
 pub const LOGS_TAIL_BYTES: u64 = 512 * 1024;
 pub const METRICS_TAIL_BYTES: u64 = 2 * 1024 * 1024;
+pub const TRACES_TAIL_BYTES: u64 = 2 * 1024 * 1024;
+pub const PROFILES_TAIL_BYTES: u64 = 4 * 1024 * 1024;
 pub const DEFAULT_LOGS_LIMIT: usize = 120;
 pub const DEFAULT_METRICS_LIMIT: usize = 400;
+pub const DEFAULT_TRACES_LIMIT: usize = 120;
+pub const DEFAULT_PROFILES_LIMIT: usize = 50;
 
 /// Absolute (or canonicalized) monorepo root and derived artifact paths.
 #[derive(Debug, Clone)]
@@ -48,6 +55,14 @@ impl RootPaths {
 
     pub fn metrics_file(&self) -> PathBuf {
         self.collector_data_dir().join("metrics.json")
+    }
+
+    pub fn traces_file(&self) -> PathBuf {
+        self.collector_data_dir().join("traces.json")
+    }
+
+    pub fn profiles_file(&self) -> PathBuf {
+        self.collector_data_dir().join("profiles.json")
     }
 
     pub fn otelcol_pid(&self) -> PathBuf {
@@ -104,19 +119,24 @@ impl RootPaths {
         }
         let path = self.unit_report_dir().join(name);
         let report = self.unit_report_dir();
-        path.canonicalize()
-            .ok()
-            .filter(|p| p.starts_with(report.canonicalize().unwrap_or_else(|_| report.clone())))
-            .or_else(|| {
-                if path
-                    .components()
-                    .any(|c| matches!(c, std::path::Component::ParentDir))
-                {
-                    None
-                } else {
-                    Some(path)
-                }
-            })
+        if let Ok(canon_path) = path.canonicalize() {
+            let canon_report = report.canonicalize().unwrap_or_else(|_| report.clone());
+            return canon_path.starts_with(&canon_report).then_some(canon_path);
+        }
+        if path
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink())
+        {
+            return None;
+        }
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            None
+        } else {
+            Some(path)
+        }
     }
 }
 
@@ -129,5 +149,20 @@ mod tests {
         let paths = RootPaths::new("/tmp/airbug-root");
         assert!(paths.unit_report_file("../secret").is_none());
         assert!(paths.unit_report_file("index.html").is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unit_report_rejects_escaping_symlink() {
+        let dir = std::env::temp_dir().join(format!("airbug-cfg-sym-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let report_dir = dir.join("target/airbug-report");
+        std::fs::create_dir_all(&report_dir).unwrap();
+        let outside = dir.join("outside.txt");
+        std::fs::write(&outside, "secret").unwrap();
+        std::os::unix::fs::symlink(&outside, report_dir.join("escape.html")).unwrap();
+        let paths = RootPaths::new(&dir);
+        assert!(paths.unit_report_file("escape.html").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

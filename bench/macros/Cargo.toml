@@ -5,7 +5,10 @@ edition.workspace = true
 license = "MIT OR Apache-2.0"
 rust-version.workspace = true
 repository = "https://github.com/themoretheless/airbug"
+readme = "../README.md"
 description = "Attribute macros for the airbug-bench benchmark library"
+keywords = ["benchmark", "performance", "profiling", "macros", "proc-macro"]
+categories = ["development-tools::profiling", "development-tools::testing"]
 
 [lib]
 proc-macro = true

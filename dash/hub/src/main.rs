@@ -39,6 +39,9 @@ fn main() {
     let mut root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut port = config::DEFAULT_PORT;
     let mut with_collector = false;
+    let mut collector_mode = collector::CollectorMode::Auto;
+    let mut collector_http_port = collector::DEFAULT_OTLP_HTTP_PORT;
+    let mut collector_grpc_port = collector::DEFAULT_OTLP_GRPC_PORT;
     let mut webhook = env::var("AIRBUG_ISSUES_WEBHOOK").ok();
 
     while let Some(flag) = args.next() {
@@ -58,6 +61,31 @@ fn main() {
                     .unwrap_or_else(|_| usage_exit("invalid --port"));
             }
             "--collector" => with_collector = true,
+            "--collector-mode" => {
+                let value = args.next().unwrap_or_else(|| {
+                    usage_exit("--collector-mode needs auto|builtin|docker|binary")
+                });
+                collector_mode = collector::CollectorMode::parse(&value).unwrap_or_else(|| {
+                    usage_exit("invalid --collector-mode (expected auto|builtin|docker|binary)")
+                });
+                with_collector = true;
+            }
+            "--collector-http-port" => {
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--collector-http-port needs a port"));
+                collector_http_port = value
+                    .parse()
+                    .unwrap_or_else(|_| usage_exit("invalid --collector-http-port"));
+            }
+            "--collector-grpc-port" => {
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--collector-grpc-port needs a port"));
+                collector_grpc_port = value
+                    .parse()
+                    .unwrap_or_else(|_| usage_exit("invalid --collector-grpc-port"));
+            }
             "--webhook" => {
                 let value = args
                     .next()
@@ -73,8 +101,21 @@ fn main() {
 
     match command.as_str() {
         "serve" => {
+            let app = match app::HubApp::new(root.clone(), port, webhook) {
+                Ok(app) => Arc::new(app),
+                Err(err) => {
+                    tracing::error!(error = %err, "hub init failed");
+                    process::exit(1);
+                }
+            };
+
             let collector = if with_collector {
-                match collector::CollectorHandle::start(&root) {
+                match collector::CollectorHandle::start(
+                    Arc::clone(&app),
+                    collector_mode,
+                    collector_http_port,
+                    collector_grpc_port,
+                ) {
                     Ok(handle) => handle,
                     Err(err) => {
                         tracing::error!(error = %err, "hub collector failed");
@@ -96,13 +137,6 @@ fn main() {
                 }
             }
 
-            let app = match app::HubApp::new(root, port, webhook) {
-                Ok(app) => Arc::new(app),
-                Err(err) => {
-                    tracing::error!(error = %err, "hub init failed");
-                    process::exit(1);
-                }
-            };
             if let Err(err) = serve::serve(app) {
                 if let Some(handle) = collector {
                     handle.stop();
@@ -112,7 +146,7 @@ fn main() {
             }
         }
         "status" => {
-            print!("{}", serve::status_json(&root));
+            print!("{}", serve::status_json_with_port(&root, port));
         }
         other => usage_exit(&format!("unknown command: {other}")),
     }
@@ -127,8 +161,9 @@ fn usage_exit(message: &str) -> ! {
 airbug-hub — monorepo dashboard for unit / bench / mon / otel / err
 
 Usage:
-  airbug-hub serve [--root PATH] [--port N] [--collector] [--webhook URL]
-      # dashboard :8790; --collector prefers Docker, else otelcol on PATH
+  airbug-hub serve [--root PATH] [--port N] [--collector] [--collector-mode auto|builtin|docker|binary] [--webhook URL]
+      # dashboard :8790 (+ built-in HTTP OTLP at /v1/*)
+      # --collector brings up :4318 HTTP + :4317 gRPC (Docker -> otelcol -> built-in Rust collector)
       # --webhook / AIRBUG_ISSUES_WEBHOOK fires on new issues (http:// only)
   airbug-hub status [--root PATH]
   {}

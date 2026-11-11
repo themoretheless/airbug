@@ -1,5 +1,5 @@
 # Local OpenTelemetry Collector for airbug-hub.
-# Receives OTLP traces/metrics/logs; traces → Jaeger; logs/metrics → files for the hub UI.
+# Receives OTLP traces/metrics/logs; traces → file + Jaeger; logs/metrics → files for the hub UI.
 
 receivers:
   otlp:
@@ -20,6 +20,11 @@ exporters:
     endpoint: jaeger:4317
     tls:
       insecure: true
+  file/traces:
+    path: /var/lib/otelcol/traces.json
+    rotation:
+      max_megabytes: 32
+      max_backups: 3
   file/logs:
     path: /var/lib/otelcol/logs.json
     rotation:
@@ -36,7 +41,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug, otlp/jaeger]
+      exporters: [debug, file/traces, otlp/jaeger]
     metrics:
       receivers: [otlp]
       processors: [batch]

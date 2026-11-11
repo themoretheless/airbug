@@ -159,7 +159,7 @@ impl Wait {
             }
             Self::Tcp { container_port } => {
                 let port = mapped(*container_port)?;
-                let addr = format!("{host}:{port}");
+                let addr = format_host_port(host, port);
                 while Instant::now() < deadline {
                     if try_connect(&addr) {
                         return Ok(());
@@ -180,7 +180,7 @@ impl Wait {
                 text,
             } => {
                 let port = mapped(*container_port)?;
-                let addr = format!("{host}:{port}");
+                let addr = format_host_port(host, port);
                 while Instant::now() < deadline {
                     if try_connect(&addr) || runtime.logs(id, true)?.contains(text) {
                         return Ok(());
@@ -279,6 +279,32 @@ fn http_ready(url: &str, path_needle: Option<&str>, expect: Option<&str>) -> boo
     }
 }
 
+fn format_host_port(host: &str, port: u16) -> String {
+    if host.contains(':') && !(host.starts_with('[') && host.ends_with(']')) {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
+fn parse_authority(authority: &str) -> Option<(String, u16)> {
+    if let Some(rest) = authority.strip_prefix('[') {
+        let (ipv6, tail) = rest.split_once(']')?;
+        if tail.is_empty() {
+            return Some((format!("[{ipv6}]"), 80));
+        }
+        let port = tail.strip_prefix(':')?.parse().ok()?;
+        Some((format!("[{ipv6}]"), port))
+    } else if let Some((host, port)) = authority.rsplit_once(':') {
+        if host.contains(':') {
+            return None;
+        }
+        Some((host.to_string(), port.parse().ok()?))
+    } else {
+        Some((authority.to_string(), 80))
+    }
+}
+
 /// Minimal HTTP/1.1 GET over TCP. Supports `http://host[:port]/path`.
 fn http_get(url: &str) -> Option<(u16, String)> {
     let rest = url.strip_prefix("http://")?;
@@ -286,10 +312,7 @@ fn http_get(url: &str) -> Option<(u16, String)> {
         Some((hostport, path)) => (hostport, format!("/{path}")),
         None => (rest, "/".to_string()),
     };
-    let (host, port) = match authority.rsplit_once(':') {
-        Some((host, port)) => (host, port.parse().ok()?),
-        None => (authority, 80u16),
-    };
+    let (host, port) = parse_authority(authority)?;
     let addr = format!("{host}:{port}");
     let mut addrs = addr.to_socket_addrs().ok()?;
     let sock = addrs.next()?;
@@ -313,4 +336,22 @@ fn http_get(url: &str) -> Option<(u16, String)> {
         },
     };
     Some((status, body))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_authority_supports_ipv4_hostname_and_bracketed_ipv6() {
+        assert_eq!(
+            parse_authority("127.0.0.1:8080"),
+            Some(("127.0.0.1".into(), 8080))
+        );
+        assert_eq!(parse_authority("localhost"), Some(("localhost".into(), 80)));
+        assert_eq!(parse_authority("[::1]:8080"), Some(("[::1]".into(), 8080)));
+        assert_eq!(parse_authority("[::1]"), Some(("[::1]".into(), 80)));
+        assert_eq!(parse_authority("[::1:8080"), None);
+        assert_eq!(parse_authority("::1:8080"), None);
+    }
 }

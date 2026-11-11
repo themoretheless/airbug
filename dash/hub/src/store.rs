@@ -243,14 +243,52 @@ fn announced_bench_runs(root: &Path, seen: &mut HashSet<String>) -> Vec<RunItem>
         .collect()
 }
 
-/// `"1712345678s unix"` (registry stamps) → milliseconds.
+/// `"1712345678s unix"` or ISO-8601 (`YYYY-MM-DDTHH:MM:SS(.mmm)Z`) → milliseconds.
 fn unix_stamp_ms(stamp: &str) -> u64 {
-    stamp
-        .trim()
-        .strip_suffix("s unix")
-        .and_then(|s| s.parse::<u64>().ok())
-        .map(|s| s * 1000)
-        .unwrap_or(0)
+    let s = stamp.trim();
+    if let Some(secs_str) = s.strip_suffix("s unix") {
+        return secs_str.parse::<u64>().map(|n| n * 1000).unwrap_or(0);
+    }
+    parse_iso_ms(s).unwrap_or(0)
+}
+
+fn parse_iso_ms(s: &str) -> Option<u64> {
+    let s = s.strip_suffix('Z')?;
+    let (date, time) = s.split_once('T')?;
+    let mut d_parts = date.split('-');
+    let y: i64 = d_parts.next()?.parse().ok()?;
+    let mo: i64 = d_parts.next()?.parse().ok()?;
+    let d: i64 = d_parts.next()?.parse().ok()?;
+    if !(1..=12).contains(&mo) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let mut t_parts = time.split(':');
+    let h: u64 = t_parts.next()?.parse().ok()?;
+    let mi: u64 = t_parts.next()?.parse().ok()?;
+    let sec_part = t_parts.next()?;
+    let (sec_s, ms) = match sec_part.split_once('.') {
+        Some((sec_s, frac)) => {
+            let mut frac_ms = 0u64;
+            for (i, ch) in frac.chars().take(3).enumerate() {
+                let digit = ch.to_digit(10)? as u64;
+                frac_ms += digit * 10u64.pow(2 - i as u32);
+            }
+            (sec_s, frac_ms)
+        }
+        None => (sec_part, 0),
+    };
+    let sec: u64 = sec_s.parse().ok()?;
+    let y_adj = if mo <= 2 { y - 1 } else { y };
+    let era = if y_adj >= 0 { y_adj } else { y_adj - 399 } / 400;
+    let yoe = (y_adj - era * 400) as u64;
+    let mp = (if mo > 2 { mo - 3 } else { mo + 9 }) as u64;
+    let doy = (153 * mp + 2) / 5 + (d as u64) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + (doe as i64) - 719_468;
+    if days < 0 {
+        return None;
+    }
+    Some((days as u64) * 86_400_000 + (h * 3600 + mi * 60 + sec) * 1000 + ms)
 }
 
 /// Shared `airbug_report` and direct `cargo bench` case history.
@@ -331,11 +369,11 @@ pub fn timeline(root: &Path, registry: &RunStore, kind: Option<&str>, limit: usi
                 .cmp(&a.started_at_ms.max(a.updated_at_ms))
         })
     });
-    runs.truncate(limit);
     let live = runs
         .iter()
         .filter(|r| !r.stale && matches!(r.state.as_str(), "building" | "running"))
         .count();
+    runs.truncate(limit);
     json!({
         "runs": runs,
         "live": live,
@@ -669,6 +707,7 @@ mod tests {
     #[test]
     fn unix_stamps_parse() {
         assert_eq!(unix_stamp_ms("12s unix"), 12_000);
+        assert_eq!(unix_stamp_ms("1970-01-01T00:00:12.345Z"), 12_345);
         assert_eq!(unix_stamp_ms("garbage"), 0);
     }
 }

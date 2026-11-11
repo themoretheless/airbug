@@ -1,49 +1,100 @@
 //! Start/stop the local OpenTelemetry Collector.
 //!
-//! Order: Docker Compose (collector + Jaeger) → `otelcol-contrib` / `otelcol` binary.
-//! Compose is reached through `docker compose` when the CLI plugin is installed,
-//! otherwise through a standalone `docker-compose` binary.
-use crate::config::RootPaths;
+//! Order in `auto` mode: Docker Compose (collector + Jaeger) → `otelcol-contrib` / `otelcol`
+//! binary → built-in Rust OTLP HTTP (`127.0.0.1:4318`) + Tonic gRPC (`127.0.0.1:4317`) receiver.
+use crate::{app::HubApp, config::RootPaths, otlp::receiver::BuiltinCollector};
 use std::{
     fs, io,
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
+    sync::Arc,
     time::{Duration, Instant},
 };
+
+pub const DEFAULT_OTLP_HTTP_PORT: u16 = 4318;
+pub const DEFAULT_OTLP_GRPC_PORT: u16 = 4317;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectorMode {
+    Auto,
+    Builtin,
+    Docker,
+    Binary,
+}
+
+impl CollectorMode {
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "builtin" | "native" => Some(Self::Builtin),
+            "docker" | "compose" => Some(Self::Docker),
+            "binary" | "otelcol" => Some(Self::Binary),
+            _ => None,
+        }
+    }
+}
 
 pub struct CollectorHandle {
     /// Present when Docker Compose backend is used (Ctrl+C / stop → compose down).
     pub compose_file: Option<PathBuf>,
     child: Option<Child>,
     pid_file: Option<PathBuf>,
+    builtin: Option<BuiltinCollector>,
 }
 
 impl CollectorHandle {
-    /// Prefer Docker stack; otherwise spawn a local otelcol binary.
-    pub fn start(root: &Path) -> io::Result<Option<Self>> {
-        let paths = RootPaths::new(root);
+    /// Start OTLP collector according to `mode`.
+    ///
+    /// `Auto` prefers Docker Compose (+ Jaeger), then `otelcol-contrib`/`otelcol` on `PATH`,
+    /// and finally falls back to the built-in Rust OTLP HTTP + gRPC receiver so `--collector`
+    /// always brings up `:4318` and `:4317` on every machine.
+    pub fn start(
+        app: Arc<HubApp>,
+        mode: CollectorMode,
+        http_port: u16,
+        grpc_port: u16,
+    ) -> io::Result<Option<Self>> {
+        let paths = &app.paths;
         fs::create_dir_all(paths.collector_data_dir())?;
 
-        if let Some(handle) = try_docker(&paths)? {
-            return Ok(Some(handle));
+        match mode {
+            CollectorMode::Auto => {
+                if http_port == DEFAULT_OTLP_HTTP_PORT && grpc_port == DEFAULT_OTLP_GRPC_PORT {
+                    if let Some(handle) = try_docker(paths)? {
+                        return Ok(Some(handle));
+                    }
+                    if let Some(handle) = try_binary(paths)? {
+                        return Ok(Some(handle));
+                    }
+                    if port_open(http_port) && port_open(grpc_port) {
+                        eprintln!(
+                            "collector: reusing existing OTLP listener on http://127.0.0.1:{http_port}  grpc://127.0.0.1:{grpc_port}"
+                        );
+                        return Ok(None);
+                    }
+                }
+                start_builtin(app, http_port, grpc_port).map(Some)
+            }
+            CollectorMode::Builtin => start_builtin(app, http_port, grpc_port).map(Some),
+            CollectorMode::Docker => try_docker(paths)?.ok_or_else(|| {
+                io::Error::other(
+                    "Docker Compose collector unavailable (check `docker compose version` and dash/collector/docker-compose.yml)",
+                )
+            }).map(Some),
+            CollectorMode::Binary => try_binary(paths)?.ok_or_else(|| {
+                io::Error::other(
+                    "otelcol-contrib / otelcol binary unavailable on PATH (or use --collector-mode builtin)",
+                )
+            }).map(Some),
         }
-        if let Some(handle) = try_binary(&paths)? {
-            return Ok(Some(handle));
-        }
-
-        eprintln!("collector: neither Docker nor otelcol found");
-        eprintln!(
-            "  Docker:  docker compose -f {} up -d   (plugin, or a standalone docker-compose)",
-            paths.compose_file().display()
-        );
-        eprintln!("  Binary:  install otelcol-contrib (or otelcol) on PATH");
-        eprintln!("           https://github.com/open-telemetry/opentelemetry-collector-releases");
-        Ok(None)
     }
 
-    pub fn stop(self) {
+    pub fn stop(mut self) {
         eprintln!("collector: stopping …");
+        if let Some(mut builtin) = self.builtin.take() {
+            builtin.stop();
+        }
         if let Some(compose) = &self.compose_file {
             let _ = compose_cmd(compose, &["down"]);
         }
@@ -62,19 +113,35 @@ impl CollectorHandle {
     }
 }
 
+fn start_builtin(app: Arc<HubApp>, http_port: u16, grpc_port: u16) -> io::Result<CollectorHandle> {
+    let builtin = BuiltinCollector::start(app, http_port, grpc_port)?;
+    let http_addr = builtin.http_addr();
+    let grpc_addr = builtin.grpc_addr();
+    eprintln!(
+        "collector: built-in Rust OTLP receiver listening on http://{http_addr}  grpc://{grpc_addr} (traces/metrics/logs/profiles; no external Docker/otelcol required)"
+    );
+    eprintln!("  export OTEL_EXPORTER_OTLP_ENDPOINT=http://{http_addr}");
+    Ok(CollectorHandle {
+        compose_file: None,
+        child: None,
+        pid_file: None,
+        builtin: Some(builtin),
+    })
+}
+
 fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
     let compose_file = paths.compose_file();
     if !compose_file.is_file() {
         return Ok(None);
     }
     if !command_ok("docker", &["version"]) {
-        eprintln!("collector: Docker not available — trying otelcol binary …");
+        eprintln!("collector: Docker not available — trying otelcol binary / built-in …");
         return Ok(None);
     }
     let Some((program, lead)) = compose_program() else {
         eprintln!(
             "collector: Docker is up but neither `docker compose` nor `docker-compose` works — \
-             trying otelcol binary …"
+             trying otelcol binary / built-in …"
         );
         return Ok(None);
     };
@@ -90,7 +157,7 @@ fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
     );
     let status = compose_cmd(&compose_file, &["up", "-d", "--remove-orphans"])?;
     if !status.success() {
-        eprintln!("collector: docker compose up failed — trying otelcol binary …");
+        eprintln!("collector: docker compose up failed — trying otelcol binary / built-in …");
         return Ok(None);
     }
 
@@ -111,7 +178,31 @@ fn try_docker(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
         compose_file: Some(compose_file),
         child: None,
         pid_file: None,
+        builtin: None,
     }))
+}
+
+fn render_standalone_config(template: &str, paths: &RootPaths) -> String {
+    let logs_yaml = format!(
+        "\"{}\"",
+        paths.logs_file().display().to_string().replace('\\', "/")
+    );
+    let metrics_yaml = format!(
+        "\"{}\"",
+        paths
+            .metrics_file()
+            .display()
+            .to_string()
+            .replace('\\', "/")
+    );
+    let traces_yaml = format!(
+        "\"{}\"",
+        paths.traces_file().display().to_string().replace('\\', "/")
+    );
+    template
+        .replace("__LOGS_PATH__", &logs_yaml)
+        .replace("__METRICS_PATH__", &metrics_yaml)
+        .replace("__TRACES_PATH__", &traces_yaml)
 }
 
 fn try_binary(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
@@ -127,18 +218,8 @@ fn try_binary(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
         return Ok(None);
     }
 
-    let data_dir = paths.collector_data_dir();
-    let logs_path = paths.logs_file();
-    let metrics_path = paths.metrics_file();
     let runtime_cfg = paths.runtime_config();
-    let logs_yaml = format!("\"{}\"", logs_path.display().to_string().replace('\\', "/"));
-    let metrics_yaml = format!(
-        "\"{}\"",
-        metrics_path.display().to_string().replace('\\', "/")
-    );
-    let rendered = fs::read_to_string(&template)?
-        .replace("__LOGS_PATH__", &logs_yaml)
-        .replace("__METRICS_PATH__", &metrics_yaml);
+    let rendered = render_standalone_config(&fs::read_to_string(&template)?, paths);
     fs::write(&runtime_cfg, rendered)?;
 
     eprintln!(
@@ -168,15 +249,15 @@ fn try_binary(paths: &RootPaths) -> io::Result<Option<CollectorHandle>> {
     }
 
     eprintln!(
-        "collector: OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317 (no Jaeger in binary mode)"
+        "collector: OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317 (traces in hub; no Jaeger in binary mode)"
     );
     eprintln!("  export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318");
-    let _ = data_dir;
 
     Ok(Some(CollectorHandle {
         compose_file: None,
         child: Some(child),
         pid_file: Some(pid_file),
+        builtin: None,
     }))
 }
 
@@ -258,8 +339,8 @@ fn wait_port(port: u16, budget: Duration) {
 /// Probe localhost OTLP / Jaeger for the hub status card.
 pub fn probe() -> CollectorProbe {
     CollectorProbe {
-        otlp_http: port_open(4318),
-        otlp_grpc: port_open(4317),
+        otlp_http: port_open(DEFAULT_OTLP_HTTP_PORT),
+        otlp_grpc: port_open(DEFAULT_OTLP_GRPC_PORT),
         jaeger_ui: port_open(16686),
     }
 }
@@ -279,32 +360,6 @@ fn port_open_at(addr: SocketAddr, budget: Duration) -> bool {
 /// so an untimed connect waits out the whole TCP timeout — long enough to stall the status route
 /// this feeds, which the dashboard polls every few seconds.
 const PROBE_BUDGET: Duration = Duration::from_millis(250);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_dropped_syn_is_down_rather_than_hanging() {
-        // RFC 5737 TEST-NET-1 answers nothing, which is the failure a reserved loopback port
-        // shows on a Windows runner: no refusal to come back from, only silence.
-        let black_hole = SocketAddr::from(([192, 0, 2, 1], 4318));
-        let started = Instant::now();
-        assert!(!port_open_at(black_hole, PROBE_BUDGET));
-        assert!(
-            started.elapsed() < Duration::from_secs(2),
-            "took {:?}",
-            started.elapsed()
-        );
-    }
-
-    #[test]
-    fn an_open_port_is_reported_up() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-        let port = listener.local_addr().expect("addr").port();
-        assert!(port_open(port));
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct CollectorProbe {
@@ -332,5 +387,51 @@ pub fn emergency_stop(root: &Path) {
             let _ = Command::new("kill").arg(pid.to_string()).status();
         }
         let _ = fs::remove_file(&pid_file);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_dropped_syn_is_down_rather_than_hanging() {
+        let black_hole = SocketAddr::from(([192, 0, 2, 1], 4318));
+        let started = Instant::now();
+        assert!(!port_open_at(black_hole, PROBE_BUDGET));
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn an_open_port_is_reported_up() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        assert!(port_open(port));
+    }
+
+    #[test]
+    fn standalone_template_renders_traces_metrics_and_logs_paths() {
+        let paths = RootPaths::new("/tmp/airbug-ws");
+        let tpl = "logs: __LOGS_PATH__\nmetrics: __METRICS_PATH__\ntraces: __TRACES_PATH__\n";
+        let out = render_standalone_config(tpl, &paths);
+        assert!(out.contains("dash/collector/data/logs.json"));
+        assert!(out.contains("dash/collector/data/metrics.json"));
+        assert!(out.contains("dash/collector/data/traces.json"));
+    }
+
+    #[test]
+    fn collector_mode_parses_all_variants() {
+        assert_eq!(CollectorMode::parse("auto"), Some(CollectorMode::Auto));
+        assert_eq!(
+            CollectorMode::parse("builtin"),
+            Some(CollectorMode::Builtin)
+        );
+        assert_eq!(CollectorMode::parse("docker"), Some(CollectorMode::Docker));
+        assert_eq!(CollectorMode::parse("binary"), Some(CollectorMode::Binary));
+        assert_eq!(CollectorMode::parse("bogus"), None);
     }
 }

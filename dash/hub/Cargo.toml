@@ -22,6 +22,13 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid = { workspace = true }
 airbug-run.workspace = true
+tokio = { workspace = true, features = ["net", "sync"] }
+opentelemetry-proto = { version = "0.30", default-features = false, features = ["gen-tonic", "with-serde", "trace", "metrics", "logs", "profiles", "zpages"] }
+prost = "0.13"
+tonic = { version = "0.13", default-features = false, features = ["transport", "codegen", "prost", "gzip"] }
+flate2 = "1"
+hex = "0.4"
+base64 = "0.22"
 airbug-err = { path = "../../err", default-features = false }
 # Bench comparisons on the Now page use the same statistics as `cargo airbug-bench compare`.
 airbug-bench.workspace = true

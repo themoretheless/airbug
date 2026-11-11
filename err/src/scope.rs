@@ -8,7 +8,7 @@ use std::{
 
 const DEFAULT_MAX_BREADCRUMBS: usize = 100;
 
-/// Mutable capture context (tags, user, extra, fingerprint override).
+/// Mutable capture context (tags, user, extra, fingerprint override, trace context).
 #[derive(Debug, Clone, Default)]
 pub struct Scope {
     pub tags: BTreeMap<String, String>,
@@ -16,6 +16,8 @@ pub struct Scope {
     pub extra: BTreeMap<String, serde_json::Value>,
     pub fingerprint: Option<Vec<String>>,
     pub level: Option<Severity>,
+    pub trace_id: Option<String>,
+    pub span_id: Option<String>,
 }
 
 impl Scope {
@@ -37,6 +39,17 @@ impl Scope {
 
     pub fn set_level(&mut self, level: Severity) {
         self.level = Some(level);
+    }
+
+    pub fn set_trace_context(&mut self, trace_id: impl Into<String>, span_id: Option<String>) {
+        let tid = trace_id.into();
+        self.trace_id = (!tid.trim().is_empty()).then_some(tid);
+        self.span_id = span_id.filter(|sid| !sid.trim().is_empty());
+    }
+
+    pub fn clear_trace_context(&mut self) {
+        self.trace_id = None;
+        self.span_id = None;
     }
 
     pub fn clear(&mut self) {
@@ -89,7 +102,7 @@ pub(crate) fn configure_max_breadcrumbs(max: usize) {
     }
 }
 
-/// Record a breadcrumb kept until the next captured event.
+/// Record a breadcrumb in the process-wide ring buffer (up to `max_breadcrumbs` most recent entries are attached to captured events).
 pub fn add_breadcrumb(category: impl Into<String>, message: impl Into<String>, level: Severity) {
     let crumb = Breadcrumb {
         timestamp: crate::iso_now(),
@@ -102,6 +115,7 @@ pub fn add_breadcrumb(category: impl Into<String>, message: impl Into<String>, l
     }
 }
 
+/// Snapshot the current breadcrumb ring buffer for an outgoing event.
 pub(crate) fn take_breadcrumbs() -> Vec<Breadcrumb> {
     ring().lock().map(|g| g.snapshot()).unwrap_or_default()
 }
@@ -114,11 +128,15 @@ where
     SCOPE.with(|cell| f(&mut cell.borrow_mut()))
 }
 
-pub(crate) fn with_scope<F, R>(f: F) -> R
+pub(crate) fn with_scope<F>(f: F)
 where
-    F: FnOnce(&Scope) -> R,
+    F: FnOnce(&Scope),
 {
-    SCOPE.with(|cell| f(&cell.borrow()))
+    let _ = SCOPE.try_with(|cell| {
+        if let Ok(guard) = cell.try_borrow() {
+            f(&guard);
+        }
+    });
 }
 
 #[cfg(test)]

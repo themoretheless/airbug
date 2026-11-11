@@ -26,7 +26,7 @@ for _ in $(seq 1 40); do
   fi
   sleep 0.25
 done
-curl -sf "$BASE/api/status" | head -c 200 >/dev/null
+curl -sf "$BASE/api/status" >/dev/null
 echo "status ok"
 
 curl -sf "$BASE/api/logs?limit=5" >/dev/null && echo "logs ok"

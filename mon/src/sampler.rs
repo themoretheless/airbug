@@ -40,6 +40,7 @@ pub struct Sampler {
     prev_net: Option<(u64, u64)>,
     prev_disk: Option<(u64, u64)>,
     prev_proc_disk: HashMap<u32, (u64, u64)>,
+    last_sample_at: Option<std::time::Instant>,
 }
 
 impl Sampler {
@@ -56,10 +57,18 @@ impl Sampler {
             prev_net: None,
             prev_disk: None,
             prev_proc_disk: HashMap::new(),
+            last_sample_at: None,
         }
     }
 
     pub fn sample(&mut self) -> Sample {
+        let now = std::time::Instant::now();
+        let dt_secs = self
+            .last_sample_at
+            .replace(now)
+            .map(|prev| now.duration_since(prev).as_secs_f64().max(0.001))
+            .unwrap_or(1.0);
+
         self.system.refresh_cpu_all();
         self.system.refresh_memory();
         self.system.refresh_processes(ProcessesToUpdate::All, true);
@@ -75,16 +84,12 @@ impl Sampler {
         let swap_used = self.system.used_swap();
         let swap_total = self.system.total_swap();
 
-        let rx: u64 = self.networks.iter().map(|(_, d)| d.total_received()).sum();
-        let tx: u64 = self
-            .networks
-            .iter()
-            .map(|(_, d)| d.total_transmitted())
-            .sum();
+        let rx: u64 = self.networks.values().map(|d| d.total_received()).sum();
+        let tx: u64 = self.networks.values().map(|d| d.total_transmitted()).sum();
         let (net_rx_rate, net_tx_rate) = match self.prev_net.replace((rx, tx)) {
             Some((prx, ptx)) => (
-                (rx.saturating_sub(prx)) as f64,
-                (tx.saturating_sub(ptx)) as f64,
+                (rx.saturating_sub(prx)) as f64 / dt_secs,
+                (tx.saturating_sub(ptx)) as f64 / dt_secs,
             ),
             None => (0.0, 0.0),
         };
@@ -97,8 +102,8 @@ impl Sampler {
             .sum();
         let (disk_read_rate, disk_write_rate) = match self.prev_disk.replace((dr, dw)) {
             Some((pr, pw)) => (
-                (dr.saturating_sub(pr)) as f64,
-                (dw.saturating_sub(pw)) as f64,
+                (dr.saturating_sub(pr)) as f64 / dt_secs,
+                (dw.saturating_sub(pw)) as f64 / dt_secs,
             ),
             None => (0.0, 0.0),
         };
@@ -112,8 +117,8 @@ impl Sampler {
                 let usage = p.disk_usage();
                 let (read_rate, write_rate) = match self.prev_proc_disk.get(&pid_u32) {
                     Some(&(pr, pw)) => (
-                        usage.total_read_bytes.saturating_sub(pr) as f64,
-                        usage.total_written_bytes.saturating_sub(pw) as f64,
+                        usage.total_read_bytes.saturating_sub(pr) as f64 / dt_secs,
+                        usage.total_written_bytes.saturating_sub(pw) as f64 / dt_secs,
                     ),
                     None => (0.0, 0.0),
                 };

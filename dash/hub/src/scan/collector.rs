@@ -38,37 +38,33 @@ pub(crate) fn scan_collector(root: &Path) -> DomainCard {
             parts.push("Jaeger :16686");
         }
         (Status::Ready, parts.join(" · "))
-    } else if compose.is_file() {
-        (
-            Status::Missing,
-            "Collector not running. Start hub with --collector (Docker or otelcol on PATH).".into(),
-        )
     } else {
         (
             Status::Missing,
-            "No dash/collector stack in this root.".into(),
+            "Collector :4318/:4317 idle (Hub native HTTP OTLP is live on /v1/*; pass --collector to also bind :4318 + :4317).".into(),
         )
     };
 
     DomainCard {
         id: "collector",
         title: "Collector",
-        blurb: "Local OTLP · Docker or otelcol binary",
+        blurb: "Local OTLP · Built-in Rust, Docker, or otelcol",
         status,
         summary,
         artifacts,
         actions: vec![
             Action {
-                label: "Hub + collector".into(),
+                label: "Hub + auto collector".into(),
                 command: "cargo run -p airbug-hub -- serve --root . --collector".into(),
+            },
+            Action {
+                label: "Hub + built-in collector".into(),
+                command: "cargo run -p airbug-hub -- serve --root . --collector-mode builtin"
+                    .into(),
             },
             Action {
                 label: "Compose up (Docker)".into(),
                 command: "docker compose -f dash/collector/docker-compose.yml up -d".into(),
-            },
-            Action {
-                label: "Compose down".into(),
-                command: "docker compose -f dash/collector/docker-compose.yml down".into(),
             },
             Action {
                 label: "Open Jaeger".into(),

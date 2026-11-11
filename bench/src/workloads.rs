@@ -199,6 +199,6 @@ pub fn pipeline<I: Send, O: Send>(
 impl<T> PipelineResult<T> {
     /// End-to-end items/second including worker lifecycle and queue overhead.
     pub fn throughput_per_second(&self) -> Option<f64> {
-        (self.wall_ns > 0).then(|| self.processed as f64 * 1e9 / self.wall_ns as f64)
+        (self.wall_ns > 0).then_some(self.processed as f64 * 1e9 / self.wall_ns as f64)
     }
 }

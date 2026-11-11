@@ -419,7 +419,7 @@ pub fn pairs(a: &Run, b: Option<&Run>, case: &str, metric: &str) -> Result<Vec<P
                 baseline,
                 candidate,
                 change_percent: (baseline > 0.)
-                    .then(|| (candidate / baseline - 1.) * 100.)
+                    .then_some((candidate / baseline - 1.) * 100.)
                     .filter(|v| v.is_finite()),
             }
         })

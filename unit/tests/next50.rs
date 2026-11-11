@@ -32,7 +32,7 @@ fn noop_raw_waker() -> RawWaker {
 fn block_on<F: Future>(fut: F) -> F::Output {
     let waker = unsafe { Waker::from_raw(noop_raw_waker()) };
     let mut cx = Context::from_waker(&waker);
-    let mut fut = Box::pin(fut);
+    let mut fut = std::pin::pin!(fut);
     match fut.as_mut().poll(&mut cx) {
         Poll::Ready(v) => v,
         Poll::Pending => panic!("future pending without async runtime"),
@@ -345,8 +345,8 @@ fn pending_response_stays_pending() {
     }
     let waker = unsafe { Waker::from_raw(raw()) };
     let mut cx = Context::from_waker(&waker);
-    let mut a = Box::pin(pending_response::<u32>());
-    let mut b = Box::pin(Mock::<(), ()>::pending::<()>());
+    let mut a = std::pin::pin!(pending_response::<u32>());
+    let mut b = std::pin::pin!(Mock::<(), ()>::pending::<()>());
     assert!(matches!(a.as_mut().poll(&mut cx), Poll::Pending));
     assert!(matches!(b.as_mut().poll(&mut cx), Poll::Pending));
 }

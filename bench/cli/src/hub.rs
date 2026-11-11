@@ -25,24 +25,35 @@ pub fn register(hub_base: &str, title: &str, command: Option<&str>) -> Result<Re
     });
     let body = serde_json::to_vec(&body)?;
     let (host, port, path) = parse_http_url(&url)?;
+    let host_header = if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
     let mut stream = connect(&host, port)?;
     stream.set_read_timeout(Some(RESPONSE_BUDGET))?;
     write!(
         stream,
-        "POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST {path} HTTP/1.1\r\nHost: {host_header}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )?;
     stream.write_all(&body)?;
     let mut buf = Vec::new();
     stream
         .read_to_end(&mut buf)
-        .map_err(|e| error(format!("hub register: {host}:{port} gave no response: {e}")))?;
+        .map_err(|e| error(format!("hub register: {host_header} gave no response: {e}")))?;
     let text = String::from_utf8_lossy(&buf);
     let Some(idx) = text.find("\r\n\r\n") else {
         return Err(error("hub register: malformed HTTP response"));
     };
     let (headers, payload) = text.split_at(idx + 4);
-    if !headers.contains("200") {
+    let status_ok = headers
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|code| code.parse::<u16>().ok())
+        .is_some_and(|code| (200..300).contains(&code));
+    if !status_ok {
         return Err(error(format!(
             "hub register failed: {}",
             payload.trim().chars().take(200).collect::<String>()
@@ -51,13 +62,19 @@ pub fn register(hub_base: &str, title: &str, command: Option<&str>) -> Result<Re
     serde_json::from_str(payload.trim()).map_err(|e| error(format!("hub register JSON: {e}")))
 }
 
-pub fn apply_otel_resource(hub_id: &str, run_id: &str) {
+pub fn otel_resource_attributes(hub_id: &str, run_id: &str) -> String {
     let extra = format!("airbug.hub_id={hub_id},airbug.run_id={run_id}");
-    let merged = match std::env::var("OTEL_RESOURCE_ATTRIBUTES") {
+    match std::env::var("OTEL_RESOURCE_ATTRIBUTES") {
         Ok(existing) if !existing.is_empty() => format!("{existing},{extra}"),
         _ => extra,
-    };
-    // SAFETY: single-threaded CLI before spawning workers; sets correlation for children.
+    }
+}
+
+pub fn apply_otel_resource(hub_id: &str, run_id: &str) {
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let merged = otel_resource_attributes(hub_id, run_id);
+    // SAFETY: serialized by process-wide `ENV_LOCK`; CLI before spawning workers.
     unsafe {
         std::env::set_var("OTEL_RESOURCE_ATTRIBUTES", merged);
     }
@@ -110,12 +127,34 @@ fn parse_http_url(url: &str) -> Result<(String, u16, String)> {
     } else {
         format!("/{path}")
     };
-    let (host, port) = if let Some((h, p)) = authority.split_once(':') {
+    let (host, port) = if let Some(bracketed) = authority.strip_prefix('[') {
+        let (ipv6, tail) = bracketed
+            .split_once(']')
+            .ok_or_else(|| error("invalid IPv6 hub authority"))?;
+        if ipv6.is_empty() {
+            return Err(error("invalid IPv6 hub authority"));
+        }
+        let port = if tail.is_empty() {
+            80
+        } else {
+            tail.strip_prefix(':')
+                .ok_or_else(|| error("invalid hub port"))?
+                .parse()
+                .map_err(|_| error("invalid hub port"))?
+        };
+        (ipv6.to_string(), port)
+    } else if let Some((h, p)) = authority.rsplit_once(':') {
+        if h.is_empty() || h.contains(':') {
+            return Err(error("invalid hub authority"));
+        }
         (
             h.to_string(),
             p.parse().map_err(|_| error("invalid hub port"))?,
         )
     } else {
+        if authority.is_empty() {
+            return Err(error("invalid hub authority"));
+        }
         (authority.to_string(), 80)
     };
     Ok((host, port, path))
@@ -268,5 +307,37 @@ mod tests {
             "silent hub cost {elapsed:?}, expected the {RESPONSE_BUDGET:?} response budget"
         );
         server.join().expect("the silent stand-in hub");
+    }
+
+    #[test]
+    fn parse_http_url_supports_ipv6_and_status_line_checks_first_line() {
+        assert_eq!(
+            parse_http_url("http://[::1]:8790/api/v1/bench/runs").unwrap(),
+            ("::1".into(), 8790, "/api/v1/bench/runs".into())
+        );
+        assert_eq!(
+            parse_http_url("http://[::1]/status").unwrap(),
+            ("::1".into(), 80, "/status".into())
+        );
+        assert!(parse_http_url("http://[::1:8790/").is_err());
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind a stand-in hub");
+        let port = listener.local_addr().expect("stand-in hub addr").port();
+        let server = spawn_thread(move || {
+            let (mut socket, _) = listener.accept().expect("a registration");
+            let _ = read_request(&mut socket);
+            // 500 error whose headers contain "200" in Date/X-Id must still be rejected.
+            socket
+                .write_all(
+                    b"HTTP/1.1 500 Internal Server Error\r\nX-Request-Id: 200\r\nContent-Type: text/plain\r\n\r\nbad",
+                )
+                .expect("the response");
+            socket.shutdown(Shutdown::Write).expect("a clean goodbye");
+        });
+        let err = register(&format!("http://127.0.0.1:{port}"), "probe", None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("hub register failed"), "{err}");
+        server.join().expect("the stand-in hub");
     }
 }

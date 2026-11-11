@@ -108,15 +108,23 @@ impl Runtime {
     }
 
     pub(crate) fn logs(&self, id: &str, stdout_only: bool) -> Result<String, ContainerError> {
-        let mut args = vec!["logs"];
-        if stdout_only {
-            args.push("--stdout");
-        }
-        args.push(id);
         let output = Command::new(&self.program)
-            .args(&args)
+            .args(["logs", id])
             .output()
             .map_err(|e| ContainerError::RuntimeUnavailable(e.to_string()))?;
+        if !output.status.success() {
+            let message = String::from_utf8_lossy(&output.stderr);
+            let fallback = String::from_utf8_lossy(&output.stdout);
+            let detail = if message.trim().is_empty() {
+                fallback.trim().to_string()
+            } else {
+                message.trim().to_string()
+            };
+            return Err(ContainerError::Inspect(format!(
+                "`{} logs {id}` failed: {detail}",
+                self.program
+            )));
+        }
         let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
         if !stdout_only {
             combined.push_str(&String::from_utf8_lossy(&output.stderr));
@@ -397,7 +405,11 @@ impl Container {
         let timeout = self.startup_timeout;
         let mapped = |container_port: u16| runtime.mapped_port(&id, container_port);
         if let Err(err) = wait.block_until(&runtime, &id, &host, &mapped, timeout) {
-            runtime.stop_rm(&id);
+            if self.auto_remove {
+                runtime.stop_rm(&id);
+            } else {
+                let _ = runtime.run(&["stop", &id]);
+            }
             self.id = None;
             return Err(err);
         }

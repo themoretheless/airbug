@@ -87,9 +87,13 @@ impl MongoDbContainer {
     /// Connection URI (`mongodb://host:port` or with credentials).
     pub fn get_connection_string(&self) -> Result<String, ContainerError> {
         let port = self.inner.get_mapped_public_port(27017)?;
-        let host = self.inner.hostname();
+        let host = super::format_host(&self.inner.hostname());
         match (&self.username, &self.password) {
-            (Some(user), Some(pass)) => Ok(format!("mongodb://{user}:{pass}@{host}:{port}")),
+            (Some(user), Some(pass)) => Ok(format!(
+                "mongodb://{}:{}@{host}:{port}",
+                super::percent_encode(user),
+                super::percent_encode(pass)
+            )),
             _ => Ok(format!("mongodb://{host}:{port}")),
         }
     }

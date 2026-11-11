@@ -513,7 +513,7 @@ pub(crate) fn execute() -> Result<i32> {
                         .map(|s| s.to_string_lossy().into_owned())
                 })
                 .unwrap_or_else(|| "airbug-bench".into());
-            let (out, _reg) =
+            let (out, reg) =
                 crate::hub::resolve_output(hub.as_deref(), out_arg, &title, Some(&title))?;
             let mut plan = if let Some(p) = plan {
                 serde_json::from_reader(std::fs::File::open(p)?)?
@@ -539,6 +539,17 @@ pub(crate) fn execute() -> Result<i32> {
                     provenance: Default::default(),
                 }
             };
+            if let Some(reg) = &reg {
+                let otel_attr = crate::hub::otel_resource_attributes(&reg.hub_id, &reg.run_id);
+                for p in std::iter::once(&mut plan.candidate)
+                    .chain(plan.baseline.iter_mut())
+                    .chain(plan.variants.values_mut())
+                {
+                    p.env
+                        .entry("OTEL_RESOURCE_ATTRIBUTES".into())
+                        .or_insert_with(|| otel_attr.clone());
+                }
+            }
             if memory {
                 if plan.baseline.is_some() || !plan.variants.is_empty() {
                     return Err(error("memory profiling requires a single candidate"));

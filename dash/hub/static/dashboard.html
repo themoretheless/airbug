@@ -60,6 +60,8 @@
           <div id="bench-charts" class="bench-charts"></div>
           <iframe id="bench-report-frame" class="bench-report-frame" title="Bench report" hidden></iframe>
           <div class="bench-tele">
+            <h3>Traces</h3>
+            <div id="bench-traces" class="bench-tele-panel"></div>
             <h3>Logs</h3>
             <div id="bench-logs" class="bench-tele-panel"></div>
             <h3>Metrics</h3>
@@ -101,6 +103,46 @@
       </section>
     </section>
 
+    <section class="panel" data-cat="traces" id="panel-traces" hidden>
+      <section class="traces" aria-live="polite">
+        <div class="traces-head">
+          <h2 id="traces-title">Traces</h2>
+          <div class="traces-meta" id="traces-meta">loading…</div>
+        </div>
+        <div id="traces-list-wrap">
+          <div class="traces-views" id="traces-views" role="tablist" aria-label="Traces subview"></div>
+          <div class="traces-toolbar">
+            <select id="traces-service" aria-label="Service">
+              <option value="">all services</option>
+            </select>
+            <select id="traces-status" aria-label="Status">
+              <option value="">all statuses</option>
+              <option value="ERROR">ERROR only</option>
+              <option value="OK">OK / UNSET</option>
+            </select>
+            <input type="number" id="traces-min-ms" min="0" step="1" placeholder="min ms…" aria-label="Minimum duration ms" />
+            <input type="search" id="traces-filter" placeholder="filter operation, trace_id, service…" autocomplete="off" />
+          </div>
+          <div id="traces-analytics" class="traces-analytics" hidden></div>
+          <div class="traces-list" id="traces-list"><p class="traces-empty">waiting…</p></div>
+        </div>
+        <div id="traces-detail" class="traces-detail" hidden>
+          <div class="trace-detail-bar">
+            <a class="bench-back" href="#/traces">← all traces</a>
+            <div id="trace-detail-summary" class="trace-detail-summary"></div>
+          </div>
+          <div class="trace-waterfall-layout">
+            <div class="trace-waterfall" id="trace-waterfall"></div>
+            <aside class="span-inspector" id="span-inspector" hidden></aside>
+          </div>
+          <div class="trace-corr">
+            <div class="viz-picker" id="trace-corr-tabs" role="tablist" aria-label="Correlated telemetry"></div>
+            <div class="trace-corr-body" id="trace-corr-body"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
     <section class="panel" data-cat="metrics" id="panel-metrics" hidden>
       <section class="metrics" aria-live="polite">
         <div class="metrics-head">
@@ -110,6 +152,7 @@
         <div class="viz-picker" id="viz-picker" role="tablist" aria-label="Visualization type"></div>
         <div class="metrics-pick" id="metrics-pick" hidden></div>
         <div class="metrics-boards" id="metrics-boards"></div>
+        <div class="metrics-exemplars" id="metrics-exemplars" hidden></div>
         <div class="metrics-panel" id="metrics-panel"><p class="metrics-empty">waiting…</p></div>
       </section>
     </section>
@@ -121,7 +164,7 @@
           <div class="logs-meta" id="logs-meta">loading…</div>
         </div>
         <div class="logs-toolbar" id="logs-toolbar">
-          <input type="search" id="logs-filter" placeholder="filter body…" autocomplete="off" />
+          <input type="search" id="logs-filter" placeholder="filter body, trace_id, event…" autocomplete="off" />
           <select id="logs-service" aria-label="Service">
             <option value="">all services</option>
           </select>
@@ -129,6 +172,31 @@
         </div>
         <div class="sev-bar" id="sev-bar" hidden></div>
         <div class="logs-panel" id="logs-panel"><p class="logs-empty">waiting…</p></div>
+      </section>
+    </section>
+
+    <section class="panel" data-cat="profiles" id="panel-profiles" hidden>
+      <section class="profiles" aria-live="polite">
+        <div class="profiles-head">
+          <h2>Profiles</h2>
+          <div class="profiles-meta" id="profiles-meta">loading…</div>
+        </div>
+        <div class="traces-toolbar">
+          <select id="profiles-service" aria-label="Service">
+            <option value="">all services</option>
+          </select>
+          <select id="profiles-type" aria-label="Sample type">
+            <option value="">all sample types</option>
+          </select>
+          <input type="search" id="profiles-trace" placeholder="filter by trace_id…" autocomplete="off" />
+          <button type="button" class="mini-btn" id="profiles-zoom-reset" hidden>Reset zoom</button>
+        </div>
+        <div id="profiles-links" class="profiles-links"></div>
+        <div class="flame-card">
+          <div id="profiles-flame" class="profiles-flame"><p class="profiles-empty">waiting…</p></div>
+          <div id="profiles-tooltip" class="flame-tooltip" hidden></div>
+        </div>
+        <div id="profiles-top" class="profiles-top"></div>
       </section>
     </section>
   </main>
