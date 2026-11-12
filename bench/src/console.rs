@@ -228,6 +228,22 @@ fn rate(count: f64, nanos: f64, unit: &str, bytes: Option<crate::report::BytesFo
     format!("{value:.4} {label}")
 }
 
+/// A measured value for a terminal line: six significant digits, whole numbers untouched.
+/// The full value stays in the JSON and the report; a 17-digit float only wraps the line.
+fn short(value: f64) -> String {
+    if !value.is_finite() || (value.fract() == 0.0 && value.abs() < 1e15) {
+        return value.to_string();
+    }
+    let magnitude = value.abs().log10().floor() as i32;
+    let decimals = (5 - magnitude).clamp(0, 12) as usize;
+    let text = format!("{value:.decimals$}");
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        text
+    }
+}
+
 pub(crate) fn tree(
     rows: &[crate::report::DescriptiveRow],
     bytes: Option<crate::report::BytesFormat>,
@@ -237,7 +253,7 @@ pub(crate) fn tree(
         let value = row
             .summary
             .as_ref()
-            .map(|s| s.median.to_string())
+            .map(|s| short(s.median))
             .unwrap_or_else(|| "unavailable".into());
         let mut line = format!(
             "{} [{} process {}]: median {} {}{}; missing {}",
@@ -256,7 +272,11 @@ pub(crate) fn tree(
         if let Some(summary) = &row.summary {
             line.push_str(&format!(
                 "; min {}; max {}; mean {}; samples {}; operations {}",
-                summary.minimum, summary.maximum, summary.mean, summary.count, row.operations
+                short(summary.minimum),
+                short(summary.maximum),
+                short(summary.mean),
+                summary.count,
+                row.operations
             ));
         } else {
             line.push_str(&format!("; samples 0; operations {}", row.operations));
@@ -348,6 +368,26 @@ pub(crate) fn tree(
     root.render("", &mut result);
     result
 }
+#[cfg(test)]
+mod short_tests {
+    #[test]
+    fn six_significant_digits_and_whole_numbers_untouched() {
+        let cases = [
+            (18.094402313232422, "18.0944"),
+            (206.258056640625, "206.258"),
+            (25.0, "25"),
+            (1572864.0, "1572864"),
+            (0.000123456789, "0.000123457"),
+            (1234567.891, "1234568"),
+            (-3.5, "-3.5"),
+        ];
+        for (value, text) in cases {
+            assert_eq!(super::short(value), text);
+        }
+        assert_eq!(super::short(f64::NAN), "NaN");
+    }
+}
+
 #[cfg(test)]
 mod tree_tests {
     use super::*;

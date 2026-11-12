@@ -39,14 +39,15 @@
     {
       "id": "console_policy",
       "title": "Проверить вывод и удобство CLI",
-      "status": "open",
+      "status": "reviewed_with_findings",
       "sources": [
         "bench/docs/parity/output.json",
         "bench/docs/parity/option-modes.json",
         "bench/docs/parity/numeric-domains.json"
       ],
       "acceptance": "Сопоставить default/quiet/verbose/JSON у прямого harness и process runner; проверить глубокое дерево и длинные имена в терминале.",
-      "current": "Complete UTF-8 follow-up CI 41470453896 passed all six OS/toolchain jobs and console fixtures. Current local external console fixture confirms default/quiet/verbose, color and plain machine/artifact output. Actual terminal-emulator visual acceptance remains open."
+      "current": "Reviewed 2026-11-12: the sort example run in a PTY at 80 and 120 columns in default, --quiet, --verbose, tree and tree --list modes, captured with colours and rendered for inspection (bench/scripts/terminal-acceptance.py). Colours, headings, progress lines and tree guides are correct; exit codes are 0. Fixed: tree values were printed with up to 17 digits and wrapped every result line; they now use six significant digits (console::short). Finding left open: the default and --verbose Markdown tables are up to 236 characters wide and wrap at both widths (54 of 112 lines at 80 columns, 27 at 120); --quiet fits 120 columns but not 80 (90 characters); tree result lines are up to 145 characters. PTY tests in CI (test-terminal-tree.py, test-console-policy.py) pass.",
+      "limits": "A PTY and an ANSI-to-HTML rendering, not a terminal emulator; no Windows console."
     },
     {
       "id": "visual_acceptance",

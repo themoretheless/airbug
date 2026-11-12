@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tree output prints measured values with six significant digits instead of the full float, so result lines stop wrapping.
+
 - Run files are written atomically and flushed with their directory: a JSON file is either whole or absent, and `status-final.json` present means the run is complete.
 - On Linux the runner samples CPU frequency, temperature and thermal-throttle counts between processes (`host.json`) and notes throttling or a frequency drop of 10% or more.
 
