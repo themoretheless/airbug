@@ -63,6 +63,11 @@ const COMMANDS: &[(&str, Tool, &str)] = &[
         "start the hub on http://127.0.0.1:8790/  [--collector] [--port N]",
     ),
     (
+        "up",
+        Tool::Hub,
+        "start hub + collector and launch .airbug/stack.json resources",
+    ),
+    (
         "status",
         Tool::Hub,
         "print the hub's status snapshot as JSON",
@@ -192,6 +197,10 @@ mod tests {
         assert_eq!(
             route(&args(&["serve", "--collector"])),
             Route::Run(Tool::Hub, args(&["serve", "--collector"]))
+        );
+        assert_eq!(
+            route(&args(&["airbug", "up", "--stack", ".airbug/stack.json"])),
+            Route::Run(Tool::Hub, args(&["up", "--stack", ".airbug/stack.json"]))
         );
     }
 

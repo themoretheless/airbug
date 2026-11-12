@@ -2,16 +2,19 @@
 //! needs no setup: steps still execute and assertions still assert, but no files
 //! are written unless the reporter configures `AIRBUG_REPORT_DIR` for the process.
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt::Debug,
     fs::{self, OpenOptions},
+    future::Future,
     io::{self, Write},
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     path::PathBuf,
+    pin::Pin,
     sync::{
         Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
+    task::{Context, Poll},
     time::Instant,
 };
 
@@ -26,7 +29,28 @@ const MAX_EVENTS: u64 = 8 * 1024 * 1024;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static WRITER: Mutex<()> = Mutex::new(());
 static ATTACHED_BYTES: Mutex<usize> = Mutex::new(0);
-thread_local! { static PARENTS: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) }; }
+thread_local! {
+    static PARENTS: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    static TRACE_EMITTED: Cell<bool> = const { Cell::new(false) };
+}
+
+fn emit_env_trace_once() {
+    let already = TRACE_EMITTED.with(|c| c.get());
+    if already {
+        return;
+    }
+    if let Ok(trace_id) = std::env::var("AIRBUG_TRACE_ID") {
+        let trace_id = trace_id.trim();
+        if !trace_id.is_empty() {
+            TRACE_EMITTED.with(|c| c.set(true));
+            let span_id = std::env::var("AIRBUG_SPAN_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            trace_context(trace_id, span_id.as_deref());
+        }
+    }
+}
 
 fn directory() -> Option<PathBuf> {
     std::env::var_os("AIRBUG_REPORT_DIR").map(PathBuf::from)
@@ -128,6 +152,7 @@ struct Step {
 }
 impl Step {
     fn new(name: &str) -> Self {
+        emit_env_trace_once();
         let id = id();
         record(&format!(
             "{{\"type\":\"step_start\",\"id\":{id},\"parent\":{},\"name\":{},{}}}",
@@ -152,6 +177,112 @@ impl Step {
             self.started.elapsed().as_secs_f64(),
             origin()
         ));
+    }
+}
+
+struct AsyncStepState {
+    id: u64,
+    started: Instant,
+    finished: bool,
+}
+
+impl AsyncStepState {
+    fn new(name: &str) -> Option<Self> {
+        directory()?;
+        emit_env_trace_once();
+        let id = id();
+        record(&format!(
+            "{{\"type\":\"step_start\",\"id\":{id},\"parent\":{},\"name\":{},{}}}",
+            parent(),
+            quote(clipped(name)),
+            origin()
+        ));
+        Some(Self {
+            id,
+            started: Instant::now(),
+            finished: false,
+        })
+    }
+
+    fn finish(&mut self, status: &str) {
+        if !self.finished {
+            self.finished = true;
+            record(&format!(
+                "{{\"type\":\"step_end\",\"id\":{},\"status\":{},\"duration\":{},{}}}",
+                self.id,
+                quote(status),
+                self.started.elapsed().as_secs_f64(),
+                origin()
+            ));
+        }
+    }
+}
+
+impl Drop for AsyncStepState {
+    fn drop(&mut self) {
+        self.finish("cancelled");
+    }
+}
+
+struct StepFuture<F: Future> {
+    fut: Pin<Box<F>>,
+    state: Option<AsyncStepState>,
+    classify: fn(&F::Output) -> &'static str,
+}
+
+impl<F: Future> Future for StepFuture<F> {
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
+        let step_id = this.state.as_ref().map(|s| s.id);
+        if let Some(id) = step_id {
+            PARENTS.with(|parents| parents.borrow_mut().push(id));
+        }
+        let poll_res = catch_unwind(AssertUnwindSafe(|| this.fut.as_mut().poll(cx)));
+        if step_id.is_some() {
+            PARENTS.with(|parents| {
+                parents.borrow_mut().pop();
+            });
+        }
+        match poll_res {
+            Ok(Poll::Ready(output)) => {
+                if let Some(state) = &mut this.state {
+                    let status = (this.classify)(&output);
+                    state.finish(status);
+                }
+                Poll::Ready(output)
+            }
+            Ok(Poll::Pending) => Poll::Pending,
+            Err(payload) => {
+                if let Some(state) = &mut this.state {
+                    state.finish("failed");
+                }
+                resume_unwind(payload)
+            }
+        }
+    }
+}
+
+/// Record an asynchronous step across `.await` points, keeping nested steps and
+/// attachments parented during each poll without leaving stale parent IDs across yields.
+pub fn step_async<F: Future>(name: &str, fut: F) -> impl Future<Output = F::Output> {
+    StepFuture {
+        fut: Box::pin(fut),
+        state: AsyncStepState::new(name),
+        classify: |_| "passed",
+    }
+}
+
+/// Like [`step_async`], but marks a returned `Err` as `"failed"` without consuming it.
+pub fn try_step_async<F, T, E>(name: &str, fut: F) -> impl Future<Output = Result<T, E>>
+where
+    F: Future<Output = Result<T, E>>,
+{
+    StepFuture {
+        fut: Box::pin(fut),
+        state: AsyncStepState::new(name),
+        classify: |res| if res.is_ok() { "passed" } else { "failed" },
     }
 }
 
@@ -309,6 +440,112 @@ pub fn flaky(reason: &str) {
     ));
 }
 
+fn record_meta(field: &str, value: &str) {
+    if directory().is_none() {
+        return;
+    }
+    emit_env_trace_once();
+    record(&format!(
+        "{{\"type\":\"meta\",\"field\":{},\"value\":{},{}}}",
+        quote(field),
+        quote(clipped(value)),
+        origin()
+    ));
+}
+
+/// Record the TestOps `epic` behavior label for the current test.
+pub fn epic(value: &str) {
+    record_meta("epic", value);
+}
+
+/// Record the TestOps `feature` behavior label for the current test.
+pub fn feature(value: &str) {
+    record_meta("feature", value);
+}
+
+/// Record the TestOps `story` behavior label for the current test.
+pub fn story(value: &str) {
+    record_meta("story", value);
+}
+
+/// Record the TestOps `severity` (`blocker`, `critical`, `normal`, `minor`, `trivial`) for the current test.
+pub fn severity(value: &str) {
+    record_meta("severity", value);
+}
+
+/// Record the TestOps `owner` for the current test.
+pub fn owner(value: &str) {
+    record_meta("owner", value);
+}
+
+/// Record a TestOps `tag` for the current test (may be called multiple times).
+pub fn tag(value: &str) {
+    record_meta("tag", value);
+}
+
+/// Mark the current test as `quarantined` with a reason.
+pub fn quarantine(reason: &str) {
+    record_meta("quarantined", reason);
+}
+
+/// Record an external link (`tms`, `issue`, etc.) for the current test.
+pub fn link(kind: &str, id: &str, url: Option<&str>) {
+    if directory().is_none() {
+        return;
+    }
+    emit_env_trace_once();
+    let url_json = match url {
+        Some(u) => quote(clipped(u)),
+        None => "null".into(),
+    };
+    record(&format!(
+        "{{\"type\":\"link\",\"kind\":{},\"linkId\":{},\"url\":{url_json},{}}}",
+        quote(clipped(kind)),
+        quote(clipped(id)),
+        origin()
+    ));
+}
+
+/// Record a TMS (Test Management System) link ID for the current test.
+pub fn tms_link(id: &str) {
+    link("tms", id, None);
+}
+
+/// Record an issue tracker link ID for the current test.
+pub fn issue_link(id: &str) {
+    link("issue", id, None);
+}
+
+/// Record a test parameter `(key, value)` for the current test.
+pub fn parameter(key: &str, value: &str) {
+    if directory().is_none() {
+        return;
+    }
+    emit_env_trace_once();
+    record(&format!(
+        "{{\"type\":\"parameter\",\"name\":{},\"value\":{},{}}}",
+        quote(clipped(key)),
+        quote(clipped(value)),
+        origin()
+    ));
+}
+
+/// Associate an OpenTelemetry `trace_id` (and optional `span_id`) with the current test.
+pub fn trace_context(trace_id: &str, span_id: Option<&str>) {
+    if directory().is_none() {
+        return;
+    }
+    let span_json = match span_id {
+        Some(s) => quote(clipped(s)),
+        None => "null".into(),
+    };
+    record(&format!(
+        "{{\"type\":\"trace\",\"traceId\":{},\"spanId\":{span_json},{}}}",
+        quote(clipped(trace_id)),
+        origin()
+    ));
+}
+
 /// Literal redaction pairs for [`crate::snapshot::Snapshots::redact`].
 pub mod redact {
     /// Common secret patterns as `(from, to)` replacements.
@@ -382,5 +619,149 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().starts_with("attachment-"))
             .collect();
         assert!(attachments.is_empty(), "{attachments:?}");
+    }
+
+    #[test]
+    fn step_async_and_try_step_async_record_nested_steps_and_cancellation() {
+        use std::task::Waker;
+
+        let dir = crate::native::TempDir::new().unwrap();
+        let _env = crate::native::EnvScope::set("AIRBUG_REPORT_DIR", dir.path());
+
+        struct YieldOnce(bool);
+        impl Future for YieldOnce {
+            type Output = ();
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+                if self.0 {
+                    Poll::Ready(())
+                } else {
+                    self.0 = true;
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            }
+        }
+
+        let mut fut = std::pin::pin!(step_async("Outer async", async {
+            step("Sync child before yield", || {});
+            YieldOnce(false).await;
+            let res: Result<u32, &str> = try_step_async("Fallible child", async {
+                YieldOnce(false).await;
+                Err("boom")
+            })
+            .await;
+            assert_eq!(res, Err("boom"));
+            42u32
+        }));
+
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
+
+        // First poll yields; PARENTS must be empty outside poll!
+        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        assert_eq!(parent(), "null");
+
+        // Second poll yields inside Fallible child; PARENTS must still be empty outside poll!
+        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        assert_eq!(parent(), "null");
+
+        // Third poll completes.
+        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Ready(42));
+        assert_eq!(parent(), "null");
+
+        // Also test dropping an incomplete StepFuture emits "cancelled".
+        {
+            let mut cancelled = std::pin::pin!(step_async("Cancelled step", YieldOnce(false)));
+            assert_eq!(cancelled.as_mut().poll(&mut cx), Poll::Pending);
+        }
+
+        let content = fs::read_to_string(dir.path().join("events.jsonl")).unwrap();
+        assert!(content.contains("\"name\":\"Outer async\""), "{content}");
+        assert!(
+            content.contains("\"name\":\"Sync child before yield\""),
+            "{content}"
+        );
+        assert!(content.contains("\"name\":\"Fallible child\""), "{content}");
+        assert!(content.contains("\"status\":\"failed\""), "{content}");
+        assert!(content.contains("\"status\":\"cancelled\""), "{content}");
+    }
+
+    #[test]
+    fn testops_metadata_and_trace_context_write_expected_events() {
+        let dir = crate::native::TempDir::new().unwrap();
+        let _env = crate::native::EnvScope::set("AIRBUG_REPORT_DIR", dir.path());
+
+        epic("Checkout");
+        feature("Payments");
+        story("Card authorization");
+        severity("critical");
+        owner("payments-team");
+        tag("smoke");
+        tms_link("TMS-101");
+        issue_link("BUG-202");
+        link("docs", "DOC-1", Some("https://example.test/doc"));
+        parameter("currency", "USD");
+        quarantine("flaky gateway");
+        trace_context("4bf92f3577b34da6a3ce929d0e0e4736", Some("00f067aa0ba902b7"));
+
+        let content = fs::read_to_string(dir.path().join("events.jsonl")).unwrap();
+        assert!(
+            content.contains("\"type\":\"meta\",\"field\":\"epic\",\"value\":\"Checkout\""),
+            "{content}"
+        );
+        assert!(
+            content.contains("\"type\":\"meta\",\"field\":\"feature\",\"value\":\"Payments\""),
+            "{content}"
+        );
+        assert!(
+            content
+                .contains("\"type\":\"meta\",\"field\":\"story\",\"value\":\"Card authorization\""),
+            "{content}"
+        );
+        assert!(
+            content.contains("\"type\":\"meta\",\"field\":\"severity\",\"value\":\"critical\""),
+            "{content}"
+        );
+        assert!(
+            content.contains("\"type\":\"meta\",\"field\":\"owner\",\"value\":\"payments-team\""),
+            "{content}"
+        );
+        assert!(
+            content.contains("\"type\":\"meta\",\"field\":\"tag\",\"value\":\"smoke\""),
+            "{content}"
+        );
+        assert!(
+            content.contains(
+                "\"type\":\"meta\",\"field\":\"quarantined\",\"value\":\"flaky gateway\""
+            ),
+            "{content}"
+        );
+        assert!(
+            content
+                .contains("\"type\":\"link\",\"kind\":\"tms\",\"linkId\":\"TMS-101\",\"url\":null"),
+            "{content}"
+        );
+        assert!(
+            content.contains(
+                "\"type\":\"link\",\"kind\":\"issue\",\"linkId\":\"BUG-202\",\"url\":null"
+            ),
+            "{content}"
+        );
+        assert!(
+            content.contains(
+                "\"type\":\"link\",\"kind\":\"docs\",\"linkId\":\"DOC-1\",\"url\":\"https://example.test/doc\""
+            ),
+            "{content}"
+        );
+        assert!(
+            content.contains("\"type\":\"parameter\",\"name\":\"currency\",\"value\":\"USD\""),
+            "{content}"
+        );
+        assert!(
+            content.contains(
+                "\"type\":\"trace\",\"traceId\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"spanId\":\"00f067aa0ba902b7\""
+            ),
+            "{content}"
+        );
     }
 }

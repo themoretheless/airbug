@@ -9,8 +9,10 @@ mod http;
 mod issues;
 mod otlp;
 mod rerun;
+mod resources;
 mod runs;
 mod scan;
+mod sentry;
 mod serve;
 mod test_runs;
 
@@ -38,11 +40,12 @@ fn main() {
     }
     let mut root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut port = config::DEFAULT_PORT;
-    let mut with_collector = false;
+    let mut with_collector = command == "up";
     let mut collector_mode = collector::CollectorMode::Auto;
     let mut collector_http_port = collector::DEFAULT_OTLP_HTTP_PORT;
     let mut collector_grpc_port = collector::DEFAULT_OTLP_GRPC_PORT;
     let mut webhook = env::var("AIRBUG_ISSUES_WEBHOOK").ok();
+    let mut stack_path: Option<PathBuf> = None;
 
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -92,6 +95,12 @@ fn main() {
                     .unwrap_or_else(|| usage_exit("--webhook needs a URL"));
                 webhook = Some(value);
             }
+            "--stack" => {
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--stack needs a path"));
+                stack_path = Some(PathBuf::from(value));
+            }
             "-h" | "--help" => usage_exit(""),
             other => usage_exit(&format!("unknown argument: {other}")),
         }
@@ -100,7 +109,7 @@ fn main() {
     let root = root.canonicalize().unwrap_or(root);
 
     match command.as_str() {
-        "serve" => {
+        "serve" | "up" => {
             let app = match app::HubApp::new(root.clone(), port, webhook) {
                 Ok(app) => Arc::new(app),
                 Err(err) => {
@@ -108,6 +117,9 @@ fn main() {
                     process::exit(1);
                 }
             };
+            if let Some(stack) = stack_path {
+                app.resources.set_stack_path(Some(stack));
+            }
 
             let collector = if with_collector {
                 match collector::CollectorHandle::start(
@@ -126,10 +138,24 @@ fn main() {
                 None
             };
 
-            if collector.is_some() {
+            if command == "up" {
+                match app.resources.start_all() {
+                    Ok(started) if !started.is_empty() => {
+                        tracing::info!(?started, "resources: started stack resources");
+                    }
+                    Ok(_) => {}
+                    Err(err) => {
+                        tracing::warn!(error = %err, "resources: could not start all stack resources");
+                    }
+                }
+            }
+
+            if collector.is_some() || command == "up" {
                 let root_for_handler = Arc::new(root.clone());
+                let app_for_handler = Arc::clone(&app);
                 if let Err(err) = ctrlc::set_handler(move || {
-                    tracing::info!("collector: stopping (Ctrl+C)");
+                    tracing::info!("hub: stopping (Ctrl+C)");
+                    app_for_handler.resources.stop_all();
                     collector::emergency_stop(root_for_handler.as_ref());
                     process::exit(0);
                 }) {
@@ -137,7 +163,8 @@ fn main() {
                 }
             }
 
-            if let Err(err) = serve::serve(app) {
+            if let Err(err) = serve::serve(Arc::clone(&app)) {
+                app.resources.stop_all();
                 if let Some(handle) = collector {
                     handle.stop();
                 }
@@ -161,10 +188,12 @@ fn usage_exit(message: &str) -> ! {
 airbug-hub — monorepo dashboard for unit / bench / mon / otel / err
 
 Usage:
-  airbug-hub serve [--root PATH] [--port N] [--collector] [--collector-mode auto|builtin|docker|binary] [--webhook URL]
-      # dashboard :8790 (+ built-in HTTP OTLP at /v1/*)
+  airbug-hub serve [--root PATH] [--port N] [--collector] [--collector-mode auto|builtin|docker|binary] [--stack PATH] [--webhook URL]
+      # dashboard :8790 (+ built-in HTTP OTLP at /v1/*, Sentry DSN http://airbug@127.0.0.1:8790/1)
       # --collector brings up :4318 HTTP + :4317 gRPC (Docker -> otelcol -> built-in Rust collector)
       # --webhook / AIRBUG_ISSUES_WEBHOOK fires on new issues (http:// only)
+  airbug-hub up [--root PATH] [--port N] [--stack PATH]
+      # starts hub + OTLP collector + all resources declared in .airbug/stack.json
   airbug-hub status [--root PATH]
   {}
 ",

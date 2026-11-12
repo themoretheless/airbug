@@ -38,6 +38,8 @@ pub struct Frame {
     pub filename: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lineno: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colno: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub in_app: bool,
 }
@@ -59,9 +61,13 @@ pub struct Exception {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Breadcrumb {
     pub timestamp: String,
+    #[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
+    pub ty: Option<String>,
     pub category: String,
     pub message: String,
     pub level: Severity,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub data: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -72,6 +78,47 @@ pub struct User {
     pub email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionStatus {
+    #[default]
+    Ok,
+    Exited,
+    Crashed,
+    Abnormal,
+}
+
+impl SessionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Exited => "exited",
+            Self::Crashed => "crashed",
+            Self::Abnormal => "abnormal",
+        }
+    }
+}
+
+/// Release Health session envelope payload posted to `/api/v1/sessions`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionUpdate {
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub distinct_id: Option<String>,
+    pub release: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    #[serde(default)]
+    pub status: SessionStatus,
+    #[serde(default)]
+    pub errors: u32,
+    pub started_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
 }
 
 /// Full event posted to the hub.

@@ -19,18 +19,29 @@ cargo run -p airbug-err --example capture
 ```
 
 ```rust
-use airbug_err::{add_breadcrumb, capture_error, capture_message, configure_scope, Options, Severity};
+use airbug_err::{
+    add_breadcrumb, add_breadcrumb_with_data, capture_error, capture_message, configure_scope,
+    Options, Severity,
+};
 
 let _guard = airbug_err::init(
     Options::new()
         .endpoint("http://127.0.0.1:8790/api/v1/errors")
         .release(env!("CARGO_PKG_VERSION"))
         .environment("dev")
-        .service("checkout"),
+        .service("checkout")
+        .auto_session_tracking(true),
 )?;
 
 configure_scope(|s| s.set_tag("tenant", "acme"));
 add_breadcrumb("auth", "login ok", Severity::Info);
+add_breadcrumb_with_data(
+    "http",
+    Some("http"),
+    "POST /payments",
+    Severity::Info,
+    [("status_code".into(), serde_json::json!(200))].into(),
+);
 capture_message("something odd");
 capture_error(&err);
 ```
@@ -52,11 +63,12 @@ Env override: `AIRBUG_ERR_ENDPOINT`. Hub webhook: `AIRBUG_ISSUES_WEBHOOK` or `--
 | Panic hook (forward previous) | yes (`panic`) |
 | `capture_error` / `capture_message` | yes |
 | Severity levels | yes (`fatal`/`error`/`warning`/`info`) |
-| Breadcrumbs ring buffer | yes |
-| Scope: tags, user, extra, fingerprint | yes |
+| Breadcrumbs ring buffer (`add_breadcrumb` / `add_breadcrumb_with_data`) | yes |
+| Scope: tags, user, extra, fingerprint, trace context | yes |
 | Release / environment / service | yes |
-| Contexts (OS, hostname, rust) | yes |
-| Backtrace frames | yes |
+| Release Health sessions (`start_session`, `end_session`, auto-tracking) | yes |
+| Contexts (OS, hostname, rust, trace) | yes |
+| Backtrace frames (with `in_app` classification & `colno`) | yes |
 | Default + custom fingerprint | yes (type + top frames; values/ids stripped) |
 | `before_send` | yes |
 | Sample rate | yes |

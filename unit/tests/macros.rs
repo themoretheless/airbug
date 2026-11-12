@@ -184,3 +184,94 @@ fn builder_overrides_root_factory_without_mutating_it() {
     assert_eq!(ctx.builder::<Keywords>().with_type(3).build().r#type, 3);
     assert_eq!(ctx.build::<Keywords>().r#type, 4);
 }
+
+#[airbug::test(
+    epic = "Checkout",
+    feature = "Payments",
+    story = "Card authorization",
+    severity = "critical",
+    owner = "payments-team",
+    tms = "TMS-42",
+    issue = "ISS-99",
+    tag = "smoke",
+    tags = ["billing", "fast"],
+    quarantined = "awaiting sandbox update",
+    flaky = "sandbox jitter"
+)]
+fn annotated_test_records_taxonomy_and_runs_as_native_test() {
+    let dir = airbug::native::TempDir::new().unwrap();
+    let _env = airbug::native::EnvScope::set("AIRBUG_REPORT_DIR", dir.path());
+    // Re-invoke a function annotated with #[airbug::test] inside the scoped report dir:
+    #[airbug::test(
+        epic = "Checkout",
+        feature = "Payments",
+        story = "Card authorization",
+        severity = "critical",
+        owner = "payments-team",
+        tms = "TMS-42",
+        issue = "ISS-99",
+        tag = "smoke",
+        tags = ["billing", "fast"],
+        quarantined = "awaiting sandbox update",
+        flaky = "sandbox jitter"
+    )]
+    async fn inner_async() -> u32 {
+        airbug::report::step_async("Authorize card", async { 2500 }).await
+    }
+
+    use std::{
+        future::Future,
+        task::{Context, Poll, Waker},
+    };
+    let mut fut = std::pin::pin!(inner_async());
+    let poll = fut.as_mut().poll(&mut Context::from_waker(Waker::noop()));
+    assert_eq!(poll, Poll::Ready(2500));
+
+    let events = std::fs::read_to_string(dir.path().join("events.jsonl")).unwrap();
+    assert!(
+        events.contains("\"field\":\"epic\",\"value\":\"Checkout\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"feature\",\"value\":\"Payments\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"story\",\"value\":\"Card authorization\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"severity\",\"value\":\"critical\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"owner\",\"value\":\"payments-team\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"tag\",\"value\":\"smoke\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"tag\",\"value\":\"billing\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"tag\",\"value\":\"fast\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"kind\":\"tms\",\"linkId\":\"TMS-42\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"kind\":\"issue\",\"linkId\":\"ISS-99\""),
+        "{events}"
+    );
+    assert!(
+        events.contains("\"field\":\"quarantined\",\"value\":\"awaiting sandbox update\""),
+        "{events}"
+    );
+    assert!(events.contains("\"type\":\"flaky\""), "{events}");
+    assert!(events.contains("\"name\":\"Authorize card\""), "{events}");
+}

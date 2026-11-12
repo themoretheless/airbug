@@ -104,11 +104,25 @@ pub(crate) fn configure_max_breadcrumbs(max: usize) {
 
 /// Record a breadcrumb in the process-wide ring buffer (up to `max_breadcrumbs` most recent entries are attached to captured events).
 pub fn add_breadcrumb(category: impl Into<String>, message: impl Into<String>, level: Severity) {
+    add_breadcrumb_with_data(category, None::<String>, message, level, BTreeMap::new());
+}
+
+/// Record a breadcrumb with an optional Sentry-style `type` (`"http"`, `"navigation"`, `"query"`, `"default"`)
+/// and structured key-value `data`.
+pub fn add_breadcrumb_with_data(
+    category: impl Into<String>,
+    ty: Option<impl Into<String>>,
+    message: impl Into<String>,
+    level: Severity,
+    data: BTreeMap<String, serde_json::Value>,
+) {
     let crumb = Breadcrumb {
         timestamp: crate::iso_now(),
+        ty: ty.map(Into::into).filter(|s| !s.trim().is_empty()),
         category: category.into(),
         message: message.into(),
         level,
+        data,
     };
     if let Ok(mut g) = ring().lock() {
         g.push(crumb);
@@ -149,9 +163,11 @@ mod tests {
         for msg in ["1", "2", "3", "4"] {
             ring.push(Breadcrumb {
                 timestamp: "t".into(),
+                ty: None,
                 category: "a".into(),
                 message: msg.into(),
                 level: Severity::Info,
+                data: BTreeMap::new(),
             });
         }
         let crumbs = ring.snapshot();

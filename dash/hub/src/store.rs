@@ -443,7 +443,18 @@ pub fn test_run_detail(root: &Path, id: &str, lite: bool) -> Result<Value> {
     let item = test_run_item(&dir).ok_or_else(|| HubError::msg("not found"))?;
     let manifest: Value = read(&dir.join("manifest.json")).unwrap_or(Value::Null);
     let progress: Value = read(&dir.join("progress.json")).unwrap_or(Value::Null);
-    let report: Value = read(&dir.join("report.json")).unwrap_or(Value::Null);
+    let mut report: Value = read(&dir.join("report.json")).unwrap_or(Value::Null);
+    if let Ok(mut parsed_report) =
+        serde_json::from_value::<crate::testrun::model::Report>(report.clone())
+    {
+        crate::testrun::analytics::classify_defects(
+            &mut parsed_report,
+            &crate::testrun::analytics::load_rules(root),
+        );
+        if let Ok(val) = serde_json::to_value(&parsed_report) {
+            report = val;
+        }
+    }
     let current: LightReport = serde_json::from_value(report.clone()).unwrap_or_default();
 
     let older: Vec<RunItem> = test_runs(root, 500)

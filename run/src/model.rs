@@ -148,6 +148,63 @@ pub struct Suite {
     pub crash_log: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TestLink {
+    pub kind: String,
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TestMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epic: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub story: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<TestLink>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parameters: Vec<(String, String)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quarantined: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span_id: Option<String>,
+}
+
+impl TestMeta {
+    pub fn is_empty(&self) -> bool {
+        self.epic.is_none()
+            && self.feature.is_none()
+            && self.story.is_none()
+            && self.severity.is_none()
+            && self.owner.is_none()
+            && self.tags.is_empty()
+            && self.links.is_empty()
+            && self.parameters.is_empty()
+            && self.quarantined.is_none()
+            && self.trace_id.is_none()
+            && self.span_id.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DefectClassification {
+    /// `"product_bug"`, `"infrastructure"`, `"test_bug"`, `"flaky"`, or `"quarantined"`.
+    pub category: String,
+    pub rule: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestCase {
     /// `<suite id>::<test name>` — the key for history across runs.
@@ -158,6 +215,9 @@ pub struct TestCase {
     /// Seconds since the run started when libtest reported the result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished_s: Option<f64>,
+    /// Measured execution duration of this test case in seconds, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_s: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ignore_reason: Option<String>,
     /// Captured stdout/panic message (failures, or every test with `--show-output`).
@@ -171,6 +231,10 @@ pub struct TestCase {
     pub attachments: Vec<Attachment>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub flaky: Vec<String>,
+    #[serde(default, skip_serializing_if = "TestMeta::is_empty")]
+    pub meta: TestMeta,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defect: Option<DefectClassification>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

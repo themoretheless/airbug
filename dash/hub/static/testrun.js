@@ -118,6 +118,7 @@
       data: null,
       filter: null,
       filterTouched: false,
+      viewMode: "suites",
       query: "",
       open: new Set(),
       suiteToggle: new Map(),
@@ -130,7 +131,8 @@
       <div data-part="changes"></div>
       <div data-part="blocks"></div>
       <div class="atr-tools">
-        <input type="search" data-part="search" placeholder="filter tests by name or suite…" autocomplete="off" />
+        <div class="atr-views" data-part="views"></div>
+        <input type="search" data-part="search" placeholder="filter tests by name, suite, owner, tag, epic…" autocomplete="off" />
         <span class="atr-count" data-part="count"></span>
       </div>
       <div data-part="list"></div>
@@ -223,6 +225,12 @@
       if (r.exit_code != null && r.exit_code !== 0) meta.push(`<span>exit ${esc(r.exit_code)}</span>`);
       if (files()) meta.push(`<a href="${esc(files())}output.log" target="_blank" rel="noopener">output.log</a>`);
       if (files() && opts.standaloneLink !== false) meta.push(`<a href="${esc(files())}index.html" target="_blank" rel="noopener">standalone report</a>`);
+      const junitId = (state.data && state.data.run_id) || r.run_id;
+      if (opts.rerun && junitId) {
+        meta.push(`<a href="/api/v1/runs/${encodeURIComponent(junitId)}/junit.xml" download="junit-${esc(junitId)}.xml">JUnit XML ↓</a>`);
+      } else if (files()) {
+        meta.push(`<a href="${esc(files())}junit.xml" download="junit.xml">JUnit XML ↓</a>`);
+      }
       const manifest = state.data.manifest || {};
       if (manifest.rerun_of) {
         const short = String(manifest.rerun_of).slice(0, 8);
@@ -377,13 +385,49 @@
     function matches(test, suite) {
       const q = state.query.trim().toLowerCase();
       if (!q) return true;
-      return String(test.name).toLowerCase().includes(q) || String(suite).toLowerCase().includes(q);
+      const m = test.meta || {};
+      const hay = [
+        test.name,
+        suite,
+        m.epic,
+        m.feature,
+        m.story,
+        m.owner,
+        m.severity,
+        m.quarantined,
+        ...(m.tags || []),
+        test.defect && test.defect.category,
+        test.defect && test.defect.rule,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    }
+
+    function paintViews(r) {
+      const viewsEl = part("views");
+      if (!viewsEl) return;
+      if (!r) {
+        viewsEl.innerHTML = "";
+        return;
+      }
+      const tests = r.tests || [];
+      const defectCount = tests.filter(t => t.defect && t.defect.category).length;
+      const behaviorCount = tests.filter(t => t.meta && (t.meta.epic || t.meta.feature || t.meta.story)).length;
+      const modes = [
+        { id: "suites", label: "Suites" },
+        { id: "behaviors", label: behaviorCount ? `Behaviors (${behaviorCount})` : "Behaviors" },
+        { id: "defects", label: defectCount ? `Defects (${defectCount})` : "Defects" },
+        { id: "slowest", label: "Slowest" },
+      ];
+      viewsEl.innerHTML = modes.map(m =>
+        `<button type="button" class="atr-view-btn${state.viewMode === m.id ? " on" : ""}" data-view-mode="${esc(m.id)}">${esc(m.label)}</button>`
+      ).join("");
     }
 
     function paintList() {
       const r = report();
       const el = part("list");
       const countEl = part("count");
+      paintViews(r);
       if (!r) {
         el.innerHTML = "";
         countEl.textContent = "";
@@ -394,6 +438,19 @@
       const flaky = flakySet();
       const strips = (state.data.history && state.data.history.tests) || {};
       const runs = (state.data.history && state.data.history.runs) || [];
+
+      if (state.viewMode === "behaviors") {
+        paintBehaviorsList(r, el, countEl, filter, sets, flaky, strips, runs);
+        return;
+      }
+      if (state.viewMode === "defects") {
+        paintDefectsList(r, el, countEl, filter, sets, flaky, strips, runs);
+        return;
+      }
+      if (state.viewMode === "slowest") {
+        paintSlowestList(r, el, countEl, filter, sets, flaky, strips, runs);
+        return;
+      }
 
       const bySuite = new Map();
       for (const s of r.suites || []) bySuite.set(s.id, { suite: s, tests: [] });
@@ -470,6 +527,113 @@
       }).join("");
     }
 
+    function paintBehaviorsList(r, el, countEl, filter, sets, flaky, strips, runs) {
+      const buckets = new Map();
+      let shown = 0;
+      for (const t of r.tests || []) {
+        if (!filter.test(t) || !matches(t, t.suite)) continue;
+        const m = t.meta || {};
+        const epic = m.epic || "Unassigned Epic";
+        const feature = m.feature || "General Feature";
+        const story = m.story || "Default Story";
+        const key = `${epic} › ${feature} › ${story}`;
+        if (!buckets.has(key)) {
+          buckets.set(key, { key, epic, feature, story, tests: [], passed: 0, failed: 0 });
+        }
+        const b = buckets.get(key);
+        b.tests.push(t);
+        if (t.status === "passed") b.passed++;
+        if (t.status === "failed" || t.status === "not_run") b.failed++;
+        shown++;
+      }
+      const total = (r.tests || []).length;
+      countEl.textContent = `${shown} of ${total} tests across ${buckets.size} behavior${buckets.size === 1 ? "" : "s"}`;
+      if (!buckets.size) {
+        el.innerHTML = `<div class="atr-empty">No behavior groups match the current filter. Annotate tests with <code>airbug::report::epic</code> / <code>feature</code> / <code>story</code>.</div>`;
+        return;
+      }
+      const groups = Array.from(buckets.values()).sort((a, b) => (b.failed - a.failed) || a.key.localeCompare(b.key));
+      el.innerHTML = groups.map(g => {
+        const groupId = `beh:${g.key}`;
+        const toggled = state.suiteToggle.get(groupId);
+        const open = toggled != null ? toggled : true;
+        const stats = [
+          g.failed ? `<span class="f">${g.failed} failed</span>` : "",
+          `${g.passed}/${g.tests.length} passed`,
+        ].filter(Boolean).join(" · ");
+        const rows = open ? g.tests.map(t => testRow(t, sets, flaky, strips[t.id], runs)).join("") : "";
+        return `<section class="atr-suite" data-suite="${esc(groupId)}">
+          <button type="button" class="atr-suite-head" data-toggle-suite="${esc(groupId)}" aria-expanded="${open}">
+            <span class="atr-dot ${g.failed ? "failed" : "passed"}"></span>
+            <span class="atr-suite-name"><strong>${esc(g.epic)}</strong> › ${esc(g.feature)} <small>› ${esc(g.story)}</small></span>
+            <span class="atr-suite-stats">${stats}</span>
+          </button>
+          ${open ? `<div class="atr-suite-body">${rows}</div>` : ""}
+        </section>`;
+      }).join("");
+    }
+
+    function paintDefectsList(r, el, countEl, filter, sets, flaky, strips, runs) {
+      const DEFECT_META = {
+        product_bug: { label: "Product Bugs (Assertion / Comparison Failure)", dot: "failed" },
+        infrastructure: { label: "Infrastructure & Environment (Timeouts / I/O / Crash)", dot: "not_run" },
+        test_bug: { label: "Test Bugs (Unclassified Panic / Setup Error)", dot: "failed" },
+        flaky: { label: "Flaky Tests (Passed on Retry / Marked Flaky)", dot: "not_run" },
+        quarantined: { label: "Quarantined Tests (Known Issue)", dot: "ignored" },
+      };
+      const buckets = new Map();
+      let shown = 0;
+      for (const t of r.tests || []) {
+        const cat = (t.defect && t.defect.category) || (t.meta && t.meta.quarantined ? "quarantined" : null);
+        if (!cat) continue;
+        if (!matches(t, t.suite)) continue;
+        if (!buckets.has(cat)) buckets.set(cat, []);
+        buckets.get(cat).push(t);
+        shown++;
+      }
+      countEl.textContent = `${shown} classified defect${shown === 1 ? "" : "s"}`;
+      if (!buckets.size) {
+        el.innerHTML = `<div class="atr-empty">No defects or quarantined tests in this run.</div>`;
+        return;
+      }
+      const order = ["product_bug", "infrastructure", "test_bug", "flaky", "quarantined"];
+      const keys = Array.from(buckets.keys()).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+      el.innerHTML = keys.map(cat => {
+        const list = buckets.get(cat) || [];
+        const info = DEFECT_META[cat] || { label: cat, dot: "failed" };
+        const groupId = `def:${cat}`;
+        const toggled = state.suiteToggle.get(groupId);
+        const open = toggled != null ? toggled : true;
+        const rows = open ? list.map(t => testRow(t, sets, flaky, strips[t.id], runs)).join("") : "";
+        return `<section class="atr-suite" data-suite="${esc(groupId)}">
+          <button type="button" class="atr-suite-head" data-toggle-suite="${esc(groupId)}" aria-expanded="${open}">
+            <span class="atr-dot ${esc(info.dot)}"></span>
+            <span class="atr-suite-name">${esc(info.label)}</span>
+            <span class="atr-suite-stats">${list.length} test${list.length === 1 ? "" : "s"}</span>
+          </button>
+          ${open ? `<div class="atr-suite-body">${rows}</div>` : ""}
+        </section>`;
+      }).join("");
+    }
+
+    function paintSlowestList(r, el, countEl, filter, sets, flaky, strips, runs) {
+      const tests = (r.tests || []).filter(t => filter.test(t) && matches(t, t.suite));
+      tests.sort((a, b) => {
+        const da = Number(a.duration_s ?? a.finished_s ?? 0);
+        const db = Number(b.duration_s ?? b.finished_s ?? 0);
+        return db - da;
+      });
+      const top = tests.slice(0, 50);
+      countEl.textContent = `top ${top.length} slowest of ${tests.length} tests`;
+      if (!top.length) {
+        el.innerHTML = `<div class="atr-empty">No timed tests match the filter.</div>`;
+        return;
+      }
+      el.innerHTML = `<section class="atr-suite">
+        <div class="atr-suite-body">${top.map(t => testRow(t, sets, flaky, strips[t.id], runs)).join("")}</div>
+      </section>`;
+    }
+
     function strip(chars, runs) {
       if (!chars) return "";
       return `<span class="atr-strip" title="history, oldest → newest">${Array.from(chars).map((c, i) => {
@@ -485,14 +649,37 @@
       if (sets.newFailures.has(t.id)) badges.push(`<span class="atr-badge new">new failure</span>`);
       if (sets.fixed.has(t.id)) badges.push(`<span class="atr-badge fixed">fixed</span>`);
       if (flaky.has(t.id)) badges.push(`<span class="atr-badge flaky">flaky</span>`);
+      const m = t.meta || {};
+      if (t.defect && t.defect.category) {
+        const cat = t.defect.category;
+        const cls = cat === "product_bug" || cat === "test_bug" ? "new" : (cat === "infrastructure" || cat === "flaky" ? "flaky" : "info");
+        badges.push(`<span class="atr-badge ${cls}" title="${esc(t.defect.rule || "")}">${esc(cat.replace("_", " "))}</span>`);
+      } else if (m.quarantined) {
+        badges.push(`<span class="atr-badge info" title="${esc(m.quarantined)}">quarantined</span>`);
+      }
+      if (m.severity) {
+        const sevCls = m.severity === "blocker" || m.severity === "critical" ? "new" : "info";
+        badges.push(`<span class="atr-badge ${sevCls}">${esc(m.severity)}</span>`);
+      }
+      if (m.owner) {
+        badges.push(`<span class="atr-badge info">@${esc(m.owner)}</span>`);
+      }
+      for (const tag of (m.tags || []).slice(0, 3)) {
+        badges.push(`<span class="atr-badge info">#${esc(tag)}</span>`);
+      }
+      if (m.trace_id) {
+        const shortTrace = String(m.trace_id).slice(0, 8);
+        badges.push(`<span class="atr-badge trace" data-trace="${esc(m.trace_id)}" title="Jump to OTLP trace ${esc(m.trace_id)}">trace:${esc(shortTrace)} ↗</span>`);
+      }
       const stepCount = countSteps(t.steps || []);
       if (stepCount) badges.push(`<span class="atr-badge info">${stepCount} step${stepCount === 1 ? "" : "s"}</span>`);
       const atts = countAttachments(t);
       if (atts) badges.push(`<span class="atr-badge info">${atts} file${atts === 1 ? "" : "s"}</span>`);
       const open = state.open.has(t.id);
+      const dur = t.duration_s != null ? fmtDuration(t.duration_s) : (t.finished_s != null ? `+${Number(t.finished_s).toFixed(2)}s` : "");
       const side = [
         strip(history, runs),
-        t.finished_s != null ? `<span title="finished at, seconds into the run">+${esc(Number(t.finished_s).toFixed(2))}s</span>` : "",
+        dur ? `<span title="duration">${esc(dur)}</span>` : "",
         `<span>${esc(LABEL[t.status] || t.status)}</span>`,
       ].join("");
       return `<div class="atr-test${open ? " open" : ""}" data-test="${esc(t.id)}">
@@ -517,6 +704,36 @@
 
     function testDetail(t) {
       const parts = [];
+      const m = t.meta || {};
+      const metaRows = [];
+      if (m.epic || m.feature || m.story) {
+        metaRows.push(`<span><b>Behavior:</b> ${esc([m.epic, m.feature, m.story].filter(Boolean).join(" › "))}</span>`);
+      }
+      if (m.severity) metaRows.push(`<span><b>Severity:</b> ${esc(m.severity)}</span>`);
+      if (m.owner) metaRows.push(`<span><b>Owner:</b> @${esc(m.owner)}</span>`);
+      if (m.quarantined) metaRows.push(`<span><b>Quarantined:</b> ${esc(m.quarantined)}</span>`);
+      if (m.tags && m.tags.length) metaRows.push(`<span><b>Tags:</b> ${m.tags.map(x => `#${esc(x)}`).join(" ")}</span>`);
+      if (t.defect && t.defect.category) {
+        metaRows.push(`<span><b>Defect:</b> <code>${esc(t.defect.category)}</code> (${esc(t.defect.rule || "")})</span>`);
+      }
+      if (m.trace_id) {
+        metaRows.push(`<span><b>Trace:</b> <a href="#/traces/${esc(m.trace_id)}"><code>${esc(m.trace_id)}</code> ↗</a></span>`);
+      }
+      if (m.links && m.links.length) {
+        const linksHtml = m.links.map(l =>
+          l.url
+            ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.kind)}:${esc(l.id)} ↗</a>`
+            : `<code>${esc(l.kind)}:${esc(l.id)}</code>`
+        ).join(" · ");
+        metaRows.push(`<span><b>Links:</b> ${linksHtml}</span>`);
+      }
+      if (m.parameters && Object.keys(m.parameters).length) {
+        const kv = Object.entries(m.parameters).map(([k, v]) => `<code>${esc(k)}=${esc(v)}</code>`).join(" ");
+        metaRows.push(`<span><b>Params:</b> ${kv}</span>`);
+      }
+      if (metaRows.length) {
+        parts.push(`<div class="atr-meta-box">${metaRows.join(" · ")}</div>`);
+      }
       if (t.ignore_reason) parts.push(`<div class="muted">ignored: ${esc(t.ignore_reason)}</div>`);
       if (t.flaky && t.flaky.length) parts.push(`<div class="muted">marked flaky: ${esc(t.flaky.join("; "))}</div>`);
       if (t.duration_s != null) parts.push(`<div class="muted">duration: ${esc(fmtDuration(t.duration_s))}</div>`);
@@ -551,20 +768,23 @@
     }
 
     function comparison(c) {
-      const diff = c.passed ? null : lineDiff(c.expected, c.actual);
+      const exp = c.expected != null ? c.expected : (c.left != null ? c.left : "");
+      const act = c.actual != null ? c.actual : (c.right != null ? c.right : "");
+      const label = c.name || c.label || "assertion";
+      const diff = c.passed ? null : lineDiff(exp, act);
       let body;
       if (c.passed) {
-        body = `<div class="ctx">${esc(c.actual)}</div>`;
+        body = `<div class="ctx">${esc(act)}</div>`;
       } else if (diff) {
         body = diff.map(d => {
           const cls = d.op === "-" ? "del" : d.op === "+" ? "add" : "ctx";
           return `<div class="${cls}">${esc(d.op)} ${esc(d.text)}</div>`;
         }).join("");
       } else {
-        body = `<div class="del">- ${esc(c.expected)}</div><div class="add">+ ${esc(c.actual)}</div>`;
+        body = `<div class="del">- ${esc(exp)}</div><div class="add">+ ${esc(act)}</div>`;
       }
       return `<div class="atr-diff">
-        <div class="atr-diff-head"><span>${esc(c.name)}</span>
+        <div class="atr-diff-head"><span>${esc(label)}</span>
           <span class="${c.passed ? "ok" : "bad"}">${c.passed ? "equal" : "− expected  + actual"}${c.truncated ? " · truncated" : ""}</span></div>
         <div class="atr-diff-body">${body}</div>
       </div>`;
@@ -619,9 +839,20 @@
     }
 
     root.addEventListener("click", ev => {
+      const traceBadge = ev.target.closest("[data-trace]");
+      if (traceBadge && root.contains(traceBadge)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const tid = traceBadge.getAttribute("data-trace");
+        if (tid) location.hash = `#/traces/${encodeURIComponent(tid)}`;
+        return;
+      }
       const target = ev.target.closest("button, a");
       if (!target || !root.contains(target)) return;
-      if (target.hasAttribute("data-rerun")) {
+      if (target.hasAttribute("data-view-mode")) {
+        state.viewMode = target.getAttribute("data-view-mode") || "suites";
+        paintList();
+      } else if (target.hasAttribute("data-rerun")) {
         startRerun(target.getAttribute("data-rerun") === "failed");
       } else if (target.hasAttribute("data-copy")) {
         copyCommand(target);

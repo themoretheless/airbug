@@ -89,6 +89,11 @@ fn handle(stream: &mut TcpStream, app: &HubApp) -> std::io::Result<()> {
     {
         return otlp::receiver::handle_http_otlp(stream, app, &req, sig);
     }
+    if req.method == "POST"
+        && let Some((_project_id, kind)) = crate::sentry::match_sentry_path(path_only)
+    {
+        return crate::sentry::handle_sentry_http(stream, app, &req, kind);
+    }
     if req.method == "GET"
         && let Some((mime, body)) = assets::lookup(path_only)
     {
@@ -294,6 +299,10 @@ fn handle_api(
                 &store::timeline(&app.paths.root, &app.runs, kind.as_deref(), limit),
             )
         }
+        ("GET", p) if p.starts_with("/runs/") && p.ends_with("/junit.xml") => {
+            let id = &p["/runs/".len()..p.len() - "/junit.xml".len()];
+            handle_run_junit(stream, app, id)
+        }
         ("GET", p) if p.starts_with("/runs/") => {
             let id = &p["/runs/".len()..];
             let lite = http::query_value(&req.query, "lite").is_some_and(|v| v == "1");
@@ -314,6 +323,43 @@ fn handle_api(
             app,
             req,
             &p["/runs/".len()..p.len() - "/rerun".len()],
+        ),
+        ("GET", "/tests/analytics") => {
+            let window = http::query_usize(&req.query, "window", 20).clamp(1, 100);
+            http::respond_json(
+                stream,
+                "200 OK",
+                &crate::testrun::analytics::compute_analytics(&app.paths.root, window),
+            )
+        }
+        ("GET", "/tests/rules") => http::respond_json(
+            stream,
+            "200 OK",
+            &serde_json::json!({
+                "rules": crate::testrun::analytics::load_rules(&app.paths.root),
+            }),
+        ),
+        ("POST", "/tests/rules") => handle_post_test_rules(stream, app, req),
+        ("GET", "/resources") => {
+            http::respond_json(stream, "200 OK", &app.resources.list_resources())
+        }
+        ("GET", p) if p.starts_with("/resources/") && p.ends_with("/logs") => {
+            let name = &p["/resources/".len()..p.len() - "/logs".len()];
+            let tail = http::query_usize(&req.query, "tail", 500).clamp(1, 2000);
+            match app.resources.logs(name, tail) {
+                Ok(val) => http::respond_json(stream, "200 OK", &val),
+                Err(e) => http::respond_err(stream, "404 Not Found", &e),
+            }
+        }
+        ("POST", p) if p.starts_with("/resources/") => handle_resource_action(stream, app, p),
+        ("POST", "/sessions") => handle_session_ingest(stream, app, req),
+        ("GET", "/releases") => http::respond_json(
+            stream,
+            "200 OK",
+            &serde_json::json!({
+                "releases": app.issues.list_releases(),
+                "dsn": format!("http://airbug@127.0.0.1:{}/1", app.port),
+            }),
         ),
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
         ("GET", "/bench/compare") => {
@@ -674,12 +720,140 @@ fn handle_issue_action(stream: &mut TcpStream, app: &HubApp, path: &str) -> std:
         return http::respond_err(
             stream,
             "400 Bad Request",
-            &HubError::msg("action must be resolve|ignore|reopen"),
+            &HubError::msg("action must be resolve|resolve_next_release|ignore|reopen"),
         );
     };
     match app.issues.set_status(id, status) {
         Ok(issue) => http::respond_json(stream, "200 OK", &issue),
         Err(e) => http::respond_err(stream, "404 Not Found", &e),
+    }
+}
+
+fn handle_run_junit(stream: &mut TcpStream, app: &HubApp, id: &str) -> std::io::Result<()> {
+    let resolved_id = match store::resolve_test_run(&app.paths.root, id) {
+        Ok(id) => id,
+        Err(e) => {
+            let status = if e.to_string().contains("not found") {
+                "404 Not Found"
+            } else {
+                "400 Bad Request"
+            };
+            return http::respond_err(stream, status, &e);
+        }
+    };
+    let junit_file = store::runs_dir(&app.paths.root)
+        .join(&resolved_id)
+        .join("junit.xml");
+    if junit_file.is_file()
+        && let Ok(xml) = std::fs::read_to_string(&junit_file)
+    {
+        return http::respond(stream, "200 OK", "application/xml; charset=utf-8", &xml);
+    }
+    let detail = match store::test_run_detail(&app.paths.root, &resolved_id, false) {
+        Ok(detail) => detail,
+        Err(e) => return http::respond_err(stream, "404 Not Found", &e),
+    };
+    let Some(report_val) = detail.get("report") else {
+        return http::respond_err(
+            stream,
+            "404 Not Found",
+            &HubError::msg("test run report not available yet"),
+        );
+    };
+    let report: airbug_run::model::Report = match serde_json::from_value(report_val.clone()) {
+        Ok(r) => r,
+        Err(e) => return http::respond_err(stream, "500 Internal Server Error", &e.into()),
+    };
+    let xml = crate::testrun::junit::render_junit_xml(&report);
+    http::respond(stream, "200 OK", "application/xml; charset=utf-8", &xml)
+}
+
+fn handle_post_test_rules(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    use crate::testrun::analytics::{DefectRule, load_rules, save_rules};
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum RulesPayload {
+        Wrapped { rules: Vec<DefectRule> },
+        List(Vec<DefectRule>),
+        Single(DefectRule),
+    }
+    let parsed: RulesPayload = match serde_json::from_slice(&req.body) {
+        Ok(v) => v,
+        Err(e) => return http::respond_err(stream, "400 Bad Request", &HubError::from(e)),
+    };
+    let rules = match parsed {
+        RulesPayload::Wrapped { rules } | RulesPayload::List(rules) => rules,
+        RulesPayload::Single(rule) => {
+            let mut existing = load_rules(&app.paths.root);
+            existing.retain(|r| r.name != rule.name);
+            existing.push(rule);
+            existing
+        }
+    };
+    if let Err(e) = save_rules(&app.paths.root, &rules) {
+        return http::respond_err(stream, "500 Internal Server Error", &HubError::from(e));
+    }
+    http::respond_json(
+        stream,
+        "200 OK",
+        &serde_json::json!({ "ok": true, "rules": rules }),
+    )
+}
+
+fn handle_resource_action(stream: &mut TcpStream, app: &HubApp, path: &str) -> std::io::Result<()> {
+    let rest = &path["/resources/".len()..];
+    let Some((name, action)) = rest.split_once('/') else {
+        return http::respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "not found",
+        );
+    };
+    let result = match action {
+        "start" => app.resources.start_resource(name),
+        "stop" => app.resources.stop_resource(name),
+        "restart" => app.resources.restart_resource(name),
+        _ => {
+            return http::respond_err(
+                stream,
+                "400 Bad Request",
+                &HubError::msg("action must be start|stop|restart"),
+            );
+        }
+    };
+    match result {
+        Ok(val) => http::respond_json(stream, "200 OK", &val),
+        Err(e) => {
+            let status = if e.to_string().contains("not found") {
+                "404 Not Found"
+            } else {
+                "400 Bad Request"
+            };
+            http::respond_err(stream, status, &e)
+        }
+    }
+}
+
+fn handle_session_ingest(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    let session = match serde_json::from_slice::<airbug_err::SessionUpdate>(&req.body) {
+        Ok(s) => s,
+        Err(_) => match crate::sentry::parse_sentry_session_json(&req.body) {
+            Ok(s) => s,
+            Err(e) => return http::respond_err(stream, "400 Bad Request", &e),
+        },
+    };
+    match app.issues.record_session(session) {
+        Ok(()) => http::respond_json(stream, "200 OK", &serde_json::json!({ "ok": true })),
+        Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
     }
 }
 

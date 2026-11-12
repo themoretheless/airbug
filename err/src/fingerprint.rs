@@ -226,12 +226,14 @@ mod tests {
                 function: "foo".into(),
                 filename: Some("/abs/path/a.rs".into()),
                 lineno: Some(10),
+                colno: None,
                 in_app: true,
             },
             Frame {
                 function: "bar".into(),
                 filename: Some("b.rs".into()),
                 lineno: Some(20),
+                colno: None,
                 in_app: true,
             },
         ]

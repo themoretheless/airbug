@@ -5,7 +5,7 @@
 //! `Running` line and `test` is the libtest thread name.
 use super::{
     libtest::Collector,
-    model::{Attachment, Comparison, Step, Unattributed},
+    model::{Attachment, Comparison, Step, TestLink, TestMeta, Unattributed},
 };
 use serde::Deserialize;
 use std::{collections::HashMap, fs, path::Path};
@@ -44,6 +44,20 @@ struct Raw {
     #[serde(default)]
     reason: String,
     #[serde(default)]
+    field: String,
+    #[serde(default)]
+    value: String,
+    #[serde(default, alias = "linkId", alias = "link_id", alias = "id_str")]
+    link_id: String,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default, alias = "linkKind", alias = "link_kind", alias = "kind")]
+    link_kind: String,
+    #[serde(default, alias = "traceId", alias = "trace_id")]
+    trace_id: String,
+    #[serde(default, alias = "spanId", alias = "span_id")]
+    span_id: String,
+    #[serde(default)]
     pid: u32,
     #[serde(default)]
     bin: String,
@@ -69,6 +83,7 @@ struct Loose {
     comparisons: Vec<Comparison>,
     attachments: Vec<Attachment>,
     flaky: Vec<String>,
+    meta: TestMeta,
 }
 
 /// Read `events.jsonl` + `report-error.txt` from `dir` and attach them to `collector.report`.
@@ -118,6 +133,10 @@ pub fn fold_case(test: &mut super::model::TestCase, events: &[serde_json::Value]
         test.comparisons = parsed.comparisons;
         test.attachments = parsed.attachments;
         test.flaky = parsed.flaky;
+        test.meta = parsed.meta;
+        if test.duration_s.is_none() {
+            test.duration_s = parsed.duration_s;
+        }
     }
 }
 
@@ -199,6 +218,63 @@ fn fold_text(collector: &mut Collector, text: &str) {
                 Some(p) => nodes[p].step.flaky.push(raw.reason),
                 None => loose(&mut owners, owner).flaky.push(raw.reason),
             },
+            "meta" => {
+                let meta = &mut loose(&mut owners, owner).meta;
+                match raw.field.as_str() {
+                    "epic" => meta.epic = Some(raw.value),
+                    "feature" => meta.feature = Some(raw.value),
+                    "story" => meta.story = Some(raw.value),
+                    "severity" => meta.severity = Some(raw.value),
+                    "owner" => meta.owner = Some(raw.value),
+                    "tag" => {
+                        if !raw.value.is_empty() && !meta.tags.contains(&raw.value) {
+                            meta.tags.push(raw.value);
+                        }
+                    }
+                    "quarantined" => meta.quarantined = Some(raw.value),
+                    _ => {}
+                }
+            }
+            "link" => {
+                let kind = if !raw.link_kind.is_empty() {
+                    raw.link_kind
+                } else if !raw.field.is_empty() {
+                    raw.field
+                } else {
+                    "link".into()
+                };
+                let id = if !raw.link_id.is_empty() {
+                    raw.link_id
+                } else if !raw.name.is_empty() {
+                    raw.name
+                } else {
+                    raw.value
+                };
+                if !id.is_empty() {
+                    loose(&mut owners, owner).meta.links.push(TestLink {
+                        kind,
+                        id,
+                        url: raw.url.filter(|u| !u.is_empty()),
+                    });
+                }
+            }
+            "parameter" => {
+                if !raw.name.is_empty() {
+                    loose(&mut owners, owner)
+                        .meta
+                        .parameters
+                        .push((raw.name, raw.value));
+                }
+            }
+            "trace" => {
+                let meta = &mut loose(&mut owners, owner).meta;
+                if !raw.trace_id.is_empty() {
+                    meta.trace_id = Some(raw.trace_id);
+                }
+                if !raw.span_id.is_empty() {
+                    meta.span_id = Some(raw.span_id);
+                }
+            }
             _ => skipped += 1,
         }
     }
@@ -213,10 +289,15 @@ fn fold_text(collector: &mut Collector, text: &str) {
         match test {
             Some(index) => {
                 let test = &mut collector.report.tests[index];
+                let step_dur_sum: f64 = steps.iter().filter_map(|s| s.duration_s).sum();
                 test.steps.extend(steps);
                 test.comparisons.extend(items.comparisons);
                 test.attachments.extend(items.attachments);
                 test.flaky.extend(items.flaky);
+                merge_meta(&mut test.meta, items.meta);
+                if test.duration_s.is_none() && step_dur_sum > 0.0 {
+                    test.duration_s = Some(step_dur_sum);
+                }
             }
             None => collector.report.unattributed.push(Unattributed {
                 suite: suite.or_else(|| (!owner.bin.is_empty()).then(|| owner.bin.clone())),
@@ -232,6 +313,40 @@ fn fold_text(collector: &mut Collector, text: &str) {
             .report
             .diagnostics
             .push(format!("{skipped} report event(s) could not be read"));
+    }
+}
+
+fn merge_meta(target: &mut TestMeta, incoming: TestMeta) {
+    if incoming.epic.is_some() {
+        target.epic = incoming.epic;
+    }
+    if incoming.feature.is_some() {
+        target.feature = incoming.feature;
+    }
+    if incoming.story.is_some() {
+        target.story = incoming.story;
+    }
+    if incoming.severity.is_some() {
+        target.severity = incoming.severity;
+    }
+    if incoming.owner.is_some() {
+        target.owner = incoming.owner;
+    }
+    for tag in incoming.tags {
+        if !target.tags.contains(&tag) {
+            target.tags.push(tag);
+        }
+    }
+    target.links.extend(incoming.links);
+    target.parameters.extend(incoming.parameters);
+    if incoming.quarantined.is_some() {
+        target.quarantined = incoming.quarantined;
+    }
+    if incoming.trace_id.is_some() {
+        target.trace_id = incoming.trace_id;
+    }
+    if incoming.span_id.is_some() {
+        target.span_id = incoming.span_id;
     }
 }
 

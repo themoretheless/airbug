@@ -451,9 +451,14 @@ candidate for the documented surface, not compatibility with every .NET API.
 Publishing and a stable 1.0 contract require a release review and successful CI.
 
 Structured diagnostics are opt-in via `airbug::report::step`, `try_step`,
-`attach_text`, `attach_bytes`, `assert_equal` and `assert_text_equal`.
-Equality failures from fluent assertions and `CheckReport` are recorded too.
-Step/comparison statuses remain distinct from the native test outcome.
+`step_async`, `try_step_async`, `attach_text`, `attach_bytes`, `assert_equal`
+and `assert_text_equal`. TestOps taxonomy (`epic`, `feature`, `story`,
+`severity`, `owner`, `tag`, `tms_link`, `issue_link`, `parameter`, `quarantine`,
+`trace_context`) can be recorded directly through `airbug::report::*` or via
+`#[airbug::test(epic = "...", feature = "...", severity = "critical", owner = "...")]`
+on both synchronous and `async` tests. Equality failures from fluent assertions
+and `CheckReport` are recorded too. Step/comparison statuses remain distinct
+from the native test outcome.
 
 
 ### Live test dashboard

@@ -1,5 +1,5 @@
-//! Blocking HTTP transport to airbug-hub `/api/v1/errors`.
-use crate::event::Event;
+//! Blocking HTTP transport to airbug-hub `/api/v1/errors` and `/api/v1/sessions`.
+use crate::event::{Event, SessionUpdate};
 use std::{
     sync::{Arc, Mutex, mpsc},
     time::Duration,
@@ -14,15 +14,19 @@ pub enum TransportError {
     Rejected { status: u16, body: String },
 }
 
-/// Pluggable delivery for [`Event`] (DIP / test doubles).
+/// Pluggable delivery for [`Event`] and [`SessionUpdate`] (DIP / test doubles).
 pub trait EventTransport: Send + Sync {
     fn send(&self, event: &Event) -> Result<(), TransportError>;
+
+    fn send_session(&self, _session: &SessionUpdate) -> Result<(), TransportError> {
+        Ok(())
+    }
 }
 
 enum WorkerRequest {
     Send {
         url: String,
-        event: Event,
+        body: serde_json::Value,
         reply: mpsc::SyncSender<Result<(), TransportError>>,
     },
 }
@@ -81,8 +85,8 @@ impl HttpTransport {
                     }
                 };
 
-                while let Ok(WorkerRequest::Send { url, event, reply }) = req_rx.recv() {
-                    let res = match client.post(&url).json(&event).send() {
+                while let Ok(WorkerRequest::Send { url, body, reply }) = req_rx.recv() {
+                    let res = match client.post(&url).json(&body).send() {
                         Ok(response) => {
                             let status = response.status();
                             if status.is_success() {
@@ -123,11 +127,16 @@ impl HttpTransport {
         }
         self.endpoint.clone()
     }
-}
 
-impl EventTransport for HttpTransport {
-    fn send(&self, event: &Event) -> Result<(), TransportError> {
-        let url = self.resolved_url();
+    pub(crate) fn resolved_sessions_url(&self) -> String {
+        let base = self.endpoint.trim_end_matches('/');
+        if let Some((prefix, _)) = base.split_once("/api/v1/errors") {
+            return format!("{prefix}/api/v1/sessions");
+        }
+        format!("{base}/sessions")
+    }
+
+    fn post_json(&self, url: String, body: serde_json::Value) -> Result<(), TransportError> {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let tx = {
             let guard = self
@@ -138,13 +147,26 @@ impl EventTransport for HttpTransport {
         };
         tx.send(WorkerRequest::Send {
             url,
-            event: event.clone(),
+            body,
             reply: reply_tx,
         })
         .map_err(|e| TransportError::Http(e.to_string()))?;
         reply_rx
             .recv()
             .map_err(|e| TransportError::Http(e.to_string()))?
+    }
+}
+
+impl EventTransport for HttpTransport {
+    fn send(&self, event: &Event) -> Result<(), TransportError> {
+        let body = serde_json::to_value(event).map_err(|e| TransportError::Http(e.to_string()))?;
+        self.post_json(self.resolved_url(), body)
+    }
+
+    fn send_session(&self, session: &SessionUpdate) -> Result<(), TransportError> {
+        let body =
+            serde_json::to_value(session).map_err(|e| TransportError::Http(e.to_string()))?;
+        self.post_json(self.resolved_sessions_url(), body)
     }
 }
 
@@ -157,6 +179,7 @@ pub type Transport = HttpTransport;
 #[derive(Clone, Default)]
 pub struct MemoryTransport {
     events: Arc<Mutex<Vec<Event>>>,
+    sessions: Arc<Mutex<Vec<SessionUpdate>>>,
 }
 
 impl MemoryTransport {
@@ -168,12 +191,19 @@ impl MemoryTransport {
         self.events.lock().map(|g| g.clone()).unwrap_or_default()
     }
 
+    pub fn sessions(&self) -> Vec<SessionUpdate> {
+        self.sessions.lock().map(|g| g.clone()).unwrap_or_default()
+    }
+
     pub fn last(&self) -> Option<Event> {
         self.events.lock().ok()?.last().cloned()
     }
 
     pub fn clear(&self) {
         if let Ok(mut g) = self.events.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.sessions.lock() {
             g.clear();
         }
     }
@@ -191,6 +221,13 @@ impl EventTransport for MemoryTransport {
     fn send(&self, event: &Event) -> Result<(), TransportError> {
         if let Ok(mut g) = self.events.lock() {
             g.push(event.clone());
+        }
+        Ok(())
+    }
+
+    fn send_session(&self, session: &SessionUpdate) -> Result<(), TransportError> {
+        if let Ok(mut g) = self.sessions.lock() {
+            g.push(session.clone());
         }
         Ok(())
     }

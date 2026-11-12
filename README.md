@@ -12,12 +12,12 @@ Rust toolkit split by job. One naming rule:
 | `otel/` | `airbug-otel` |
 | `err/` | `airbug-err` |
 | `dash/` | `airbug-hub` (+ `dash/collector` ops assets) |
-| `cli/` | `cargo-airbug` (`cargo airbug test \| bench \| serve \| status`) |
+| `cli/` | `cargo-airbug` (`cargo airbug test \| bench \| serve \| up \| status`) |
 | `run/` | `airbug-run` (run format + store shared by runners and the hub) |
 
 ```text
-unit/                      # package: airbug
-  macros/                  # airbug-macros
+unit/                      # package: airbug (Allure/ReportPortal-style TestOps, #[airbug::test], async steps)
+  macros/                  # airbug-macros (#[airbug::test(...)], #[test_case], #[test_matrix])
   containers/              # airbug-containers
   checkout-domain/         # airbug-checkout-domain
 bench/                     # package: airbug-bench
@@ -27,17 +27,18 @@ bench/                     # package: airbug-bench
   integrations/forma/      # excluded from workspace
 mon/                       # package: airbug-mon (host monitor)
 otel/                      # package: airbug-otel (OTLP traces+metrics+logs+profiles, W3C propagation, tracing bridge)
-err/                       # package: airbug-err (panic/error → hub issues + OTel trace correlation)
-dash/hub/                  # package: airbug-hub (built-in OTLP HTTP/gRPC collector + traces/profiles/metrics/logs/issues UI)
-run/                       # package: airbug-run (one on-disk contract for runs)
+err/                       # package: airbug-err (panic/error, breadcrumbs, Release Health sessions → hub + Sentry DSN)
+dash/hub/                  # package: airbug-hub (TestOps + .NET Aspire Resources + Sentry Issues + OTLP collector & UI)
+run/                       # package: airbug-run (one on-disk contract for runs + TestOps metadata & defect models)
 ```
 
 ## Architecture (local toolkit)
 
 ```text
 airbug-mon / apps ──► airbug-otel ──► OTLP (:4318 HTTP / :4317 gRPC) ──► dash/collector or built-in hub receiver ──► files ──► airbug-hub
-airbug-err (+ OTel trace_id/span_id) ──► POST /api/v1/errors ──► airbug-hub (SQLite issues)
-cargo airbug test ──► .airbug/runs ──► airbug-hub (live tests)
+airbug-err / Sentry SDKs ──► POST /api/v1/errors | /api/1/envelope/ | /api/v1/sessions ──► airbug-hub (SQLite issues + source context + release health)
+cargo airbug up ──► .airbug/stack.json + Docker discovery ──► airbug-hub (#/resources Aspire orchestrator + live stdout/stderr)
+cargo airbug test (--junit) ──► .airbug/runs ──► airbug-hub (#/tests TestOps behaviors, defect classifier, JUnit XML)
 bench artifacts ──► airbug-hub runs timeline
 ```
 
@@ -47,11 +48,11 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. This i
 
 | Area | Status | Notes |
 |------|--------|-------|
-| `unit` / macros | release / publishable | Strong tests + CI matrix; crates.io metadata |
+| `unit` / macros | release / publishable | `#[airbug::test]` taxonomy, sync + `step_async` steps, OTel trace correlation, defect classification, JUnit XML |
 | `bench` / cli / macros | release / publishable | Typed `BenchError`; docs synced to in-crate modules |
 | `otel` | full OTel stack | OTLP HTTP (`protobuf`/`json`, `gzip`) + gRPC, traces/metrics/logs/profiles, W3C propagation, `TracingOtelLayer`, `InMemoryTelemetry` |
-| `err` | usable | `EventTransport` + `schema_version` + automatic OTel `trace_id`/`span_id` correlation → hub |
-| `hub` | usable | Built-in OTLP HTTP/gRPC receiver, native Traces (waterfall/topology/RED/zPages) + Profiles flamechart + Metrics quantiles/exemplars + Logs + Issues |
+| `err` | full Sentry stack | `EventTransport` + `in_app` frames + structured breadcrumbs + Release Health sessions + OTel `trace_id`/`span_id` correlation |
+| `hub` | full local dev platform | TestOps (`Behaviors`/`Defects`/`Slowest`/`junit.xml`), `.NET Aspire` Resources (`#/resources`), Sentry Issue Inspector (`±5` source context, `git blame` suspect commit, auto-regressions, `/api/1/envelope/`), and built-in OTLP collector |
 | `mon` | usable (macOS) | `MonApp`; CI on macOS |
 | `containers` / checkout-domain | internal | `publish = false` |
 
@@ -69,8 +70,9 @@ cargo test -p airbug-otel --all-features
 cargo test -p airbug-err --all-features
 cargo test -p airbug-hub
 cargo airbug serve                                       # hub on http://127.0.0.1:8790/
+cargo airbug up                                          # start hub + collector + .airbug/stack.json resources (#/resources)
 cargo airbug bench run --program ./target/release/mybench --output .airbug-bench/session
-cargo airbug test -- --workspace --exclude airbug-mon    # live per-test run → hub #/tests
+cargo airbug test --junit junit.xml -- --workspace --exclude airbug-mon  # live TestOps run → hub #/tests + JUnit XML
 cargo run -p airbug-hub -- serve --root . --collector   # Docker, otelcol on PATH, or zero-dependency built-in OTLP collector
 cargo run -p airbug-otel --example full_stack           # emit traces + metrics + logs + profiles + correlated error
 ./dash/scripts/smoke_local.sh                           # optional local smoke

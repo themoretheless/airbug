@@ -42,6 +42,7 @@ const ASSETS: &[(&str, &str, &str)] = &[
     asset!("js/sections/logs.js", JS),
     asset!("js/sections/metrics.js", JS),
     asset!("js/sections/profiles.js", JS),
+    asset!("js/sections/resources.js", JS),
     asset!("js/sections/health.js", JS),
 ];
 

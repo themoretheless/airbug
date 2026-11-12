@@ -29,6 +29,17 @@
       </div>
     </section>
 
+    <section class="panel" data-cat="resources" id="panel-resources" hidden>
+      <section class="resources" aria-live="polite">
+        <div class="resources-head">
+          <h2>Resources</h2>
+          <div class="resources-meta" id="resources-meta">loading…</div>
+        </div>
+        <div id="resources-table-wrap" class="resources-table-wrap"></div>
+        <aside id="resource-inspector" class="resource-inspector" hidden></aside>
+      </section>
+    </section>
+
     <section class="panel atr" data-cat="runs" id="panel-runs" hidden>
       <div class="runs-head">
         <h2>Runs</h2>
@@ -90,6 +101,7 @@
           <h2>Issues</h2>
           <div class="issues-meta" id="issues-meta">loading…</div>
         </div>
+        <div id="issues-releases" class="issues-releases"></div>
         <div class="issues-layout">
           <div class="issues-panel" id="issues-panel"><p class="issues-empty">waiting…</p></div>
           <aside class="issue-detail" id="issue-detail" hidden>
@@ -97,7 +109,7 @@
               <h3 id="issue-detail-title">Issue</h3>
               <div class="issue-actions" id="issue-actions"></div>
             </div>
-            <pre class="issue-detail-body" id="issue-detail-body"></pre>
+            <div class="issue-detail-body" id="issue-detail-body"></div>
           </aside>
         </div>
       </section>

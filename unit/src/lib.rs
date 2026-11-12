@@ -33,7 +33,7 @@ pub use validation::{
 pub use verify::{VerificationErrors, VerifyMocks, with_mocks, with_mocks_async};
 
 #[cfg(feature = "macros")]
-pub use airbug_macros::{Generate, cases, mock};
+pub use airbug_macros::{Generate, cases, mock, test};
 
 /// Common opt-in imports for ordinary Rust tests.
 pub mod prelude {

@@ -68,7 +68,13 @@ metrics, correlate instead of rerouting: `OTEL_RESOURCE_ATTRIBUTES="airbug.hub_i
   gRPC, and then the endpoint must move to `:4317`. Mismatched pairs fail at
   shutdown with a bare `transport error`.
 - Errors need no setup: `airbug-err` posts to `http://127.0.0.1:8790/api/v1/errors`
-  by default; point it elsewhere with `AIRBUG_ERR_ENDPOINT` (`err/src/lib.rs:129`).
+  by default (and Release Health sessions to `/api/v1/sessions`); point it elsewhere with
+  `AIRBUG_ERR_ENDPOINT` (`err/src/lib.rs:129`). Standard Sentry SDKs (`sentry-rust`,
+  `@sentry/browser`, `sentry-sdk`) can also use DSN `http://airbug@127.0.0.1:8790/1`
+  (`POST /api/1/envelope/` and `/api/1/store/`).
+- Local Aspire stack: `cargo airbug up` starts the hub + collector and launches `.airbug/stack.json`
+  resources with automatic `OTEL_*`, `AIRBUG_*`, `AIRBUG_SENTRY_DSN`, and `SERVICES__<NAME>__HTTP`
+  injection (`http://127.0.0.1:8790/#/resources`).
 - Host metrics: `cargo run -p airbug-mon --release -- --otlp`, or
   `--headless --seconds N --otlp` without a GUI. mon itself is an egui window with no
   port — never link mon, link the hub.
@@ -121,26 +127,30 @@ write no history. The separate process runner's live dashboard rules above still
 
 ## Tests are live in the hub: `cargo airbug test`
 
-`cargo airbug` is the one entry point (`cli/`, `cargo-airbug`): it routes `test`, `serve` and
-`status` to `airbug-hub` and `bench …` to `cargo-airbug-bench` (`cargo airbug bench run …` is
+`cargo airbug` is the one entry point (`cli/`, `cargo-airbug`): it routes `test`, `serve`,
+`up` and `status` to `airbug-hub` and `bench …` to `cargo-airbug-bench` (`cargo airbug bench run …` is
 `cargo airbug-bench run …`). `cargo airbug test` wraps `cargo test`, lists tests first
 so progress has a denominator, and writes a run directory the hub reads while it runs.
 
 ```sh
-cargo airbug test -- --workspace --exclude airbug-mon   # anything after -- goes to cargo test
+cargo airbug test --junit junit.xml -- --workspace --exclude airbug-mon   # anything after -- goes to cargo test
 ```
 
 - stderr prints `Live tests: http://127.0.0.1:8790/#/tests/<run_id>` when a hub for this
   root is up (otherwise it says how to start one). Hand over that URL — it is live, per
   test, and keeps working after the run finishes.
-- Files: `.airbug/runs/<run_id>/{manifest,progress,report}.json`, `output.log`, `events/`,
+- Files: `.airbug/runs/<run_id>/{manifest,progress,report}.json`, `junit.xml`, `output.log`, `events/`,
   and a self-contained `index.html`. `report.json` is `airbug.test-report/1`.
-- The runner sets `AIRBUG_REPORT_DIR`, so `airbug::report` steps, comparisons and
-  attachments land on the right test (`unit/src/report.rs`).
+- The runner sets `AIRBUG_REPORT_DIR`, so `airbug::report` steps (`step`, `step_async`),
+  TestOps taxonomy (`#[airbug::test(epic = ..., feature = ..., story = ..., severity = ..., owner = ...)]`),
+  comparisons and attachments land on the right test (`unit/src/report.rs`), and defects are
+  automatically classified (`product_bug`, `test_bug`, `infrastructure`, `flaky`, `quarantined`).
 - Exit code: 0 all passed, cargo's code otherwise, 130 on Ctrl+C. `--out DIR` writes the
-  run somewhere else (CI uses `target/airbug-report`); `--quiet` hides cargo's output.
-- JSON for agents: `GET /api/v1/runs?kind=test` and `GET /api/v1/runs/latest` (per-test
-  status, failure output, steps, new failures vs the previous run, flaky tests).
+  run somewhere else (CI uses `target/airbug-report`); `--junit FILE` exports JUnit XML;
+  `--quiet` hides cargo's output.
+- JSON for agents: `GET /api/v1/runs?kind=test`, `GET /api/v1/runs/latest`,
+  `GET /api/v1/runs/<id>/junit.xml`, and `GET /api/v1/tests/analytics` (per-test
+  status, failure output, steps, defect classification, stability, slowest tests, behaviors).
 - `--nextest` runs `cargo nextest run` instead (list via `nextest list --message-format
   json`, per-test results parsed from its output, retries → `flaky`). Same files, same UI.
 - Rerun what failed: `POST /api/v1/runs/<id>/rerun` with JSON `{"failed": true}` (the

@@ -318,6 +318,7 @@ pub fn respond_err(
 pub fn mime_for_path(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()) {
         Some("json") => "application/json; charset=utf-8",
+        Some("xml") => "application/xml; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
         Some("js") => "text/javascript; charset=utf-8",
         Some("html") | Some("htm") => "text/html; charset=utf-8",

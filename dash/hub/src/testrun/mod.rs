@@ -5,8 +5,10 @@
 //! `airbug::report` steps, comparisons and attachments land beside the results. Everything is
 //! plain files (see [`model`]); the hub only reads them, so a run is live in the dashboard
 //! whether or not the hub was started first.
+pub mod analytics;
 pub mod events;
 pub mod html;
+pub mod junit;
 pub mod libtest;
 /// The run format lives in `airbug-run`; this path is kept for the modules that grew up here.
 pub use airbug_run::model;
@@ -44,6 +46,7 @@ static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 pub struct Options {
     pub root: PathBuf,
     pub out: Option<PathBuf>,
+    pub junit: Option<PathBuf>,
     pub title: Option<String>,
     pub port: u16,
     pub list: bool,
@@ -59,10 +62,11 @@ pub struct Options {
 }
 
 pub const USAGE: &str = "\
-airbug-hub test [--nextest] [--root PATH] [--out DIR] [--title TEXT] [--port N] [--no-list]
-                [--quiet] [--keep N] [-- <cargo test args> [-- <test binary args>]]
+airbug-hub test [--nextest] [--root PATH] [--out DIR] [--junit FILE] [--title TEXT] [--port N]
+                [--no-list] [--quiet] [--keep N] [-- <cargo test args> [-- <test binary args>]]
     # runs cargo test, writes .airbug/runs/<id>/ (or --out DIR), live in the hub at
     # http://127.0.0.1:<port>/#/tests/<id>; exit code follows the tests
+    # --junit FILE exports JUnit XML upon completion
     # --nextest runs `cargo nextest run` (args after -- go to it; filters after the second --)
     # --no-list skips the listing pass (needed for harness = false test targets)";
 
@@ -74,6 +78,7 @@ where
     let mut options = Options {
         root: env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         out: None,
+        junit: None,
         title: None,
         port: crate::config::DEFAULT_PORT,
         list: true,
@@ -91,6 +96,7 @@ where
         match arg.as_str() {
             "--root" => options.root = PathBuf::from(value("--root")?),
             "--out" | "-o" => options.out = Some(PathBuf::from(value("--out")?)),
+            "--junit" => options.junit = Some(PathBuf::from(value("--junit")?)),
             "--title" => options.title = Some(value("--title")?),
             "--port" => {
                 options.port = value("--port")?
@@ -382,8 +388,23 @@ fn run(options: Options) -> io::Result<i32> {
     collector.report.finished_at_ms = Some(finished);
     collector.report.duration_s = Some(store.started.elapsed().as_secs_f64());
     collector.report.exit_code = exit_code;
+    analytics::classify_defects(&mut collector.report, &analytics::load_rules(&root));
     store.write(&mut collector, true);
     fs::write(dir.join("index.html"), html::render(&collector.report))?;
+    let junit_xml = junit::render_junit_xml(&collector.report);
+    let _ = fs::write(dir.join("junit.xml"), &junit_xml);
+    if let Some(ref junit_path) = options.junit {
+        let target = if junit_path.is_absolute() {
+            junit_path.clone()
+        } else {
+            root.join(junit_path)
+        };
+        if let Some(parent) = target.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&target, &junit_xml)?;
+        eprintln!("airbug test: junit {}", target.display());
+    }
     print_summary(
         &collector.report,
         &dir,

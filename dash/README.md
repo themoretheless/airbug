@@ -16,23 +16,70 @@ cargo run -p airbug-hub -- serve --root . --collector
 # Force the zero-dependency built-in Rust collector explicitly:
 cargo run -p airbug-hub -- serve --root . --collector-mode builtin
 # OTLP http://127.0.0.1:4318  grpc://127.0.0.1:4317
+# Sentry DSN http://airbug@127.0.0.1:8790/1
 # Jaeger http://127.0.0.1:16686/  (Docker mode only; optional external link alongside native Traces tab)
+
+# .NET Aspire-style stack orchestrator: start hub + collector + .airbug/stack.json resources
+cargo run -p airbug-hub -- up --root .
 
 cargo run -p airbug-hub -- status --root .
 cargo test -p airbug-hub
 ```
 
-### Live test runs (`cargo airbug test`)
+### Live test runs & TestOps (`cargo airbug test`)
 
 ```bash
 cargo airbug test -- --workspace --exclude airbug-mon   # = cargo run -p airbug-hub -- test -- …
+cargo airbug test --junit target/junit.xml -- --workspace
 ```
 
 The runner wraps `cargo test --no-fail-fast`, lists tests first (real progress bar), and
 writes `.airbug/runs/{run_id}/` as it goes: `manifest.json`, `progress.json`,
-`report.json` (`airbug.test-report/1`), `output.log`, `events/` (from `airbug::report`,
+`report.json` (`airbug.test-report/1`), `junit.xml`, `output.log`, `events/` (from `airbug::report`,
 via `AIRBUG_REPORT_DIR`) and a self-contained `index.html`. The hub only reads these
 files, so the run is live at `#/tests/{run_id}` whether the hub started first or not.
+
+**Allure / ReportPortal-style TestOps views (`#/tests`):**
+- **Suites:** Grouped by test binary / suite with failure-first sorting and historical pass/fail strips.
+- **Behaviors (`Epic › Feature › Story`):** Hierarchical grouping populated from `airbug::report::epic(...)`, `feature(...)`, and `story(...)`.
+- **Defects:** Automated failure classification into `product_bug` (assertion/comparison diffs), `infrastructure` (connection refused, timeouts, suite crashes), `test_bug` (unclassified panics), `flaky` (passed on retry / marked flaky), and `quarantined` (`airbug::report::quarantined("ISSUE-123")`), plus custom regex/substring rules in `.airbug/defect-rules.json` (`GET/POST /api/v1/tests/rules`).
+- **Slowest:** Top slowest tests in the run with duration bars.
+- **Trace Correlation (`trace:<short> ↗`):** Tests that call `airbug::report::trace_context(trace_id, span_id)` (or auto-capture active OTLP spans) link directly to `#/traces/{trace_id}`.
+- **JUnit XML Export:** Pass `--junit <FILE>` on the CLI or download `/api/v1/runs/{run_id}/junit.xml` directly from the UI header.
+
+### .NET Aspire-style Resource Orchestrator (`#/resources` & `airbug-hub up`)
+
+Define local processes and containers in `.airbug/stack.json` (or `airbug.stack.json`):
+
+```json
+{
+  "schema": "airbug.stack/1",
+  "resources": [
+    {
+      "name": "api",
+      "kind": "process",
+      "command": "cargo",
+      "args": ["run", "-p", "my-api"],
+      "ports": [{ "host": 3000, "scheme": "http" }],
+      "depends_on": [],
+      "healthcheck": { "kind": "http", "url": "http://127.0.0.1:3000/health" }
+    }
+  ]
+}
+```
+
+- Always surfaces built-in `airbug-hub` and `otlp-collector` plus discovered Docker containers even without a `stack.json`.
+- `airbug-hub up` starts the hub, OTLP collector, and all stack resources in topological `depends_on` order, and tears them down cleanly on Ctrl+C / exit.
+- Automatically injects `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_RESOURCE_ATTRIBUTES`, `AIRBUG_ERR_ENDPOINT`, `AIRBUG_SENTRY_DSN`, and .NET Aspire-compatible `SERVICES__<NAME>__HTTP` service discovery variables into every child process.
+- Captures per-resource `stdout`/`stderr` ring buffers (`GET /api/v1/resources/:name/logs`) and masks secret environment variables (`PASSWORD`, `SECRET`, `TOKEN`, `KEY`, `DSN`, `AUTH`, `CREDENTIAL`).
+
+### Sentry-grade Issue Intelligence & Envelope Receiver (`#/issues`)
+
+- **Native Sentry SDK Compatibility:** Point any official Sentry SDK (`sentry-rust`, `@sentry/browser`, `sentry-python`, `sentry-go`) at `SENTRY_DSN=http://airbug@127.0.0.1:8790/1`. The hub accepts `POST /api/:project/envelope/` and `POST /api/:project/store/` (plain or `gzip`).
+- **Inline Source Context (`±5` lines):** Stacktrace frames with workspace-local paths automatically resolve 5 lines of `pre_context`, `context_line`, and `post_context` (strictly confined inside `paths.root`).
+- **Suspect Commit (`git blame`):** Automatically identifies the commit author, SHA, and subject that last touched the top in-app crashing frame (`git log -1 -L`).
+- **Auto-Regression & Lifecycle:** Issues support `unresolved`, `resolved`, `resolved_in_next_release`, and `ignored`. If a new event arrives for a resolved issue (or from a newer release), it automatically transitions back to `unresolved` with a `REGRESSED ×N` badge.
+- **Release Health (`POST /api/v1/sessions` & `GET /api/v1/releases`):** Tracks `Crash-Free Sessions %`, session counts, crashed sessions, and issue counts per release.
 
 Options: `--title`, `--out DIR`, `--port N` (hub to link), `--no-list`, `--quiet`,
 `--keep 50` (runs kept in `.airbug/runs`). Cargo args after `--`, test-binary args after
@@ -156,6 +203,12 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | POST | `/v1/{traces,metrics,logs}` · `/v1development/profiles` | Built-in OTLP HTTP receiver (`application/x-protobuf`, `application/json`, optional `gzip`; also `/api/v1/otlp/...`) |
 | GET | `/api/v1/runs?kind=&limit=` | Timeline of test + bench runs (`live` count; stale runs flagged) |
 | GET | `/api/v1/runs/:id\|latest?lite=` | Test run: report, `changes` vs previous run, `history`, `flaky`, `rerun` commands (`lite=1` drops per-test data) |
+| GET | `/api/v1/runs/:id/junit.xml` | JUnit XML export (`application/xml; charset=utf-8`) for the test run |
+| GET | `/api/v1/tests/analytics?window=` | Cross-run TestOps stability, slowest tests, behavior tree (`epic › feature › story`), and defect summary |
+| GET / POST | `/api/v1/tests/rules` | List or update custom defect classification rules (`.airbug/defect-rules.json`) |
+| GET | `/api/v1/resources` | .NET Aspire-style local resource inventory (built-in, discovered containers, `.airbug/stack.json`) |
+| GET | `/api/v1/resources/:name/logs?tail=` | Captured `stdout`/`stderr` console ring buffer for a managed resource |
+| POST | `/api/v1/resources/:name/{start,stop,restart}` | Start, stop, or restart a managed stack resource |
 | GET | `/runs/:id/*` | Files of a test run (`index.html`, `output.log`, `events/…`) |
 | POST | `/api/v1/runs/:id/rerun` | JSON `{"failed":true\|false}` → starts a rerun, `202 {run_id, href, command}`; 409 while a run is live |
 | GET | `/api/v1/bench/compare?run=` | Newest (or given) bench run vs previous comparable run: `summary`, `rows` (regressions first) |
@@ -165,10 +218,13 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | GET | `/api/v1/bench/runs/:id/report` | Report when present |
 | GET | `/bench/runs/:id/*` | Bench artifacts under `.airbug-bench/runs/{id}/` |
 | POST | `/api/v1/errors` | airbug-err event → issues (`schema_version`; tag `airbug.run_id`) |
+| POST | `/api/:project/envelope/` · `/api/:project/store/` | Native Sentry SDK Envelope & Store receiver (`application/x-sentry-envelope`, `application/json`, `gzip`) |
+| POST | `/api/v1/sessions` | Release health session update (`init`, `ok`, `errored`, `crashed`, `exited`) |
+| GET | `/api/v1/releases` | Release health summary (`crash_free_rate`, session counts, issue counts) + local Sentry DSN |
 | POST | `/api/v1/events` | Unified error/trace/metric/log envelope |
-| GET | `/api/v1/issues?run_id=` | Issue list (optional filter by tag) |
-| GET | `/api/v1/issues/:id` | Issue detail (`last_event` + recent `events`) |
-| POST | `/api/v1/issues/:id/{resolve,ignore,reopen}` | Status change |
+| GET | `/api/v1/issues?run_id=` | Issue list (optional filter by tag, includes `is_regression`, `regression_count`) |
+| GET | `/api/v1/issues/:id` | Issue detail (`last_event`, `events` with `±5` line source context, `suspect_commit`, `tag_distributions`, `activity_buckets`) |
+| POST | `/api/v1/issues/:id/{resolve,resolve_next_release,ignore,reopen}` | Status change |
 | GET | `/report/*` | Unit HTML report files |
 
 Error JSON shape: `{ "ok": false, "error": "…" }`.

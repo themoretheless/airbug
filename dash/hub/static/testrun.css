@@ -143,6 +143,19 @@
 }
 
 .atr-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.9rem 0 0.5rem; }
+.atr-views { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
+.atr-view-btn {
+  padding: 0.32rem 0.65rem;
+  border: 1px solid var(--atr-line);
+  background: #ffffffcc;
+  color: var(--atr-ink);
+  font-size: 0.73rem;
+}
+.atr-view-btn.on {
+  border-color: var(--atr-deep);
+  background: var(--atr-deep);
+  color: #f3f7f2;
+}
 .atr-tools input[type="search"] {
   flex: 1 1 16rem;
   font: inherit;
@@ -214,6 +227,17 @@
 .atr-badge.fixed { color: var(--atr-pass); }
 .atr-badge.flaky { color: var(--atr-norun); }
 .atr-badge.info { color: var(--atr-mute); }
+.atr-badge.trace { color: var(--atr-deep); background: #c8f54a55; cursor: pointer; }
+.atr-meta-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  padding: 0.45rem 0.65rem;
+  background: #0b3d2e0a;
+  border-left: 2px solid var(--atr-deep);
+  font-size: 0.74rem;
+}
+.atr-meta-box a { color: var(--atr-deep); }
 
 .atr-strip { display: inline-flex; gap: 2px; }
 .atr-strip i { width: 0.45rem; height: 0.8rem; background: #0b3d2e14; display: block; }

@@ -15,9 +15,10 @@ mod scope;
 mod transport;
 
 pub use event::{
-    Breadcrumb, EVENT_SCHEMA_VERSION, Event, Exception, Frame, Severity, Stacktrace, User,
+    Breadcrumb, EVENT_SCHEMA_VERSION, Event, Exception, Frame, SessionStatus, SessionUpdate,
+    Severity, Stacktrace, User,
 };
-pub use scope::{Scope, add_breadcrumb, configure_scope};
+pub use scope::{Scope, add_breadcrumb, add_breadcrumb_with_data, configure_scope};
 pub use transport::{EventTransport, HttpTransport, MemoryTransport, TransportError};
 
 use event::Exception as Ex;
@@ -28,10 +29,12 @@ use std::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
+    time::Instant,
 };
 use uuid::Uuid;
 
 static CLIENT: OnceLock<Mutex<Option<Client>>> = OnceLock::new();
+static ACTIVE_SESSION: OnceLock<Mutex<Option<ActiveSession>>> = OnceLock::new();
 static SEND_FAILURES: AtomicU64 = AtomicU64::new(0);
 static LAST_SEND_ERROR: Mutex<Option<String>> = Mutex::new(None);
 static TRACE_CONTEXT_HOOK: OnceLock<Mutex<Option<TraceContextHook>>> = OnceLock::new();
@@ -62,6 +65,16 @@ fn client_slot() -> &'static Mutex<Option<Client>> {
     CLIENT.get_or_init(|| Mutex::new(None))
 }
 
+fn session_slot() -> &'static Mutex<Option<ActiveSession>> {
+    ACTIVE_SESSION.get_or_init(|| Mutex::new(None))
+}
+
+#[derive(Clone)]
+struct ActiveSession {
+    update: SessionUpdate,
+    started_instant: Instant,
+}
+
 /// Client configuration.
 #[derive(Clone)]
 pub struct Options {
@@ -72,6 +85,7 @@ pub struct Options {
     pub service: Option<String>,
     pub sample_rate: f64,
     pub max_breadcrumbs: usize,
+    pub auto_session_tracking: bool,
     pub before_send: Option<BeforeSend>,
 }
 
@@ -88,6 +102,7 @@ impl std::fmt::Debug for Options {
             .field("service", &self.service)
             .field("sample_rate", &self.sample_rate)
             .field("max_breadcrumbs", &self.max_breadcrumbs)
+            .field("auto_session_tracking", &self.auto_session_tracking)
             .field("before_send", &self.before_send.as_ref().map(|_| "<fn>"))
             .finish()
     }
@@ -103,6 +118,7 @@ impl Default for Options {
             service: None,
             sample_rate: 1.0,
             max_breadcrumbs: 100,
+            auto_session_tracking: true,
             before_send: None,
         }
     }
@@ -145,6 +161,11 @@ impl Options {
 
     pub fn max_breadcrumbs(mut self, max: usize) -> Self {
         self.max_breadcrumbs = max.max(1);
+        self
+    }
+
+    pub fn auto_session_tracking(mut self, enabled: bool) -> Self {
+        self.auto_session_tracking = enabled;
         self
     }
 
@@ -217,10 +238,81 @@ impl Guard {
 
 impl Drop for Guard {
     fn drop(&mut self) {
+        end_session_with_status(SessionStatus::Exited);
         let _ = self.flush();
         if let Ok(mut slot) = client_slot().lock() {
             *slot = None;
         }
+    }
+}
+
+/// Start a new Release Health session (`SessionStatus::Ok`) when a `release` is configured.
+pub fn start_session() {
+    let info = with_client(|c| {
+        let release = c.options.release.clone()?;
+        Some((
+            release,
+            c.options.environment.clone(),
+            c.options.service.clone(),
+            Arc::clone(&c.transport),
+        ))
+    })
+    .flatten();
+    let Some((release, environment, service, transport)) = info else {
+        return;
+    };
+    let mut distinct_id = None;
+    scope::with_scope(|s| {
+        if let Some(u) = &s.user {
+            distinct_id =
+                u.id.clone()
+                    .or_else(|| u.email.clone())
+                    .or_else(|| u.username.clone());
+        }
+    });
+    let update = SessionUpdate {
+        session_id: Uuid::new_v4().to_string(),
+        distinct_id,
+        release,
+        environment,
+        service,
+        status: SessionStatus::Ok,
+        errors: 0,
+        started_at: iso_now(),
+        duration_ms: Some(0),
+    };
+    if let Ok(mut slot) = session_slot().lock() {
+        *slot = Some(ActiveSession {
+            update: update.clone(),
+            started_instant: Instant::now(),
+        });
+    }
+    let _ = transport.send_session(&update);
+}
+
+/// End the active Release Health session with `SessionStatus::Exited`.
+pub fn end_session() {
+    end_session_with_status(SessionStatus::Exited);
+}
+
+/// End the active Release Health session with the given terminal `status`.
+pub fn end_session_with_status(status: SessionStatus) {
+    let active = session_slot().lock().ok().and_then(|mut s| s.take());
+    let Some(mut active) = active else {
+        return;
+    };
+    active.update.status = status;
+    active.update.duration_ms = Some(active.started_instant.elapsed().as_millis() as u64);
+    if let Some(transport) = with_client(|c| Arc::clone(&c.transport)) {
+        let _ = transport.send_session(&active.update);
+    }
+}
+
+fn record_session_error() {
+    if let Ok(mut slot) = session_slot().lock()
+        && let Some(active) = slot.as_mut()
+    {
+        active.update.errors = active.update.errors.saturating_add(1);
     }
 }
 
@@ -241,10 +333,17 @@ pub fn init_with_transport(
     options: Options,
     transport: Arc<dyn EventTransport>,
 ) -> Result<Guard, TransportError> {
+    if let Ok(mut s) = session_slot().lock() {
+        *s = None;
+    }
     scope::configure_max_breadcrumbs(options.max_breadcrumbs);
+    let auto_session = options.auto_session_tracking && options.release.is_some();
     let client = Client { options, transport };
     if let Ok(mut slot) = client_slot().lock() {
         *slot = Some(client);
+    }
+    if auto_session {
+        start_session();
     }
     #[cfg(feature = "panic")]
     install_panic_hook();
@@ -278,6 +377,7 @@ pub fn capture_message_with_level(message: impl AsRef<str>, level: Severity) -> 
 /// The exception type is the concrete Rust type name (via [`std::any::type_name_of_val`]),
 /// not a generic `"Error"` stub.
 pub fn capture_error<E: std::error::Error>(err: &E) -> Option<String> {
+    record_session_error();
     let mut chain = Vec::new();
     let mut cur: Option<&dyn std::error::Error> = Some(err);
     while let Some(e) = cur {
@@ -300,6 +400,7 @@ pub fn capture_error<E: std::error::Error>(err: &E) -> Option<String> {
 /// Capture an `anyhow::Error` (feature `anyhow`).
 #[cfg(feature = "anyhow")]
 pub fn capture_anyhow(err: &anyhow::Error) -> Option<String> {
+    record_session_error();
     let mut chain = Vec::new();
     for e in err.chain() {
         chain.push(e.to_string());
@@ -614,6 +715,37 @@ fn hostname() -> Result<String, ()> {
         .ok_or(())
 }
 
+pub(crate) fn is_in_app_frame(function: &str, filename: Option<&str>) -> bool {
+    let fn_trimmed = function.trim_start_matches('<');
+    const NON_APP_PREFIXES: &[&str] = &[
+        "std::",
+        "core::",
+        "alloc::",
+        "tokio::",
+        "backtrace::",
+        "airbug_err::",
+        "rust_begin_unwind",
+        "__rust_",
+    ];
+    if NON_APP_PREFIXES
+        .iter()
+        .any(|p| function.starts_with(p) || fn_trimmed.starts_with(p))
+    {
+        return false;
+    }
+    let Some(file) = filename else {
+        return false;
+    };
+    let norm = file.replace('\\', "/");
+    !norm.contains("/rustc/")
+        && !norm.contains("/.cargo/registry/")
+        && !norm.contains("/.cargo/git/")
+        && !norm.contains("/.rustup/")
+        && !norm.contains("library/std")
+        && !norm.contains("library/core")
+        && !norm.contains("library/alloc")
+}
+
 fn collect_frames() -> Vec<Frame> {
     let bt = backtrace::Backtrace::new();
     let mut frames = Vec::new();
@@ -625,22 +757,16 @@ fn collect_frames() -> Vec<Frame> {
                 .unwrap_or_else(|| "<unknown>".into());
             let filename = sym.filename().map(|p| p.display().to_string());
             let lineno = sym.lineno();
-            let in_app = filename
-                .as_deref()
-                .map(|f| {
-                    !f.contains("/rustc/")
-                        && !f.contains("/.cargo/registry/")
-                        && !f.contains("library/std")
-                        && !f.contains("library/core")
-                })
-                .unwrap_or(false);
+            let colno = sym.colno();
             if function.contains("airbug_err::") || function.contains("backtrace::") {
                 continue;
             }
+            let in_app = is_in_app_frame(&function, filename.as_deref());
             frames.push(Frame {
                 function,
                 filename,
                 lineno,
+                colno,
                 in_app,
             });
         }
@@ -660,6 +786,7 @@ fn install_panic_hook() {
     panic::set_hook(Box::new(move |info| {
         let already_in_send = IN_SEND_OR_PANIC.try_with(|c| c.get()).unwrap_or(true);
         if !already_in_send && with_client(|_| ()).is_some() {
+            record_session_error();
             let payload = panic_payload(info);
             let location = info
                 .location()
@@ -677,6 +804,7 @@ fn install_panic_hook() {
                 }),
             });
             let _ = send_event(event);
+            end_session_with_status(SessionStatus::Crashed);
         }
         prev(info);
     }));
@@ -948,5 +1076,134 @@ mod tests {
             "expected exception event on OTel span, got {:?}",
             span.events
         );
+    }
+
+    #[test]
+    fn in_app_frame_classification_filters_runtime_and_registry_frames() {
+        assert!(!is_in_app_frame(
+            "std::panicking::begin_panic",
+            Some("src/main.rs")
+        ));
+        assert!(!is_in_app_frame(
+            "core::ops::function::FnOnce::call_once",
+            Some("src/main.rs")
+        ));
+        assert!(!is_in_app_frame(
+            "alloc::vec::Vec<T>::push",
+            Some("src/main.rs")
+        ));
+        assert!(!is_in_app_frame(
+            "tokio::runtime::park",
+            Some("src/main.rs")
+        ));
+        assert!(!is_in_app_frame("backtrace::capture", Some("src/main.rs")));
+        assert!(!is_in_app_frame(
+            "airbug_err::capture_error",
+            Some("src/main.rs")
+        ));
+        assert!(!is_in_app_frame(
+            "my_crate::handler",
+            Some("/Users/dev/.cargo/registry/src/index.crates.io/tokio-1.0/src/lib.rs")
+        ));
+        assert!(!is_in_app_frame(
+            "my_crate::handler",
+            Some("/Users/dev/.rustup/toolchains/stable/lib/rustlib/src/rust/library/std/src/rt.rs")
+        ));
+        assert!(!is_in_app_frame(
+            "my_crate::handler",
+            Some("/rustc/123456/library/core/src/ops/function.rs")
+        ));
+        assert!(!is_in_app_frame("my_crate::handler", None));
+        assert!(is_in_app_frame(
+            "checkout_api::orders::create",
+            Some("/workspace/checkout-api/src/orders.rs")
+        ));
+    }
+
+    #[test]
+    fn add_breadcrumb_with_data_attaches_type_and_structured_data() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        let _guard = init_with_transport(
+            Options::new().endpoint("unused"),
+            Arc::new(transport.clone()),
+        )
+        .unwrap();
+
+        let mut data = BTreeMap::new();
+        data.insert("method".into(), serde_json::json!("POST"));
+        data.insert("status_code".into(), serde_json::json!(502));
+        add_breadcrumb_with_data(
+            "http",
+            Some("http"),
+            "POST /payments -> 502",
+            Severity::Warning,
+            data,
+        );
+        assert!(capture_message("gateway failed").is_some());
+        let ev = transport.last().unwrap();
+        let crumb = ev.breadcrumbs.last().unwrap();
+        assert_eq!(crumb.category, "http");
+        assert_eq!(crumb.ty.as_deref(), Some("http"));
+        assert_eq!(crumb.message, "POST /payments -> 502");
+        assert_eq!(crumb.level, Severity::Warning);
+        assert_eq!(crumb.data.get("method"), Some(&serde_json::json!("POST")));
+        assert_eq!(crumb.data.get("status_code"), Some(&serde_json::json!(502)));
+    }
+
+    #[test]
+    fn release_health_session_lifecycle_ok_to_exited_and_panic_to_crashed() {
+        let _lock = INIT_LOCK.lock().unwrap();
+        let transport = MemoryTransport::new();
+        {
+            let _guard = init_with_transport(
+                Options::new()
+                    .endpoint("http://127.0.0.1:8790/api/v1/errors")
+                    .release("1.2.3")
+                    .environment("staging")
+                    .service("checkout"),
+                Arc::new(transport.clone()),
+            )
+            .unwrap();
+            let err = io::Error::other("transient");
+            let _ = capture_error(&err);
+        }
+        let sessions = transport.sessions();
+        assert_eq!(
+            sessions.len(),
+            2,
+            "expected start + exited sessions: {sessions:?}"
+        );
+        assert_eq!(sessions[0].status, SessionStatus::Ok);
+        assert_eq!(sessions[0].release, "1.2.3");
+        assert_eq!(sessions[0].errors, 0);
+        assert_eq!(sessions[1].session_id, sessions[0].session_id);
+        assert_eq!(sessions[1].status, SessionStatus::Exited);
+        assert_eq!(sessions[1].errors, 1);
+        assert!(sessions[1].duration_ms.is_some());
+
+        #[cfg(feature = "panic")]
+        {
+            transport.clear();
+            let _guard = init_with_transport(
+                Options::new()
+                    .endpoint("http://127.0.0.1:8790/api/v1/errors")
+                    .release("1.2.4"),
+                Arc::new(transport.clone()),
+            )
+            .unwrap();
+            let _ = std::panic::catch_unwind(|| {
+                panic!("simulated crash");
+            });
+            let sessions = transport.sessions();
+            assert_eq!(
+                sessions.len(),
+                2,
+                "expected start + crashed sessions: {sessions:?}"
+            );
+            assert_eq!(sessions[0].status, SessionStatus::Ok);
+            assert_eq!(sessions[1].status, SessionStatus::Crashed);
+            assert_eq!(sessions[1].errors, 1);
+        }
     }
 }

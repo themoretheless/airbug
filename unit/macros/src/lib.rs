@@ -454,3 +454,173 @@ fn expand_cases(
         .retain(|a| !a.path().is_ident("ignore") && !a.path().is_ident("should_panic"));
     Ok(quote!(#[cfg(test)] #input #(#cfg)* #[cfg(test)] mod #name { use super::*; #(#wrappers)* }))
 }
+
+struct TestMetaArgs {
+    epic: Option<syn::LitStr>,
+    feature: Option<syn::LitStr>,
+    story: Option<syn::LitStr>,
+    severity: Option<syn::LitStr>,
+    owner: Option<syn::LitStr>,
+    tms: Option<syn::LitStr>,
+    issue: Option<syn::LitStr>,
+    tags: Vec<syn::LitStr>,
+    quarantined: Option<syn::LitStr>,
+    flaky: Option<syn::LitStr>,
+}
+
+impl TestMetaArgs {
+    fn parse(attr: TokenStream) -> syn::Result<Self> {
+        let mut out = Self {
+            epic: None,
+            feature: None,
+            story: None,
+            severity: None,
+            owner: None,
+            tms: None,
+            issue: None,
+            tags: Vec::new(),
+            quarantined: None,
+            flaky: None,
+        };
+        if attr.is_empty() {
+            return Ok(out);
+        }
+        let parser = syn::meta::parser(|meta| {
+            if meta.path.is_ident("epic") {
+                out.epic = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("feature") {
+                out.feature = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("story") {
+                out.story = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("severity") {
+                let s: syn::LitStr = meta.value()?.parse()?;
+                let val = s.value();
+                if !matches!(
+                    val.as_str(),
+                    "blocker" | "critical" | "normal" | "minor" | "trivial"
+                ) {
+                    return Err(syn::Error::new_spanned(
+                        &s,
+                        "severity must be one of: blocker, critical, normal, minor, trivial",
+                    ));
+                }
+                out.severity = Some(s);
+                Ok(())
+            } else if meta.path.is_ident("owner") {
+                out.owner = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("tms") {
+                out.tms = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("issue") {
+                out.issue = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("tag") {
+                out.tags.push(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("tags") {
+                let expr: syn::ExprArray = meta.value()?.parse()?;
+                for elem in expr.elems {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(s),
+                        ..
+                    }) = elem
+                    {
+                        out.tags.push(s);
+                    } else {
+                        return Err(syn::Error::new_spanned(
+                            elem,
+                            "tags array elements must be string literals",
+                        ));
+                    }
+                }
+                Ok(())
+            } else if meta.path.is_ident("quarantined") {
+                out.quarantined = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("flaky") {
+                out.flaky = Some(meta.value()?.parse()?);
+                Ok(())
+            } else {
+                Err(meta.error(
+                    "unsupported #[airbug::test] argument; expected epic, feature, story, severity, owner, tms, issue, tag, tags, quarantined, or flaky",
+                ))
+            }
+        });
+        syn::parse::Parser::parse(parser, attr)?;
+        Ok(out)
+    }
+}
+
+/// Annotate a test with TestOps taxonomy (`epic`, `feature`, `story`, `severity`, `owner`, `tms`,
+/// `issue`, `tag` / `tags`, `quarantined`, `flaky`). Emits `#[test]` on synchronous functions when
+/// no test attribute is already present, and preserves existing test runners such as `#[tokio::test]`.
+#[proc_macro_attribute]
+pub fn test(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let args = match TestMetaArgs::parse(attr) {
+        Ok(args) => args,
+        Err(err) => return err.into_compile_error().into(),
+    };
+    finish(expand_test(args, parse_macro_input!(input as syn::ItemFn)))
+}
+
+fn has_test_attribute(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        attr.path()
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "test")
+    })
+}
+
+fn expand_test(args: TestMetaArgs, mut input: syn::ItemFn) -> syn::Result<Tokens> {
+    let root = runtime()?;
+    let mut stmts: Vec<syn::Stmt> = Vec::new();
+    if let Some(v) = args.epic {
+        stmts.push(parse_quote!(#root::report::epic(#v);));
+    }
+    if let Some(v) = args.feature {
+        stmts.push(parse_quote!(#root::report::feature(#v);));
+    }
+    if let Some(v) = args.story {
+        stmts.push(parse_quote!(#root::report::story(#v);));
+    }
+    if let Some(v) = args.severity {
+        stmts.push(parse_quote!(#root::report::severity(#v);));
+    }
+    if let Some(v) = args.owner {
+        stmts.push(parse_quote!(#root::report::owner(#v);));
+    }
+    for tag in args.tags {
+        stmts.push(parse_quote!(#root::report::tag(#tag);));
+    }
+    if let Some(v) = args.tms {
+        stmts.push(parse_quote!(#root::report::tms_link(#v);));
+    }
+    if let Some(v) = args.issue {
+        stmts.push(parse_quote!(#root::report::issue_link(#v);));
+    }
+    if let Some(v) = args.quarantined {
+        stmts.push(parse_quote!(#root::report::quarantine(#v);));
+    }
+    if let Some(v) = args.flaky {
+        stmts.push(parse_quote!(#root::report::flaky(#v);));
+    }
+
+    let old_stmts = std::mem::take(&mut input.block.stmts);
+    input.block.stmts = stmts;
+    input.block.stmts.extend(old_stmts);
+
+    let needs_std_test = input.sig.asyncness.is_none() && !has_test_attribute(&input.attrs);
+    if needs_std_test {
+        Ok(quote! {
+            #[::core::prelude::v1::test]
+            #input
+        })
+    } else {
+        Ok(quote!(#input))
+    }
+}

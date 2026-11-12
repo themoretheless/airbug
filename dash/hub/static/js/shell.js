@@ -8,6 +8,7 @@ import { $, escapeAttr, escapeHtml } from "./dom.js";
 /** Four questions, not eight packages: what is happening, which run, which signal, is the hub healthy. */
 const GROUPS = [
   { id: "now", label: "Now", cats: ["now"] },
+  { id: "resources", label: "Resources", cats: ["resources"] },
   { id: "runs", label: "Runs", cats: ["runs", "tests", "bench"],
     sub: [["runs", "All"], ["tests", "Tests"], ["bench", "Bench"]] },
   { id: "signals", label: "Signals", cats: ["issues", "traces", "logs", "metrics", "profiles"],
@@ -19,14 +20,16 @@ const GROUPS = [
 const ALIASES = {
   launches: "tests", overview: "now", unit: "tests", mon: "system", otel: "system", err: "system",
   collector: "system", apis: "system", health: "system", signals: "issues", tracez: "traces",
+  stack: "resources", aspire: "resources",
 };
 
 const LEDE = {
   now: "What is running, what just broke, and what changed since the last run.",
+  resources: "Local .NET Aspire-style resource orchestrator: built-in services, discovered containers, and .airbug/stack.json.",
   runs: "Every test and bench run, newest first — live ones on top.",
-  tests: "Per-test results from cargo airbug test: failures first, steps, diffs, history.",
+  tests: "Per-test results from cargo airbug test: failures first, behaviors, defects, steps, diffs, history.",
   bench: "Live and finished bench runs (GUID sessions).",
-  issues: "Issue inbox from airbug-err events.",
+  issues: "Sentry-grade issue inbox: source context, suspect commits, breadcrumbs, release health, and auto-regression.",
   traces: "Distributed traces, critical-path waterfall, service dependency map, RED metrics, and zPages Tracez.",
   logs: "OTLP log tail, structured attributes, and trace correlation.",
   metrics: "OTLP metrics, native histogram quantiles (p50/p95/p99), and trace-linked exemplars.",

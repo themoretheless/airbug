@@ -5,6 +5,7 @@ use crate::{
     event_model::EventEnvelope,
     issues::{IssueStore, SqliteIssueStore},
     otlp::receiver::OtlpStore,
+    resources::ResourceManager,
     runs::{RunStore, load_or_create_hub_id},
 };
 use std::sync::{Arc, Mutex};
@@ -15,6 +16,7 @@ pub struct HubApp {
     pub hub_id: String,
     pub issues: Arc<dyn IssueStore>,
     pub runs: Arc<RunStore>,
+    pub resources: Arc<ResourceManager>,
     pub webhook: Option<String>,
     pub port: u16,
     pub otlp_store: OtlpStore,
@@ -29,13 +31,17 @@ impl HubApp {
     ) -> Result<Self> {
         let paths = RootPaths::new(root);
         let hub_id = load_or_create_hub_id(&paths.hub_id_file())?;
-        let issues = Arc::new(SqliteIssueStore::open(paths.issues_db())?) as Arc<dyn IssueStore>;
+        let issues = Arc::new(SqliteIssueStore::open_with_root(
+            paths.issues_db(),
+            paths.root.clone(),
+        )?) as Arc<dyn IssueStore>;
         let runs = Arc::new(RunStore::open(
             paths.root.clone(),
             &paths.runs_db(),
             hub_id.clone(),
             port,
         )?);
+        let resources = ResourceManager::new(paths.clone(), hub_id.clone(), port);
         if let Some(ref url) = webhook {
             crate::issues::validate_webhook_url(url)?;
         }
@@ -44,6 +50,7 @@ impl HubApp {
             hub_id,
             issues,
             runs,
+            resources,
             webhook,
             port,
             otlp_store: OtlpStore::new(),
