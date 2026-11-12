@@ -91,3 +91,26 @@ RSS снимается вне per-frame hot loop. Изменение RSS не д
 Изображение, checksum, semantic assertions и ошибки работы — отдельные артефакты с привязкой к binary/fixture. Для одинакового backend возможны byte-exact goldens; для разных backend требуется заранее заданная tolerance/quality policy. Принять потерю AA ради ускорения без явного изменения контракта нельзя.
 
 Отчёт обязан показывать scope рядом с числом, raw count и independent process count, interval/effect, availability, mismatches и ссылки на raw data. Профили помогают объяснить причину, но сами по себе не доказывают end-to-end ускорение.
+
+## Аппаратные счётчики
+
+`airbug_bench::perf` даёт счётчики процессора как обычное `Measurement`: `hw.instructions`,
+`hw.cycles`, `hw.cache_references`, `hw.cache_misses`, `hw.branches`, `hw.branch_misses`.
+Счётчик открывается на вызывающий поток, считает только пользовательское пространство и
+работает непрерывно; измерение батча — разность двух чтений.
+
+```rust
+use airbug_bench::{BatchPolicy, Suite, perf::{Event, PerfCounter}};
+match PerfCounter::open(Event::CacheMisses) {
+    Ok(counter) => { suite.bench_measured("sort/cache", counter, BatchPolicy::SmallInput, work)?; }
+    Err(why) => eprintln!("skipped: {why}"),
+}
+```
+
+Границы: только Linux (`perf_event_open`); нужен `perf_event_paranoid` ≤ 2 и PMU, который
+виртуальная машина пробрасывает гостю. Там, где счётчика нет, `open` возвращает ошибку с причиной —
+набор сам решает, пропустить кейс или упасть (пример: `examples/perf_counters.rs`). Значения
+относятся к потоку, а не к процессу: работа в дочерних потоках в них не попадает. Проверено на
+машине без PMU (все шесть событий корректно недоступны); на железе со счётчиками поведение
+покрыто тестом, который там и выполняется, но отдельной приёмки ещё не было.
+

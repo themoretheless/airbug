@@ -40,10 +40,11 @@ Goal: the numbers behind a run come from the machine. `mon` already samples with
 on Linux and macOS, with GPU load and memory (unified memory included). Independent of
 stage 2; can run in parallel with it.
 
-7. **Hardware performance counters in bench**: cache misses, branch mispredictions, SIMD
-   utilisation. Linux/x86_64 first, then macOS ARM.
+7. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
+   and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
+   development VM nor CI exposes one), macOS ARM, SIMD utilisation.
 8. **Frequency-scaling and thermal-throttling correlation** for bench runs (needs
-   model-specific registers; attempt after the counters).
+   model-specific registers).
 
 ## Stage 4 — Measurement depth (`bench`)
 

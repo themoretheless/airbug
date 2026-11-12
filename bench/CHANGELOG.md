@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add `perf`: hardware performance counters (instructions, cycles, cache and branch events) as a `Measurement` on Linux via `perf_event_open`; a missing counter is an explicit error with the reason. Example `perf_counters`.
+- Reports: long source paths wrap on narrow windows, scatter legends wrap instead of clipping, and series colours repeat after twelve instead of six.
+
 - Remove the built-in web interface: `run`, `matrix`, `bench`, `git-compare` and `resume` announce their session in `.airbug/runs/` and print `Live benchmark: http://127.0.0.1:8790/#/run/<id>` when a hub serves the directory; the process exits as soon as results are saved. `--ui`, `--no-ui` and `--no-open` are accepted and ignored; `serve` says where the interface moved.
 
 - Automatically compare completed direct Cargo runs per case, with immutable hash-checked history, filtered-run continuity, explicit incompatibility and history opt-out.

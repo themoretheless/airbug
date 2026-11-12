@@ -31,6 +31,7 @@ pub mod measurement;
 pub mod model;
 mod ordering;
 pub mod outliers;
+pub mod perf;
 pub mod presentation;
 pub mod regression;
 pub mod regression_format;
