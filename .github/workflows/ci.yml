@@ -107,11 +107,20 @@ jobs:
       - run: cargo +stable test --locked -p airbug-hub
 
   airbug-mon:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: rustup toolchain install stable --profile minimal
+      - run: rustup toolchain install stable --profile minimal --component clippy
+      # The sampler builds everywhere; the window is an optional feature.
       - run: cargo +stable test --locked -p airbug-mon
+      - run: cargo +stable clippy --locked -p airbug-mon --all-targets -- -D warnings
+      - name: The window still builds
+        if: runner.os == 'macOS'
+        run: cargo +stable check --locked -p airbug-mon --features gui
 
   report:
     runs-on: ubuntu-latest

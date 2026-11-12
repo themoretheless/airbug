@@ -61,9 +61,9 @@ metrics, correlate instead of rerouting: `OTEL_RESOURCE_ATTRIBUTES="airbug.hub_i
 - Local Aspire stack: `cargo airbug up` starts the hub + collector and launches `.airbug/stack.json`
   resources with automatic `OTEL_*`, `AIRBUG_*`, `AIRBUG_SENTRY_DSN`, and `SERVICES__<NAME>__HTTP`
   injection (`http://127.0.0.1:8790/#/resources`).
-- Host metrics: `cargo run -p airbug-mon --release -- --otlp`, or
-  `--headless --seconds N --otlp` without a GUI. mon itself is an egui window with no
-  port — never link mon, link the hub.
+- Host metrics: `cargo run -p airbug-mon --release -- --otlp` samples until Ctrl+C
+  (`--seconds N` bounds it); it runs without a window on Linux and macOS. mon has no port —
+  never link mon, link the hub.
 
 Checks, in order:
 

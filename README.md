@@ -64,7 +64,7 @@ Known debt (not blocking): none on `syn` majors (unit + bench macros both on syn
 
 ```bash
 cargo test --workspace --locked --exclude airbug-mon   # cross-platform
-cargo test -p airbug-mon                               # macOS host monitor
+cargo test -p airbug-mon                               # host sampler (window: --features gui)
 cargo test -p airbug --all-features
 cargo test -p airbug-otel --all-features
 cargo test -p airbug-err --all-features

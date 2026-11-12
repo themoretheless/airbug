@@ -27,37 +27,33 @@ form.
    formatters), `plots` (on/off, linear/log scales, grouped comparisons), `output` (verbosity,
    colour, tree/table, machine formats), `artifacts` (output directory, raw data, summary).
 3. **`api_semantics`** — check the behaviour of every public API already mapped.
-4. **`report_matrix`, `console_policy`, `visual_acceptance`** — finish the report matrix,
-    review CLI output, look through real rendered reports including interaction.
+4. **`report_matrix`, `console_policy`** — finish the report matrix and review CLI output
+   in a real terminal. (Browser review of the HTML reports is done.)
 5. **`platforms` / `platform_acceptance`** — confirm the current code on Windows runtime and
     native x86 timing.
 6. **`audit` / `final_gate`** — repeat the upstream source audit for missed features, then
     accept a frozen change set requirement by requirement.
 
-## Stage 3 — Host and hardware signals (`mon`, `bench`)
+## Stage 3 — Hardware signals (`bench`)
 
-Goal: the numbers behind a run come from the machine, on Linux as well as macOS. Independent
-of stage 2; can run in parallel with it.
+Goal: the numbers behind a run come from the machine. `mon` already samples without a window
+on Linux and macOS, with GPU load and memory (unified memory included). Independent of
+stage 2; can run in parallel with it.
 
-7. **`mon` as a headless sampler**: sampling without the egui window is the main mode, the
-    window becomes optional.
-8. **`mon` on Linux.**
-9. **Correct GPU memory on unified-memory machines** — today `mem_used` is always 0 and
-    `mem_total` is the "GPU HW allocated memory" figure (`mon/src/gpu.rs`).
-10. **Hardware performance counters in bench**: cache misses, branch mispredictions, SIMD
-    utilisation. Linux/x86_64 first, then macOS ARM.
-11. **Frequency-scaling and thermal-throttling correlation** for bench runs (needs
-    model-specific registers; attempt after the counters).
+7. **Hardware performance counters in bench**: cache misses, branch mispredictions, SIMD
+   utilisation. Linux/x86_64 first, then macOS ARM.
+8. **Frequency-scaling and thermal-throttling correlation** for bench runs (needs
+   model-specific registers; attempt after the counters).
 
 ## Stage 4 — Measurement depth (`bench`)
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-12. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
-13. **Browser/WASM scenario driver** through an external host.
-14. **Method experiments**: instrumentation effect, overhead against
+9. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
+10. **Browser/WASM scenario driver** through an external host.
+11. **Method experiments**: instrumentation effect, overhead against
     handwritten/Criterion/Divan loops, stability under systematic drift.
-15. **Crash-durable atomic publication** of a run directory.
+12. **Crash-durable atomic publication** of a run directory.
 
 ## Unscheduled
 

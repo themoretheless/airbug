@@ -9,7 +9,7 @@ Local developer toolkit (not hosted SaaS). Domains live in folders; packages are
 | `airbug-hub` | `HubApp` in `dash/hub` | Injects `IssueStore`, built-in OTLP HTTP/gRPC receiver, paths, webhook |
 | `cargo-airbug-bench` | `bench/cli` | Clap → action modules |
 | `cargo-airbug` | `cli` | Runs tests in-process (`airbug-testrun`); hands `serve` / `up` / `status` to the hub and `bench` to the bench CLI |
-| `airbug-mon` | `mon/src/main.rs` | Channels + sampler + egui `MonApp` |
+| `airbug-mon` | `mon/src/main.rs` | Channels + sampler + SQLite writer; egui `MonApp` behind the `gui` feature |
 
 Libraries (`airbug`, `airbug-bench`, `airbug-err`, `airbug-otel`) expose builders/traits; they do not install a global `tracing` subscriber (`airbug-otel` provides an opt-in `TracingOtelLayer` via `airbug_otel::tracing_layer()`).
 
