@@ -27,14 +27,14 @@
     {
       "id": "report_matrix",
       "title": "Завершить матрицу отчётов",
-      "status": "open",
+      "status": "verified",
       "sources": [
         "bench/docs/parity/plots.json",
         "bench/docs/parity/measurement.json",
         "bench/docs/parity/artifacts.json"
       ],
       "acceptance": "Проверить direct Cargo, standalone report/compare и history: raw/custom metrics, baseline, saved settings, filters, no-html/no-plots, linear/log axes; для каждой комбинации указать поддерживаемое поведение и проверку.",
-      "current": "Named/automatic statistical and regression snapshots, output/archive equivalence and standalone restoration are verified, including nonmonotone regression interval images supplied by ValueFormatter::scale_intervals. Collection limits and terminal depth have focused tests. Remaining report work includes final source review, navigation and browser visual acceptance. Browser visual acceptance is closed (see visual_acceptance)."
+      "current": "The matrix is executable: bench/scripts/test-report-matrix.py runs 20 combinations — direct harness (default, --no-html, --no-plots, filter, linear and logarithmic summary, save/compare baseline, custom measurement with formatter), history (default, --no-history), standalone report (html/md/json, --baseline, custom metric) and compare (text, --html, --no-plots) — and states the expected behaviour of each. It runs in CI on every OS/toolchain job. Browser review of the rendered reports: visual_acceptance."
     },
     {
       "id": "console_policy",

@@ -27,11 +27,9 @@ form.
    formatters), `plots` (on/off, linear/log scales, grouped comparisons), `output` (verbosity,
    colour, tree/table, machine formats), `artifacts` (output directory, raw data, summary).
 3. **`api_semantics`** — check the behaviour of every public API already mapped.
-4. **`report_matrix`** — finish the report matrix. (Browser review of the reports and a PTY
-   review of the console are done; console tables now fit the terminal.)
-5. **`platforms` / `platform_acceptance`** — confirm the current code on Windows runtime and
+4. **`platforms` / `platform_acceptance`** — confirm the current code on Windows runtime and
     native x86 timing.
-6. **`audit` / `final_gate`** — repeat the upstream source audit for missed features, then
+5. **`audit` / `final_gate`** — repeat the upstream source audit for missed features, then
     accept a frozen change set requirement by requirement.
 
 ## Stage 3 — Hardware signals (`bench`)
@@ -40,10 +38,10 @@ Goal: the numbers behind a run come from the machine. `mon` already samples with
 on Linux and macOS, with GPU load and memory (unified memory included). Independent of
 stage 2; can run in parallel with it.
 
-7. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
+6. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
    and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
    development VM nor CI exposes one), macOS ARM, SIMD utilisation.
-8. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
+7. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
    temperature and throttle counts between processes on Linux (`host.json`) and notes
    throttling; `diagnose` correlates it with
    per-process timings. Still owed: model-specific registers and macOS.
@@ -52,7 +50,7 @@ stage 2; can run in parallel with it.
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-9. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
+8. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
 
 ## Unscheduled
 
