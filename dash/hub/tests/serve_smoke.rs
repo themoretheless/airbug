@@ -1264,7 +1264,7 @@ fn run_page_describes_an_announced_matrix() {
         std::fs::write(dir.join("logs/0-candidate.stdout"), "hello\n").unwrap();
         std::fs::write(
             dir.join("progress.json"),
-            format!(r#"{{"completed":{done},"total":3}}"#),
+            format!(r#"{{"completed":{done},"total":3,"variant":"candidate"}}"#),
         )
         .unwrap();
     }
@@ -1290,10 +1290,9 @@ fn run_page_describes_an_announced_matrix() {
     let run: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(run["kind"], "bench");
     assert_eq!(run["state"], "running", "one cell is still going: {run}");
-    assert_eq!(
-        run["progress"],
-        serde_json::json!({"completed": 4, "total": 6})
-    );
+    assert_eq!(run["progress"]["completed"], 4);
+    assert_eq!(run["progress"]["total"], 6);
+    assert_eq!(run["progress"]["variant"], "--cpu 2 · candidate");
     assert_eq!(run["matrix"], true);
     assert_eq!(run["cells"][1]["axes"]["--cpu"], "2");
     assert_eq!(run["cells"][0]["state"], "complete");

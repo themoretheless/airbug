@@ -27,7 +27,27 @@ pub fn announce(out: &Path) -> Option<Announced> {
         return None;
     }
     let root = std::env::current_dir().ok()?;
-    announce_in(&root, out, std::env::args().collect())
+    let announced = announce_in(&root, out, std::env::args().collect())?;
+    say_where(&root, &announced.run_id);
+    Some(announced)
+}
+
+/// Print where the session is live. The `Live benchmark: <url>` line is a contract: agents
+/// and scripts read it from stdout.
+fn say_where(root: &Path, run_id: &str) {
+    use airbug_run::hub::{self, Probe};
+    let port = hub::port();
+    let url = hub::run_url(port, run_id);
+    match hub::probe(port, root) {
+        Probe::Ours => println!("Live benchmark: {url}"),
+        Probe::Other(other) => eprintln!(
+            "bench: hub on :{port} serves {other}, not this directory — start one here with \
+             `cargo airbug serve --port <N>` to watch live"
+        ),
+        Probe::Absent => {
+            eprintln!("bench: no hub on :{port} — `cargo airbug serve` shows this run at {url}")
+        }
+    }
 }
 
 fn announce_in(root: &Path, out: &Path, command: Vec<String>) -> Option<Announced> {

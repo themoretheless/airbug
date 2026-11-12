@@ -13,7 +13,6 @@ mod revisions;
 mod runner;
 mod sessions;
 mod shared_store;
-mod web_ui;
 
 fn init_tracing() {
     let filter = std::env::var("AIRBUG_LOG")

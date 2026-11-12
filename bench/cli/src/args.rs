@@ -42,7 +42,8 @@ pub(crate) enum Action {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Browse saved experiments in a local web interface.
+    /// Removed: saved experiments are browsed in the hub (`cargo airbug serve`).
+    #[command(hide = true)]
     Serve {
         #[arg(default_value = ".airbug-bench")]
         root: PathBuf,
@@ -55,14 +56,12 @@ pub(crate) enum Action {
         plan: PathBuf,
         #[arg(short, long)]
         output: PathBuf,
-        /// Start and open the live interface even without an interactive terminal.
-        #[arg(long, conflicts_with = "no_ui")]
+        /// Accepted and ignored: the live page is the hub's (`cargo airbug serve`).
+        #[arg(long, hide = true)]
         ui: bool,
-        /// Disable the automatic interface (CI/headless runs).
-        #[arg(long)]
+        #[arg(long, hide = true)]
         no_ui: bool,
-        /// Print the interface URL without launching a browser.
-        #[arg(long)]
+        #[arg(long, hide = true)]
         no_open: bool,
     },
     /// Search a bounded first-parent history; audit every commit to detect nonmonotonic regressions.
@@ -315,14 +314,12 @@ pub(crate) enum Action {
         protocol: bool,
         #[arg(long)]
         dry_run: bool,
-        /// Start and open the live interface even without an interactive terminal.
-        #[arg(long, conflicts_with = "no_ui")]
+        /// Accepted and ignored: the live page is the hub's (`cargo airbug serve`).
+        #[arg(long, hide = true)]
         ui: bool,
-        /// Disable the automatic interface (CI/headless runs).
-        #[arg(long)]
+        #[arg(long, hide = true)]
         no_ui: bool,
-        /// Print the interface URL without launching a browser.
-        #[arg(long)]
+        #[arg(long, hide = true)]
         no_open: bool,
         /// One diagnostic memory-profile run; requires an instrumented Rust worker.
         #[arg(long)]

@@ -21,6 +21,7 @@ let chartsKey = "";
 let logPath = "";
 let baseline = {};     // run id → chosen baseline id
 let pendingRerun = null;
+let pace = { id: "", at: 0, done: 0 };  // first sighting of a live bench run, for the ETA
 
 const note = text => `<p class="now-quiet">${escapeHtml(text)}</p>`;
 const isTest = () => run && run.kind === "test";
@@ -80,9 +81,19 @@ function cellGrid() {
   return `<table class="run-grid"><thead><tr>${head}<th>state</th><th>processes</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+/** Time left, from how fast processes finished since this page first saw the run. */
+function eta(p) {
+  if (pace.id !== run.run_id) pace = { id: run.run_id, at: Date.now(), done: p.completed || 0 };
+  const gained = (p.completed || 0) - pace.done;
+  if (!p.total || gained <= 0) return "";
+  const left = ((Date.now() - pace.at) / gained) * (p.total - p.completed) / 1000;
+  return left < 1 ? "" : `about ${TR ? TR.fmtDuration(left) : Math.round(left) + " s"} left`;
+}
+
 async function benchResults(body, fresh) {
   if (fresh) {
-    body.innerHTML = `<div class="bench-progress-wrap"><progress id="run-progress" max="100" value="0"></progress></div>
+    body.innerHTML = `<div class="bench-progress-wrap"><progress id="run-progress" max="100" value="0"></progress>
+        <div class="bench-live" id="run-now"></div></div>
       <div class="bench-links" id="run-links"></div><div id="run-cells"></div>
       <div id="run-charts" class="bench-charts"></div>
       <iframe id="run-report" class="bench-report-frame" title="Bench report" hidden></iframe>`;
@@ -92,6 +103,7 @@ async function benchResults(body, fresh) {
   const bar = $("run-progress");
   bar.max = p.total || 100;
   bar.value = p.total ? p.completed : (live() ? 0 : 100);
+  $("run-now").textContent = live() ? [p.variant, eta(p)].filter(Boolean).join(" · ") : "";
   const files = [[run.has_report_html, "report.html"], [run.has_run_json, "run.json"]]
     .filter(([has]) => has)
     .map(([, name]) => `<a href="${escapeAttr(run.files + name)}" target="_blank" rel="noopener">${name}</a>`);

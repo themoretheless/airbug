@@ -124,6 +124,17 @@ fn locate(root: &Path, registry: &RunStore, id: &str) -> Option<(Option<Manifest
     })
 }
 
+/// The variant a running directory is measuring right now.
+fn variant(dir: &Path) -> Option<String> {
+    if dir.join("status-final.json").is_file() {
+        return None;
+    }
+    read_json::<Value>(&dir.join("progress.json"))?["variant"]
+        .as_str()
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+}
+
 /// State, counts and last change of one runner directory.
 fn observe(dir: &Path) -> (Option<String>, u64, u64, u64) {
     let read = |name: &str| read_json::<Value>(&dir.join(name));
@@ -266,6 +277,26 @@ pub fn describe(root: &Path, registry: &RunStore, id: &str) -> Option<Value> {
         log_files(&bench.dir.join(name), &format!("{name}/"), &mut logs);
     }
     let has = |f: &str| bench.dir.join(f).is_file();
+    // What is being measured now: the session itself, or its running cell.
+    let now = variant(&bench.dir).or_else(|| {
+        cells
+            .iter()
+            .filter(|c| c["state"] == "running")
+            .find_map(|c| {
+                let name = c["name"].as_str()?;
+                let axes = c["axes"].as_object().map(|a| {
+                    a.iter()
+                        .map(|(k, v)| format!("{k} {}", v.as_str().unwrap_or("")))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                });
+                let what = variant(&bench.dir.join(name)).unwrap_or_default();
+                Some(format!(
+                    "{} · {what}",
+                    axes.unwrap_or_else(|| name.to_string())
+                ))
+            })
+    });
     Some(json!({
         "run_id": id,
         "kind": KIND_BENCH,
@@ -275,7 +306,7 @@ pub fn describe(root: &Path, registry: &RunStore, id: &str) -> Option<Value> {
         "started_at_ms": bench.started_at_ms,
         "finished_at_ms": done.then(|| recorded_end.and_then(|(_, end)| end).unwrap_or(at)),
         "updated_at_ms": at,
-        "progress": { "completed": completed, "total": total },
+        "progress": { "completed": completed, "total": total, "variant": now },
         "files": bench.files,
         "has_report_html": has("report.html"),
         "has_run_json": has("run.json"),

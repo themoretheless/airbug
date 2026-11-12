@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the built-in web interface: `run`, `matrix`, `bench`, `git-compare` and `resume` announce their session in `.airbug/runs/` and print `Live benchmark: http://127.0.0.1:8790/#/run/<id>` when a hub serves the directory; the process exits as soon as results are saved. `--ui`, `--no-ui` and `--no-open` are accepted and ignored; `serve` says where the interface moved.
+
 - Automatically compare completed direct Cargo runs per case, with immutable hash-checked history, filtered-run continuity, explicit incompatibility and history opt-out.
 
 - Add compensation attributes with nested/imported inheritance and CLI precedence; correct run-level overhead-policy metadata and verify CPU clocks on ARM64 and x86_64 through Rosetta.

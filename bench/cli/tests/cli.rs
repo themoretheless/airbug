@@ -3,6 +3,8 @@ use std::{fs, path::Path, process::Command};
 fn cli(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_cargo-airbug-bench"))
         .args(args)
+        // Fixture sessions are not runs anybody wants listed in a hub.
+        .env("AIRBUG_DASHBOARD", "0")
         .output()
         .unwrap()
 }

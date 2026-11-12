@@ -62,9 +62,6 @@ static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 extern "C" fn cancel(_: libc::c_int) {
     CANCELLED.store(true, std::sync::atomic::Ordering::Relaxed);
 }
-pub fn cancelled() -> bool {
-    CANCELLED.load(std::sync::atomic::Ordering::Relaxed)
-}
 fn progress(out: &Path, completed: usize, total: usize, variant: &str) -> Result<()> {
     let temp = out.join("progress.next.json");
     fs::write(

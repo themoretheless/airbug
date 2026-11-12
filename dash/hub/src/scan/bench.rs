@@ -107,10 +107,6 @@ pub(crate) fn scan_bench(root: &Path) -> DomainCard {
                 command: "open http://127.0.0.1:8790/#/bench".into(),
             },
             Action {
-                label: "Serve bench UI".into(),
-                command: "cargo airbug-bench serve .airbug-bench --port 8787".into(),
-            },
-            Action {
                 label: "Run workloads".into(),
                 command: "cargo airbug-bench run -p airbug-bench --bench workloads -o .airbug-bench/session".into(),
             },
