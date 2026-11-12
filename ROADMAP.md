@@ -55,8 +55,9 @@ Goal: the scenarios Forma needs and evidence for the method itself.
 
 9. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
 10. **Browser/WASM scenario driver** through an external host.
-11. **Method experiments**: instrumentation effect, overhead against
-    handwritten/Criterion/Divan loops, stability under systematic drift.
+11. **Method experiments**: instrumentation effect and overhead against
+    handwritten/Criterion/Divan loops. (Stability under systematic drift is settled by
+    `bench/tests/drift.rs`.)
 
 ## Unscheduled
 
