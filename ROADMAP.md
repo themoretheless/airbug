@@ -53,7 +53,8 @@ stage 2; can run in parallel with it.
 Goal: the scenarios Forma needs and evidence for the method itself.
 
 9. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
-10. **Browser/WASM scenario driver** through an external host.
+10. **Browser scenarios**: the micro driver exists (`bench/scripts/browser-driver.cjs`);
+    scenario phases in a browser (readiness, frames, events) are still to do.
 11. **Method experiments**: instrumentation effect and overhead against
     handwritten/Criterion/Divan loops. (Stability under systematic drift is settled by
     `bench/tests/drift.rs`.)

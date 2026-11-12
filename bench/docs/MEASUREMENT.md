@@ -114,3 +114,25 @@ match PerfCounter::open(Event::CacheMisses) {
 машине без PMU (все шесть событий корректно недоступны); на железе со счётчиками поведение
 покрыто тестом, который там и выполняется, но отдельной приёмки ещё не было.
 
+## Браузер и WASM
+
+`bench/scripts/browser-driver.cjs` запускает страницу в headless Chromium и отдаёт результаты в
+протоколе worker, поэтому process runner работает с браузером как с обычной программой:
+
+```sh
+cargo airbug-bench run --protocol --program node -o .airbug-bench/browser \
+  -- bench/scripts/browser-driver.cjs bench/examples/browser/index.html
+```
+
+Контракт страницы — один глобальный объект: `globalThis.airbugBench = { "case id": () => { одна
+операция } }` (или promise такого объекта: WASM компилируется асинхронно). Драйвер прогревает
+кейс, подбирает размер батча под `--target-ms` (по умолчанию 50 мс) и снимает `--samples` батчей;
+значение — сумма батча в наносекундах и число операций, как у нативного worker. Расписание
+AB/BA, baseline, сравнение и отчёты — те же.
+
+Границы: часы — `performance.now()` главного потока; в Chromium без cross-origin isolation шаг
+0,1 мс, поэтому батчи длинные, а разрешение записывается в контракт кейса и в scope метрики. Между
+кодом и числом стоят JIT и сборщик мусора. Это микро-драйвер: фазы сценария (готовность, кадры,
+события) в браузере пока не размечаются. Нужен Playwright с Chromium; в CI драйвер не запускается.
+Пример страницы с WASM-модулем: `bench/examples/browser/index.html`.
+
