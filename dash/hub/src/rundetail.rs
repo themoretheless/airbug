@@ -310,6 +310,7 @@ pub fn describe(root: &Path, registry: &RunStore, id: &str) -> Option<Value> {
         "files": bench.files,
         "has_report_html": has("report.html"),
         "has_run_json": has("run.json"),
+        "has_memory_html": has("memory.html"),
         "matrix": has("matrix.json"),
         "cells": cells,
         "logs": logs,

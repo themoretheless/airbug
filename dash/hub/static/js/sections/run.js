@@ -104,7 +104,7 @@ async function benchResults(body, fresh) {
   bar.max = p.total || 100;
   bar.value = p.total ? p.completed : (live() ? 0 : 100);
   $("run-now").textContent = live() ? [p.variant, eta(p)].filter(Boolean).join(" · ") : "";
-  const files = [[run.has_report_html, "report.html"], [run.has_run_json, "run.json"]]
+  const files = [[run.has_report_html, "report.html"], [run.has_memory_html, "memory.html"], [run.has_run_json, "run.json"]]
     .filter(([has]) => has)
     .map(([, name]) => `<a href="${escapeAttr(run.files + name)}" target="_blank" rel="noopener">${name}</a>`);
   $("run-links").innerHTML = files.join(" · ");

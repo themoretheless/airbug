@@ -439,7 +439,7 @@
         "criterion-bencher.json: all 14 sync/async Bencher declarations mapped to typed native APIs; 20 current measurement integration tests passed. Method equality checked by test-upstream-surface.py; full semantic parity remains unproven.",
         "criterion-extensions.json::measurement_semantic_audit::signed_measurement_probe: executed pinned Criterion with negative Measurement values; recorded sample and estimate artifacts."
       ],
-      "remaining": "Signed totals and report/baseline paths passed locally and in both Linux/Windows toolchains. Current full macOS CI and browser visual acceptance remain open."
+      "remaining": "Signed totals and report/baseline paths passed locally and in both Linux/Windows toolchains. Current full macOS CI remains open; browser visual acceptance done 2026-11-12 (completion.json::visual_acceptance)."
     },
     {
       "id": "samples",
@@ -665,7 +665,7 @@
         "bench/docs/parity/plots.json (Plotter surface audit against local Criterion 0.8.2 sources)",
         "hypothesis_plot::html now shares the standard report template and numerical comparison table. Two library and three runner comparison tests passed; navigation markup/escaping verified, browser interactions still unverified."
       ],
-      "remaining": "See plots.json: graph families and scale inheritance are implemented with focused evidence; full HTML visual inspection, navigation/thumbnail equivalents, resource limits, report-entrypoint audit and custom-formatter integration remain incomplete."
+      "remaining": "See plots.json: graph families and scale inheritance are implemented with focused evidence; navigation/thumbnail equivalents, resource limits, report-entrypoint audit and custom-formatter integration remain incomplete; HTML visual inspection done 2026-11-12 (completion.json::visual_acceptance)."
     },
     {
       "id": "output",
@@ -741,7 +741,7 @@
         "bench/docs/parity/artifacts.json: hashed Criterion 0.8.2 source audit of raw samples, identity, estimates, fences, CSV, relative estimates, baselines and HTML; CSV metadata/normalization gap identified.",
         "Native --no-html preserves JSON/CSV/statistics/history while skipping HTML. Real Cargo named/automatic/loaded-baseline cases including distribution capture passed in test-formatted-bootstrap.py; artifacts.json::raw_only_direct_harness."
       ],
-      "remaining": "Raw and machine-formatted CSV context is covered in artifacts.json; ordinary measurements now generate statistical artifacts by default; complete plot/visual entrypoint verification remains open."
+      "remaining": "Raw and machine-formatted CSV context is covered in artifacts.json; ordinary measurements now generate statistical artifacts by default; plot entrypoint audit remains open; browser visual acceptance done 2026-11-12 (completion.json::visual_acceptance)."
     },
     {
       "id": "black_box",

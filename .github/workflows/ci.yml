@@ -122,6 +122,9 @@ jobs:
           node-version: '22'
       - name: Offline report navigation logic
         run: node bench/scripts/test-report-navigation.cjs
+      - name: Report and memory page controls (DOM fixtures)
+        working-directory: bench
+        run: node scripts/test-report-ui.mjs && node scripts/test-memory-ui.mjs
       - run: rustup toolchain install stable --profile minimal
       - name: Generate web report (per-test run, same format the hub shows live)
         run: cargo +stable run --locked -p cargo-airbug -- test --title "CI tests" --out target/airbug-report -- --locked --workspace --all-features --exclude airbug-mon
