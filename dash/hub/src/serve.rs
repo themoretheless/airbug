@@ -857,9 +857,13 @@ fn handle_session_ingest(
     }
 }
 
-/// `/runs/<id>/<file>` — files of a test run (`index.html`, `output.log`, `events/…`).
+/// `/runs/<id>/<file>` — files of a test run (`index.html`, `output.log`, `events/…`);
+/// `/runs/<id>/files/<file>` — files of a bench session's output directory.
 fn serve_run_file(stream: &mut TcpStream, app: &HubApp, rest: &str) -> std::io::Result<()> {
     let found = rest.split_once('/').and_then(|(id, rel)| {
+        if let Some(artifact) = rel.strip_prefix("files/") {
+            return store::artifact_file(&app.paths.root, id, artifact);
+        }
         let rel = if rel.is_empty() { "index.html" } else { rel };
         store::run_file(&app.paths.root, id, rel)
     });

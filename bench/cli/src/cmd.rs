@@ -60,7 +60,8 @@ pub(crate) fn execute() -> Result<i32> {
             no_open,
         } => {
             let live = start_interface(&output, &cli.store, ui, no_ui, no_open)?;
-            let result = matrix::run(serde_json::from_slice(&std::fs::read(plan)?)?, &output);
+            let matrix = serde_json::from_slice(&std::fs::read(plan)?)?;
+            let result = crate::shared_store::session(&output, || matrix::run(matrix, &output));
             if live && result.is_ok() && !runner::cancelled() {
                 hold_interface();
             }
@@ -90,7 +91,8 @@ pub(crate) fn execute() -> Result<i32> {
             args,
         })?,
         Action::Resume { run, output } => {
-            sessions::resume(&project::resolve(&cli.store, &run)?, &output)?
+            let source = project::resolve(&cli.store, &run)?;
+            crate::shared_store::session(&output, || sessions::resume(&source, &output))?
         }
         Action::Profile {
             run,
@@ -388,38 +390,41 @@ pub(crate) fn execute() -> Result<i32> {
             if !args.iter().any(|s| s == "--json") {
                 args.push("--json".into());
             }
-            for (i, (t, path)) in targets.iter().zip(builds).enumerate() {
-                let directory = out.join(format!("{i}-{}-{}", t.package, t.name));
-                eprintln!(
-                    "bench: target {}/{} {}/{}",
-                    i + 1,
-                    targets.len(),
-                    t.package,
-                    t.name
-                );
-                let run = runner::run(
-                    runner::Plan {
-                        privacy: None,
-                        variants: Default::default(),
-                        start_pair: 0,
-                        candidate: runner::Program {
-                            path,
-                            args: args.clone(),
-                            env: Default::default(),
-                            cwd: t.manifest.parent().map(|p| p.to_path_buf()),
+            crate::shared_store::session(&out, || {
+                for (i, (t, path)) in targets.iter().zip(builds).enumerate() {
+                    let directory = out.join(format!("{i}-{}-{}", t.package, t.name));
+                    eprintln!(
+                        "bench: target {}/{} {}/{}",
+                        i + 1,
+                        targets.len(),
+                        t.package,
+                        t.name
+                    );
+                    let run = runner::run(
+                        runner::Plan {
+                            privacy: None,
+                            variants: Default::default(),
+                            start_pair: 0,
+                            candidate: runner::Program {
+                                path,
+                                args: args.clone(),
+                                env: Default::default(),
+                                cwd: t.manifest.parent().map(|p| p.to_path_buf()),
+                            },
+                            baseline: None,
+                            repetitions,
+                            timeout_ms,
+                            protocol: true,
+                            fixtures: vec![],
+                            contract: Default::default(),
+                            provenance: Default::default(),
                         },
-                        baseline: None,
-                        repetitions,
-                        timeout_ms,
-                        protocol: true,
-                        fixtures: vec![],
-                        contract: Default::default(),
-                        provenance: Default::default(),
-                    },
-                    &directory,
-                )?;
-                println!("{}\nSaved {}", report::markdown(&run)?, directory.display());
-            }
+                        &directory,
+                    )?;
+                    println!("{}\nSaved {}", report::markdown(&run)?, directory.display());
+                }
+                Ok(())
+            })?;
         }
         Action::Baseline { action } => match action {
             BaselineAction::Save {
@@ -580,7 +585,7 @@ pub(crate) fn execute() -> Result<i32> {
             let announced = crate::shared_store::announce(&out);
             let result = runner::run(plan, &out);
             if let Some(announced) = announced {
-                announced.finish(&out);
+                announced.finish(&out, result.is_ok());
             }
             if out.join("run.json").is_file() {
                 let doc = experiment_report::build(experiment_report::Options {
