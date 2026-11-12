@@ -342,7 +342,7 @@ pub fn start(root: &Path, port: u16, id: &str, failed_only: bool) -> Result<Valu
     Ok(json!({
         "run_id": run_id,
         "rerun_of": id,
-        "href": format!("#/tests/{run_id}"),
+        "href": format!("#/run/{run_id}"),
         "tests": plan.tests,
         "truncated": plan.truncated,
         "command": plan.command(),

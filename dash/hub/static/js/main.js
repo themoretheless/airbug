@@ -11,11 +11,12 @@ import metrics, { refresh as refreshMetrics } from "./sections/metrics.js";
 import now from "./sections/now.js";
 import profiles, { init as initProfiles, refresh as refreshProfiles } from "./sections/profiles.js";
 import resources, { refresh as refreshResources } from "./sections/resources.js";
+import run from "./sections/run.js";
 import runs from "./sections/runs.js";
 import tests from "./sections/tests.js";
 import traces, { init as initTraces, refresh as refreshTraces } from "./sections/traces.js";
 
-[now, resources, runs, tests, bench, issues, traces, logs, metrics, profiles, health].forEach(register);
+[now, resources, runs, run, tests, bench, issues, traces, logs, metrics, profiles, health].forEach(register);
 initLogs();
 initTraces();
 initProfiles();

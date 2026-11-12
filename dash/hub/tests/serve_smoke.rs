@@ -464,7 +464,7 @@ fn launch_history_updates_and_serves_only_registered_attachments() {
     let (status, body) = http(port, "GET", "/api/v1/runs?kind=test", None);
     assert_eq!(status, 200);
     let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(timeline["runs"][0]["href"], "#/tests/123-456");
+    assert_eq!(timeline["runs"][0]["href"], "#/run/123-456");
     assert_eq!(timeline["runs"][0]["totals"]["total"], 1);
     assert_eq!(timeline["live"], 0); // Missing timestamps make this fixture stale.
     let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
@@ -530,7 +530,7 @@ fn launch_history_updates_and_serves_only_registered_attachments() {
     std::fs::write(bench.join("run.json"), fixture.to_string()).unwrap();
     let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
     let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(timeline["runs"][0]["href"], "#/tests/123-457");
+    assert_eq!(timeline["runs"][0]["href"], "#/run/123-457");
     let (status, body) = http(port, "GET", "/api/v1/runs/123-457", None);
     assert_eq!(status, 200, "{body}");
     let adapted: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -1248,5 +1248,71 @@ fn serve_native_otlp_collector_traces_metrics_logs_profiles_and_issue_correlatio
         200
     );
 
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The run page asks one endpoint about any run: an announced matrix is described with its
+/// cells, its logs and where its files are served — also outside `.airbug-bench`.
+#[test]
+fn run_page_describes_an_announced_matrix() {
+    let root = std::env::temp_dir().join(format!("airbug-hub-run-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let out = root.join("elsewhere/grid");
+    for (cell, done) in [("0", 3), ("1", 1)] {
+        let dir = out.join(cell);
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        std::fs::write(dir.join("logs/0-candidate.stdout"), "hello\n").unwrap();
+        std::fs::write(
+            dir.join("progress.json"),
+            format!(r#"{{"completed":{done},"total":3}}"#),
+        )
+        .unwrap();
+    }
+    std::fs::write(out.join("0/status-final.json"), r#"{"state":"complete"}"#).unwrap();
+    std::fs::write(out.join("0/run.json"), "{}").unwrap();
+    std::fs::write(out.join("matrix.json"), r#"[{"--cpu":"1"},{"--cpu":"2"}]"#).unwrap();
+    let store = root.join(".airbug/runs/bench-7-7");
+    std::fs::create_dir_all(&store).unwrap();
+    let manifest = serde_json::json!({
+        "schema": "airbug.run/1", "kind": "bench", "run_id": "bench-7-7", "title": "grid",
+        "started_at_ms": 1000, "artifacts": out.display().to_string(),
+    });
+    std::fs::write(store.join("manifest.json"), manifest.to_string()).unwrap();
+    std::fs::write(
+        store.join("progress.json"),
+        r#"{"run_id":"bench-7-7","kind":"bench","state":"running"}"#,
+    )
+    .unwrap();
+
+    let (port, _hub) = start_hub(&root);
+    let (status, body) = http(port, "GET", "/api/v1/run?id=bench-7-7", None);
+    assert_eq!(status, 200, "{body}");
+    let run: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(run["kind"], "bench");
+    assert_eq!(run["state"], "running", "one cell is still going: {run}");
+    assert_eq!(
+        run["progress"],
+        serde_json::json!({"completed": 4, "total": 6})
+    );
+    assert_eq!(run["matrix"], true);
+    assert_eq!(run["cells"][1]["axes"]["--cpu"], "2");
+    assert_eq!(run["cells"][0]["state"], "complete");
+    assert_eq!(run["files"], "/runs/bench-7-7/files/");
+    assert_eq!(run["logs"][0]["path"], "0/logs/0-candidate.stdout");
+
+    let (status, body) = http(
+        port,
+        "GET",
+        "/runs/bench-7-7/files/0/logs/0-candidate.stdout",
+        None,
+    );
+    assert_eq!((status, body.as_str()), (200, "hello\n"));
+    let (status, _) = http(port, "GET", "/runs/bench-7-7/files/../manifest.json", None);
+    assert_eq!(status, 404);
+    let (status, _) = http(port, "GET", "/api/v1/run?id=nope", None);
+    assert_eq!(status, 404);
+    let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
+    let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(timeline["runs"][0]["href"], "#/run/bench-7-7");
     let _ = std::fs::remove_dir_all(&root);
 }

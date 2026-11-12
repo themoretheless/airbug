@@ -65,7 +65,7 @@ pub const USAGE: &str = "\
 airbug-hub test [--nextest] [--root PATH] [--out DIR] [--junit FILE] [--title TEXT] [--port N]
                 [--no-list] [--quiet] [--keep N] [-- <cargo test args> [-- <test binary args>]]
     # runs cargo test, writes .airbug/runs/<id>/ (or --out DIR), live in the hub at
-    # http://127.0.0.1:<port>/#/tests/<id>; exit code follows the tests
+    # http://127.0.0.1:<port>/#/run/<id>; exit code follows the tests
     # --junit FILE exports JUnit XML upon completion
     # --nextest runs `cargo nextest run` (args after -- go to it; filters after the second --)
     # --no-list skips the listing pass (needed for harness = false test targets)";
@@ -247,7 +247,7 @@ fn run(options: Options) -> io::Result<i32> {
     store.write(&mut collector, true);
     fs::write(dir.join("index.html"), html::render(&collector.report))?;
 
-    let live_url = format!("http://127.0.0.1:{}/#/tests/{run_id}", options.port);
+    let live_url = format!("http://127.0.0.1:{}/#/run/{run_id}", options.port);
     eprintln!("airbug test: run {run_id}");
     eprintln!("airbug test: files {}", dir.display());
     if in_store {

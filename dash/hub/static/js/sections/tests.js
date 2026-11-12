@@ -1,8 +1,8 @@
-// Runs › Tests: one test run, live, with a picker of recent runs.
+// Runs › Tests: the newest test run, live; recent runs open on the run page.
 
 import { getJson } from "../api.js";
 import { $, bindCopy, escapeAttr, escapeHtml } from "../dom.js";
-import { currentRoute, setTitle } from "../shell.js";
+import { setTitle } from "../shell.js";
 import { emptyStart, fetchTimeline, isLive, START_TESTS, TR } from "../runs.js";
 
 let view = null;
@@ -15,7 +15,7 @@ const message = text => `<div class="now-empty"><p>${escapeHtml(text)}</p></div>
 
 function onRerunStarted(started) {
   pendingRerun = started.run_id;
-  location.hash = started.href || "#/tests/" + started.run_id;
+  refresh(true).catch(() => {});
 }
 
 function dotState(r) {
@@ -30,21 +30,19 @@ function renderPicker(runs) {
     el.innerHTML = "";
     return;
   }
-  const following = !currentRoute().runId;
   const chips = runs.map(r => {
     const t = r.totals || {};
     const label = (r.git && r.git.short) || r.run_id.slice(0, 8);
     const count = isLive(r) ? `${t.completed || 0}/${t.total || "?"}` : (t.failed ? `${t.failed}✗` : `${t.passed || 0}✓`);
-    const on = r.run_id === viewRun && !following ? " on" : "";
-    return `<a class="pick${on}" href="#/tests/${escapeAttr(r.run_id)}" title="${escapeAttr(r.title + " · " + (TR ? TR.fmtWhen(r.started_at_ms) : ""))}">
+    return `<a class="pick" href="#/run/${escapeAttr(r.run_id)}" title="${escapeAttr(r.title + " · " + (TR ? TR.fmtWhen(r.started_at_ms) : ""))}">
       <span class="atr-dot ${dotState(r)}"></span>${escapeHtml(label)} <small>${escapeHtml(count)}</small></a>`;
   }).join("");
-  el.innerHTML = `<a class="pick${following ? " on" : ""}" href="#/tests" title="always show the newest run">latest</a>${chips}`;
+  el.innerHTML = `<a class="pick on" href="#/tests" title="always show the newest run">latest</a>${chips}`;
 }
 
 async function refresh(reset) {
   const el = $("tests-view");
-  const id = currentRoute().runId || "latest";
+  const id = pendingRerun || "latest";
   const [detail, list] = await Promise.all([
     getJson("runs/" + encodeURIComponent(id)).catch(err => ({ error: err })),
     fetchTimeline("test", 15).catch(() => ({ runs: [] })),

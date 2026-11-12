@@ -49,6 +49,12 @@
       <div class="runs-list" id="runs-list" aria-live="polite"></div>
     </section>
 
+    <section class="panel atr" data-cat="run" id="panel-run" hidden>
+      <div class="run-head" id="run-head"></div>
+      <nav class="run-tabs" id="run-tabs" aria-label="Run"></nav>
+      <div class="run-body" id="run-body" aria-live="polite"></div>
+    </section>
+
     <section class="panel" data-cat="tests" id="panel-tests" hidden>
       <div class="tests-picker atr" id="tests-picker"></div>
       <div class="tests-view" id="tests-view"></div>
@@ -61,26 +67,6 @@
           <div class="bench-meta" id="bench-meta">loading…</div>
         </div>
         <div id="bench-list" class="bench-list"></div>
-        <div id="bench-detail" class="bench-detail" hidden>
-          <a class="bench-back" href="#/bench">← all runs</a>
-          <div class="bench-progress-wrap">
-            <progress id="bench-progress" max="100" value="0"></progress>
-            <div id="bench-live" class="bench-live"></div>
-          </div>
-          <div class="bench-links" id="bench-links"></div>
-          <div id="bench-charts" class="bench-charts"></div>
-          <iframe id="bench-report-frame" class="bench-report-frame" title="Bench report" hidden></iframe>
-          <div class="bench-tele">
-            <h3>Traces</h3>
-            <div id="bench-traces" class="bench-tele-panel"></div>
-            <h3>Logs</h3>
-            <div id="bench-logs" class="bench-tele-panel"></div>
-            <h3>Metrics</h3>
-            <div id="bench-metrics" class="bench-tele-panel"></div>
-            <h3>Issues</h3>
-            <div id="bench-issues" class="bench-tele-panel"></div>
-          </div>
-        </div>
       </section>
     </section>
 

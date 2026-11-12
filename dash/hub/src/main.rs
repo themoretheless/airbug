@@ -10,6 +10,7 @@ mod issues;
 mod otlp;
 mod rerun;
 mod resources;
+mod rundetail;
 mod runs;
 mod scan;
 mod sentry;

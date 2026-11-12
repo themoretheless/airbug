@@ -100,7 +100,7 @@ fn test_run_item(dir: &Path) -> Option<RunItem> {
         .unwrap_or(manifest.started_at_ms);
     let stale = !state.is_finished() && now_ms().saturating_sub(updated) > STALE_AFTER_MS;
     Some(RunItem {
-        href: format!("#/tests/{}", manifest.run_id),
+        href: crate::rundetail::href(&manifest.run_id),
         run_id: manifest.run_id,
         kind: "test",
         title: manifest.title,
@@ -124,7 +124,7 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
         for run in list.runs {
             seen.insert(format!("runs/{}", run.run_id));
             items.push(RunItem {
-                href: format!("#/bench/{}", run.run_id),
+                href: crate::rundetail::href(&run.run_id),
                 run_id: run.run_id,
                 kind: "bench",
                 title: run.title,
@@ -143,7 +143,11 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
     items.extend(announced_bench_runs(root, &mut seen));
     for row in scan::list_bench_dirs(root).runs {
         let id = row.id.replace('\\', "/");
-        if seen.contains(&id) {
+        // Announced sessions are listed once, cells of a matrix included.
+        if seen
+            .iter()
+            .any(|known| id == *known || id.starts_with(&format!("{known}/")))
+        {
             continue;
         }
         let run_json = root.join(&row.rel);
@@ -153,7 +157,7 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
             .unwrap_or_else(|| "complete".into());
         let when = mtime_ms(&run_json);
         items.push(RunItem {
-            href: row.report_url.unwrap_or(row.run_url),
+            href: crate::rundetail::href(&id),
             title: id.clone(),
             run_id: id,
             kind: "bench",
@@ -210,15 +214,7 @@ fn announced_bench_runs(root: &Path, seen: &mut HashSet<String>) -> Vec<RunItem>
                     .filter(|p| p.totals.total > 0)
                     .map(|p| json!({"completed": p.totals.completed, "total": p.totals.total}))
             });
-            let href = artifacts
-                .as_deref()
-                .and_then(|a| {
-                    ["report.html", "run.json"]
-                        .into_iter()
-                        .find(|file| a.join(file).is_file())
-                })
-                .map(|file| format!("/runs/{}/files/{file}", manifest.run_id))
-                .unwrap_or_else(|| "#/runs".into());
+            let href = crate::rundetail::href(&manifest.run_id);
             Some(RunItem {
                 href,
                 run_id: manifest.run_id,
@@ -359,7 +355,7 @@ fn case_runs(root: &Path) -> Vec<RunItem> {
                 state,
                 started_at_ms: run["created_ms"].as_u64().unwrap_or(0),
                 updated_at_ms,
-                href: format!("#/tests/{id}"),
+                href: format!("#/run/{id}"),
                 git: None,
                 totals: Some(Totals {
                     total,
@@ -774,7 +770,7 @@ mod tests {
         .unwrap();
 
         let items = announced_bench_runs(&root, &mut HashSet::new());
-        assert_eq!(items[0].href, "/runs/bench-1-2/files/report.html");
+        assert_eq!(items[0].href, "#/run/bench-1-2");
         assert_eq!(items[0].progress.as_ref().unwrap()["total"], 4);
 
         let served = |rel| artifact_file(&root, "bench-1-2", rel);

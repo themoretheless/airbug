@@ -160,7 +160,7 @@ impl RunStore {
                 ],
             )?;
         }
-        let dash_url = format!("http://127.0.0.1:{}/#/bench/{run_id}", self.port);
+        let dash_url = format!("http://127.0.0.1:{}/#/run/{run_id}", self.port);
         Ok(CreateRunResponse {
             hub_id: self.hub_id.clone(),
             run_id,
@@ -213,7 +213,7 @@ impl RunStore {
                 created_at,
                 updated_at,
                 progress,
-                dash_path: format!("#/bench/{run_id}"),
+                dash_path: format!("#/run/{run_id}"),
             });
         }
         runs.sort_by(|a, b| {
@@ -294,7 +294,7 @@ impl RunStore {
             jaeger_url: format!(
                 "http://127.0.0.1:16686/search?tags=%7B%22airbug.run_id%22%3A%22{run_id}%22%7D"
             ),
-            dash_path: format!("#/bench/{run_id}"),
+            dash_path: format!("#/run/{run_id}"),
         })
     }
 

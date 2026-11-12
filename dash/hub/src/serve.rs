@@ -290,6 +290,13 @@ fn handle_api(
                 &app.issues.list_filtered(run_id.as_deref()),
             )
         }
+        ("GET", "/run") => {
+            let id = http::query_str(&req.query, "id").unwrap_or_default();
+            match crate::rundetail::describe(&app.paths.root, &app.runs, &id) {
+                Some(value) => http::respond_json(stream, "200 OK", &value),
+                None => http::respond_err(stream, "404 Not Found", &HubError::msg("run not found")),
+            }
+        }
         ("GET", "/runs") => {
             let limit = http::query_usize(&req.query, "limit", 60).clamp(1, 500);
             let kind = http::query_str(&req.query, "kind");
@@ -364,10 +371,11 @@ fn handle_api(
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
         ("GET", "/bench/compare") => {
             let run = http::query_str(&req.query, "run");
+            let baseline = http::query_str(&req.query, "baseline");
             http::respond_json(
                 stream,
                 "200 OK",
-                &crate::benchcmp::compare(&app.paths.root, run.as_deref()),
+                &crate::benchcmp::compare(&app.paths.root, run.as_deref(), baseline.as_deref()),
             )
         }
         ("GET", "/bench") | ("GET", "/bench/runs") => match app.runs.list() {

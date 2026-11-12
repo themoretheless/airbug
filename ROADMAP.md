@@ -7,67 +7,59 @@ feature maps at the bottom are the record of what was done).
 
 Last reviewed: 2026-11-12.
 
-## Stage 1 — Every run in one place (`dash`, `bench`)
+## Stage 1 — One UI, one runner (`bench`, `dash`, `cli`)
 
-Goal: any test or bench run is opened, read and compared on one page of the hub. Every bench
-command already announces its session in `.airbug/runs/`; the scan of `.airbug-bench` is
-kept only for sessions written without an announcement (older ones, `AIRBUG_DASHBOARD=0`).
+Goal: the hub is the only web interface and `cargo airbug` the only launcher. Every run
+already opens on one hub page (`#/run/<id>`: Results / Output / Signals / Compare).
 
-1. **One run page**: tabs Results / Output / Signals / Compare for test and bench runs alike.
-   Signals are scoped to the run, Compare has a baseline picker, matrix runs get a grid.
-
-## Stage 2 — One UI, one runner (`bench`, `dash`, `cli`)
-
-Goal: the hub is the only web interface and `cargo airbug` the only launcher.
-
-2. **Live bench page inside the hub**, fed by the same `progress.json`.
-3. **Retire the bench web UI**: the `--ui` server, `cargo airbug-bench serve` and the per-tool
+1. **Live bench page inside the hub**, fed by the same `progress.json`.
+2. **Retire the bench web UI**: the `--ui` server, `cargo airbug-bench serve` and the per-tool
    report pages go away; static `report.html` stays as the offline/CI artifact.
-4. **Move the test runner out of `airbug-hub` into the CLI**; the hub only reads runs.
-5. **Release**: publish `airbug-run`, then `cargo-airbug-bench`, which depends on it.
+3. **Move the test runner out of `airbug-hub` into the CLI**; the hub only reads runs.
+4. **Release**: publish `airbug-run`, then `cargo-airbug-bench`, which depends on it.
 
-## Stage 3 — Close Criterion / Divan parity (`bench`)
+## Stage 2 — Close Criterion / Divan parity (`bench`)
 
 Goal: parity is declared, backed by the registry in
 [bench/docs/parity/](bench/docs/parity/README.md) (46 requirements verified, 6 partial).
-Placed after stage 2 on purpose: reports and console output are reviewed once, in their final
+Placed after stage 1 on purpose: reports and console output are reviewed once, in their final
 form.
 
-6. **Finish the partial requirements**: `measurement` (pluggable values, aggregation,
+5. **Finish the partial requirements**: `measurement` (pluggable values, aggregation,
    formatters), `plots` (on/off, linear/log scales, grouped comparisons), `output` (verbosity,
    colour, tree/table, machine formats), `artifacts` (output directory, raw data, summary).
-7. **`api_semantics`** — check the behaviour of every public API already mapped.
-8. **`report_matrix`, `console_policy`, `visual_acceptance`** — finish the report matrix,
+6. **`api_semantics`** — check the behaviour of every public API already mapped.
+7. **`report_matrix`, `console_policy`, `visual_acceptance`** — finish the report matrix,
     review CLI output, look through real rendered reports including interaction.
-9. **`platforms` / `platform_acceptance`** — confirm the current code on Windows runtime and
+8. **`platforms` / `platform_acceptance`** — confirm the current code on Windows runtime and
     native x86 timing.
-10. **`audit` / `final_gate`** — repeat the upstream source audit for missed features, then
+9. **`audit` / `final_gate`** — repeat the upstream source audit for missed features, then
     accept a frozen change set requirement by requirement.
 
-## Stage 4 — Host and hardware signals (`mon`, `bench`)
+## Stage 3 — Host and hardware signals (`mon`, `bench`)
 
 Goal: the numbers behind a run come from the machine, on Linux as well as macOS. Independent
-of stage 3; can run in parallel with it.
+of stage 2; can run in parallel with it.
 
-11. **`mon` as a headless sampler**: sampling without the egui window is the main mode, the
+10. **`mon` as a headless sampler**: sampling without the egui window is the main mode, the
     window becomes optional.
-12. **`mon` on Linux.**
-13. **Correct GPU memory on unified-memory machines** — today `mem_used` is always 0 and
+11. **`mon` on Linux.**
+12. **Correct GPU memory on unified-memory machines** — today `mem_used` is always 0 and
     `mem_total` is the "GPU HW allocated memory" figure (`mon/src/gpu.rs`).
-14. **Hardware performance counters in bench**: cache misses, branch mispredictions, SIMD
+13. **Hardware performance counters in bench**: cache misses, branch mispredictions, SIMD
     utilisation. Linux/x86_64 first, then macOS ARM.
-15. **Frequency-scaling and thermal-throttling correlation** for bench runs (needs
+14. **Frequency-scaling and thermal-throttling correlation** for bench runs (needs
     model-specific registers; attempt after the counters).
 
-## Stage 5 — Measurement depth (`bench`)
+## Stage 4 — Measurement depth (`bench`)
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-16. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
-17. **Browser/WASM scenario driver** through an external host.
-18. **Method experiments**: instrumentation effect, overhead against
+15. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
+16. **Browser/WASM scenario driver** through an external host.
+17. **Method experiments**: instrumentation effect, overhead against
     handwritten/Criterion/Divan loops, stability under systematic drift.
-19. **Crash-durable atomic publication** of a run directory.
+18. **Crash-durable atomic publication** of a run directory.
 
 ## Unscheduled
 

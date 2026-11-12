@@ -235,7 +235,7 @@
       if (manifest.rerun_of) {
         const short = String(manifest.rerun_of).slice(0, 8);
         meta.push(opts.rerun
-          ? `<a href="#/tests/${esc(manifest.rerun_of)}">↻ rerun of ${esc(short)}</a>`
+          ? `<a href="#/run/${esc(manifest.rerun_of)}">↻ rerun of ${esc(short)}</a>`
           : `<span>↻ rerun of ${esc(short)}</span>`);
       }
       if (manifest.runner === "nextest") meta.push(`<span>nextest</span>`);

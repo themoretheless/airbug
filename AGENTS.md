@@ -136,7 +136,7 @@ so progress has a denominator, and writes a run directory the hub reads while it
 cargo airbug test --junit junit.xml -- --workspace --exclude airbug-mon   # anything after -- goes to cargo test
 ```
 
-- stderr prints `Live tests: http://127.0.0.1:8790/#/tests/<run_id>` when a hub for this
+- stderr prints `Live tests: http://127.0.0.1:8790/#/run/<run_id>` when a hub for this
   root is up (otherwise it says how to start one). Hand over that URL — it is live, per
   test, and keeps working after the run finishes.
 - Files: `.airbug/runs/<run_id>/{manifest,progress,report}.json`, `junit.xml`, `output.log`, `events/`,
@@ -157,7 +157,8 @@ cargo airbug test --junit junit.xml -- --workspace --exclude airbug-mon   # anyt
   "Rerun failed" button); `false` repeats the whole run. The detail's `rerun.command_failed`
   is the equivalent shell command — prefer running that yourself when you have a terminal.
 - Bench regressions at a glance: `GET /api/v1/bench/compare` compares the newest finished
-  bench run with the previous one that has the same cases and environment (Now page).
+  bench run with the previous one that has the same cases and environment (Now page);
+  `?run=<id>&baseline=<id>` compares a chosen pair (the run page's Compare tab).
 - `airbug_report` also records live case history at `/#/runs` and final snapshots at `/report/`.
 
 ## Deeper docs

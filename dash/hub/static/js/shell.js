@@ -9,7 +9,7 @@ import { $, escapeAttr, escapeHtml } from "./dom.js";
 const GROUPS = [
   { id: "now", label: "Now", cats: ["now"] },
   { id: "resources", label: "Resources", cats: ["resources"] },
-  { id: "runs", label: "Runs", cats: ["runs", "tests", "bench"],
+  { id: "runs", label: "Runs", cats: ["runs", "tests", "bench", "run"],
     sub: [["runs", "All"], ["tests", "Tests"], ["bench", "Bench"]] },
   { id: "signals", label: "Signals", cats: ["issues", "traces", "logs", "metrics", "profiles"],
     sub: [["issues", "Issues"], ["traces", "Traces"], ["logs", "Logs"], ["metrics", "Metrics"], ["profiles", "Profiles"]] },
@@ -28,7 +28,8 @@ const LEDE = {
   resources: "Local .NET Aspire-style resource orchestrator: built-in services, discovered containers, and .airbug/stack.json.",
   runs: "Every test and bench run, newest first — live ones on top.",
   tests: "Per-test results from cargo airbug test: failures first, behaviors, defects, steps, diffs, history.",
-  bench: "Live and finished bench runs (GUID sessions).",
+  bench: "Bench sessions registered with this hub.",
+  run: "One run: results, captured output, the signals it produced, and what changed against a baseline.",
   issues: "Sentry-grade issue inbox: source context, suspect commits, breadcrumbs, release health, and auto-regression.",
   traces: "Distributed traces, critical-path waterfall, service dependency map, RED metrics, and zPages Tracez.",
   logs: "OTLP log tail, structured attributes, and trace correlation.",
@@ -42,7 +43,7 @@ const CATS = GROUPS.flatMap(g => g.cats);
 const groupOf = cat => GROUPS.find(g => g.id === cat || g.cats.includes(cat)) || GROUPS[0];
 
 const sections = new Map();
-let current = { cat: "", runId: null };
+let current = { cat: "", runId: null, tab: "" };
 let traces = { up: false, href: "" };
 
 export function register(section) {
@@ -55,9 +56,11 @@ export function parseRoute() {
   const parts = (location.hash || "").replace(/^#\/?/, "").trim().split("/").filter(Boolean);
   let id = parts[0] || "now";
   if (ALIASES[id]) id = ALIASES[id];
-  const cat = CATS.includes(id) ? id : "now";
+  let cat = CATS.includes(id) ? id : "now";
   const runId = parts[1] ? decodeURIComponent(parts[1]) : null;
-  return { cat, runId };
+  // One page for any run: links to a specific test or bench run open it.
+  if (runId && (cat === "tests" || cat === "bench")) cat = "run";
+  return { cat, runId, tab: cat === "run" ? parts[2] || "" : "" };
 }
 
 function renderNav() {
@@ -75,7 +78,7 @@ function renderSubnav(cat) {
     return;
   }
   const items = group.sub.map(([id, label]) =>
-    `<a href="#/${id}" class="${id === cat ? "on" : ""}">${escapeHtml(label)}</a>`);
+    `<a href="#/${id}" class="${id === cat || (cat === "run" && id === "runs") ? "on" : ""}">${escapeHtml(label)}</a>`);
   if (group.id === "signals" && traces.up && traces.href) {
     items.push(`<a href="${escapeAttr(traces.href)}" target="_blank" rel="noopener" title="Open external Jaeger UI">Jaeger ↗</a>`);
   }
@@ -101,7 +104,7 @@ export function setTitle(...parts) {
 
 export function showRoute() {
   const next = parseRoute();
-  const changed = next.cat !== current.cat || next.runId !== current.runId;
+  const changed = next.cat !== current.cat || next.runId !== current.runId || next.tab !== current.tab;
   const prev = sections.get(current.cat);
   const section = sections.get(next.cat);
   if (prev && prev !== section && prev.hide) prev.hide();
