@@ -46,8 +46,8 @@ stage 2; can run in parallel with it.
    development VM nor CI exposes one), macOS ARM, SIMD utilisation.
 8. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
    temperature and throttle counts between processes on Linux (`host.json`) and notes
-   throttling. Still owed: model-specific registers, macOS, and correlating the series with
-   per-process timings in `diagnose`.
+   throttling; `diagnose` correlates it with
+   per-process timings. Still owed: model-specific registers and macOS.
 
 ## Stage 4 — Measurement depth (`bench`)
 

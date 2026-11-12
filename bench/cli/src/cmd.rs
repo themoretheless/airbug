@@ -73,11 +73,22 @@ pub(crate) fn execute() -> Result<i32> {
             serde_json::to_string_pretty(&sessions::retention(&cli.store, keep, apply)?)?
         ),
         Action::Diagnose { run } => {
-            let r = load(run)?;
+            let path = project::resolve(&cli.store, &run)?;
+            let r = Run::load(&path)?;
+            // The runner leaves the machine's state beside the run, where it could read it.
+            let directory = if path.is_dir() {
+                path.clone()
+            } else {
+                path.parent().unwrap_or(&path).to_path_buf()
+            };
+            let host: Option<Vec<crate::host::Sample>> = std::fs::read(directory.join("host.json"))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+            let host = host.map(|samples| crate::host::correlate(&r, &samples));
             println!(
                 "{}",
                 serde_json::to_string_pretty(
-                    &serde_json::json!({"spread_and_drift":diagnostics::diagnose(&r)?,"order":diagnostics::order_effects(&r)?,"status":r.status,"unavailable_observations":r.observations.iter().filter(|o|o.availability!=Availability::Available).count(),"interpretation":"Descriptive thresholds; missing observations excluded and counted. No causal or significance inference."})
+                    &serde_json::json!({"spread_and_drift":diagnostics::diagnose(&r)?,"order":diagnostics::order_effects(&r)?,"host":host,"status":r.status,"unavailable_observations":r.observations.iter().filter(|o|o.availability!=Availability::Available).count(),"interpretation":"Descriptive thresholds; missing observations excluded and counted. No causal or significance inference."})
                 )?
             );
         }

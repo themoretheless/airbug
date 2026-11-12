@@ -5,13 +5,13 @@
 //! are taken between processes, never while one is being measured. The series goes to
 //! `host.json`; a run that was throttled, or whose frequency sagged, says so in its notes —
 //! a slower candidate measured on a hotter machine is not a regression.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Frequency drop between the first and the last sample that is worth a note.
 const SAG_PERCENT: f64 = 10.0;
 
-#[derive(Clone, Debug, Serialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Sample {
     /// Measured processes completed so far.
     pub after_process: u32,
@@ -130,6 +130,91 @@ impl Probe {
     }
 }
 
+/// Pearson correlation; `None` without at least three points or without variation.
+fn pearson(points: &[(f64, f64)]) -> Option<f64> {
+    if points.len() < 3 {
+        return None;
+    }
+    let n = points.len() as f64;
+    let (mx, my) = (
+        points.iter().map(|p| p.0).sum::<f64>() / n,
+        points.iter().map(|p| p.1).sum::<f64>() / n,
+    );
+    let (mut sxy, mut sxx, mut syy) = (0.0, 0.0, 0.0);
+    for (x, y) in points {
+        sxy += (x - mx) * (y - my);
+        sxx += (x - mx) * (x - mx);
+        syy += (y - my) * (y - my);
+    }
+    (sxx > 0.0 && syy > 0.0).then(|| sxy / (sxx * syy).sqrt())
+}
+
+/// How each process's timings sat against the machine's state right after it: for
+/// `diagnose`. Timings are made comparable across cases by dividing each value by the median
+/// of its case, metric and variant, then averaged per process.
+pub fn correlate(run: &airbug_bench::Run, samples: &[Sample]) -> serde_json::Value {
+    use std::collections::BTreeMap;
+    /// (case, metric, variant) → (process, value per operation).
+    type Groups<'a> = BTreeMap<(&'a str, &'a str, &'a str), Vec<(u32, f64)>>;
+    let mut groups: Groups = BTreeMap::new();
+    for o in &run.observations {
+        if o.availability != airbug_bench::Availability::Available {
+            continue;
+        }
+        if let Some(value) = o.value.as_deref().and_then(|v| v.parse::<f64>().ok()) {
+            groups
+                .entry((o.case.as_str(), o.metric.as_str(), o.variant.as_str()))
+                .or_default()
+                .push((o.process, value / o.operations.max(1) as f64));
+        }
+    }
+    let mut relative: BTreeMap<u32, Vec<f64>> = BTreeMap::new();
+    for values in groups.values() {
+        let mut sorted: Vec<f64> = values.iter().map(|v| v.1).collect();
+        sorted.sort_by(f64::total_cmp);
+        let median = sorted[sorted.len() / 2];
+        if median > 0.0 {
+            for (process, value) in values {
+                relative.entry(*process).or_default().push(value / median);
+            }
+        }
+    }
+    let timing = |process: u32| {
+        relative
+            .get(&process)
+            .map(|v| v.iter().sum::<f64>() / v.len() as f64)
+    };
+    // The sample taken after process `k` describes the machine that process just ran on.
+    let against = |state: fn(&Sample) -> Option<f64>| {
+        let points: Vec<(f64, f64)> = samples
+            .iter()
+            .filter(|s| s.after_process > 0)
+            .filter_map(|s| Some((state(s)?, timing(s.after_process - 1)?)))
+            .collect();
+        pearson(&points)
+    };
+    let range = |values: Vec<f64>| {
+        let (Some(first), Some(last)) = (values.first(), values.last()) else {
+            return serde_json::Value::Null;
+        };
+        serde_json::json!({
+            "first": first, "last": last,
+            "min": values.iter().copied().fold(f64::INFINITY, f64::min),
+            "max": values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        })
+    };
+    let throttle: Vec<u64> = samples.iter().filter_map(|s| s.throttle_events).collect();
+    serde_json::json!({
+        "samples": samples.len(),
+        "cpu_khz": range(samples.iter().filter_map(|s| s.cpu_khz.map(|v| v as f64)).collect()),
+        "max_temp_c": range(samples.iter().filter_map(|s| s.max_temp_c).collect()),
+        "throttle_events_during_run": throttle.first().zip(throttle.last()).map(|(a, b)| b.saturating_sub(*a)),
+        "timing_vs_cpu_khz_r": against(|s| s.cpu_khz.map(|v| v as f64)),
+        "timing_vs_max_temp_c_r": against(|s| s.max_temp_c),
+        "interpretation": "Pearson r of each process's relative timing against the machine state sampled right after it. Strongly negative for frequency or positive for temperature means the machine, not the code, moved the timings. Descriptive only.",
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,5 +290,52 @@ mod tests {
         let mut probe = Probe::at(dir.path());
         probe.observe(0);
         assert!(probe.samples().is_empty() && probe.notes().is_empty());
+    }
+
+    #[test]
+    fn timings_that_follow_the_frequency_correlate_with_it() {
+        use airbug_bench::{Availability, Observation, Run};
+        let mut run = Run::new();
+        let khz = [3_200_000u64, 3_000_000, 2_800_000, 2_600_000];
+        let mut samples = vec![Sample {
+            after_process: 0,
+            cpu_khz: Some(3_400_000),
+            max_temp_c: Some(40.0),
+            throttle_events: Some(1),
+        }];
+        for (process, khz) in khz.iter().enumerate() {
+            run.observations.push(Observation {
+                case: "work".into(),
+                metric: "wall".into(),
+                variant: "candidate".into(),
+                process: process as u32,
+                pair: None,
+                sequence: process as u64 + 1,
+                // Slower clock, longer time.
+                value: Some((3.2e9 / *khz as f64 * 1000.0).to_string()),
+                operations: 1,
+                worker_work_totals: Default::default(),
+                work_totals: Default::default(),
+                availability: Availability::Available,
+            });
+            samples.push(Sample {
+                after_process: process as u32 + 1,
+                cpu_khz: Some(*khz),
+                max_temp_c: Some(50.0 + process as f64 * 5.0),
+                throttle_events: Some(1 + process as u64),
+            });
+        }
+        let report = correlate(&run, &samples);
+        assert!(
+            report["timing_vs_cpu_khz_r"].as_f64().unwrap() < -0.98,
+            "{report}"
+        );
+        assert!(
+            report["timing_vs_max_temp_c_r"].as_f64().unwrap() > 0.98,
+            "{report}"
+        );
+        assert_eq!(report["throttle_events_during_run"], 3);
+        assert_eq!(report["cpu_khz"]["min"], 2_600_000.0);
+        assert!(correlate(&run, &samples[..2])["timing_vs_cpu_khz_r"].is_null());
     }
 }
