@@ -243,6 +243,9 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
     )?;
     let total_processes = schedule.len();
     progress(out, 0, total_processes, "")?;
+    // Sampled between processes only; nothing here runs while a process is measured.
+    let mut host = crate::host::Probe::new();
+    host.observe(0);
     let experiment_start = Instant::now();
     let mut execution = (|| -> Result<()> {
         for e in schedule {
@@ -538,9 +541,17 @@ pub fn run(mut plan: Plan, out: &Path) -> Result<Run> {
                 &serde_json::json!({"process": e.process,"observations": &result.observations[observation_start..]}),
             )?;
             progress(out, e.process as usize + 1, total_processes, &e.variant)?;
+            host.observe(e.process + 1);
         }
         Ok(())
     })();
+    if !host.samples().is_empty() {
+        write_new(&out.join("host.json"), &host.samples())?;
+        result
+            .provenance
+            .insert("host.sha256".into(), hash_file(&out.join("host.json"))?);
+        result.notes.extend(host.notes());
+    }
     if execution.is_ok() {
         if let Some(path) = plan.candidate.env.get("BENCH_MEMORY_OUTPUT") {
             match airbug_bench::memory::Profile::load(Path::new(path)) {

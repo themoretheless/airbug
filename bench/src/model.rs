@@ -569,11 +569,43 @@ impl Default for Run {
         Self::new()
     }
 }
+/// Write `value` as a new JSON file that is either complete or absent.
+///
+/// The bytes go to a temporary sibling, are flushed to disk, and only then appear under
+/// `path` through a hard link — which fails if `path` exists, so nothing is ever overwritten
+/// and a reader never sees a half-written file. The directory entry is flushed too, so the
+/// file survives a crash right after this returns. A runner relies on the order: `run.json`
+/// first, `status-final.json` last, and the presence of the latter means the run is complete.
 pub fn write_new(path: &Path, value: &impl Serialize) -> Result<()> {
-    let mut f = OpenOptions::new().write(true).create_new(true).open(path)?;
-    serde_json::to_writer_pretty(&mut f, value)?;
-    f.write_all(b"\n")?;
-    f.sync_all()?;
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".tmp-{}-{sequence}", std::process::id()));
+    let temp = path.with_file_name(name);
+    let written = (|| -> Result<()> {
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        serde_json::to_writer_pretty(&mut f, value)?;
+        f.write_all(b"\n")?;
+        f.sync_all()?;
+        match fs::hard_link(&temp, path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(e.into()),
+            // A filesystem without hard links: the check and the rename are not one step,
+            // but the file still appears whole.
+            Err(_) if !path.exists() => Ok(fs::rename(&temp, path)?),
+            Err(e) => Err(e.into()),
+        }
+    })();
+    let _ = fs::remove_file(&temp);
+    written?;
+    // Flushing a directory is how its new entry becomes durable; not available on Windows.
+    #[cfg(unix)]
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::File::open(parent)?.sync_all()?;
+    }
     Ok(())
 }
 /// Lowercase hex encoding of a byte slice.
@@ -600,4 +632,26 @@ pub fn hash_file(path: &Path) -> Result<String> {
         hash.update(&buf[..n]);
     }
     Ok(hex(&hash.finalize()))
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::write_new;
+
+    #[test]
+    fn a_new_file_appears_whole_and_an_existing_one_is_never_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run.json");
+        write_new(&path, &serde_json::json!({"state": "complete"})).unwrap();
+        assert!(write_new(&path, &serde_json::json!({"state": "overwritten"})).is_err());
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("complete") && text.ends_with('\n'), "{text}");
+        let names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["run.json"], "no temporary file is left behind");
+        // A missing directory is an error, not a silently created path.
+        assert!(write_new(&dir.path().join("absent/run.json"), &1).is_err());
+    }
 }

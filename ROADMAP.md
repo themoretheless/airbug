@@ -43,8 +43,10 @@ stage 2; can run in parallel with it.
 7. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
    and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
    development VM nor CI exposes one), macOS ARM, SIMD utilisation.
-8. **Frequency-scaling and thermal-throttling correlation** for bench runs (needs
-   model-specific registers).
+8. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
+   temperature and throttle counts between processes on Linux (`host.json`) and notes
+   throttling. Still owed: model-specific registers, macOS, and correlating the series with
+   per-process timings in `diagnose`.
 
 ## Stage 4 — Measurement depth (`bench`)
 
@@ -54,7 +56,6 @@ Goal: the scenarios Forma needs and evidence for the method itself.
 10. **Browser/WASM scenario driver** through an external host.
 11. **Method experiments**: instrumentation effect, overhead against
     handwritten/Criterion/Divan loops, stability under systematic drift.
-12. **Crash-durable atomic publication** of a run directory.
 
 ## Unscheduled
 
