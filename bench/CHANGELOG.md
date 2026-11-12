@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- In a terminal, a results table wider than the window is shown as one record per row packed to the window width; pipes and files keep the Markdown table.
+
 - Tree output prints measured values with six significant digits instead of the full float, so result lines stop wrapping.
 
 - Run files are written atomically and flushed with their directory: a JSON file is either whole or absent, and `status-final.json` present means the run is complete.

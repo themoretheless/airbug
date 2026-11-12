@@ -5,7 +5,7 @@ as an HTML page for a look.
     python3 bench/scripts/terminal-acceptance.py out.html target/release/examples/sort
 """
 import os, pty, fcntl, termios, struct, subprocess, select, html, re, sys, json
-exe=sys.argv[2]
+exe=os.path.abspath(sys.argv[2])
 base=[exe,'--no-history','--samples','3','--warmup-ms','0','--resamples','32','--color','always']
 modes={'default':[], 'quiet':['--quiet'], 'verbose':['--verbose'], 'tree':['--output-format','tree'], 'list-tree':['--output-format','tree','--list']}
 def run(args,width):

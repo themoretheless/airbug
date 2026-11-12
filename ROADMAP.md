@@ -27,9 +27,8 @@ form.
    formatters), `plots` (on/off, linear/log scales, grouped comparisons), `output` (verbosity,
    colour, tree/table, machine formats), `artifacts` (output directory, raw data, summary).
 3. **`api_semantics`** — check the behaviour of every public API already mapped.
-4. **`report_matrix`, `console_policy`** — finish the report matrix; make the default console
-   tables fit a terminal (up to 236 characters wide today, so they wrap at 80 and 120
-   columns). Browser review of the reports and a PTY review of the console are done.
+4. **`report_matrix`** — finish the report matrix. (Browser review of the reports and a PTY
+   review of the console are done; console tables now fit the terminal.)
 5. **`platforms` / `platform_acceptance`** — confirm the current code on Windows runtime and
     native x86 timing.
 6. **`audit` / `final_gate`** — repeat the upstream source audit for missed features, then
