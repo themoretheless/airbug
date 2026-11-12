@@ -56,7 +56,7 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. This i
 | `mon` | usable (macOS) | `MonApp`; CI on macOS |
 | `containers` / checkout-domain | internal | `publish = false` |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).
+See [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md) and [ROADMAP.md](ROADMAP.md) (what is still open).
 
 Known debt (not blocking): none on `syn` majors (unit + bench macros both on syn 2.x).
 

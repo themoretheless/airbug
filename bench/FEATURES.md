@@ -1,6 +1,6 @@
-# AirBench Features Roadmap
+# AirBench idea catalogue
 
-Comprehensive list of optimization ideas and future features for airbug-bench (~1000 items).
+Unprioritised ideas for airbug-bench (items 1–400), not a commitment. What is actually planned: [ROADMAP.md](../ROADMAP.md).
 
 ## 1. Performance Benchmarks & Profiling (1-100)
 
@@ -465,7 +465,7 @@ Comprehensive list of optimization ideas and future features for airbug-bench (~
 
 ## 5-10. Additional Categories
 
-See `/tmp/airbug-roadmap-1000.md` for complete list including:
+Items 401–1000 were never written down in this repository. Their intended categories:
 - Data Structures & Algorithms (401-500)
 - Optimization Patterns & Techniques (501-600)
 - Memory Management & Allocation (601-700)
@@ -489,4 +489,4 @@ Based on immediate value for airbug-bench:
 ---
 
 *Generated from mcp-rag corpus - airbug/roadmap-*
-*Total items: ~1000 optimization ideas*
+*Items in this file: 1–400*

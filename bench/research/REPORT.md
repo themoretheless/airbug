@@ -8,7 +8,7 @@
 
 Брать архитектурные идеи из BenchmarkDotNet, модель статистического измерения Criterion, эргономику Divan, paired scheduling Tango/Binggan/Zenbench, process workflow Hyperfine, опциональную диагностику Gungraun и отложенные GPU queries wgpu-profiler. Не копировать все возможности в первый релиз.
 
-Главные документы: [требования](../docs/REQUIREMENTS.md), [архитектура](../docs/ARCHITECTURE.md), [методика измерений](../docs/MEASUREMENT.md), [реализация по этапам](../docs/ROADMAP.md), [сравнение ключевых проектов](FOCUSED.md).
+Главные документы: [требования](../docs/REQUIREMENTS.md), [архитектура](../docs/ARCHITECTURE.md), [методика измерений](../docs/MEASUREMENT.md), [реализация по этапам](../../ROADMAP.md), [сравнение ключевых проектов](FOCUSED.md).
 
 ## Объём и глубина исследования
 
