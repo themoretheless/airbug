@@ -1,14 +1,14 @@
 //! "Rerun failed" and "Run again" for test runs.
 //!
 //! The runner records how it was started (`runner`, `cargo_args`, `test_args` in
-//! `manifest.json`), so the hub can start `airbug-hub test` again with the same arguments —
+//! `manifest.json`), so the hub can start `cargo airbug test` again with the same arguments —
 //! narrowed to the failed and not-run tests when asked. The new run is an ordinary run
 //! directory; the hub only picks its id so the dashboard can open it right away.
 use crate::{
     error::{HubError, Result},
     store,
-    testrun::model::{Manifest, RUNNER_NEXTEST, TestStatus},
 };
+use airbug_run::model::{Manifest, RUNNER_NEXTEST, TestStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -277,6 +277,20 @@ pub fn describe(manifest: &Value, report: &Value) -> Value {
 }
 
 /// Start the rerun in the background; returns the new run id and what was started.
+/// The `cargo-airbug` binary that runs tests: named by `AIRBUG_CLI` (the CLI sets it when it
+/// starts the hub), else installed next to this binary, else found on `PATH`.
+fn cli() -> std::path::PathBuf {
+    if let Some(path) = std::env::var_os("AIRBUG_CLI") {
+        return path.into();
+    }
+    let name = format!("cargo-airbug{}", std::env::consts::EXE_SUFFIX);
+    std::env::current_exe()
+        .ok()
+        .map(|exe| exe.with_file_name(&name))
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| name.into())
+}
+
 pub fn start(root: &Path, port: u16, id: &str, failed_only: bool) -> Result<Value> {
     let mut guard = RERUN_START_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if let Some((ref pending_id, started_at)) = *guard
@@ -325,8 +339,7 @@ pub fn start(root: &Path, port: u16, id: &str, failed_only: bool) -> Result<Valu
         args.push("--".into());
         args.extend(plan.test_args.iter().cloned());
     }
-    let exe = std::env::current_exe()?;
-    let mut child = Command::new(exe)
+    let mut child = Command::new(cli())
         .args(&args)
         .current_dir(root)
         .stdin(Stdio::null())
@@ -352,7 +365,7 @@ pub fn start(root: &Path, port: u16, id: &str, failed_only: bool) -> Result<Valu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testrun::model::RUNNER_CARGO_TEST;
+    use airbug_testrun::model::RUNNER_CARGO_TEST;
 
     fn manifest(runner: &str) -> Manifest {
         Manifest {

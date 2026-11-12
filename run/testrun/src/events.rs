@@ -380,7 +380,7 @@ fn is_plain_file_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testrun::model::Report;
+    use crate::model::Report;
 
     #[test]
     fn steps_nest_per_process_and_attach_to_their_test() {

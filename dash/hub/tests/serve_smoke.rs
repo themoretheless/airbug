@@ -14,6 +14,29 @@ fn hub_bin() -> Command {
     cmd
 }
 
+/// The `cargo-airbug` binary that runs tests, next to the hub's own. Cargo builds only this
+/// package's binaries for its integration tests, so it is built on first use.
+fn cli_bin() -> PathBuf {
+    static BUILT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    BUILT
+        .get_or_init(|| {
+            let hub = Path::new(env!("CARGO_BIN_EXE_airbug-hub"));
+            let cli = hub.with_file_name(format!("cargo-airbug{}", std::env::consts::EXE_SUFFIX));
+            let mut build = Command::new(env!("CARGO"));
+            build.args(["build", "--locked", "-p", "cargo-airbug"]);
+            if hub.parent().and_then(Path::file_name) == Some("release".as_ref()) {
+                build.arg("--release");
+            }
+            let status = build
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .status()
+                .expect("cargo build -p cargo-airbug");
+            assert!(status.success() && cli.is_file(), "no {}", cli.display());
+            cli
+        })
+        .clone()
+}
+
 fn free_port() -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.local_addr().unwrap().port()
@@ -81,6 +104,8 @@ fn start_hub(root: &Path) -> (u16, HubProc) {
     for _ in 0..10 {
         let port = free_port();
         let child = hub_bin()
+            // Reruns start the CLI; outside tests the CLI sets this when it starts the hub.
+            .env("AIRBUG_CLI", cli_bin())
             .args([
                 "serve",
                 "--root",
@@ -662,7 +687,7 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
     write_fixture(&root);
 
     // Nobody listens on this port, so the runner must not wait for a hub.
-    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+    let output = Command::new(cli_bin())
         .args([
             "test",
             "--root",
@@ -672,7 +697,7 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
             "--quiet",
         ])
         .output()
-        .expect("run airbug-hub test");
+        .expect("run cargo-airbug test");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(101), "{stderr}");
     assert!(
@@ -787,7 +812,7 @@ fn nextest_runner_reports_the_same_fixture() {
     let _ = std::fs::remove_dir_all(&root);
     write_fixture(&root);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+    let output = Command::new(cli_bin())
         .args([
             "test",
             "--nextest",
@@ -798,7 +823,7 @@ fn nextest_runner_reports_the_same_fixture() {
             "--quiet",
         ])
         .output()
-        .expect("run airbug-hub test --nextest");
+        .expect("run cargo-airbug test --nextest");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_ne!(output.status.code(), Some(0), "{stderr}");
     assert!(
@@ -893,6 +918,8 @@ fn start_hub_with_builtin_collector(root: &Path) -> (u16, u16, u16, HubProc) {
             continue;
         }
         let child = hub_bin()
+            // Reruns start the CLI; outside tests the CLI sets this when it starts the hub.
+            .env("AIRBUG_CLI", cli_bin())
             .args([
                 "serve",
                 "--root",

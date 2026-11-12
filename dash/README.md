@@ -29,7 +29,7 @@ cargo test -p airbug-hub
 ### Live test runs & TestOps (`cargo airbug test`)
 
 ```bash
-cargo airbug test -- --workspace --exclude airbug-mon   # = cargo run -p airbug-hub -- test -- …
+cargo airbug test -- --workspace --exclude airbug-mon   # = cargo run -p cargo-airbug -- test -- …
 cargo airbug test --junit target/junit.xml -- --workspace
 ```
 
@@ -90,7 +90,7 @@ a second `--`.
 that passes on retry is marked flaky. Suites are nextest binary ids (`demo`,
 `demo::integration`); doctests are not run, as with plain nextest.
 
-**Rerun failed** on a finished run starts `airbug-hub test` again with the failed and
+**Rerun failed** on a finished run starts `cargo airbug test` again with the failed and
 not-run tests only (libtest: `--exact` names; nextest: a `-E` filterset), linked back via
 `manifest.rerun_of`. **Run again** repeats the original command. Both are
 `POST /api/v1/runs/:id/rerun` and refuse while another test run is live (409). The

@@ -336,14 +336,14 @@ fn handle_api(
             http::respond_json(
                 stream,
                 "200 OK",
-                &crate::testrun::analytics::compute_analytics(&app.paths.root, window),
+                &crate::analytics::compute_analytics(&app.paths.root, window),
             )
         }
         ("GET", "/tests/rules") => http::respond_json(
             stream,
             "200 OK",
             &serde_json::json!({
-                "rules": crate::testrun::analytics::load_rules(&app.paths.root),
+                "rules": airbug_testrun::defects::load_rules(&app.paths.root),
             }),
         ),
         ("POST", "/tests/rules") => handle_post_test_rules(stream, app, req),
@@ -420,7 +420,7 @@ fn yes() -> bool {
     true
 }
 
-/// `POST /api/v1/runs/<id>/rerun` `{"failed": true}` — start `airbug-hub test` again.
+/// `POST /api/v1/runs/<id>/rerun` `{"failed": true}` — start `cargo airbug test` again.
 fn handle_rerun(
     stream: &mut TcpStream,
     app: &HubApp,
@@ -772,7 +772,7 @@ fn handle_run_junit(stream: &mut TcpStream, app: &HubApp, id: &str) -> std::io::
         Ok(r) => r,
         Err(e) => return http::respond_err(stream, "500 Internal Server Error", &e.into()),
     };
-    let xml = crate::testrun::junit::render_junit_xml(&report);
+    let xml = airbug_testrun::junit::render_junit_xml(&report);
     http::respond(stream, "200 OK", "application/xml; charset=utf-8", &xml)
 }
 
@@ -781,7 +781,7 @@ fn handle_post_test_rules(
     app: &HubApp,
     req: &Request,
 ) -> std::io::Result<()> {
-    use crate::testrun::analytics::{DefectRule, load_rules, save_rules};
+    use airbug_testrun::defects::{DefectRule, load_rules, save_rules};
     #[derive(serde::Deserialize)]
     #[serde(untagged)]
     enum RulesPayload {

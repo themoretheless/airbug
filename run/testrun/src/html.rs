@@ -2,9 +2,9 @@
 //! embedded, so a CI artifact or a copied folder opens without a server.
 use super::model::Report;
 
-const TEMPLATE: &str = include_str!("../../static/report.html");
-pub const TESTRUN_CSS: &str = include_str!("../../static/testrun.css");
-pub const TESTRUN_JS: &str = include_str!("../../static/testrun.js");
+const TEMPLATE: &str = include_str!("../static/report.html");
+pub const TESTRUN_CSS: &str = include_str!("../static/testrun.css");
+pub const TESTRUN_JS: &str = include_str!("../static/testrun.js");
 
 pub fn render(report: &Report) -> String {
     let data = serde_json::to_string(&serde_json::json!({ "report": report }))

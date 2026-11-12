@@ -1,3 +1,4 @@
+mod analytics;
 mod app;
 mod assets;
 mod benchcmp;
@@ -18,7 +19,6 @@ mod serve;
 mod test_runs;
 
 mod store;
-mod testrun;
 
 use std::{env, path::PathBuf, process, sync::Arc};
 
@@ -37,7 +37,8 @@ fn main() {
     let mut args = env::args().skip(1).peekable();
     let command = args.next().unwrap_or_else(|| "serve".into());
     if command == "test" {
-        process::exit(testrun::main(args.collect()));
+        eprintln!("airbug-hub: the test runner moved to the CLI — use `cargo airbug test`");
+        process::exit(2);
     }
     let mut root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut port = config::DEFAULT_PORT;
@@ -196,9 +197,9 @@ Usage:
   airbug-hub up [--root PATH] [--port N] [--stack PATH]
       # starts hub + OTLP collector + all resources declared in .airbug/stack.json
   airbug-hub status [--root PATH]
-  {}
-",
-        testrun::USAGE
+
+Tests run through the CLI: cargo airbug test
+"
     );
     process::exit(if message.is_empty() { 0 } else { 2 });
 }

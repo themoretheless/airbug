@@ -2,7 +2,7 @@
 //!
 //! Adding a file to `static/` means adding one row to [`ASSETS`]; nothing else changes.
 
-use crate::testrun::html::{TESTRUN_CSS, TESTRUN_JS};
+use airbug_testrun::html::{TESTRUN_CSS, TESTRUN_JS};
 
 const HTML: &str = "text/html; charset=utf-8";
 const CSS: &str = "text/css; charset=utf-8";

@@ -13,6 +13,7 @@ members = [
     "err",
     "dash/hub",
     "run",
+    "run/testrun",
     "cli",
 ]
 default-members = [
@@ -27,6 +28,7 @@ default-members = [
     "err",
     "dash/hub",
     "run",
+    "run/testrun",
     "cli",
 ]
 exclude = [
@@ -39,6 +41,7 @@ rust-version = "1.96"
 
 [workspace.dependencies]
 airbug-run = { path = "run", version = "0.1.0" }
+airbug-testrun = { path = "run/testrun", version = "0.1.0" }
 airbug-macros = { path = "unit/macros", version = "0.6.2" }
 airbug-bench = { path = "bench", version = "0.9.0" }
 airbug-bench-macros = { path = "bench/macros", version = "0.9.0" }

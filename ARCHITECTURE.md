@@ -8,6 +8,7 @@ Local developer toolkit (not hosted SaaS). Domains live in folders; packages are
 |--------|------|-------|
 | `airbug-hub` | `HubApp` in `dash/hub` | Injects `IssueStore`, built-in OTLP HTTP/gRPC receiver, paths, webhook |
 | `cargo-airbug-bench` | `bench/cli` | Clap → action modules |
+| `cargo-airbug` | `cli` | Runs tests in-process (`airbug-testrun`); hands `serve` / `up` / `status` to the hub and `bench` to the bench CLI |
 | `airbug-mon` | `mon/src/main.rs` | Channels + sampler + egui `MonApp` |
 
 Libraries (`airbug`, `airbug-bench`, `airbug-err`, `airbug-otel`) expose builders/traits; they do not install a global `tracing` subscriber (`airbug-otel` provides an opt-in `TracingOtelLayer` via `airbug_otel::tracing_layer()`).
@@ -36,7 +37,7 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. See [S
 .airbug-bench/                 # bench store (runs, baselines)
 dash/collector/data/           # OTLP file export (traces.json, metrics.json, logs.json, profiles.json + .1..3 backups)
 dash/hub/data/issues.sqlite    # error issues (with trace_id/span_id correlation)
-.airbug/runs/<run_id>/         # test runs written by `airbug-hub test`, read by the hub
+.airbug/runs/<run_id>/         # runs written by `cargo airbug test` and bench sessions, read by the hub
 ~/.local/share/airbug-mon/     # mon history (platform-specific)
 ```
 

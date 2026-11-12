@@ -1,11 +1,11 @@
-//! `airbug-hub test` (`cargo airbug test`) — run `cargo test` as a live, per-test run.
+//! `cargo airbug test` — run `cargo test` as a live, per-test run.
 //!
 //! The runner lists tests first (`cargo test … -- --list`) so the hub can show a real
 //! progress bar, then runs them with `AIRBUG_REPORT_DIR` pointing into the run directory so
 //! `airbug::report` steps, comparisons and attachments land beside the results. Everything is
 //! plain files (see [`model`]); the hub only reads them, so a run is live in the dashboard
 //! whether or not the hub was started first.
-pub mod analytics;
+pub mod defects;
 pub mod events;
 pub mod html;
 pub mod junit;
@@ -62,7 +62,7 @@ pub struct Options {
 }
 
 pub const USAGE: &str = "\
-airbug-hub test [--nextest] [--root PATH] [--out DIR] [--junit FILE] [--title TEXT] [--port N]
+cargo airbug test [--nextest] [--root PATH] [--out DIR] [--junit FILE] [--title TEXT] [--port N]
                 [--no-list] [--quiet] [--keep N] [-- <cargo test args> [-- <test binary args>]]
     # runs cargo test, writes .airbug/runs/<id>/ (or --out DIR), live in the hub at
     # http://127.0.0.1:<port>/#/run/<id>; exit code follows the tests
@@ -80,7 +80,7 @@ where
         out: None,
         junit: None,
         title: None,
-        port: crate::config::DEFAULT_PORT,
+        port: airbug_run::hub::DEFAULT_PORT,
         list: true,
         quiet: false,
         keep: DEFAULT_KEEP,
@@ -134,7 +134,7 @@ where
     Ok(options)
 }
 
-/// Entry point for `airbug-hub test`; returns the process exit code.
+/// Entry point for `cargo airbug test`; returns the process exit code.
 pub fn main(args: Vec<String>) -> i32 {
     let options = match parse_args(args) {
         Ok(options) => options,
@@ -388,7 +388,7 @@ fn run(options: Options) -> io::Result<i32> {
     collector.report.finished_at_ms = Some(finished);
     collector.report.duration_s = Some(store.started.elapsed().as_secs_f64());
     collector.report.exit_code = exit_code;
-    analytics::classify_defects(&mut collector.report, &analytics::load_rules(&root));
+    defects::classify_defects(&mut collector.report, &defects::load_rules(&root));
     store.write(&mut collector, true);
     fs::write(dir.join("index.html"), html::render(&collector.report))?;
     let junit_xml = junit::render_junit_xml(&collector.report);

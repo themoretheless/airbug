@@ -13,7 +13,7 @@ Rust toolkit split by job. One naming rule:
 | `err/` | `airbug-err` |
 | `dash/` | `airbug-hub` (+ `dash/collector` ops assets) |
 | `cli/` | `cargo-airbug` (`cargo airbug test \| bench \| serve \| up \| status`) |
-| `run/` | `airbug-run` (run format + store shared by runners and the hub) |
+| `run/` | `airbug-run` (run format + store shared by runners and the hub), `airbug-testrun` (the test runner behind `cargo airbug test`) |
 
 ```text
 unit/                      # package: airbug (Allure/ReportPortal-style TestOps, #[airbug::test], async steps)

@@ -1,7 +1,8 @@
 //! `cargo airbug <command>` — one entry point for the toolkit.
 //!
-//! This binary owns no behaviour: it routes a command to the tool that implements it and
-//! becomes that process, so flags, output and exit codes are the tool's own.
+//! `test` runs here (`airbug-testrun`); the other commands are routed to the tool that
+//! implements them, and this process becomes that tool, so flags, output and exit codes are
+//! the tool's own.
 use std::{
     env,
     ffi::OsString,
@@ -47,16 +48,18 @@ impl Tool {
 enum Route {
     Help,
     Unknown(String),
+    /// Run tests in this process; the arguments follow the command word.
+    Test(Vec<String>),
     Run(Tool, Vec<String>),
 }
 
+const TEST: (&str, &str) = (
+    "test",
+    "run cargo test as a live per-test run   [-- <cargo test args>]",
+);
+
 /// `(command, tool, what it does)` — the single list help and routing are built from.
 const COMMANDS: &[(&str, Tool, &str)] = &[
-    (
-        "test",
-        Tool::Hub,
-        "run cargo test as a live per-test run   [-- <cargo test args>]",
-    ),
     (
         "serve",
         Tool::Hub,
@@ -91,6 +94,9 @@ fn route(args: &[String]) -> Route {
     if matches!(command.as_str(), "-h" | "--help" | "help") {
         return Route::Help;
     }
+    if command == TEST.0 {
+        return Route::Test(args[1..].to_vec());
+    }
     match COMMANDS.iter().find(|(name, ..)| name == command) {
         // The hub parses its own command word; the bench CLI gets what follows `bench`.
         Some((_, Tool::Hub, _)) => Route::Run(Tool::Hub, args.to_vec()),
@@ -111,7 +117,8 @@ fn help() -> String {
     let mut text = String::from(
         "cargo airbug — run, watch and compare tests and benchmarks\n\nUsage: cargo airbug <command> [args]\n\n",
     );
-    for (name, _, about) in COMMANDS {
+    let commands = COMMANDS.iter().map(|(name, _, about)| (*name, *about));
+    for (name, about) in std::iter::once(TEST).chain(commands) {
         text.push_str(&format!("  {name:<7} {about}\n"));
     }
     text.push_str("\nEvery run lands in .airbug/runs/ and shows up in the hub.\n");
@@ -149,6 +156,10 @@ fn hand_over(tool: Tool, args: Vec<String>) -> ! {
     command.args(tool.prefix()).args(args);
     // The tool reads its own configuration; this is only how it was reached.
     command.env_remove("CARGO_MANIFEST_DIR");
+    // The hub starts reruns through this binary.
+    if let Ok(exe) = env::current_exe() {
+        command.env("AIRBUG_CLI", exe);
+    }
     #[cfg(unix)]
     let error = {
         use std::os::unix::process::CommandExt;
@@ -176,6 +187,7 @@ fn main() {
             eprint!("cargo airbug: unknown command `{command}`\n\n{}", help());
             process::exit(2);
         }
+        Route::Test(args) => process::exit(airbug_testrun::main(args)),
         Route::Run(tool, args) => hand_over(tool, args),
     }
 }
@@ -192,7 +204,7 @@ mod tests {
     fn hub_commands_keep_their_command_word() {
         assert_eq!(
             route(&args(&["airbug", "test", "--", "--workspace"])),
-            Route::Run(Tool::Hub, args(&["test", "--", "--workspace"]))
+            Route::Test(args(&["--", "--workspace"]))
         );
         assert_eq!(
             route(&args(&["serve", "--collector"])),

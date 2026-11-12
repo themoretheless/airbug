@@ -1,0 +1,16 @@
+[package]
+name = "airbug-testrun"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+repository = "https://github.com/themoretheless/airbug"
+description = "The airbug test runner: cargo test / nextest as a live, per-test run in the airbug run store"
+publish = false
+
+[dependencies]
+airbug-run.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ctrlc = "3"
+uuid = { workspace = true }

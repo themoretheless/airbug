@@ -124,7 +124,7 @@ jobs:
         run: node bench/scripts/test-report-navigation.cjs
       - run: rustup toolchain install stable --profile minimal
       - name: Generate web report (per-test run, same format the hub shows live)
-        run: cargo +stable run --locked -p airbug-hub -- test --title "CI tests" --out target/airbug-report -- --locked --workspace --all-features --exclude airbug-mon
+        run: cargo +stable run --locked -p cargo-airbug -- test --title "CI tests" --out target/airbug-report -- --locked --workspace --all-features --exclude airbug-mon
       - uses: actions/upload-artifact@v4
         if: always()
         with:

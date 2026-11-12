@@ -1,14 +1,14 @@
 //! Read side of the run store: one timeline of test runs (`.airbug/runs`) and bench runs
 //! (GUID registry + `.airbug-bench` scan), plus per-test history across test runs.
 //!
-//! The hub never writes here — runners own their directories; see `testrun::model`.
+//! The hub never writes here — runners own their directories; see `airbug_run::model`.
 use crate::{
     error::{HubError, Result},
     runs::RunStore,
     scan,
-    testrun::model::{
-        Git, KIND_BENCH, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals,
-    },
+};
+use airbug_run::model::{
+    Git, KIND_BENCH, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -61,7 +61,7 @@ fn state_str<T: Serialize>(state: &T) -> String {
 }
 
 fn now_ms() -> u64 {
-    crate::testrun::model::now_ms()
+    airbug_testrun::model::now_ms()
 }
 
 fn mtime_ms(path: &Path) -> u64 {
@@ -475,11 +475,11 @@ pub fn test_run_detail(root: &Path, id: &str, lite: bool) -> Result<Value> {
     let progress: Value = read(&dir.join("progress.json")).unwrap_or(Value::Null);
     let mut report: Value = read(&dir.join("report.json")).unwrap_or(Value::Null);
     if let Ok(mut parsed_report) =
-        serde_json::from_value::<crate::testrun::model::Report>(report.clone())
+        serde_json::from_value::<airbug_testrun::model::Report>(report.clone())
     {
-        crate::testrun::analytics::classify_defects(
+        airbug_testrun::defects::classify_defects(
             &mut parsed_report,
-            &crate::testrun::analytics::load_rules(root),
+            &airbug_testrun::defects::load_rules(root),
         );
         if let Ok(val) = serde_json::to_value(&parsed_report) {
             report = val;
@@ -625,7 +625,7 @@ pub fn run_file(root: &Path, id: &str, rel: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testrun::model::{REPORT_SCHEMA, Report, TestCase};
+    use airbug_testrun::model::{REPORT_SCHEMA, Report, TestCase};
 
     fn write_run(
         root: &Path,

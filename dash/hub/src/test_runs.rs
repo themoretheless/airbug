@@ -130,7 +130,7 @@ pub fn dashboard_detail(
     item: &crate::store::RunItem,
     lite: bool,
 ) -> io::Result<Value> {
-    use crate::testrun::{events, model::TestCase};
+    use airbug_testrun::{events, model::TestCase};
     let run = detail(root, id)?;
     let mut tests = Vec::new();
     let mut suites = std::collections::BTreeMap::<String, Value>::new();

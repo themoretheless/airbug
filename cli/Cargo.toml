@@ -11,3 +11,6 @@ publish = false
 [[bin]]
 name = "cargo-airbug"
 path = "src/main.rs"
+
+[dependencies]
+airbug-testrun.workspace = true
