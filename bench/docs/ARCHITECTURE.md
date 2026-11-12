@@ -63,7 +63,7 @@ Runner заранее строит и сохраняет schedule. Compile вы�
 2. **Process:** spawn готовой программы с argv/env/cwd; отдельно startup-inclusive wall time и внутренние метрики, если программа поддерживает protocol/import. Нельзя вычитать launch cost из startup benchmark.
 3. **Scenario:** приложение само владеет main thread/event loop. Driver сообщает readiness, phase boundaries, tick/frame/event completion. Runner не вкладывает winit loop в background thread и не заставляет приложение синхронно ждать GPU на каждом кадре.
 
-Browser/WASM: микро-драйвер через внешний host уже есть (`scripts/browser-driver.cjs`, см. MEASUREMENT.md); scenario driver с фазами — будущая работа. Внутри wasm нет предположения о spawn процесса, Unix APIs или обычном native timer.
+Browser/WASM: драйвер через внешний host (`scripts/browser-driver.cjs`, см. MEASUREMENT.md) измеряет и микро-кейсы, и сценарии с готовностью, фазами и кадрами. Внутри wasm нет предположения о spawn процесса, Unix APIs или обычном native timer.
 
 ## API — эскиз
 

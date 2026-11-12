@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>list/5000</title>
+<!--
+  A scenario measured by bench/scripts/browser-driver.cjs: the page owns its flow and marks
+  readiness, named phases and frames on the recorder it is given.
+-->
+<ul id="list"></ul>
+<script>
+  globalThis.airbugScenario = async rec => {
+    const list = document.getElementById("list");
+    rec.ready();
+    await rec.phase("build", () => {
+      for (let i = 0; i < 5000; i++) list.appendChild(document.createElement("li")).textContent = "row " + i;
+      return list.offsetHeight; // force layout inside the phase
+    });
+    await rec.frames(30, n => { list.style.transform = `translateY(${-n * 8}px)`; });
+    await rec.phase("teardown", () => { list.replaceChildren(); return list.offsetHeight; });
+  };
+</script>

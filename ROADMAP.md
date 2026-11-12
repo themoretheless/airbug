@@ -53,11 +53,6 @@ stage 2; can run in parallel with it.
 Goal: the scenarios Forma needs and evidence for the method itself.
 
 9. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
-10. **Browser scenarios**: the micro driver exists (`bench/scripts/browser-driver.cjs`);
-    scenario phases in a browser (readiness, frames, events) are still to do.
-11. **Method experiments**: overhead against Criterion and Divan loops, and the effect of
-    instrumentation (allocator, phases). (Drift is settled by `bench/tests/drift.rs`; the
-    harness's own cost against a handwritten loop by `examples/method_overhead.rs`.)
 
 ## Unscheduled
 
