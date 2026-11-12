@@ -12,7 +12,9 @@ Last reviewed: 2026-11-12.
 The hub is now the only web interface and `cargo airbug` the only launcher; what is left of
 that work is shipping it.
 
-1. **Release**: publish `airbug-run`, then `cargo-airbug-bench`, which depends on it.
+1. **Release**: publish `airbug-run`, then `cargo-airbug-bench`, which depends on it. Needs
+   the owner: the Release workflow is dispatched by hand and has no `airbug-run` family yet;
+   packaging itself is checked on every PR (`publish-dry-run.yml`).
 
 ## Stage 2 — Close Criterion / Divan parity (`bench`)
 

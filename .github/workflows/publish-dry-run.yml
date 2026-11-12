@@ -45,3 +45,10 @@ jobs:
         with:
           package-name: airbug-bench-macros
           dry-run: true
+
+      # The run format is a leaf too; `cargo-airbug-bench` depends on it.
+      - name: Dry-run airbug-run
+        uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          package-name: airbug-run
+          dry-run: true
