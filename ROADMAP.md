@@ -12,9 +12,10 @@ Last reviewed: 2026-11-13.
 The hub is now the only web interface and `cargo airbug` the only launcher; what is left of
 that work is shipping it.
 
-1. **Release**: publish `airbug-run`, then `cargo-airbug-bench`, which depends on it. Needs
-   the owner: the Release workflow is dispatched by hand and has no `airbug-run` family yet;
-   packaging itself is checked on every PR (`publish-dry-run.yml`).
+1. **Release**: dispatch the Release workflow for `airbug-run` (0.1.0), publish it, then
+   release `airbug-bench` — `cargo-airbug-bench` depends on `airbug-run`. Everything is in
+   place (the workflow knows the `airbug-run` family, packaging is dry-run on every PR); it
+   needs the owner's hand and crates.io token.
 
 ## Stage 2 — Hardware signals (`bench`)
 
