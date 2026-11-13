@@ -16,35 +16,24 @@ that work is shipping it.
    the owner: the Release workflow is dispatched by hand and has no `airbug-run` family yet;
    packaging itself is checked on every PR (`publish-dry-run.yml`).
 
-## Stage 2 — Close Criterion / Divan parity (`bench`)
-
-The acceptance gate is passed on 7d8236d with current evidence for every item
-([bench/docs/parity/completion.json](bench/docs/parity/completion.json)); 51 of 52
-requirements are verified. Full parity is not claimed until the last one is:
-
-2. **`audit`** — the upstream inventory is textual: make reachability through re-exports, cfg
-   gates and macro expansion machine-checked (rustdoc JSON of both crates), and decide the
-   recorded non-claims (async executor-overhead equivalence, Divan configuration precedence).
-
-## Stage 3 — Hardware signals (`bench`)
+## Stage 2 — Hardware signals (`bench`)
 
 Goal: the numbers behind a run come from the machine. `mon` already samples without a window
-on Linux and macOS, with GPU load and memory (unified memory included). Independent of
-stage 2; can run in parallel with it.
+on Linux and macOS, with GPU load and memory (unified memory included). 
 
-3. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
+2. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
    and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
    development VM nor CI exposes one), macOS ARM, SIMD utilisation.
-4. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
+3. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
    temperature and throttle counts between processes on Linux (`host.json`) and notes
    throttling; `diagnose` correlates it with
    per-process timings. Still owed: model-specific registers and macOS.
 
-## Stage 4 — Measurement depth (`bench`)
+## Stage 3 — Measurement depth (`bench`)
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-5. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
+4. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
 
 ## Unscheduled
 

@@ -772,7 +772,7 @@
       "id": "audit",
       "requirement": "All upstream exports, CLI options, feature flags mapped and verified",
       "upstream": "Full objective",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/docs/parity/upstream-surface.json",
         "bench/scripts/audit-upstream-surface.py",
@@ -790,9 +790,10 @@
         "divan-bencher.json: all 10 exported Bencher methods mapped, eight internal method declarations explicitly excluded using type/module visibility. Complete file method-set equality checked by test-upstream-surface.py; 70 contract/fresh-input/local-closure tests passed.",
         "criterion-extensions.json: all members of four public extension traits (Measurement, ValueFormatter, AsyncExecutor, Profiler) mapped; pinned trait boundaries and exact ordered member sets checked by test-upstream-surface.py. Existing current all-feature gates exercise custom values, runtime adapters and profiler lifecycle; semantic differences remain explicit.",
         "features.json current validation: 31 tests across seven no-default feature configurations passed, including serial/parallel exact statistical oracles. Expanded existing CI script; remote matrix not executed.",
-        "divan-counters.json: counter constructors/size/iterator/string helpers mapped, including 14 macro-generated primitive byte helpers omitted by plain declaration scans; exact source method/macro lists checked by test-upstream-surface.py. Conversion/sealed-trait visibility and count-domain differences documented."
+        "divan-counters.json: counter constructors/size/iterator/string helpers mapped, including 14 macro-generated primitive byte helpers omitted by plain declaration scans; exact source method/macro lists checked by test-upstream-surface.py. Conversion/sealed-trait visibility and count-domain differences documented.",
+        "bench/docs/parity/reachability.json (bench/scripts/audit-reachability.py): rustdoc JSON of both pinned crates walked from the crate root — 125 Criterion and 112 Divan reachable items, none unaccounted; trait methods, trait-impl methods and criterion_group!/criterion_main! are outside the textual inventory by construction and are mapped there."
       ],
-      "remaining": "Inventory, mappings, behaviour evidence, reports, console and platforms are all current (completion.json). What keeps this partial: the inventory is textual, so reachability through re-exports, cfg gates and macro expansion is not machine-checked, and the non-claims of api_semantics (async executor-overhead equivalence, every Divan configuration-precedence row, every combination of user extensions) stand."
+      "remaining": "None open. Recorded native differences rather than gaps (completion.json::api_semantics): no claim of exact async executor-overhead equivalence, of every Divan configuration-precedence row, or of every combination of user-defined extensions."
     },
     {
       "id": "cargo_test_benches",

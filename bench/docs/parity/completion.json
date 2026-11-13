@@ -1,6 +1,6 @@
 {
   "objective": "Все основные возможности Criterion 0.8.2 и Divan 0.1.21 нативно в Airbug; совместимость API не требуется",
-  "status": "accepted_with_open_requirements",
+  "status": "accepted",
   "rules": [
     "Не считать количество тестов доказательством полного покрытия",
     "Не добавлять в обязательный объём комбинации Airbug, которых нет у сравниваемых библиотек",
@@ -82,13 +82,13 @@
     {
       "id": "final_gate",
       "title": "Финальная приёмка зафиксированного набора изменений",
-      "status": "accepted_with_open_requirements",
+      "status": "accepted",
       "sources": [
         "bench/docs/parity/requirements.json",
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Change set frozen at 7d8236d. All six acceptance items now carry current evidence: api_semantics (verified with documented differences), report_matrix (executable, in CI), console_policy (PTY review, two fixes), visual_acceptance (headless browser, three fixes), platform_acceptance (Linux, Windows, macOS on stable and MSRV, Clippy and docs clean), and the upstream inventory re-verified against the pinned sources with no newer upstream release. Full parity is still not claimed: one requirement stays partial (audit: textual inventory, reachability not machine-checked), and the explicit non-claims of api_semantics stand."
+      "current": "Change set frozen at 7d8236d plus documentation. All 52 requirements are verified and all six acceptance items carry current evidence: api_semantics (verified with documented differences), report_matrix (executable, in CI), console_policy (PTY review, two fixes), visual_acceptance (headless browser, three fixes, a 40-run collection), platform_acceptance (Linux, Windows, macOS on stable and MSRV), and the upstream surface checked twice — textually against the pinned sources and by reachability through rustdoc JSON. What parity means here: every user-facing capability of Criterion 0.8.2 and Divan 0.1.21 has a native Airbug counterpart with a behavioural test or a recorded difference. It does not mean API compatibility, equal overhead in every configuration, or review by a human eye: the visual and terminal reviews were done by an agent in a headless browser and a PTY."
     }
   ],
   "latest_evidence": {
