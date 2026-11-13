@@ -11,7 +11,7 @@
     {
       "id": "api_semantics",
       "title": "Сверить поведение всех уже сопоставленных публичных API",
-      "status": "open",
+      "status": "verified_with_documented_differences",
       "sources": [
         "bench/docs/parity/criterion-bencher.json",
         "bench/docs/parity/criterion-extensions.json",
@@ -22,7 +22,7 @@
         "bench/docs/parity/divan-runner.json"
       ],
       "acceptance": "Для каждого сопоставленного API: конкретный поведенческий тест либо документированное нативное различие, сохраняющее возможность пользователя. Отдельно проверить бюджет измерения, batching/drop, groups и profiler.",
-      "current": "All 23 Divan manager methods now have focused behavioral evidence and explicit native differences in divan-runner.json. Signed Criterion measurements are locally verified through capture, statistics, regressions, JSON/CSV, baseline and standalone reports. Final extension/report review and current remote/visual acceptance remain open. Browser visual acceptance is closed (see visual_acceptance)."
+      "current": "Every mapped public API has either a behavioural test or a recorded native difference in its audit file (criterion-bencher, criterion-groups, criterion-runner, criterion-extensions, divan-bencher, divan-counters, divan-runner). The three things those audits were still waiting on are done: the mappings were re-checked against the pinned sources on 2026-11-13 (test-upstream-surface.py: 253 Criterion + 244 Divan declarations, 24/23 manager methods, 14 + 10 Bencher methods, 15 group/identity methods, four extension traits, 57 CLI arguments, 17 Cargo features — all exact; Criterion 0.8.2 and Divan 0.1.21 are still the newest releases); the current code passed the full Linux and Windows stable/MSRV jobs (platform_acceptance); the reports were reviewed in a browser (visual_acceptance). Explicitly not claimed, as recorded in the audits: exact async executor-overhead equivalence, every configuration-precedence row of Divan's action dispatch, and every possible combination of user-defined extensions."
     },
     {
       "id": "report_matrix",
@@ -71,13 +71,13 @@
     {
       "id": "platform_acceptance",
       "title": "Подтвердить текущий код на оставшихся платформах",
-      "status": "open",
+      "status": "verified_linux_windows_macos_pending",
       "sources": [
         "bench/docs/parity/platforms.json",
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "Current published 62d2f00 passed complete Linux and Windows stable/MSRV jobs in CI 41478939861, including signed measurements and navigation tests. macOS CI remains queued; current local bench library/integration targets passed 514 tests and Clippy. See platforms.json latest_published_gate and latest_local_bench_gate for exact scope."
+      "current": "ef6a58a passed CI run 43323818833 in full on Linux x86_64 (native, not emulated) and Windows, each on stable and MSRV 1.96.0: workspace tests in debug and release, the feature matrix, every bench script including the new report matrix, docs and Clippy; airbug-mon passed on Ubuntu. The macOS jobs of that run were still queued when this was written; the last commit with completed macOS jobs is 05a622d (all green). Timing accuracy on native x86 hardware is exercised by the tests but not separately characterised; hardware counters could not run (no PMU on CI)."
     },
     {
       "id": "final_gate",
