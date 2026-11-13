@@ -12,10 +12,10 @@ Last reviewed: 2026-11-13.
 The hub is now the only web interface and `cargo airbug` the only launcher; what is left of
 that work is shipping it.
 
-1. **Release**: dispatch the Release workflow for `airbug-run` (0.1.0), publish it, then
-   release `airbug-bench` — `cargo-airbug-bench` depends on `airbug-run`. Everything is in
-   place (the workflow knows the `airbug-run` family, packaging is dry-run on every PR); it
-   needs the owner's hand and crates.io token.
+1. **Publish 0.11.0**: every package is 0.11.0 and tagged per family. Publishing to
+   crates.io is the owner's: `airbug-macros` and `airbug` first, then `airbug-run`,
+   `airbug-bench-macros`, `airbug-bench`, `cargo-airbug-bench` (each depends on the ones
+   before it).
 
 ## Stage 2 — Hardware signals (`bench`)
 

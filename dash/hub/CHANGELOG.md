@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-## 0.7.0
+## 0.11.0
+
+- Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.
 
 - The test runner moved out of the hub into `airbug-testrun`, run by `cargo airbug test`; `airbug-hub test` is gone and the hub only reads runs. Reruns start the CLI (`AIRBUG_CLI`, else `cargo-airbug` next to the hub or on `PATH`).
 - One run page `#/run/<id>` (Results / Output / Signals / Compare) for test and bench runs; `GET /api/v1/run?id=`, `/runs/<id>/files/`, `bench/compare?baseline=`.

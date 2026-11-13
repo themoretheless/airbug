@@ -15,6 +15,7 @@ on:
           - airbug-mon
           - airbug-hub
           - airbug-run
+          - airbug-containers
       version:
         description: Exact Cargo package version (must match that family's crates)
         required: true
@@ -60,7 +61,7 @@ jobs:
           case "${{ inputs.package }}" in
             airbug) pkgs="airbug airbug-macros" ;;
             airbug-bench) pkgs="airbug-bench airbug-bench-macros cargo-airbug-bench" ;;
-            airbug-err|airbug-otel|airbug-mon|airbug-hub|airbug-run) pkgs="${{ inputs.package }}" ;;
+            airbug-err|airbug-otel|airbug-mon|airbug-hub|airbug-run|airbug-containers) pkgs="${{ inputs.package }}" ;;
             *) echo "unknown package"; exit 1 ;;
           esac
           metadata="$(cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml)"

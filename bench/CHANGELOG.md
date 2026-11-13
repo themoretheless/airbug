@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-## 0.10.0
+## 0.11.0
+
+- Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.
 
 - Add `frames`: frame lifecycle for application-owned render loops (`cpu.submit.ns`, `frame.completed.ns`, `window.present.interval.ns`) and a GPU timestamp adapter (`gpu.pass.ns`) that records stale, duplicate, wrapped or missing results as unavailable with a reason. No GPU dependency; example `frames`.
 

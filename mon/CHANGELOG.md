@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-## 0.7.0
+## 0.11.0
+
+- Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.
 
 - A headless sampler by default on Linux and macOS: samples until Ctrl+C (or `--seconds N`) and logs a one-line summary; `--headless` is still accepted.
 - The egui window is an optional feature: `--features gui`, opened with `--gui`.
