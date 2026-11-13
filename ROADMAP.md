@@ -34,9 +34,10 @@ on Linux and macOS, with GPU load and memory (unified memory included).
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-4. **Forma on real devices**: the frame lifecycle and the GPU timestamp adapter exist
-   (`airbug_bench::frames`) but have only met a simulated device. Wire Forma's `perf_bench`
-   and `window_bench` to them and run on a machine with a GPU.
+4. **Forma on real devices**: `perf_bench` and `window_bench` hand their raw series to
+   the process runner (themoretheless/forma#22, checked with Forma's CPU backend). Still owed:
+   a run on a machine with a GPU and a display, and feeding GPU timestamp ticks through
+   `airbug_bench::frames` instead of Forma's already resolved durations.
 
 ## Unscheduled
 
