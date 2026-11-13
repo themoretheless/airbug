@@ -66,7 +66,7 @@
         "run --memory: memory.html",
         "examples: viz_gallery (20 figures), density_report, hypothesis_report, input_summary, outlier_report, regression_report, relative_report, violin_report"
       ],
-      "limits": "Headless Chromium only; no other engine, no print/PDF output, no screen reader. The largest set viewed is six runs (48 figures); collection limits beyond that are covered by tests, not by eye. Reproduce with bench/scripts/visual-acceptance.cjs."
+      "limits": "Headless Chromium only; no other engine, no print/PDF output, no screen reader. The largest set viewed is forty runs (120 figures, 4.2 MB), fully usable at both window sizes; the 256-run limit itself is covered by tests. Reproduce with bench/scripts/visual-acceptance.cjs."
     },
     {
       "id": "platform_acceptance",
@@ -88,7 +88,7 @@
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Change set frozen at 7d8236d. All six acceptance items now carry current evidence: api_semantics (verified with documented differences), report_matrix (executable, in CI), console_policy (PTY review, two fixes), visual_acceptance (headless browser, three fixes), platform_acceptance (Linux, Windows, macOS on stable and MSRV, Clippy and docs clean), and the upstream inventory re-verified against the pinned sources with no newer upstream release. Full parity is still not claimed: four requirements stay partial with their named leftovers in requirements.json (plots, output, artifacts, audit), and the explicit non-claims of api_semantics stand."
+      "current": "Change set frozen at 7d8236d. All six acceptance items now carry current evidence: api_semantics (verified with documented differences), report_matrix (executable, in CI), console_policy (PTY review, two fixes), visual_acceptance (headless browser, three fixes), platform_acceptance (Linux, Windows, macOS on stable and MSRV, Clippy and docs clean), and the upstream inventory re-verified against the pinned sources with no newer upstream release. Full parity is still not claimed: one requirement stays partial (audit: textual inventory, reachability not machine-checked), and the explicit non-claims of api_semantics stand."
     }
   ],
   "latest_evidence": {

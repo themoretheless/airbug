@@ -19,13 +19,12 @@ that work is shipping it.
 ## Stage 2 — Close Criterion / Divan parity (`bench`)
 
 The acceptance gate is passed on 7d8236d with current evidence for every item
-([bench/docs/parity/completion.json](bench/docs/parity/completion.json)); 48 requirements are
-verified. Full parity is not claimed until the last four are:
+([bench/docs/parity/completion.json](bench/docs/parity/completion.json)); 51 of 52
+requirements are verified. Full parity is not claimed until the last one is:
 
-2. **Finish the partial requirements** — each has its leftovers named in `requirements.json`:
-   `plots` (navigation/thumbnail equivalents, resource limits, custom-formatter integration),
-   `output` (remaining formatter and entry-point scope), `artifacts` (plot entry-point audit),
-   `audit` (the semantic review items its mappings list).
+2. **`audit`** — the upstream inventory is textual: make reachability through re-exports, cfg
+   gates and macro expansion machine-checked (rustdoc JSON of both crates), and decide the
+   recorded non-claims (async executor-overhead equivalence, Divan configuration precedence).
 
 ## Stage 3 — Hardware signals (`bench`)
 
