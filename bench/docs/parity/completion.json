@@ -1,6 +1,6 @@
 {
   "objective": "Все основные возможности Criterion 0.8.2 и Divan 0.1.21 нативно в Airbug; совместимость API не требуется",
-  "status": "open",
+  "status": "accepted_with_open_requirements",
   "rules": [
     "Не считать количество тестов доказательством полного покрытия",
     "Не добавлять в обязательный объём комбинации Airbug, которых нет у сравниваемых библиотек",
@@ -71,24 +71,24 @@
     {
       "id": "platform_acceptance",
       "title": "Подтвердить текущий код на оставшихся платформах",
-      "status": "verified_linux_windows_macos_pending",
+      "status": "verified",
       "sources": [
         "bench/docs/parity/platforms.json",
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "ef6a58a passed CI run 43323818833 in full on Linux x86_64 (native, not emulated) and Windows, each on stable and MSRV 1.96.0: workspace tests in debug and release, the feature matrix, every bench script including the new report matrix, docs and Clippy; airbug-mon passed on Ubuntu. The macOS jobs of that run were still queued when this was written; the last commit with completed macOS jobs is 05a622d (all green). Timing accuracy on native x86 hardware is exercised by the tests but not separately characterised; hardware counters could not run (no PMU on CI)."
+      "current": "a22b4a5 (merged as 7d8236d) passed CI runs 43341229886 and 43341233806 in full: Linux x86_64 (native), Windows and macOS (aarch64), each on stable and MSRV 1.96.0 — workspace tests in debug and release, the feature matrix, every bench script including the report matrix, docs and Clippy; airbug-mon on Ubuntu and macOS, including the window build. One macOS job failed once before any build step (crates.io index download, HTTP/2 framing error) and passed on its single re-run. Not covered: timing accuracy on native x86 hardware is exercised by the tests but not separately characterised; hardware counters could not run (no PMU on CI)."
     },
     {
       "id": "final_gate",
       "title": "Финальная приёмка зафиксированного набора изменений",
-      "status": "open",
+      "status": "accepted_with_open_requirements",
       "sources": [
         "bench/docs/parity/requirements.json",
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Functional changes through 62d2f00 published and verified on Linux/Windows stable/MSRV. Current local macOS bench library/integration tests and Clippy passed. Full macOS CI and browser/terminal visual acceptance remain open; no full parity completion claim. Browser visual acceptance is closed (see visual_acceptance)."
+      "current": "Change set frozen at 7d8236d. All six acceptance items now carry current evidence: api_semantics (verified with documented differences), report_matrix (executable, in CI), console_policy (PTY review, two fixes), visual_acceptance (headless browser, three fixes), platform_acceptance (Linux, Windows, macOS on stable and MSRV, Clippy and docs clean), and the upstream inventory re-verified against the pinned sources with no newer upstream release. Full parity is still not claimed: four requirements stay partial with their named leftovers in requirements.json (plots, output, artifacts, audit), and the explicit non-claims of api_semantics stand."
     }
   ],
   "latest_evidence": {

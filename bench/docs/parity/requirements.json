@@ -431,7 +431,7 @@
       "id": "measurement",
       "requirement": "Pluggable measurement values, aggregation and formatters",
       "upstream": "C:Measurement,ValueFormatter",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/docs/parity/measurement.json (method-level audit against Criterion 0.8.2 measurement.rs and current Suite/timing/report code)",
         "bench/tests/measurements.rs::typed_measurement_accumulates_waves_separately_from_wall_clock",
@@ -439,7 +439,7 @@
         "criterion-bencher.json: all 14 sync/async Bencher declarations mapped to typed native APIs; 20 current measurement integration tests passed. Method equality checked by test-upstream-surface.py; full semantic parity remains unproven.",
         "criterion-extensions.json::measurement_semantic_audit::signed_measurement_probe: executed pinned Criterion with negative Measurement values; recorded sample and estimate artifacts."
       ],
-      "remaining": "Signed totals and report/baseline paths passed locally and in both Linux/Windows toolchains. Current full macOS CI remains open; browser visual acceptance done 2026-11-12 (completion.json::visual_acceptance)."
+      "remaining": "None: signed totals and report/baseline paths pass on Linux, Windows and macOS (CI 43341229886), and the reports were reviewed in a browser."
     },
     {
       "id": "samples",
@@ -758,7 +758,7 @@
       "id": "platforms",
       "requirement": "Supported platforms/toolchains and runtime failure behavior",
       "upstream": "C/D:package features and cfg",
-      "status": "partial",
+      "status": "verified",
       "evidence": [
         "bench/docs/parity/platforms.json",
         ".github/workflows/ci.yml",
@@ -766,7 +766,7 @@
         "platforms.json::linux_x86_latest_validation: current source 506-test all-feature library/macros/CLI/doctest gate passed under QEMU, source hashes and complete log retained.",
         "ci-validation.json::worker_shutdown_run and platforms.json::latest_remote_validation: completed remote jobs and exact remaining Windows failure on cc28c4a."
       ],
-      "remaining": "Current published 62d2f00 passed the complete Linux and Windows stable/MSRV jobs in CI 41478939861. macOS jobs remain queued. Current local macOS library/integration tests for both bench packages passed 514 tests and Clippy; see platforms.json for the narrower local scope."
+      "remaining": "None for the supported set: Linux, Windows and macOS on stable and MSRV pass in full (completion.json::platform_acceptance). Native x86 timing accuracy is not separately characterised."
     },
     {
       "id": "audit",

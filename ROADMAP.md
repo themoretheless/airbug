@@ -5,7 +5,7 @@ to bottom; a later stage starts when the one before it is done unless it is mark
 independent. Only open work is listed — when an item ships, delete it here (changelogs and the
 feature maps at the bottom are the record of what was done).
 
-Last reviewed: 2026-11-12.
+Last reviewed: 2026-11-13.
 
 ## Stage 1 — Release (`run`, `bench`)
 
@@ -18,18 +18,14 @@ that work is shipping it.
 
 ## Stage 2 — Close Criterion / Divan parity (`bench`)
 
-Goal: parity is declared, backed by the registry in
-[bench/docs/parity/](bench/docs/parity/README.md) (46 requirements verified, 6 partial).
-Placed after stage 1 on purpose: reports and console output are reviewed once, in their final
-form.
+The acceptance gate is passed on 7d8236d with current evidence for every item
+([bench/docs/parity/completion.json](bench/docs/parity/completion.json)); 48 requirements are
+verified. Full parity is not claimed until the last four are:
 
-2. **Finish the partial requirements**: `measurement` (pluggable values, aggregation,
-   formatters), `plots` (on/off, linear/log scales, grouped comparisons), `output` (verbosity,
-   colour, tree/table, machine formats), `artifacts` (output directory, raw data, summary).
-3. **`platform_acceptance`** — record the macOS jobs for the current code (Linux and Windows
-   are confirmed on stable and MSRV).
-4. **`final_gate`** — accept a frozen change set requirement by requirement (the upstream
-   inventory was re-verified; no newer Criterion or Divan release exists).
+2. **Finish the partial requirements** — each has its leftovers named in `requirements.json`:
+   `plots` (navigation/thumbnail equivalents, resource limits, custom-formatter integration),
+   `output` (remaining formatter and entry-point scope), `artifacts` (plot entry-point audit),
+   `audit` (the semantic review items its mappings list).
 
 ## Stage 3 — Hardware signals (`bench`)
 
@@ -37,10 +33,10 @@ Goal: the numbers behind a run come from the machine. `mon` already samples with
 on Linux and macOS, with GPU load and memory (unified memory included). Independent of
 stage 2; can run in parallel with it.
 
-5. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
+3. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
    and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
    development VM nor CI exposes one), macOS ARM, SIMD utilisation.
-6. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
+4. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
    temperature and throttle counts between processes on Linux (`host.json`) and notes
    throttling; `diagnose` correlates it with
    per-process timings. Still owed: model-specific registers and macOS.
@@ -49,7 +45,7 @@ stage 2; can run in parallel with it.
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-7. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
+5. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
 
 ## Unscheduled
 
