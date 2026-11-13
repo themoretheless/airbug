@@ -567,7 +567,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
         );
         assert_eq!(
             c.report.totals,
-            crate::testrun::model::Totals {
+            crate::model::Totals {
                 total: 7,
                 completed: 7,
                 passed: 3,

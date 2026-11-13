@@ -28,6 +28,10 @@ pub fn run(r: Request<'_>) -> Result<()> {
     run_with_alpha(r, 0.05)
 }
 pub fn run_with_alpha(r: Request<'_>, alpha: f64) -> Result<()> {
+    let out = r.output.to_path_buf();
+    crate::shared_store::session(&out, || measure(r, alpha))
+}
+fn measure(r: Request<'_>, alpha: f64) -> Result<()> {
     if r.output.exists() {
         return Err(error("output already exists"));
     }

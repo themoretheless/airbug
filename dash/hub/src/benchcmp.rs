@@ -26,7 +26,7 @@ const ALPHA: f64 = 0.05;
 const MAX_ROWS: usize = 60;
 const MAX_RUN_BYTES: u64 = 64 * 1024 * 1024;
 
-type CacheKey = (Vec<(PathBuf, u64)>, Option<String>);
+type CacheKey = (Vec<(PathBuf, u64)>, Option<String>, Option<String>);
 static CACHE: Mutex<Option<(CacheKey, Value)>> = Mutex::new(None);
 
 struct Entry {
@@ -45,8 +45,8 @@ fn mtime_ms(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-/// `GET /api/v1/bench/compare[?run=<id>]`.
-pub fn compare(root: &Path, id: Option<&str>) -> Value {
+/// `GET /api/v1/bench/compare[?run=<id>][&baseline=<id>]`.
+pub fn compare(root: &Path, id: Option<&str>, baseline: Option<&str>) -> Value {
     let store = root.join(".airbug-bench");
     let files: Vec<(PathBuf, u64)> = find_run_json(&store, SCAN)
         .into_iter()
@@ -55,7 +55,11 @@ pub fn compare(root: &Path, id: Option<&str>) -> Value {
             (p, when)
         })
         .collect();
-    let key = (files.clone(), id.map(str::to_string));
+    let key = (
+        files.clone(),
+        id.map(str::to_string),
+        baseline.map(str::to_string),
+    );
     if let Ok(cache) = CACHE.lock()
         && let Some((cached_key, value)) = cache.as_ref()
         && *cached_key == key
@@ -66,7 +70,7 @@ pub fn compare(root: &Path, id: Option<&str>) -> Value {
         .iter()
         .filter_map(|(path, when)| load(&store, path, *when))
         .collect();
-    let value = compare_entries(&entries, id);
+    let value = compare_entries(&entries, id, baseline);
     if let Ok(mut cache) = CACHE.lock() {
         *cache = Some((key, value.clone()));
     }
@@ -87,9 +91,8 @@ fn load(store: &Path, path: &Path, when_ms: u64) -> Option<Entry> {
         .collect::<Vec<_>>()
         .join("/");
     let href = match rel.strip_prefix("runs/") {
-        Some(uuid) if uuid::Uuid::parse_str(uuid).is_ok() => format!("#/bench/{uuid}"),
-        _ if dir.join("report.html").is_file() => format!("/bench/{rel}/report.html"),
-        _ => format!("/bench/{rel}/run.json"),
+        Some(uuid) if uuid::Uuid::parse_str(uuid).is_ok() => crate::rundetail::href(uuid),
+        _ => crate::rundetail::href(&rel),
     };
     Some(Entry {
         id: rel,
@@ -162,7 +165,21 @@ fn result(
     })
 }
 
-fn compare_entries(entries: &[Entry], id: Option<&str>) -> Value {
+fn compare_entries(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> Value {
+    let mut value = compare_with(entries, id, baseline);
+    // What the baseline picker offers: every other finished run, newest first.
+    if let Some(current) = value["current"]["id"].as_str().map(str::to_string) {
+        let others: Vec<Value> = entries
+            .iter()
+            .filter(|e| e.id != current && e.run.status == Status::Complete)
+            .map(describe)
+            .collect();
+        value["candidates"] = json!(others);
+    }
+    value
+}
+
+fn compare_with(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> Value {
     let complete = |e: &&Entry| e.run.status == Status::Complete;
     let current = match id {
         Some(id) => entries
@@ -197,6 +214,26 @@ fn compare_entries(entries: &[Entry], id: Option<&str>) -> Value {
             "current": describe(current),
             "note": "unsupported variant set",
         });
+    }
+    if let Some(wanted) = baseline {
+        let Some(previous) = entries
+            .iter()
+            .find(|e| e.id == wanted && e.id != current.id)
+        else {
+            return json!({
+                "mode": null,
+                "current": describe(current),
+                "note": "the chosen baseline run was not found",
+            });
+        };
+        return match analysis::compare(&previous.run, Some(&current.run), THRESHOLD, ALPHA) {
+            Ok(rows) => result("previous", current, Some(previous), rows),
+            Err(err) => json!({
+                "mode": null,
+                "current": describe(current),
+                "note": format!("cannot compare with the chosen baseline: {err}"),
+            }),
+        };
     }
     let position = entries
         .iter()
@@ -268,7 +305,7 @@ mod tests {
     fn entry(id: &str, when_ms: u64, run: Run) -> Entry {
         Entry {
             id: id.into(),
-            href: format!("#/bench/{id}"),
+            href: format!("#/run/{id}"),
             when_ms,
             run,
         }
@@ -292,7 +329,7 @@ mod tests {
             entry("other", 2, other_env),
             entry("old", 1, run("old", &[("candidate", &FAST)])),
         ];
-        let value = compare_entries(&entries, None);
+        let value = compare_entries(&entries, None, None);
         assert_eq!(value["mode"], "previous", "{value}");
         assert_eq!(value["current"]["id"], "new");
         assert_eq!(
@@ -302,20 +339,31 @@ mod tests {
         assert_eq!(value["summary"]["regression"], 1, "{value}");
         let change = value["rows"][0]["change_percent"].as_f64().unwrap();
         assert!((change - 100.0).abs() < 1.0, "{change}");
+        assert_eq!(value["candidates"].as_array().unwrap().len(), 2);
+
+        let picked = compare_entries(&entries, Some("old"), Some("new"));
+        assert_eq!(picked["previous"]["id"], "new", "{picked}");
+        assert_eq!(picked["summary"]["improvement"], 1, "{picked}");
+        let missing = compare_entries(&entries, Some("old"), Some("gone"));
+        assert_eq!(missing["note"], "the chosen baseline run was not found");
     }
 
     #[test]
     fn crossover_runs_compare_within_themselves_and_lonely_runs_say_so() {
         let ab = run("ab", &[("baseline", &SLOW), ("candidate", &FAST)]);
-        let value = compare_entries(&[entry("ab", 1, ab)], None);
+        let value = compare_entries(&[entry("ab", 1, ab)], None, None);
         assert_eq!(value["mode"], "ab", "{value}");
         assert_eq!(value["summary"]["improvement"], 1, "{value}");
 
-        let alone = compare_entries(&[entry("x", 1, run("x", &[("candidate", &FAST)]))], None);
+        let alone = compare_entries(
+            &[entry("x", 1, run("x", &[("candidate", &FAST)]))],
+            None,
+            None,
+        );
         assert!(alone["mode"].is_null());
         assert_eq!(alone["note"], "no earlier finished run to compare with");
         assert_eq!(
-            compare_entries(&[], None)["note"],
+            compare_entries(&[], None, None)["note"],
             "no finished bench run yet"
         );
     }

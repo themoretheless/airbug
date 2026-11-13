@@ -14,6 +14,29 @@ fn hub_bin() -> Command {
     cmd
 }
 
+/// The `cargo-airbug` binary that runs tests, next to the hub's own. Cargo builds only this
+/// package's binaries for its integration tests, so it is built on first use.
+fn cli_bin() -> PathBuf {
+    static BUILT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    BUILT
+        .get_or_init(|| {
+            let hub = Path::new(env!("CARGO_BIN_EXE_airbug-hub"));
+            let cli = hub.with_file_name(format!("cargo-airbug{}", std::env::consts::EXE_SUFFIX));
+            let mut build = Command::new(env!("CARGO"));
+            build.args(["build", "--locked", "-p", "cargo-airbug"]);
+            if hub.parent().and_then(Path::file_name) == Some("release".as_ref()) {
+                build.arg("--release");
+            }
+            let status = build
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .status()
+                .expect("cargo build -p cargo-airbug");
+            assert!(status.success() && cli.is_file(), "no {}", cli.display());
+            cli
+        })
+        .clone()
+}
+
 fn free_port() -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.local_addr().unwrap().port()
@@ -81,6 +104,8 @@ fn start_hub(root: &Path) -> (u16, HubProc) {
     for _ in 0..10 {
         let port = free_port();
         let child = hub_bin()
+            // Reruns start the CLI; outside tests the CLI sets this when it starts the hub.
+            .env("AIRBUG_CLI", cli_bin())
             .args([
                 "serve",
                 "--root",
@@ -464,7 +489,7 @@ fn launch_history_updates_and_serves_only_registered_attachments() {
     let (status, body) = http(port, "GET", "/api/v1/runs?kind=test", None);
     assert_eq!(status, 200);
     let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(timeline["runs"][0]["href"], "#/tests/123-456");
+    assert_eq!(timeline["runs"][0]["href"], "#/run/123-456");
     assert_eq!(timeline["runs"][0]["totals"]["total"], 1);
     assert_eq!(timeline["live"], 0); // Missing timestamps make this fixture stale.
     let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
@@ -530,7 +555,7 @@ fn launch_history_updates_and_serves_only_registered_attachments() {
     std::fs::write(bench.join("run.json"), fixture.to_string()).unwrap();
     let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
     let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(timeline["runs"][0]["href"], "#/tests/123-457");
+    assert_eq!(timeline["runs"][0]["href"], "#/run/123-457");
     let (status, body) = http(port, "GET", "/api/v1/runs/123-457", None);
     assert_eq!(status, 200, "{body}");
     let adapted: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -662,7 +687,7 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
     write_fixture(&root);
 
     // Nobody listens on this port, so the runner must not wait for a hub.
-    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+    let output = Command::new(cli_bin())
         .args([
             "test",
             "--root",
@@ -672,7 +697,7 @@ fn test_runner_writes_a_live_run_the_hub_serves() {
             "--quiet",
         ])
         .output()
-        .expect("run airbug-hub test");
+        .expect("run cargo-airbug test");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(101), "{stderr}");
     assert!(
@@ -787,7 +812,7 @@ fn nextest_runner_reports_the_same_fixture() {
     let _ = std::fs::remove_dir_all(&root);
     write_fixture(&root);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_airbug-hub"))
+    let output = Command::new(cli_bin())
         .args([
             "test",
             "--nextest",
@@ -798,7 +823,7 @@ fn nextest_runner_reports_the_same_fixture() {
             "--quiet",
         ])
         .output()
-        .expect("run airbug-hub test --nextest");
+        .expect("run cargo-airbug test --nextest");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_ne!(output.status.code(), Some(0), "{stderr}");
     assert!(
@@ -893,6 +918,8 @@ fn start_hub_with_builtin_collector(root: &Path) -> (u16, u16, u16, HubProc) {
             continue;
         }
         let child = hub_bin()
+            // Reruns start the CLI; outside tests the CLI sets this when it starts the hub.
+            .env("AIRBUG_CLI", cli_bin())
             .args([
                 "serve",
                 "--root",
@@ -1248,5 +1275,70 @@ fn serve_native_otlp_collector_traces_metrics_logs_profiles_and_issue_correlatio
         200
     );
 
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The run page asks one endpoint about any run: an announced matrix is described with its
+/// cells, its logs and where its files are served — also outside `.airbug-bench`.
+#[test]
+fn run_page_describes_an_announced_matrix() {
+    let root = std::env::temp_dir().join(format!("airbug-hub-run-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let out = root.join("elsewhere/grid");
+    for (cell, done) in [("0", 3), ("1", 1)] {
+        let dir = out.join(cell);
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        std::fs::write(dir.join("logs/0-candidate.stdout"), "hello\n").unwrap();
+        std::fs::write(
+            dir.join("progress.json"),
+            format!(r#"{{"completed":{done},"total":3,"variant":"candidate"}}"#),
+        )
+        .unwrap();
+    }
+    std::fs::write(out.join("0/status-final.json"), r#"{"state":"complete"}"#).unwrap();
+    std::fs::write(out.join("0/run.json"), "{}").unwrap();
+    std::fs::write(out.join("matrix.json"), r#"[{"--cpu":"1"},{"--cpu":"2"}]"#).unwrap();
+    let store = root.join(".airbug/runs/bench-7-7");
+    std::fs::create_dir_all(&store).unwrap();
+    let manifest = serde_json::json!({
+        "schema": "airbug.run/1", "kind": "bench", "run_id": "bench-7-7", "title": "grid",
+        "started_at_ms": 1000, "artifacts": out.display().to_string(),
+    });
+    std::fs::write(store.join("manifest.json"), manifest.to_string()).unwrap();
+    std::fs::write(
+        store.join("progress.json"),
+        r#"{"run_id":"bench-7-7","kind":"bench","state":"running"}"#,
+    )
+    .unwrap();
+
+    let (port, _hub) = start_hub(&root);
+    let (status, body) = http(port, "GET", "/api/v1/run?id=bench-7-7", None);
+    assert_eq!(status, 200, "{body}");
+    let run: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(run["kind"], "bench");
+    assert_eq!(run["state"], "running", "one cell is still going: {run}");
+    assert_eq!(run["progress"]["completed"], 4);
+    assert_eq!(run["progress"]["total"], 6);
+    assert_eq!(run["progress"]["variant"], "--cpu 2 · candidate");
+    assert_eq!(run["matrix"], true);
+    assert_eq!(run["cells"][1]["axes"]["--cpu"], "2");
+    assert_eq!(run["cells"][0]["state"], "complete");
+    assert_eq!(run["files"], "/runs/bench-7-7/files/");
+    assert_eq!(run["logs"][0]["path"], "0/logs/0-candidate.stdout");
+
+    let (status, body) = http(
+        port,
+        "GET",
+        "/runs/bench-7-7/files/0/logs/0-candidate.stdout",
+        None,
+    );
+    assert_eq!((status, body.as_str()), (200, "hello\n"));
+    let (status, _) = http(port, "GET", "/runs/bench-7-7/files/../manifest.json", None);
+    assert_eq!(status, 404);
+    let (status, _) = http(port, "GET", "/api/v1/run?id=nope", None);
+    assert_eq!(status, 404);
+    let (_, body) = http(port, "GET", "/api/v1/runs?kind=bench", None);
+    let timeline: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(timeline["runs"][0]["href"], "#/run/bench-7-7");
     let _ = std::fs::remove_dir_all(&root);
 }

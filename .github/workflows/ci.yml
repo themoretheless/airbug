@@ -63,6 +63,11 @@ jobs:
         run: python bench/scripts/test-allocated-thread-inheritance.py
       - name: Check total measurement targets
         run: python bench/scripts/test-measurement-target.py
+      - name: Report matrix (entry points x report options)
+        run: |
+          cargo +${{ matrix.toolchain }} build --locked --release -p cargo-airbug-bench
+          cargo +${{ matrix.toolchain }} build --locked --release -p airbug-bench --example sort --example custom_measurement
+          python bench/scripts/test-report-matrix.py
       - run: cargo +${{ matrix.toolchain }} doc --locked --workspace --all-features --no-deps --exclude airbug-mon
         env:
           RUSTDOCFLAGS: -D warnings
@@ -107,11 +112,20 @@ jobs:
       - run: cargo +stable test --locked -p airbug-hub
 
   airbug-mon:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: rustup toolchain install stable --profile minimal
+      - run: rustup toolchain install stable --profile minimal --component clippy
+      # The sampler builds everywhere; the window is an optional feature.
       - run: cargo +stable test --locked -p airbug-mon
+      - run: cargo +stable clippy --locked -p airbug-mon --all-targets -- -D warnings
+      - name: The window still builds
+        if: runner.os == 'macOS'
+        run: cargo +stable check --locked -p airbug-mon --features gui
 
   report:
     runs-on: ubuntu-latest
@@ -122,9 +136,12 @@ jobs:
           node-version: '22'
       - name: Offline report navigation logic
         run: node bench/scripts/test-report-navigation.cjs
+      - name: Report and memory page controls (DOM fixtures)
+        working-directory: bench
+        run: node scripts/test-report-ui.mjs && node scripts/test-memory-ui.mjs
       - run: rustup toolchain install stable --profile minimal
       - name: Generate web report (per-test run, same format the hub shows live)
-        run: cargo +stable run --locked -p airbug-hub -- test --title "CI tests" --out target/airbug-report -- --locked --workspace --all-features --exclude airbug-mon
+        run: cargo +stable run --locked -p cargo-airbug -- test --title "CI tests" --out target/airbug-report -- --locked --workspace --all-features --exclude airbug-mon
       - uses: actions/upload-artifact@v4
         if: always()
         with:

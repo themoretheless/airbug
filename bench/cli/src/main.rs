@@ -5,6 +5,7 @@ mod cmd;
 mod experiment_report;
 mod forma;
 mod git_run;
+mod host;
 mod hub;
 mod matrix;
 mod privacy;
@@ -13,7 +14,6 @@ mod revisions;
 mod runner;
 mod sessions;
 mod shared_store;
-mod web_ui;
 
 fn init_tracing() {
     let filter = std::env::var("AIRBUG_LOG")

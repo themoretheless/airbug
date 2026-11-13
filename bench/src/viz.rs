@@ -66,8 +66,10 @@ impl Palette {
     };
 
     /// Series colors for variants and lanes, cycled by index.
-    pub const SERIES: [&'static str; 6] = [
-        "#09695d", "#2f6f9e", "#b45309", "#685286", "#7d8b3c", "#a33a5e",
+    /// Twelve hues before a color repeats: six processes of two variants share one chart.
+    pub const SERIES: [&'static str; 12] = [
+        "#09695d", "#2f6f9e", "#b45309", "#685286", "#7d8b3c", "#a33a5e", "#3fb3a2", "#74b3e0",
+        "#e39a3b", "#a58fd0", "#b9c76a", "#dd7fa0",
     ];
 
     /// Verdict colors need no direction parameter: [`Decision`] already accounts for the
@@ -729,7 +731,9 @@ impl Plot {
                     .collect()
             };
             for (part_index, part) in parts.iter().enumerate() {
-                let size = 24. + part.chars().count() as f64 * 11.;
+                // Monospace at 11px: Latin glyphs take 0.6em, wide scripts a full em.
+                let advance = |c: char| if c.is_ascii() { 6.8 } else { 11. };
+                let size = 24. + part.chars().map(advance).sum::<f64>();
                 if x > self.left && (x + size > self.width - self.right || part_index > 0) {
                     row += 1;
                     x = self.left;
@@ -1009,7 +1013,8 @@ pub mod charts {
                 .enumerate()
                 .map(|(i, s)| (s.label.clone(), Palette::LIGHT.series(i)))
                 .collect();
-            plot.legend(&entries);
+            // A dozen processes do not fit on one line; a clipped key hides whole series.
+            plot.legend_wrapped(&entries);
         }
         for (i, s) in series.iter().enumerate() {
             let stride = s.points.len().div_ceil(max_points.max(1)).max(1);

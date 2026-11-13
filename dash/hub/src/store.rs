@@ -1,14 +1,14 @@
 //! Read side of the run store: one timeline of test runs (`.airbug/runs`) and bench runs
 //! (GUID registry + `.airbug-bench` scan), plus per-test history across test runs.
 //!
-//! The hub never writes here — runners own their directories; see `testrun::model`.
+//! The hub never writes here — runners own their directories; see `airbug_run::model`.
 use crate::{
     error::{HubError, Result},
     runs::RunStore,
     scan,
-    testrun::model::{
-        Git, KIND_BENCH, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals,
-    },
+};
+use airbug_run::model::{
+    Git, KIND_BENCH, MANIFEST_SCHEMA, Manifest, Progress, RunState, TestStatus, Totals,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -61,7 +61,7 @@ fn state_str<T: Serialize>(state: &T) -> String {
 }
 
 fn now_ms() -> u64 {
-    crate::testrun::model::now_ms()
+    airbug_testrun::model::now_ms()
 }
 
 fn mtime_ms(path: &Path) -> u64 {
@@ -100,7 +100,7 @@ fn test_run_item(dir: &Path) -> Option<RunItem> {
         .unwrap_or(manifest.started_at_ms);
     let stale = !state.is_finished() && now_ms().saturating_sub(updated) > STALE_AFTER_MS;
     Some(RunItem {
-        href: format!("#/tests/{}", manifest.run_id),
+        href: crate::rundetail::href(&manifest.run_id),
         run_id: manifest.run_id,
         kind: "test",
         title: manifest.title,
@@ -124,7 +124,7 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
         for run in list.runs {
             seen.insert(format!("runs/{}", run.run_id));
             items.push(RunItem {
-                href: format!("#/bench/{}", run.run_id),
+                href: crate::rundetail::href(&run.run_id),
                 run_id: run.run_id,
                 kind: "bench",
                 title: run.title,
@@ -143,7 +143,11 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
     items.extend(announced_bench_runs(root, &mut seen));
     for row in scan::list_bench_dirs(root).runs {
         let id = row.id.replace('\\', "/");
-        if seen.contains(&id) {
+        // Announced sessions are listed once, cells of a matrix included.
+        if seen
+            .iter()
+            .any(|known| id == *known || id.starts_with(&format!("{known}/")))
+        {
             continue;
         }
         let run_json = root.join(&row.rel);
@@ -153,7 +157,7 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
             .unwrap_or_else(|| "complete".into());
         let when = mtime_ms(&run_json);
         items.push(RunItem {
-            href: row.report_url.unwrap_or(row.run_url),
+            href: crate::rundetail::href(&id),
             title: id.clone(),
             run_id: id,
             kind: "bench",
@@ -171,10 +175,10 @@ pub fn bench_runs(root: &Path, registry: &RunStore) -> Vec<RunItem> {
     items
 }
 
-/// Bench sessions announced in the shared run store by `cargo airbug-bench run`.
+/// Bench sessions announced in the shared run store by `cargo airbug-bench`.
 ///
 /// The session's files stay in its own output directory; while it runs, live counts come from
-/// the `progress.json` the runner keeps there. Directories under `.airbug-bench` are added to
+/// the `progress.json` files the runner keeps there. Directories under `.airbug-bench` are added to
 /// `seen` so the scan below does not list them twice.
 fn announced_bench_runs(root: &Path, seen: &mut HashSet<String>) -> Vec<RunItem> {
     let bench_store = root.join(".airbug-bench");
@@ -193,37 +197,24 @@ fn announced_bench_runs(root: &Path, seen: &mut HashSet<String>) -> Vec<RunItem>
             }
             let progress = airbug_run::store::progress(&dir);
             let state = progress.as_ref().map(|p| p.state).unwrap_or_default();
-            let live: Option<Value> = (!state.is_finished())
-                .then(|| {
-                    artifacts
-                        .as_deref()
-                        .and_then(|a| read(&a.join("progress.json")))
-                })
+            let live = (!state.is_finished())
+                .then(|| artifacts.as_deref().and_then(live_counts))
                 .flatten();
-            let updated = match (&live, &artifacts) {
-                (Some(_), Some(a)) => mtime_ms(&a.join("progress.json")),
-                _ => progress
+            let updated = match &live {
+                Some((_, at)) => *at,
+                None => progress
                     .as_ref()
                     .map(|p| p.updated_at_ms)
                     .unwrap_or(manifest.started_at_ms),
             };
+            let live = live.map(|(counts, _)| counts);
             let counts = live.or_else(|| {
                 progress
                     .as_ref()
                     .filter(|p| p.totals.total > 0)
                     .map(|p| json!({"completed": p.totals.completed, "total": p.totals.total}))
             });
-            // Only files under `.airbug-bench` are served; other sessions are listed without a link.
-            let href = under
-                .as_deref()
-                .zip(artifacts.as_deref())
-                .and_then(|(under, a)| {
-                    ["report.html", "run.json"]
-                        .into_iter()
-                        .find(|file| a.join(file).is_file())
-                        .map(|file| format!("/bench/{under}/{file}"))
-                })
-                .unwrap_or_else(|| "#/runs".into());
+            let href = crate::rundetail::href(&manifest.run_id);
             Some(RunItem {
                 href,
                 run_id: manifest.run_id,
@@ -241,6 +232,45 @@ fn announced_bench_runs(root: &Path, seen: &mut HashSet<String>) -> Vec<RunItem>
             })
         })
         .collect()
+}
+
+/// Process counts of a running session and when they last moved: its own `progress.json`, or
+/// the sum over its cells (a matrix, one directory per combination).
+fn live_counts(artifacts: &Path) -> Option<(Value, u64)> {
+    let own = artifacts.join("progress.json");
+    if let Some(v) = read::<Value>(&own) {
+        return Some((v, mtime_ms(&own)));
+    }
+    let (mut completed, mut total, mut at) = (0, 0, 0);
+    for cell in std::fs::read_dir(artifacts).ok()?.flatten() {
+        let file = cell.path().join("progress.json");
+        if let Some(v) = read::<Value>(&file) {
+            completed += v["completed"].as_u64().unwrap_or(0);
+            total += v["total"].as_u64().unwrap_or(0);
+            at = at.max(mtime_ms(&file));
+        }
+    }
+    (total > 0).then(|| (json!({"completed": completed, "total": total}), at))
+}
+
+/// Resolve `/runs/<id>/files/<rel>` to a file of an announced bench session, wherever its
+/// `--output` directory is.
+pub fn artifact_file(root: &Path, id: &str, rel: &str) -> Option<PathBuf> {
+    let plain = |s: &str| {
+        !s.is_empty()
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+    };
+    if !plain(id) || id.contains("..") || rel.split('/').any(|seg| !plain(seg) || seg == "..") {
+        return None;
+    }
+    let manifest = airbug_run::store::manifest(&runs_dir(root).join(id))?;
+    if manifest.kind != KIND_BENCH {
+        return None;
+    }
+    let dir = PathBuf::from(manifest.artifacts?).canonicalize().ok()?;
+    let path = dir.join(rel).canonicalize().ok()?;
+    (path.starts_with(&dir) && path.is_file()).then_some(path)
 }
 
 /// `"1712345678s unix"` or ISO-8601 (`YYYY-MM-DDTHH:MM:SS(.mmm)Z`) → milliseconds.
@@ -325,7 +355,7 @@ fn case_runs(root: &Path) -> Vec<RunItem> {
                 state,
                 started_at_ms: run["created_ms"].as_u64().unwrap_or(0),
                 updated_at_ms,
-                href: format!("#/tests/{id}"),
+                href: format!("#/run/{id}"),
                 git: None,
                 totals: Some(Totals {
                     total,
@@ -445,11 +475,11 @@ pub fn test_run_detail(root: &Path, id: &str, lite: bool) -> Result<Value> {
     let progress: Value = read(&dir.join("progress.json")).unwrap_or(Value::Null);
     let mut report: Value = read(&dir.join("report.json")).unwrap_or(Value::Null);
     if let Ok(mut parsed_report) =
-        serde_json::from_value::<crate::testrun::model::Report>(report.clone())
+        serde_json::from_value::<airbug_testrun::model::Report>(report.clone())
     {
-        crate::testrun::analytics::classify_defects(
+        airbug_testrun::defects::classify_defects(
             &mut parsed_report,
-            &crate::testrun::analytics::load_rules(root),
+            &airbug_testrun::defects::load_rules(root),
         );
         if let Ok(val) = serde_json::to_value(&parsed_report) {
             report = val;
@@ -595,7 +625,7 @@ pub fn run_file(root: &Path, id: &str, rel: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testrun::model::{REPORT_SCHEMA, Report, TestCase};
+    use airbug_testrun::model::{REPORT_SCHEMA, Report, TestCase};
 
     fn write_run(
         root: &Path,
@@ -712,6 +742,42 @@ mod tests {
         assert!(run_file(&root, c, "report.json").is_some());
         assert!(run_file(&root, c, "../x").is_none());
         assert!(run_file(&root, "nope", "report.json").is_none());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_bench_session_outside_the_bench_store_is_linked_and_served() {
+        let root = std::env::temp_dir().join(format!("airbug-artifacts-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let out = &root.join("elsewhere/session");
+        fs::create_dir_all(out.join("0")).unwrap();
+        fs::write(out.join("report.html"), "<html>").unwrap();
+        fs::write(out.join("0/progress.json"), r#"{"completed":1,"total":4}"#).unwrap();
+        let dir = runs_dir(&root).join("bench-1-2");
+        fs::create_dir_all(&dir).unwrap();
+        let manifest = Manifest {
+            schema: MANIFEST_SCHEMA.into(),
+            kind: KIND_BENCH.into(),
+            run_id: "bench-1-2".into(),
+            title: "session".into(),
+            artifacts: Some(out.display().to_string()),
+            ..Manifest::default()
+        };
+        fs::write(
+            dir.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let items = announced_bench_runs(&root, &mut HashSet::new());
+        assert_eq!(items[0].href, "#/run/bench-1-2");
+        assert_eq!(items[0].progress.as_ref().unwrap()["total"], 4);
+
+        let served = |rel| artifact_file(&root, "bench-1-2", rel);
+        assert!(served("report.html").is_some());
+        assert!(served("0/progress.json").is_some());
+        assert!(served("../../.airbug/runs/bench-1-2/manifest.json").is_none());
+        assert!(artifact_file(&root, "..", "report.html").is_none());
         let _ = fs::remove_dir_all(&root);
     }
 

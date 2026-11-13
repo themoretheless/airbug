@@ -531,7 +531,7 @@ cargo airbug-bench report .airbug-bench/sort -o .airbug-bench/sort.html
 
 `--offline` подходит при наличии зависимостей в Cargo cache; при первой сборке его можно убрать. Alias `cargo airbug-bench` настроен в этом workspace. Для других проектов: `cargo install --path bench/cli --offline`.
 
-Веб-интерфейс: `cargo airbug-bench serve .bench`. Сводные отчёты по папке экспериментов: HTML с фильтрами и графиками, Markdown и JSON. [Построение отчётов](docs/REPORTS.md).
+Веб-интерфейс — хаб: `cargo airbug serve`, каждый запуск печатает ссылку на свою страницу. Сводные отчёты по папке экспериментов: HTML с фильтрами и графиками, Markdown и JSON. [Построение отчётов](docs/REPORTS.md).
 
 Профиль памяти по стекам: `run --memory` и [подключение Rust worker](docs/MEMORY_PROFILER.md).
 
@@ -598,7 +598,7 @@ Runner чередует AB/BA, последовательно запускает
 
 ## Исследование и статус
 
-[Проверки и ограничения](docs/VALIDATION.md) · [Roadmap](docs/ROADMAP.md) · [Архитектура](docs/ARCHITECTURE.md) · [Правила измерений](docs/MEASUREMENT.md)
+[Проверки и ограничения](docs/VALIDATION.md) · [Roadmap](../ROADMAP.md) · [Архитектура](docs/ARCHITECTURE.md) · [Правила измерений](docs/MEASUREMENT.md)
 
 Исследование охватило 779 записей; 614 репозиториев оставлены после скрининга. Это анализ документации с углублёнными выборочными просмотрами исходников ключевых движков, а не полный аудит или сравнительный запуск сотен библиотек.
 

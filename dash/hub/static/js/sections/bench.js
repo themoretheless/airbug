@@ -1,30 +1,17 @@
-// Runs › Bench: run list, one run's live detail, and the "vs previous run" summary Now reuses.
+// Runs › Bench: hub-registered sessions, run.json charts, and the "vs previous run" summary
+// that Now and the run page reuse.
 
-import { enc, getJson, tryJson } from "../api.js";
+import { enc, getJson } from "../api.js";
 import { $, escapeAttr, escapeHtml } from "../dom.js";
 import { fmtNs, fmtPct, median } from "../format.js";
-import { currentRoute } from "../shell.js";
 import { targetAttrs, TR } from "../runs.js";
 
-let pollTimer = null;
-let loadedChartsKey = null;
-
-function stopPolling() {
-  clearInterval(pollTimer);
-  pollTimer = null;
-}
-
 async function renderList() {
-  stopPolling();
-  loadedChartsKey = null;
-  $("bench-list").hidden = false;
-  $("bench-detail").hidden = true;
-  $("bench-title").textContent = "Bench runs";
   const data = await getJson("bench/runs");
   $("bench-meta").textContent = (data.note || "") + (data.hub_id ? " · hub " + data.hub_id.slice(0, 8) : "");
   const runs = data.runs || [];
   $("bench-list").innerHTML = runs.length
-    ? runs.map(r => `<a class="bench-row" href="#/bench/${escapeAttr(r.run_id)}">
+    ? runs.map(r => `<a class="bench-row" href="#/run/${escapeAttr(enc(r.run_id))}">
         <span class="bench-state ${escapeAttr(r.state || "registered")}">${escapeHtml(r.state)}</span>
         <div><strong>${escapeHtml(r.title || r.run_id)}</strong><span>${escapeHtml(r.run_id)}</span></div>
         <span>${escapeHtml(r.updated_at || "")}</span>
@@ -32,31 +19,8 @@ async function renderList() {
     : `<p class="bench-live">${escapeHtml(data.note || "No runs.")}</p>`;
 }
 
-function renderProgress(d) {
-  const live = d.live || {};
-  const completed = Number(live.completed || 0);
-  const total = Number(live.total || 0);
-  const prog = $("bench-progress");
-  prog.max = total > 0 ? total : 100;
-  prog.value = total > 0 ? completed : (d.state === "complete" ? 100 : d.state === "running" ? 50 : 0);
-  $("bench-live").textContent = [live.state || d.state, total ? `${completed}/${total}` : "", live.variant || ""]
-    .filter(Boolean).join(" · ");
-}
-
-function renderLinks(d) {
-  const links = [[d.report_url, "report.html"], [d.run_json_url, "run.json"], [d.jaeger_url, "Jaeger traces"]]
-    .filter(([href]) => href)
-    .map(([href, label]) => `<a href="${escapeAttr(href)}" target="_blank" rel="noopener">${label}</a>`);
-  $("bench-links").innerHTML = links.join(" · ");
-  const frame = $("bench-report-frame");
-  frame.hidden = !(d.has_report_html && d.report_url);
-  if (!frame.hidden && frame.getAttribute("data-src") !== d.report_url) {
-    frame.src = d.report_url;
-    frame.setAttribute("data-src", d.report_url);
-  }
-}
-
-async function renderCharts(url) {
+/** Median wall time per case, grouped by case family, from a `run.json`. */
+export async function renderCharts(url, el) {
   const run = await getJson(url).catch(() => null);
   if (!run) return;
   const caseById = {};
@@ -87,82 +51,13 @@ async function renderCharts(url) {
     return `<div class="bench-chart-card"><h4>${escapeHtml(family)}</h4>
       <table><thead><tr><th>engine</th><th>median wall</th></tr></thead><tbody>${tr}</tbody></table></div>`;
   }).join("");
-  $("bench-charts").innerHTML = cards || `<p class="bench-live">No wall observations in run.json.</p>`;
-}
-
-/** Run-scoped signal feeds, one line per item. */
-const FEEDS = [
-  { el: "bench-traces", path: "traces", params: { limit: 40 }, items: d => d.traces,
-    html: t => `<a class="bench-trace-link" href="#/traces/${escapeAttr(t.trace_id)}">[${escapeHtml(t.status || "OK")}] ${escapeHtml(t.root_service)} · ${escapeHtml(t.root_name)} (${t.span_count} spans · ${Number(t.duration_ms || 0).toFixed(2)} ms)</a>`,
-    empty: "No traces for this run." },
-  { el: "bench-logs", path: "logs", params: { limit: 80 }, items: d => d.entries, line: e => `[${e.severity}] ${e.service} ${e.body}`, empty: "No logs." },
-  { el: "bench-metrics", path: "metrics", params: { limit: 80 }, items: d => (d.points || []).slice(-40), line: p => `${p.name}=${p.value} ${p.unit || ""}`.trim(), empty: "No metrics." },
-  { el: "bench-issues", path: "issues", params: {}, items: d => d.issues, line: i => `${i.id} · ${i.title} · ${i.status}`, empty: "No issues." },
-];
-
-async function renderFeed(feed, runId) {
-  const data = await tryJson(feed.path, { ...feed.params, run_id: runId }, {});
-  const items = feed.items(data) || [];
-  const el = $(feed.el);
-  if (!el) return;
-  if (items.length && feed.html) {
-    el.innerHTML = items.map(feed.html).join("\n");
-  } else {
-    el.textContent = items.length ? items.map(feed.line).join("\n") : (data.note || feed.empty);
-  }
-}
-
-async function renderDetail(runId) {
-  const d = await getJson("bench/runs/" + enc(runId)).catch(() => null);
-  if (!d) {
-    loadedChartsKey = null;
-    $("bench-meta").textContent = "";
-    $("bench-progress").max = 100;
-    $("bench-progress").value = 0;
-    $("bench-live").textContent = "run not found";
-    $("bench-links").innerHTML = "";
-    $("bench-charts").innerHTML = "";
-    const frame = $("bench-report-frame");
-    frame.hidden = true;
-    frame.removeAttribute("data-src");
-    FEEDS.forEach(f => { $(f.el).textContent = ""; });
-    return;
-  }
-  $("bench-meta").textContent = `${d.state} · hub ${String(d.hub_id || "").slice(0, 8)}`;
-  renderProgress(d);
-  renderLinks(d);
-  if (d.has_run_json && d.run_json_url) {
-    const finished = d.state === "complete" || d.state === "failed" || d.state === "cancelled";
-    const key = `${runId}:${d.state}:${d.run_json_url}`;
-    if (!finished || loadedChartsKey !== key) {
-      await renderCharts(d.run_json_url);
-      if (finished) loadedChartsKey = key;
-    }
-  } else {
-    loadedChartsKey = null;
-    $("bench-charts").innerHTML = `<p class="bench-live">Waiting for run.json (charts appear when the suite finishes or writes partial results).</p>`;
-  }
-  await Promise.all(FEEDS.map(f => renderFeed(f, runId)));
-}
-
-async function show(route) {
-  if (!route.runId) return renderList();
-  $("bench-list").hidden = true;
-  $("bench-detail").hidden = false;
-  $("bench-title").textContent = "Bench run";
-  await renderDetail(route.runId);
-  if (!pollTimer) {
-    pollTimer = setInterval(() => {
-      const r = currentRoute();
-      if (r.cat === "bench" && r.runId) renderDetail(r.runId).catch(() => {});
-    }, 1500);
-  }
+  el.innerHTML = cards || `<p class="bench-live">No wall observations in run.json.</p>`;
 }
 
 export default {
   cats: ["bench"],
-  show: route => show(route).catch(err => { $("bench-meta").textContent = String(err); }),
-  hide: stopPolling,
+  show: () => renderList().catch(err => { $("bench-meta").textContent = String(err); }),
+  tick: n => (n % 4 === 0 ? renderList() : null),
 };
 
 // ---- latest bench run vs the previous comparable one (`GET /api/v1/bench/compare`) ----

@@ -1,11 +1,11 @@
-//! `airbug-hub test` (`cargo airbug test`) — run `cargo test` as a live, per-test run.
+//! `cargo airbug test` — run `cargo test` as a live, per-test run.
 //!
 //! The runner lists tests first (`cargo test … -- --list`) so the hub can show a real
 //! progress bar, then runs them with `AIRBUG_REPORT_DIR` pointing into the run directory so
 //! `airbug::report` steps, comparisons and attachments land beside the results. Everything is
 //! plain files (see [`model`]); the hub only reads them, so a run is live in the dashboard
 //! whether or not the hub was started first.
-pub mod analytics;
+pub mod defects;
 pub mod events;
 pub mod html;
 pub mod junit;
@@ -14,6 +14,7 @@ pub mod libtest;
 pub use airbug_run::model;
 pub mod nextest;
 
+use airbug_run::hub::Probe;
 use libtest::Collector;
 use model::{
     Git, MANIFEST_SCHEMA, Manifest, Progress, REPORT_SCHEMA, RUNNER_CARGO_TEST, RUNNER_NEXTEST,
@@ -21,8 +22,7 @@ use model::{
 };
 use std::{
     env, fs,
-    io::{self, BufRead, BufReader, Read, Write},
-    net::{SocketAddr, TcpStream},
+    io::{self, BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
     sync::{
@@ -62,10 +62,10 @@ pub struct Options {
 }
 
 pub const USAGE: &str = "\
-airbug-hub test [--nextest] [--root PATH] [--out DIR] [--junit FILE] [--title TEXT] [--port N]
+cargo airbug test [--nextest] [--root PATH] [--out DIR] [--junit FILE] [--title TEXT] [--port N]
                 [--no-list] [--quiet] [--keep N] [-- <cargo test args> [-- <test binary args>]]
     # runs cargo test, writes .airbug/runs/<id>/ (or --out DIR), live in the hub at
-    # http://127.0.0.1:<port>/#/tests/<id>; exit code follows the tests
+    # http://127.0.0.1:<port>/#/run/<id>; exit code follows the tests
     # --junit FILE exports JUnit XML upon completion
     # --nextest runs `cargo nextest run` (args after -- go to it; filters after the second --)
     # --no-list skips the listing pass (needed for harness = false test targets)";
@@ -80,7 +80,7 @@ where
         out: None,
         junit: None,
         title: None,
-        port: crate::config::DEFAULT_PORT,
+        port: airbug_run::hub::DEFAULT_PORT,
         list: true,
         quiet: false,
         keep: DEFAULT_KEEP,
@@ -134,7 +134,7 @@ where
     Ok(options)
 }
 
-/// Entry point for `airbug-hub test`; returns the process exit code.
+/// Entry point for `cargo airbug test`; returns the process exit code.
 pub fn main(args: Vec<String>) -> i32 {
     let options = match parse_args(args) {
         Ok(options) => options,
@@ -247,18 +247,18 @@ fn run(options: Options) -> io::Result<i32> {
     store.write(&mut collector, true);
     fs::write(dir.join("index.html"), html::render(&collector.report))?;
 
-    let live_url = format!("http://127.0.0.1:{}/#/tests/{run_id}", options.port);
+    let live_url = airbug_run::hub::run_url(options.port, &run_id);
     eprintln!("airbug test: run {run_id}");
     eprintln!("airbug test: files {}", dir.display());
     if in_store {
-        match probe_hub(options.port, &root) {
-            HubProbe::Ours => eprintln!("Live tests: {live_url}"),
-            HubProbe::Other(other) => eprintln!(
+        match airbug_run::hub::probe(options.port, &root) {
+            Probe::Ours => eprintln!("Live tests: {live_url}"),
+            Probe::Other(other) => eprintln!(
                 "airbug test: hub on :{} serves {other}, not this root — start one with \
                  `cargo airbug serve --port <N>` to watch live",
                 options.port
             ),
-            HubProbe::Absent => eprintln!(
+            Probe::Absent => eprintln!(
                 "airbug test: no hub on :{} — `cargo airbug serve` shows this run live at {live_url}",
                 options.port
             ),
@@ -388,7 +388,7 @@ fn run(options: Options) -> io::Result<i32> {
     collector.report.finished_at_ms = Some(finished);
     collector.report.duration_s = Some(store.started.elapsed().as_secs_f64());
     collector.report.exit_code = exit_code;
-    analytics::classify_defects(&mut collector.report, &analytics::load_rules(&root));
+    defects::classify_defects(&mut collector.report, &defects::load_rules(&root));
     store.write(&mut collector, true);
     fs::write(dir.join("index.html"), html::render(&collector.report))?;
     let junit_xml = junit::render_junit_xml(&collector.report);
@@ -602,38 +602,6 @@ fn git_info(root: &Path) -> Git {
         branch: git(&["rev-parse", "--abbrev-ref", "HEAD"]),
         subject: git(&["log", "-1", "--format=%s"]),
         dirty: git(&["status", "--porcelain", "--untracked-files=no"]).is_some(),
-    }
-}
-
-enum HubProbe {
-    Ours,
-    Other(String),
-    Absent,
-}
-
-/// Is a hub for this root listening on `port`?
-fn probe_hub(port: u16, root: &Path) -> HubProbe {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(300)) else {
-        return HubProbe::Absent;
-    };
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
-    let request = "GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    if stream.write_all(request.as_bytes()).is_err() {
-        return HubProbe::Absent;
-    }
-    let mut text = String::new();
-    if stream.read_to_string(&mut text).is_err() {
-        return HubProbe::Absent;
-    }
-    let body = text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
-    let hub_root = serde_json::from_str::<serde_json::Value>(body)
-        .ok()
-        .and_then(|v| v.get("root").and_then(|r| r.as_str()).map(str::to_string));
-    match hub_root {
-        Some(hub_root) if Path::new(&hub_root) == root => HubProbe::Ours,
-        Some(hub_root) => HubProbe::Other(hub_root),
-        None => HubProbe::Absent,
     }
 }
 

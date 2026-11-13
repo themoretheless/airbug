@@ -3,8 +3,8 @@ use crate::{
     collector,
     config::RootPaths,
     error::{HubError, Result},
-    testrun::model::now_ms,
 };
+use airbug_run::model::now_ms;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{

@@ -4413,6 +4413,8 @@ impl<'a> Suite<'a> {
                 let text = format!($($arg)*);
                 let enabled = !json && !list && !dry_run && color.enabled(
                     std::io::stdout().is_terminal(), std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()));
+                // Machine output and listings are never reshaped.
+                let text = if json || list || dry_run { text } else { crate::console::terminal_tables(&text) };
                 ::std::println!("{}", crate::console::render(&text, enabled));
             }};
         }

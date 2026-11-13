@@ -13,7 +13,7 @@ Rust toolkit split by job. One naming rule:
 | `err/` | `airbug-err` |
 | `dash/` | `airbug-hub` (+ `dash/collector` ops assets) |
 | `cli/` | `cargo-airbug` (`cargo airbug test \| bench \| serve \| up \| status`) |
-| `run/` | `airbug-run` (run format + store shared by runners and the hub) |
+| `run/` | `airbug-run` (run format + store shared by runners and the hub), `airbug-testrun` (the test runner behind `cargo airbug test`) |
 
 ```text
 unit/                      # package: airbug (Allure/ReportPortal-style TestOps, #[airbug::test], async steps)
@@ -56,7 +56,7 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. This i
 | `mon` | usable (macOS) | `MonApp`; CI on macOS |
 | `containers` / checkout-domain | internal | `publish = false` |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).
+See [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md) and [ROADMAP.md](ROADMAP.md) (what is still open).
 
 Known debt (not blocking): none on `syn` majors (unit + bench macros both on syn 2.x).
 
@@ -64,7 +64,7 @@ Known debt (not blocking): none on `syn` majors (unit + bench macros both on syn
 
 ```bash
 cargo test --workspace --locked --exclude airbug-mon   # cross-platform
-cargo test -p airbug-mon                               # macOS host monitor
+cargo test -p airbug-mon                               # host sampler (window: --features gui)
 cargo test -p airbug --all-features
 cargo test -p airbug-otel --all-features
 cargo test -p airbug-err --all-features

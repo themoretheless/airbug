@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Add a browser / WASM driver (`scripts/browser-driver.cjs`): a page exposes `globalThis.airbugBench`, the driver measures calibrated batches in headless Chromium and reports them in the worker protocol, so `run --protocol --program node` schedules, compares and reports a browser like any program. A page that sets `globalThis.airbugScenario` is measured as a scenario: readiness, named phases and frame intervals.
+
+- In a terminal, a results table wider than the window is shown as one record per row packed to the window width; pipes and files keep the Markdown table.
+
+- Tree output prints measured values with six significant digits instead of the full float, so result lines stop wrapping.
+
+- Run files are written atomically and flushed with their directory: a JSON file is either whole or absent, and `status-final.json` present means the run is complete.
+- On Linux the runner samples CPU frequency, temperature and thermal-throttle counts between processes (`host.json`) and notes throttling or a frequency drop of 10% or more; `diagnose` reports how per-process timings correlate with them.
+
+- Add `perf`: hardware performance counters (instructions, cycles, cache and branch events) as a `Measurement` on Linux via `perf_event_open`; a missing counter is an explicit error with the reason. Example `perf_counters`.
+- Reports: long source paths wrap on narrow windows, scatter legends wrap instead of clipping, and series colours repeat after twelve instead of six.
+
+- Remove the built-in web interface: `run`, `matrix`, `bench`, `git-compare` and `resume` announce their session in `.airbug/runs/` and print `Live benchmark: http://127.0.0.1:8790/#/run/<id>` when a hub serves the directory; the process exits as soon as results are saved. `--ui`, `--no-ui` and `--no-open` are accepted and ignored; `serve` says where the interface moved.
+
 - Automatically compare completed direct Cargo runs per case, with immutable hash-checked history, filtered-run continuity, explicit incompatibility and history opt-out.
 
 - Add compensation attributes with nested/imported inheritance and CLI precedence; correct run-level overhead-policy metadata and verify CPU clocks on ARM64 and x86_64 through Rosetta.

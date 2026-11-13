@@ -91,3 +91,52 @@ RSS снимается вне per-frame hot loop. Изменение RSS не д
 Изображение, checksum, semantic assertions и ошибки работы — отдельные артефакты с привязкой к binary/fixture. Для одинакового backend возможны byte-exact goldens; для разных backend требуется заранее заданная tolerance/quality policy. Принять потерю AA ради ускорения без явного изменения контракта нельзя.
 
 Отчёт обязан показывать scope рядом с числом, raw count и independent process count, interval/effect, availability, mismatches и ссылки на raw data. Профили помогают объяснить причину, но сами по себе не доказывают end-to-end ускорение.
+
+## Аппаратные счётчики
+
+`airbug_bench::perf` даёт счётчики процессора как обычное `Measurement`: `hw.instructions`,
+`hw.cycles`, `hw.cache_references`, `hw.cache_misses`, `hw.branches`, `hw.branch_misses`.
+Счётчик открывается на вызывающий поток, считает только пользовательское пространство и
+работает непрерывно; измерение батча — разность двух чтений.
+
+```rust
+use airbug_bench::{BatchPolicy, Suite, perf::{Event, PerfCounter}};
+match PerfCounter::open(Event::CacheMisses) {
+    Ok(counter) => { suite.bench_measured("sort/cache", counter, BatchPolicy::SmallInput, work)?; }
+    Err(why) => eprintln!("skipped: {why}"),
+}
+```
+
+Границы: только Linux (`perf_event_open`); нужен `perf_event_paranoid` ≤ 2 и PMU, который
+виртуальная машина пробрасывает гостю. Там, где счётчика нет, `open` возвращает ошибку с причиной —
+набор сам решает, пропустить кейс или упасть (пример: `examples/perf_counters.rs`). Значения
+относятся к потоку, а не к процессу: работа в дочерних потоках в них не попадает. Проверено на
+машине без PMU (все шесть событий корректно недоступны); на железе со счётчиками поведение
+покрыто тестом, который там и выполняется, но отдельной приёмки ещё не было.
+
+## Браузер и WASM
+
+`bench/scripts/browser-driver.cjs` запускает страницу в headless Chromium и отдаёт результаты в
+протоколе worker, поэтому process runner работает с браузером как с обычной программой:
+
+```sh
+cargo airbug-bench run --protocol --program node -o .airbug-bench/browser \
+  -- bench/scripts/browser-driver.cjs bench/examples/browser/index.html
+```
+
+Контракт страницы — один глобальный объект: `globalThis.airbugBench = { "case id": () => { одна
+операция } }` (или promise такого объекта: WASM компилируется асинхронно). Драйвер прогревает
+кейс, подбирает размер батча под `--target-ms` (по умолчанию 50 мс) и снимает `--samples` батчей;
+значение — сумма батча в наносекундах и число операций, как у нативного worker. Расписание
+AB/BA, baseline, сравнение и отчёты — те же.
+
+Границы: часы — `performance.now()` главного потока; в Chromium без cross-origin isolation шаг
+0,1 мс, поэтому батчи длинные, а разрешение записывается в контракт кейса и в scope метрики. Между
+кодом и числом стоят JIT и сборщик мусора. Страница, которая вместо этого задаёт `globalThis.airbugScenario = async rec => { … }`, измеряется
+как сценарий: `rec.ready()` — время до готовности, `await rec.phase("имя", fn)` — именованная фаза,
+`await rec.frames(n, each)` — интервалы между кадрами `requestAnimationFrame`; каждое значение —
+отдельное наблюдение со своей фазой в метрике (пример: `bench/examples/browser/scenario.html`).
+Headless-браузер сам задаёт темп кадров, поэтому интервалы говорят о пропусках кадров, а не о
+предельной частоте. Нужен Playwright с Chromium; в CI драйвер не запускается.
+Пример страницы с WASM-модулем: `bench/examples/browser/index.html`.
+

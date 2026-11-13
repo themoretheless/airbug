@@ -8,7 +8,8 @@ Local developer toolkit (not hosted SaaS). Domains live in folders; packages are
 |--------|------|-------|
 | `airbug-hub` | `HubApp` in `dash/hub` | Injects `IssueStore`, built-in OTLP HTTP/gRPC receiver, paths, webhook |
 | `cargo-airbug-bench` | `bench/cli` | Clap → action modules |
-| `airbug-mon` | `mon/src/main.rs` | Channels + sampler + egui `MonApp` |
+| `cargo-airbug` | `cli` | Runs tests in-process (`airbug-testrun`); hands `serve` / `up` / `status` to the hub and `bench` to the bench CLI |
+| `airbug-mon` | `mon/src/main.rs` | Channels + sampler + SQLite writer; egui `MonApp` behind the `gui` feature |
 
 Libraries (`airbug`, `airbug-bench`, `airbug-err`, `airbug-otel`) expose builders/traits; they do not install a global `tracing` subscriber (`airbug-otel` provides an opt-in `TracingOtelLayer` via `airbug_otel::tracing_layer()`).
 
@@ -23,8 +24,8 @@ Libraries (`airbug`, `airbug-bench`, `airbug-err`, `airbug-otel`) expose builder
 | Contract | Version field | Notes |
 |----------|---------------|-------|
 | `airbug_err::Event` | `schema_version` (u32, default 1) | Hub rejects unsupported majors |
-| Runs | `schema` in `manifest.json` (`airbug.run/1`) | `airbug-run`: model + store under `.airbug/runs/<id>/`; test runs live there; `cargo airbug-bench run` announces its session there (manifest `artifacts` points at its output directory) |
-| Bench runs | filesystem `run.json` trees under `.airbug-bench` | Scanned, not a shared crate |
+| Runs | `schema` in `manifest.json` (`airbug.run/1`) | `airbug-run`: model + store under `.airbug/runs/<id>/`; test runs live there; `cargo airbug-bench` (`run`, `matrix`, `bench`, `git-compare`, `resume`) announces its session there (manifest `artifacts` points at its output directory, served at `/runs/<id>/files/`) |
+| Bench runs | filesystem `run.json` trees under `.airbug-bench` | Scanned only when no announcement exists |
 
 ## Threat model
 
@@ -36,7 +37,7 @@ Hub binds **`127.0.0.1` only**. Issue webhooks accept **`http://` only**. See [S
 .airbug-bench/                 # bench store (runs, baselines)
 dash/collector/data/           # OTLP file export (traces.json, metrics.json, logs.json, profiles.json + .1..3 backups)
 dash/hub/data/issues.sqlite    # error issues (with trace_id/span_id correlation)
-.airbug/runs/<run_id>/         # test runs written by `airbug-hub test`, read by the hub
+.airbug/runs/<run_id>/         # runs written by `cargo airbug test` and bench sessions, read by the hub
 ~/.local/share/airbug-mon/     # mon history (platform-specific)
 ```
 

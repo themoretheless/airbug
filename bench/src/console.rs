@@ -155,6 +155,91 @@ pub(crate) fn tree_names<'a>(names: impl IntoIterator<Item = &'a str>) -> String
     root.render("", &mut result);
     result
 }
+/// Markdown tables are for files and pipes; in a terminal a row wider than the window wraps
+/// into noise. There, a table that does not fit is shown as one record per row: the first
+/// cell as a heading, the rest as `Column: value` pairs packed to the window width. Pipes and
+/// tables that fit are returned unchanged.
+pub(crate) fn terminal_tables(text: &str) -> String {
+    use std::io::IsTerminal;
+    let width = std::io::stdout()
+        .is_terminal()
+        .then(|| terminal_size::terminal_size().map(|(width, _)| usize::from(width.0)))
+        .flatten();
+    fit_tables(text, width)
+}
+
+/// Cells of a Markdown row; `\|` inside a cell is a literal pipe.
+fn table_cells(line: &str) -> Option<Vec<String>> {
+    let inner = line.trim().strip_prefix('|')?.strip_suffix('|')?;
+    let mut cells = vec![String::new()];
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if chars.peek() == Some(&'|') => {
+                cells.last_mut()?.push('|');
+                chars.next();
+            }
+            '|' => cells.push(String::new()),
+            other => cells.last_mut()?.push(other),
+        }
+    }
+    Some(cells.into_iter().map(|c| c.trim().to_string()).collect())
+}
+
+fn is_table_rule(line: &str) -> bool {
+    let line = line.trim();
+    line.starts_with('|')
+        && line.contains('-')
+        && line.chars().all(|c| matches!(c, '|' | '-' | ':' | ' '))
+}
+
+fn fit_tables(text: &str, width: Option<usize>) -> String {
+    let Some(width) = width else {
+        return text.to_owned();
+    };
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut output: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let header =
+            table_cells(lines[i]).filter(|_| lines.get(i + 1).is_some_and(|l| is_table_rule(l)));
+        let Some(header) = header else {
+            output.push(lines[i].to_owned());
+            i += 1;
+            continue;
+        };
+        let mut end = i + 2;
+        while end < lines.len() && table_cells(lines[end]).is_some() {
+            end += 1;
+        }
+        if lines[i..end].iter().all(|l| l.chars().count() <= width) {
+            output.extend(lines[i..end].iter().map(|l| l.to_string()));
+        } else {
+            for row in &lines[i + 2..end] {
+                let cells = table_cells(row).unwrap_or_default();
+                output.push(cells.first().cloned().unwrap_or_default());
+                let mut line = String::new();
+                for (name, value) in header.iter().zip(&cells).skip(1) {
+                    if value.is_empty() {
+                        continue;
+                    }
+                    let pair = format!("{name}: {value}");
+                    if !line.is_empty() && line.chars().count() + 3 + pair.chars().count() > width {
+                        output.push(std::mem::take(&mut line));
+                    }
+                    line.push_str(if line.is_empty() { "  " } else { " · " });
+                    line.push_str(&pair);
+                }
+                if !line.is_empty() {
+                    output.push(line);
+                }
+            }
+        }
+        i = end;
+    }
+    output.join("\n")
+}
+
 /// Keep deep nesting from consuming a terminal's entire width. Pipes retain
 /// the full tree for scripts and logs; names and result text are never shortened.
 pub(crate) fn terminal_tree(text: &str) -> String {
@@ -228,6 +313,22 @@ fn rate(count: f64, nanos: f64, unit: &str, bytes: Option<crate::report::BytesFo
     format!("{value:.4} {label}")
 }
 
+/// A measured value for a terminal line: six significant digits, whole numbers untouched.
+/// The full value stays in the JSON and the report; a 17-digit float only wraps the line.
+fn short(value: f64) -> String {
+    if !value.is_finite() || (value.fract() == 0.0 && value.abs() < 1e15) {
+        return value.to_string();
+    }
+    let magnitude = value.abs().log10().floor() as i32;
+    let decimals = (5 - magnitude).clamp(0, 12) as usize;
+    let text = format!("{value:.decimals$}");
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        text
+    }
+}
+
 pub(crate) fn tree(
     rows: &[crate::report::DescriptiveRow],
     bytes: Option<crate::report::BytesFormat>,
@@ -237,7 +338,7 @@ pub(crate) fn tree(
         let value = row
             .summary
             .as_ref()
-            .map(|s| s.median.to_string())
+            .map(|s| short(s.median))
             .unwrap_or_else(|| "unavailable".into());
         let mut line = format!(
             "{} [{} process {}]: median {} {}{}; missing {}",
@@ -256,7 +357,11 @@ pub(crate) fn tree(
         if let Some(summary) = &row.summary {
             line.push_str(&format!(
                 "; min {}; max {}; mean {}; samples {}; operations {}",
-                summary.minimum, summary.maximum, summary.mean, summary.count, row.operations
+                short(summary.minimum),
+                short(summary.maximum),
+                short(summary.mean),
+                summary.count,
+                row.operations
             ));
         } else {
             line.push_str(&format!("; samples 0; operations {}", row.operations));
@@ -348,6 +453,50 @@ pub(crate) fn tree(
     root.render("", &mut result);
     result
 }
+#[cfg(test)]
+mod table_tests {
+    use super::fit_tables;
+
+    const TABLE: &str = "# Results\n\n| Case | Metric | Median | Scope / statistic |\n|---|---|---:|---|\n| sort/stable/32 [candidate] | wall | 20.0043 | current thread wall clock; scheduler included / batch_total |\n| a \\| b | wall | 1 |  |\n\nMedians above summarize observations.\n";
+
+    #[test]
+    fn a_table_wider_than_the_terminal_becomes_records_and_pipes_stay_markdown() {
+        assert_eq!(fit_tables(TABLE, None), TABLE, "not a terminal: unchanged");
+        assert_eq!(fit_tables(TABLE, Some(200)), TABLE, "it fits: unchanged");
+        let fitted = fit_tables(TABLE, Some(60));
+        assert_eq!(
+            fitted,
+            "# Results\n\nsort/stable/32 [candidate]\n  Metric: wall · Median: 20.0043\n  Scope / statistic: current thread wall clock; scheduler included / batch_total\na | b\n  Metric: wall · Median: 1\n\nMedians above summarize observations.\n"
+        );
+        // Everything but a value that is itself too long fits the window.
+        let long = fitted.lines().filter(|l| l.chars().count() > 60).count();
+        assert_eq!(long, 1, "{fitted}");
+        // A line with pipes that is not a table is left alone.
+        let prose = "a | b\n| not a table\n";
+        assert_eq!(fit_tables(prose, Some(10)), prose);
+    }
+}
+
+#[cfg(test)]
+mod short_tests {
+    #[test]
+    fn six_significant_digits_and_whole_numbers_untouched() {
+        let cases = [
+            (18.094402313232422, "18.0944"),
+            (206.258056640625, "206.258"),
+            (25.0, "25"),
+            (1572864.0, "1572864"),
+            (0.000123456789, "0.000123457"),
+            (1234567.891, "1234568"),
+            (-3.5, "-3.5"),
+        ];
+        for (value, text) in cases {
+            assert_eq!(super::short(value), text);
+        }
+        assert_eq!(super::short(f64::NAN), "NaN");
+    }
+}
+
 #[cfg(test)]
 mod tree_tests {
     use super::*;

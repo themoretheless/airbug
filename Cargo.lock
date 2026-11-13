@@ -223,6 +223,7 @@ dependencies = [
  "airbug-bench",
  "airbug-err",
  "airbug-run",
+ "airbug-testrun",
  "base64",
  "ctrlc",
  "flate2",
@@ -258,6 +259,7 @@ dependencies = [
  "airbug-otel",
  "chrono",
  "crossbeam-channel",
+ "ctrlc",
  "eframe",
  "egui",
  "egui_plot",
@@ -301,6 +303,17 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "airbug-testrun"
+version = "0.1.0"
+dependencies = [
+ "airbug-run",
+ "ctrlc",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -854,6 +867,9 @@ dependencies = [
 [[package]]
 name = "cargo-airbug"
 version = "0.1.0"
+dependencies = [
+ "airbug-testrun",
+]
 
 [[package]]
 name = "cargo-airbug-bench"

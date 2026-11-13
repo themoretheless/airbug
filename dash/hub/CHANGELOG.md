@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The test runner moved out of the hub into `airbug-testrun`, run by `cargo airbug test`; `airbug-hub test` is gone and the hub only reads runs. Reruns start the CLI (`AIRBUG_CLI`, else `cargo-airbug` next to the hub or on `PATH`).
+- One run page `#/run/<id>` (Results / Output / Signals / Compare) for test and bench runs; `GET /api/v1/run?id=`, `/runs/<id>/files/`, `bench/compare?baseline=`.
+
 - Add Test & bench runs: live case counts, launch history, filters, output, nested steps, comparisons and safe attachment downloads from existing Airbug diagnostics.
 
 - `airbug-hub test` (`cargo airbug test`): wraps `cargo test`, lists tests first for a real

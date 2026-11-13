@@ -29,7 +29,7 @@ cargo test -p airbug-hub
 ### Live test runs & TestOps (`cargo airbug test`)
 
 ```bash
-cargo airbug test -- --workspace --exclude airbug-mon   # = cargo run -p airbug-hub -- test -- …
+cargo airbug test -- --workspace --exclude airbug-mon   # = cargo run -p cargo-airbug -- test -- …
 cargo airbug test --junit target/junit.xml -- --workspace
 ```
 
@@ -37,7 +37,7 @@ The runner wraps `cargo test --no-fail-fast`, lists tests first (real progress b
 writes `.airbug/runs/{run_id}/` as it goes: `manifest.json`, `progress.json`,
 `report.json` (`airbug.test-report/1`), `junit.xml`, `output.log`, `events/` (from `airbug::report`,
 via `AIRBUG_REPORT_DIR`) and a self-contained `index.html`. The hub only reads these
-files, so the run is live at `#/tests/{run_id}` whether the hub started first or not.
+files, so the run is live at `#/run/{run_id}` whether the hub started first or not.
 
 **Allure / ReportPortal-style TestOps views (`#/tests`):**
 - **Suites:** Grouped by test binary / suite with failure-first sorting and historical pass/fail strips.
@@ -90,7 +90,7 @@ a second `--`.
 that passes on retry is marked flaky. Suites are nextest binary ids (`demo`,
 `demo::integration`); doctests are not run, as with plain nextest.
 
-**Rerun failed** on a finished run starts `airbug-hub test` again with the failed and
+**Rerun failed** on a finished run starts `cargo airbug test` again with the failed and
 not-run tests only (libtest: `--exact` names; nextest: a `-E` filterset), linked back via
 `manifest.rerun_of`. **Run again** repeats the original command. Both are
 `POST /api/v1/runs/:id/rerun` and refuse while another test run is live (409). The
@@ -135,7 +135,7 @@ Hub does **not** spawn benches. Client registers, writes artifacts under `.airbu
 
 1. `POST /api/v1/bench/runs` → `{hub_id, run_id, out_dir, dash_url}`
 2. Write `progress.json` while running; `status-final.json` + `run.json` / `report.html` when done
-3. Open `http://127.0.0.1:8790/#/bench/{run_id}` (printed before measure)
+3. Open `http://127.0.0.1:8790/#/run/{run_id}` (printed before measure)
 
 Correlation keys (OTEL resource / err tags): `airbug.hub_id`, `airbug.run_id`.  
 Hub instance UUID lives in `dash/hub/data/hub_id` and is exposed on `GET /api/v1/status`.
@@ -211,7 +211,9 @@ Prefer `/api/v1/...`. Legacy `/api/...` paths remain as aliases for one release.
 | POST | `/api/v1/resources/:name/{start,stop,restart}` | Start, stop, or restart a managed stack resource |
 | GET | `/runs/:id/*` | Files of a test run (`index.html`, `output.log`, `events/…`) |
 | POST | `/api/v1/runs/:id/rerun` | JSON `{"failed":true\|false}` → starts a rerun, `202 {run_id, href, command}`; 409 while a run is live |
-| GET | `/api/v1/bench/compare?run=` | Newest (or given) bench run vs previous comparable run: `summary`, `rows` (regressions first) |
+| GET | `/api/v1/bench/compare?run=&baseline=` | Newest (or given) bench run vs previous comparable run, or vs a chosen `baseline`: `summary`, `rows` (regressions first), `candidates` |
+| GET | `/api/v1/run?id=` | One description for any run (test, announced bench session, hub-registered session, directory under `.airbug-bench`): state, progress, matrix cells, logs, file prefix — what the run page `#/run/<id>` reads |
+| GET | `/runs/<id>/files/<path>` | Files of an announced bench session's output directory, wherever `--output` put it |
 | POST | `/api/v1/bench/runs` | Register run → `{hub_id, run_id, out_dir, dash_url}` |
 | GET | `/api/v1/bench/runs` | List runs (running first, then recent done) |
 | GET | `/api/v1/bench/runs/:id` | Manifest + live `progress.json` / `status-final.json` |

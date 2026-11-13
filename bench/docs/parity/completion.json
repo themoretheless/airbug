@@ -11,7 +11,7 @@
     {
       "id": "api_semantics",
       "title": "Сверить поведение всех уже сопоставленных публичных API",
-      "status": "open",
+      "status": "verified_with_documented_differences",
       "sources": [
         "bench/docs/parity/criterion-bencher.json",
         "bench/docs/parity/criterion-extensions.json",
@@ -22,60 +22,62 @@
         "bench/docs/parity/divan-runner.json"
       ],
       "acceptance": "Для каждого сопоставленного API: конкретный поведенческий тест либо документированное нативное различие, сохраняющее возможность пользователя. Отдельно проверить бюджет измерения, batching/drop, groups и profiler.",
-      "current": "All 23 Divan manager methods now have focused behavioral evidence and explicit native differences in divan-runner.json. Signed Criterion measurements are locally verified through capture, statistics, regressions, JSON/CSV, baseline and standalone reports. Final extension/report review and current remote/visual acceptance remain open."
+      "current": "Every mapped public API has either a behavioural test or a recorded native difference in its audit file (criterion-bencher, criterion-groups, criterion-runner, criterion-extensions, divan-bencher, divan-counters, divan-runner). The three things those audits were still waiting on are done: the mappings were re-checked against the pinned sources on 2026-11-13 (test-upstream-surface.py: 253 Criterion + 244 Divan declarations, 24/23 manager methods, 14 + 10 Bencher methods, 15 group/identity methods, four extension traits, 57 CLI arguments, 17 Cargo features — all exact; Criterion 0.8.2 and Divan 0.1.21 are still the newest releases); the current code passed the full Linux and Windows stable/MSRV jobs (platform_acceptance); the reports were reviewed in a browser (visual_acceptance). Explicitly not claimed, as recorded in the audits: exact async executor-overhead equivalence, every configuration-precedence row of Divan's action dispatch, and every possible combination of user-defined extensions."
     },
     {
       "id": "report_matrix",
       "title": "Завершить матрицу отчётов",
-      "status": "open",
+      "status": "verified",
       "sources": [
         "bench/docs/parity/plots.json",
         "bench/docs/parity/measurement.json",
         "bench/docs/parity/artifacts.json"
       ],
       "acceptance": "Проверить direct Cargo, standalone report/compare и history: raw/custom metrics, baseline, saved settings, filters, no-html/no-plots, linear/log axes; для каждой комбинации указать поддерживаемое поведение и проверку.",
-      "current": "Named/automatic statistical and regression snapshots, output/archive equivalence and standalone restoration are verified, including nonmonotone regression interval images supplied by ValueFormatter::scale_intervals. Collection limits and terminal depth have focused tests. Remaining report work includes final source review, navigation and browser visual acceptance."
+      "current": "The matrix is executable: bench/scripts/test-report-matrix.py runs 20 combinations — direct harness (default, --no-html, --no-plots, filter, linear and logarithmic summary, save/compare baseline, custom measurement with formatter), history (default, --no-history), standalone report (html/md/json, --baseline, custom metric) and compare (text, --html, --no-plots) — and states the expected behaviour of each. It runs in CI on every OS/toolchain job. Browser review of the rendered reports: visual_acceptance."
     },
     {
       "id": "console_policy",
       "title": "Проверить вывод и удобство CLI",
-      "status": "open",
+      "status": "reviewed_with_findings",
       "sources": [
         "bench/docs/parity/output.json",
         "bench/docs/parity/option-modes.json",
         "bench/docs/parity/numeric-domains.json"
       ],
       "acceptance": "Сопоставить default/quiet/verbose/JSON у прямого harness и process runner; проверить глубокое дерево и длинные имена в терминале.",
-      "current": "Complete UTF-8 follow-up CI 41470453896 passed all six OS/toolchain jobs and console fixtures. Current local external console fixture confirms default/quiet/verbose, color and plain machine/artifact output. Actual terminal-emulator visual acceptance remains open."
+      "current": "Reviewed 2026-11-12: the sort example run in a PTY at 80 and 120 columns in default, --quiet, --verbose, tree and tree --list modes, captured with colours and rendered for inspection (bench/scripts/terminal-acceptance.py). Colours, headings, progress lines and tree guides are correct; exit codes are 0. Two defects fixed: tree values were printed with up to 17 digits and wrapped every result line (now six significant digits, console::short); the default Markdown tables were up to 236 characters wide and wrapped at both widths (54 of 112 lines at 80 columns) — in a terminal a table that does not fit is now shown as one record per row packed to the window width (console::terminal_tables), pipes and files keep Markdown. Left: prose notes longer than the window wrap as ordinary text (16 lines at 80 columns), --quiet lines are 90 characters, tree result lines up to 145. PTY tests in CI (test-terminal-tree.py, test-console-policy.py) pass.",
+      "limits": "A PTY and an ANSI-to-HTML rendering, not a terminal emulator; no Windows console."
     },
     {
       "id": "visual_acceptance",
       "title": "Просмотреть реальные HTML-отчёты",
-      "status": "open",
+      "status": "verified_in_headless_browser",
       "sources": [
         "bench/docs/parity/plots.json"
       ],
       "acceptance": "Проверить графики, подписи, hover, навигацию, длинные имена, большие наборы и читаемость на двух размерах окна; сохранить перечень просмотренных артефактов.",
-      "current": "User explicitly authorized opening local reports. A subsequent cua.createBrowserTab request for the existing nonlinear-regression report was rejected by browser URL policy: file protocol is not allowed (only http/https). The rejection explicitly prohibits equivalent workarounds, alternate browser surfaces and indirect execution. Permission is no longer missing; visual acceptance requires a permitted environment or user-performed review.",
-      "blocked_attempt": {
-        "artifact": ".airbug/validation/nonlinear-regression/report.html",
-        "tool": "cua.createBrowserTab",
-        "surface": "iab",
-        "result": "URL policy denied file protocol before rendering",
-        "visual_evidence": "none",
-        "restriction": "Do not retry through a local server, alternate browser or raw browser commands to bypass this denial."
-      }
+      "current": "Reviewed 2026-11-12 in headless Chromium (Playwright) inside a cloud session that provides the browser, at 1280x900 and 390x844. Automated per page: script errors, page overflow, marks outside a scroller, search, outcome filter, expand/collapse, details, sorting, in-page navigation, hover; screenshots of each page were then inspected. Three defects were found and fixed: long source paths and hashes widened the page on a narrow window (report-template.html: p{overflow-wrap:anywhere}); the iteration-time legend ran off the canvas and hid series (viz.rs scatter now uses legend_wrapped, sized per glyph); series colours repeated after six (Palette::SERIES now has twelve). After the fixes every listed artifact shows no script error, no page overflow and no clipped mark.",
+      "reviewed_artifacts": [
+        "direct cargo bench (workloads --quick): report.html, estimates.html",
+        "process runner, crossover baseline/candidate, 6 pairs: paired2/report.html",
+        "collection of 6 runs with 64-character directory names: collection.html",
+        "report --baseline: comparison.html; compare --html (Welch null distributions): compare-welch.html",
+        "run --memory: memory.html",
+        "examples: viz_gallery (20 figures), density_report, hypothesis_report, input_summary, outlier_report, regression_report, relative_report, violin_report"
+      ],
+      "limits": "Headless Chromium only; no other engine, no print/PDF output, no screen reader. The largest set viewed is six runs (48 figures); collection limits beyond that are covered by tests, not by eye. Reproduce with bench/scripts/visual-acceptance.cjs."
     },
     {
       "id": "platform_acceptance",
       "title": "Подтвердить текущий код на оставшихся платформах",
-      "status": "open",
+      "status": "verified_linux_windows_macos_pending",
       "sources": [
         "bench/docs/parity/platforms.json",
         "bench/docs/parity/features.json"
       ],
       "acceptance": "Текущий Linux x86_64 прогон; выполнение на Windows; актуальный MSRV и feature matrix. Отдельно отметить эмуляцию и отсутствие проверки native x86 timing.",
-      "current": "Current published 62d2f00 passed complete Linux and Windows stable/MSRV jobs in CI 41478939861, including signed measurements and navigation tests. macOS CI remains queued; current local bench library/integration targets passed 514 tests and Clippy. See platforms.json latest_published_gate and latest_local_bench_gate for exact scope."
+      "current": "ef6a58a passed CI run 43323818833 in full on Linux x86_64 (native, not emulated) and Windows, each on stable and MSRV 1.96.0: workspace tests in debug and release, the feature matrix, every bench script including the new report matrix, docs and Clippy; airbug-mon passed on Ubuntu. The macOS jobs of that run were still queued when this was written; the last commit with completed macOS jobs is 05a622d (all green). Timing accuracy on native x86 hardware is exercised by the tests but not separately characterised; hardware counters could not run (no PMU on CI)."
     },
     {
       "id": "final_gate",
@@ -86,7 +88,7 @@
         "bench/docs/parity/validation.json"
       ],
       "acceptance": "После исправлений: macOS/Linux/Windows проверки, внешний cargo bench набор, Clippy, diff review; обновить доказательства по каждому пункту и убрать только реально закрытые остатки.",
-      "current": "Functional changes through 62d2f00 published and verified on Linux/Windows stable/MSRV. Current local macOS bench library/integration tests and Clippy passed. Full macOS CI and browser/terminal visual acceptance remain open; no full parity completion claim."
+      "current": "Functional changes through 62d2f00 published and verified on Linux/Windows stable/MSRV. Current local macOS bench library/integration tests and Clippy passed. Full macOS CI and browser/terminal visual acceptance remain open; no full parity completion claim. Browser visual acceptance is closed (see visual_acceptance)."
     }
   ],
   "latest_evidence": {

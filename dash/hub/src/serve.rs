@@ -290,6 +290,13 @@ fn handle_api(
                 &app.issues.list_filtered(run_id.as_deref()),
             )
         }
+        ("GET", "/run") => {
+            let id = http::query_str(&req.query, "id").unwrap_or_default();
+            match crate::rundetail::describe(&app.paths.root, &app.runs, &id) {
+                Some(value) => http::respond_json(stream, "200 OK", &value),
+                None => http::respond_err(stream, "404 Not Found", &HubError::msg("run not found")),
+            }
+        }
         ("GET", "/runs") => {
             let limit = http::query_usize(&req.query, "limit", 60).clamp(1, 500);
             let kind = http::query_str(&req.query, "kind");
@@ -329,14 +336,14 @@ fn handle_api(
             http::respond_json(
                 stream,
                 "200 OK",
-                &crate::testrun::analytics::compute_analytics(&app.paths.root, window),
+                &crate::analytics::compute_analytics(&app.paths.root, window),
             )
         }
         ("GET", "/tests/rules") => http::respond_json(
             stream,
             "200 OK",
             &serde_json::json!({
-                "rules": crate::testrun::analytics::load_rules(&app.paths.root),
+                "rules": airbug_testrun::defects::load_rules(&app.paths.root),
             }),
         ),
         ("POST", "/tests/rules") => handle_post_test_rules(stream, app, req),
@@ -364,10 +371,11 @@ fn handle_api(
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
         ("GET", "/bench/compare") => {
             let run = http::query_str(&req.query, "run");
+            let baseline = http::query_str(&req.query, "baseline");
             http::respond_json(
                 stream,
                 "200 OK",
-                &crate::benchcmp::compare(&app.paths.root, run.as_deref()),
+                &crate::benchcmp::compare(&app.paths.root, run.as_deref(), baseline.as_deref()),
             )
         }
         ("GET", "/bench") | ("GET", "/bench/runs") => match app.runs.list() {
@@ -412,7 +420,7 @@ fn yes() -> bool {
     true
 }
 
-/// `POST /api/v1/runs/<id>/rerun` `{"failed": true}` — start `airbug-hub test` again.
+/// `POST /api/v1/runs/<id>/rerun` `{"failed": true}` — start `cargo airbug test` again.
 fn handle_rerun(
     stream: &mut TcpStream,
     app: &HubApp,
@@ -764,7 +772,7 @@ fn handle_run_junit(stream: &mut TcpStream, app: &HubApp, id: &str) -> std::io::
         Ok(r) => r,
         Err(e) => return http::respond_err(stream, "500 Internal Server Error", &e.into()),
     };
-    let xml = crate::testrun::junit::render_junit_xml(&report);
+    let xml = airbug_testrun::junit::render_junit_xml(&report);
     http::respond(stream, "200 OK", "application/xml; charset=utf-8", &xml)
 }
 
@@ -773,7 +781,7 @@ fn handle_post_test_rules(
     app: &HubApp,
     req: &Request,
 ) -> std::io::Result<()> {
-    use crate::testrun::analytics::{DefectRule, load_rules, save_rules};
+    use airbug_testrun::defects::{DefectRule, load_rules, save_rules};
     #[derive(serde::Deserialize)]
     #[serde(untagged)]
     enum RulesPayload {
@@ -857,9 +865,13 @@ fn handle_session_ingest(
     }
 }
 
-/// `/runs/<id>/<file>` — files of a test run (`index.html`, `output.log`, `events/…`).
+/// `/runs/<id>/<file>` — files of a test run (`index.html`, `output.log`, `events/…`);
+/// `/runs/<id>/files/<file>` — files of a bench session's output directory.
 fn serve_run_file(stream: &mut TcpStream, app: &HubApp, rest: &str) -> std::io::Result<()> {
     let found = rest.split_once('/').and_then(|(id, rel)| {
+        if let Some(artifact) = rel.strip_prefix("files/") {
+            return store::artifact_file(&app.paths.root, id, artifact);
+        }
         let rel = if rel.is_empty() { "index.html" } else { rel };
         store::run_file(&app.paths.root, id, rel)
     });

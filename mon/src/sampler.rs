@@ -144,7 +144,13 @@ impl Sampler {
         });
         let top_procs: Vec<ProcSample> = procs.into_iter().take(10).collect();
 
-        let gpu = self.gpu.sample();
+        // With unified memory the GPU has no pool of its own: it allocates from system RAM.
+        let gpu = self.gpu.sample().map(|mut g| {
+            if g.unified {
+                g.mem_total = mem_total;
+            }
+            g
+        });
 
         Sample {
             ts: chrono::Utc::now().timestamp(),

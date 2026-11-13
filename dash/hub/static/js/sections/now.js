@@ -37,7 +37,7 @@ function testsCard(latest) {
     lines.push(`<p class="good">${c.fixed_count} fixed since ${since}</p>`);
   }
   if ((latest.flaky || []).length) lines.push(`<p class="warn">${latest.flaky.length} flaky over the last runs</p>`);
-  return `<a class="now-headline" href="#/tests/${escapeAttr(item.run_id)}">
+  return `<a class="now-headline" href="#/run/${escapeAttr(item.run_id)}">
       <span class="atr-state ${escapeAttr(stateLabel(item))}">${escapeHtml(stateLabel(item))}</span>
       <span class="now-big">${t.failed ? `<b class="bad">${t.failed}</b> failed · ` : ""}${t.passed || 0} passed</span>
     </a>

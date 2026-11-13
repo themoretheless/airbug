@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>airbug browser bench fixture</title>
+<!--
+  A page measured by bench/scripts/browser-driver.cjs. The contract is one global:
+
+      globalThis.airbugBench = { "case id": () => { ...one operation... }, ... }
+
+  set before the page's load event, or as a promise of that object (WASM compiles
+  asynchronously). Each function is one operation; the driver batches and times it.
+-->
+<script>
+  // (module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))
+  const ADD = new Uint8Array([
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01,
+    0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
+    0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b,
+  ]);
+  const data = Float64Array.from({ length: 4096 }, (_, i) => (i * 2654435761) % 4096);
+  let sink = 0;
+
+  globalThis.airbugBench = WebAssembly.instantiate(ADD).then(({ instance }) => ({
+    "sort/4096/typed-array": () => { sink += data.slice().sort()[0]; },
+    "sum/4096/js": () => { let s = 0; for (let i = 0; i < 4096; i++) s = (s + i) | 0; sink += s; },
+    // 4096 calls across the JS/WASM boundary per operation.
+    "sum/4096/wasm-calls": () => { let s = 0; for (let i = 0; i < 4096; i++) s = instance.exports.add(s, i); sink += s; },
+  }));
+</script>

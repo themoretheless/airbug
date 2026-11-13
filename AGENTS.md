@@ -1,47 +1,33 @@
 # Agent instructions
 
-## Benchmarks: always hand over the live dashboard link
+## Benchmarks: hand over the hub link the run prints
 
-`cargo airbug-bench run` can serve a progress page while it measures. Agents run
-without a TTY, so the interface does **not** start by default — ask for it:
+The bench has no web server of its own. Every measuring command (`run`, `matrix`, `bench`,
+`git-compare`, `resume`) announces its session in `.airbug/runs/` and, when a hub for this
+directory is up, prints the run page on stdout:
 
 ```sh
-cargo airbug-bench run --program ./target/release/mybench \
-  --output .airbug-bench/session --ui --no-open
-cargo airbug-bench matrix --plan matrix.json \
-  --output .airbug-bench/matrix --ui --no-open
+cargo airbug serve --root . &          # once; see the checks in the next section
+cargo airbug-bench run --program ./target/release/mybench --output .airbug-bench/session
+# Live benchmark: http://127.0.0.1:8790/#/run/bench-<ms>-<pid>
 ```
 
-- `--ui` forces the server; `--no-open` prints the URL instead of launching a browser.
-- Run it in the background. After results are finalized the process keeps the server
-  alive until SIGINT and never exits on its own
-  (`bench/cli/src/cmd.rs:565`), so a foreground call hangs until timeout.
-- Capture the line `Live benchmark: http://127.0.0.1:<port>/<key>/` from stdout and
-  give it to the user as soon as it appears, before reading any results.
-- Port and key are fresh per start. Never reuse a link from an earlier run; never
-  guess one.
-- The page refills itself every 1.5 s from `<output>/progress.json`
-  (`bench/cli/src/web-ui.html:558`); `<output>/status-final.json` plus
-  `report.html` / `report.json` / `report.md` land after completion. Reading
-  `progress.json` directly is fine for reporting progress in chat.
-- Send SIGINT only after the user is done looking; artifacts are already on disk.
-
-Exceptions worth stating out loud rather than silently skipping the link:
-
-- `--no-ui` for strict/timing-sensitive measurements — the browser and server perturb
-  the host. Say that you chose accuracy over the dashboard.
-- `--dry-run` starts no server and writes nothing.
-- `matrix --ui` serves one page for the whole session (`bench/cli/src/cmd.rs:68`). It
-  aggregates the per-cell `<output>/<n>/progress.json` files on the server
-  (`bench/cli/src/web_ui.rs:187`), so the counter is processes over every combination
-  and each lane is labelled with its axis values (`--cpu 2 · candidate`). The report
-  stays closed until all cells finish, and a failed or interrupted cell surfaces as the
-  aggregate state. Cells hold `run.json` only — no per-cell reports; `report` on the
-  matrix directory afterwards collects the cells.
-- `bench` (one run per registered target), `git-compare` and `sessions`-driven runs
-  call the runner with no live UI attached; only `run` and `matrix` start a server.
-  Offer `cargo airbug-bench serve <dir> --port 8787` afterwards instead of promising a
-  link.
+- Capture the `Live benchmark: <url>` line and give it to the user as soon as it appears,
+  before reading any results. The id is fresh per run: never reuse or guess one.
+- No hub → no such line; stderr says `bench: no hub on :8790 — …` with the address the run
+  will have. Start the hub (it reads the run store, so it can start after the run) or say that
+  there is no live view. A hub for another root is reported the same way — do not link it.
+- The command exits when results are saved; nothing has to be stopped afterwards.
+- The page shows progress, the current variant and an ETA, the matrix grid
+  (`--cpu 2 · candidate`), captured output, signals received during the run, and a comparison
+  against a baseline. It polls the hub every 1.5 s; the hub reads `<output>/progress.json`
+  and `status-final.json`. Reading `progress.json` directly is fine for progress in chat.
+- `report.html` / `report.json` / `report.md` land in `<output>` after completion and work
+  without a hub.
+- `AIRBUG_DASHBOARD=0` keeps the session out of the run store — use it for strict,
+  timing-sensitive measurements and say that you chose accuracy over the live page.
+- `--dry-run` writes nothing. `--ui`, `--no-ui`, `--no-open` are accepted and ignored;
+  `cargo airbug-bench serve` no longer exists.
 
 ## Traces, metrics, logs, errors: one hub, fixed address
 
@@ -51,8 +37,8 @@ cargo run -p airbug-hub -- serve --root . --collector
 
 `http://127.0.0.1:8790/` is the page that fills itself in while things run: status every
 15 s, OTLP traces every 4 s, OTLP logs every 4 s, metrics every 4 s, profiles every 8 s,
-issues every 5 s (`FEEDS` in `dash/hub/static/js/main.js`). Unlike the bench live UI the
-port is fixed and there is no token, so the link stays valid across restarts. Hand it over
+issues every 5 s (`FEEDS` in `dash/hub/static/js/main.js`). The port is fixed and there
+is no token, so the link stays valid across restarts. Hand it over
 anyway only after the checks below — every one of them degrades silently to an empty page.
 
 **Several hubs at once:** each hub has its own `hub_id`, printed by `/api/v1/status`. A shared
@@ -75,9 +61,9 @@ metrics, correlate instead of rerouting: `OTEL_RESOURCE_ATTRIBUTES="airbug.hub_i
 - Local Aspire stack: `cargo airbug up` starts the hub + collector and launches `.airbug/stack.json`
   resources with automatic `OTEL_*`, `AIRBUG_*`, `AIRBUG_SENTRY_DSN`, and `SERVICES__<NAME>__HTTP`
   injection (`http://127.0.0.1:8790/#/resources`).
-- Host metrics: `cargo run -p airbug-mon --release -- --otlp`, or
-  `--headless --seconds N --otlp` without a GUI. mon itself is an egui window with no
-  port — never link mon, link the hub.
+- Host metrics: `cargo run -p airbug-mon --release -- --otlp` samples until Ctrl+C
+  (`--seconds N` bounds it); it runs without a window on Linux and macOS. mon has no port —
+  never link mon, link the hub.
 
 Checks, in order:
 
@@ -123,12 +109,13 @@ duration includes process startup. Doctests are an aggregate suite.
 Direct `cargo bench` targets using `Suite::main()` write the same live history at
 case boundaries. `AIRBUG_DASHBOARD=0` disables those writes for strict measurements.
 `AIRBUG_DASHBOARD_ROOT` overrides workspace discovery. `--list` and `--dry-run`
-write no history. The separate process runner's live dashboard rules above still apply.
+write no history.
 
 ## Tests are live in the hub: `cargo airbug test`
 
-`cargo airbug` is the one entry point (`cli/`, `cargo-airbug`): it routes `test`, `serve`,
-`up` and `status` to `airbug-hub` and `bench …` to `cargo-airbug-bench` (`cargo airbug bench run …` is
+`cargo airbug` is the one entry point (`cli/`, `cargo-airbug`): it runs `test` itself
+(`run/testrun`), routes `serve`, `up` and `status` to `airbug-hub` and `bench …` to
+`cargo-airbug-bench` (`cargo airbug bench run …` is
 `cargo airbug-bench run …`). `cargo airbug test` wraps `cargo test`, lists tests first
 so progress has a denominator, and writes a run directory the hub reads while it runs.
 
@@ -136,7 +123,7 @@ so progress has a denominator, and writes a run directory the hub reads while it
 cargo airbug test --junit junit.xml -- --workspace --exclude airbug-mon   # anything after -- goes to cargo test
 ```
 
-- stderr prints `Live tests: http://127.0.0.1:8790/#/tests/<run_id>` when a hub for this
+- stderr prints `Live tests: http://127.0.0.1:8790/#/run/<run_id>` when a hub for this
   root is up (otherwise it says how to start one). Hand over that URL — it is live, per
   test, and keeps working after the run finishes.
 - Files: `.airbug/runs/<run_id>/{manifest,progress,report}.json`, `junit.xml`, `output.log`, `events/`,
@@ -157,10 +144,10 @@ cargo airbug test --junit junit.xml -- --workspace --exclude airbug-mon   # anyt
   "Rerun failed" button); `false` repeats the whole run. The detail's `rerun.command_failed`
   is the equivalent shell command — prefer running that yourself when you have a terminal.
 - Bench regressions at a glance: `GET /api/v1/bench/compare` compares the newest finished
-  bench run with the previous one that has the same cases and environment (Now page).
+  bench run with the previous one that has the same cases and environment (Now page);
+  `?run=<id>&baseline=<id>` compares a chosen pair (the run page's Compare tab).
 - `airbug_report` also records live case history at `/#/runs` and final snapshots at `/report/`.
 
 ## Deeper docs
 
-`bench/docs/REPORTS.md` (web interface, live interface),
-`bench/scripts/test-live-ui.py` (the stdout URL contract).
+`bench/docs/REPORTS.md` (reports and the run page).

@@ -205,7 +205,7 @@ pub fn render_junit_xml(report: &Report) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testrun::model::{DefectClassification, RunState, TestMeta, Totals};
+    use crate::model::{DefectClassification, RunState, TestMeta, Totals};
 
     #[test]
     fn renders_valid_escaped_junit_xml() {

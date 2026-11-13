@@ -417,7 +417,7 @@ fn dedent(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testrun::model::Report;
+    use crate::model::Report;
 
     const LIST: &str = r#"{"rust-build-meta":{},"test-count":5,"rust-suites":{"demo":{"package-name":"demo","binary-id":"demo","binary-name":"demo","kind":"lib","binary-path":"/t/target/debug/deps/demo-0123456789abcdef","status":"listed","testcases":{"tests::adds":{"ignored":false,"filter-match":{"status":"matches"}},"tests::fails":{"ignored":false,"filter-match":{"status":"matches"}},"tests::skipped":{"ignored":true,"filter-match":{"status":"mismatch","reason":"ignored"}},"tests::filtered":{"ignored":false,"filter-match":{"status":"mismatch","reason":"string"}}}},"demo::it":{"binary-id":"demo::it","kind":"test","binary-path":"/t/target/debug/deps/it-fedcba9876543210","status":"listed","testcases":{"flaky_one":{"ignored":false,"filter-match":{"status":"matches"}},"crashes":{"ignored":false,"filter-match":{"status":"matches"}},"never_ran":{"ignored":false,"filter-match":{"status":"matches"}}}}}}"#;
 

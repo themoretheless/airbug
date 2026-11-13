@@ -3,5 +3,6 @@
 //!
 //! [`model`] is the on-disk contract; [`store`] finds, reads, writes and prunes run
 //! directories under `<root>/.airbug/runs/`.
+pub mod hub;
 pub mod model;
 pub mod store;

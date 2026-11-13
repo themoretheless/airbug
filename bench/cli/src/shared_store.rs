@@ -5,6 +5,7 @@
 //! measured process — nothing here runs on the measured path. The session's own files stay
 //! where `--output` put them; the manifest points at that directory. Best effort: a store that
 //! cannot be written never fails a benchmark. `AIRBUG_DASHBOARD=0` turns it off.
+use airbug_bench::Result;
 use airbug_run::{
     model::{KIND_BENCH, MANIFEST_SCHEMA, Manifest, Progress, RunState, Totals, now_ms},
     store::{self, MANIFEST_FILE, PROGRESS_FILE},
@@ -26,7 +27,27 @@ pub fn announce(out: &Path) -> Option<Announced> {
         return None;
     }
     let root = std::env::current_dir().ok()?;
-    announce_in(&root, out, std::env::args().collect())
+    let announced = announce_in(&root, out, std::env::args().collect())?;
+    say_where(&root, &announced.run_id);
+    Some(announced)
+}
+
+/// Print where the session is live. The `Live benchmark: <url>` line is a contract: agents
+/// and scripts read it from stdout.
+fn say_where(root: &Path, run_id: &str) {
+    use airbug_run::hub::{self, Probe};
+    let port = hub::port();
+    let url = hub::run_url(port, run_id);
+    match hub::probe(port, root) {
+        Probe::Ours => println!("Live benchmark: {url}"),
+        Probe::Other(other) => eprintln!(
+            "bench: hub on :{port} serves {other}, not this directory — start one here with \
+             `cargo airbug serve --port <N>` to watch live"
+        ),
+        Probe::Absent => {
+            eprintln!("bench: no hub on :{port} — `cargo airbug serve` shows this run at {url}")
+        }
+    }
 }
 
 fn announce_in(root: &Path, out: &Path, command: Vec<String>) -> Option<Announced> {
@@ -77,27 +98,65 @@ impl Announced {
     }
 
     /// Record how the session ended, from the files the runner left in `out`.
-    pub fn finish(self, out: &Path) {
-        let json = |name: &str| store::read_json::<serde_json::Value>(&out.join(name));
-        let state = match json("status-final.json")
+    ///
+    /// A single run keeps `status-final.json` and `progress.json` in `out`; a matrix or a
+    /// multi-target session keeps them one level down, one directory per cell. `ok` is the
+    /// command's own result and decides when the files say nothing.
+    pub fn finish(self, out: &Path, ok: bool) {
+        let (states, totals) = outcome(out);
+        if states.is_empty() && totals.total == 0 && !ok {
+            // Rejected before anything was measured: not a run worth listing.
+            let _ = std::fs::remove_dir_all(&self.dir);
+            return;
+        }
+        let any = |name: &str| states.iter().any(|s| s == name);
+        let state = if any("cancelled") {
+            RunState::Interrupted
+        } else if any("failed") || any("incomplete") || !ok {
+            if states.is_empty() {
+                RunState::Error
+            } else {
+                RunState::Failed
+            }
+        } else {
+            RunState::Passed
+        };
+        self.write(state, totals, Some(now_ms()));
+    }
+}
+
+/// Final states and summed process counts of a session directory and its direct children.
+fn outcome(out: &Path) -> (Vec<String>, Totals) {
+    let mut dirs = vec![out.to_path_buf()];
+    if let Ok(entries) = std::fs::read_dir(out) {
+        dirs.extend(entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+    }
+    let mut states = vec![];
+    let mut totals = Totals::default();
+    for dir in dirs {
+        let json = |name: &str| store::read_json::<serde_json::Value>(&dir.join(name));
+        if let Some(state) = json("status-final.json")
             .as_ref()
             .and_then(|v| v["state"].as_str())
         {
-            Some("complete") => RunState::Passed,
-            Some("failed") | Some("incomplete") => RunState::Failed,
-            Some("cancelled") => RunState::Interrupted,
-            _ => RunState::Error,
-        };
-        let count = |v: &serde_json::Value, key: &str| v[key].as_u64().unwrap_or(0) as usize;
-        let totals = json("progress.json")
-            .map(|p| Totals {
-                total: count(&p, "total"),
-                completed: count(&p, "completed"),
-                ..Totals::default()
-            })
-            .unwrap_or_default();
-        self.write(state, totals, Some(now_ms()));
+            states.push(state.to_string());
+        }
+        if let Some(p) = json("progress.json") {
+            totals.total += p["total"].as_u64().unwrap_or(0) as usize;
+            totals.completed += p["completed"].as_u64().unwrap_or(0) as usize;
+        }
     }
+    (states, totals)
+}
+
+/// Run `body` as one announced session writing into `out`.
+pub fn session<T>(out: &Path, body: impl FnOnce() -> Result<T>) -> Result<T> {
+    let announced = announce(out);
+    let result = body();
+    if let Some(announced) = announced {
+        announced.finish(out, result.is_ok());
+    }
+    result
 }
 
 #[cfg(test)]
@@ -127,10 +186,37 @@ mod tests {
             r#"{"state":"running","completed":3,"total":8,"variant":"candidate"}"#,
         )
         .unwrap();
-        announced.finish(&out);
+        announced.finish(&out, false);
         let progress = store::progress(dir).unwrap();
         assert_eq!(progress.state, RunState::Interrupted);
         assert_eq!((progress.totals.completed, progress.totals.total), (3, 8));
         assert!(progress.duration_s.is_some());
+    }
+
+    #[test]
+    fn a_matrix_sums_its_cells_and_a_rejected_call_leaves_no_run() {
+        let root = tempfile::tempdir().unwrap();
+        let out = root.path().join("matrix");
+        for (cell, done) in [("0", 4), ("1", 2)] {
+            let dir = out.join(cell);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("status-final.json"), r#"{"state":"complete"}"#).unwrap();
+            std::fs::write(
+                dir.join("progress.json"),
+                format!(r#"{{"completed":{done},"total":4}}"#),
+            )
+            .unwrap();
+        }
+        let announced = announce_in(root.path(), &out, vec![]).unwrap();
+        announced.finish(&out, true);
+        let runs = store::list(&store::runs_dir(root.path()), KIND_BENCH);
+        let progress = store::progress(&runs[0].0).unwrap();
+        assert_eq!(progress.state, RunState::Passed);
+        assert_eq!((progress.totals.completed, progress.totals.total), (6, 8));
+
+        let rejected = announce_in(root.path(), &root.path().join("absent"), vec![]).unwrap();
+        let dir = rejected.dir.clone();
+        rejected.finish(&root.path().join("absent"), false);
+        assert!(!dir.exists());
     }
 }

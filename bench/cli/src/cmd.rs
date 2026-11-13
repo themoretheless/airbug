@@ -2,38 +2,10 @@
 use crate::args::{Action, BaselineAction, Cli, Uncertainty};
 use crate::{
     artifacts, experiment_report, forma, git_run, matrix, project, revisions, runner, sessions,
-    web_ui,
 };
 use airbug_bench::{analysis, report, *};
 use clap::{CommandFactory, Parser};
-use std::{
-    fs::OpenOptions,
-    io::{IsTerminal, Write},
-    path::{Path, PathBuf},
-    process::Command,
-};
-
-/// Serve `out` as a live experiment and print its URL. Without a terminal the
-/// interface is opt-in, so an agent asks for it with `--ui --no-open`.
-fn start_interface(out: &Path, store: &Path, ui: bool, no_ui: bool, no_open: bool) -> Result<bool> {
-    if no_ui || !(ui || std::io::stdout().is_terminal()) {
-        return Ok(false);
-    }
-    let url = web_ui::start_live(out, store)?;
-    println!("Live benchmark: {url}");
-    if !no_open {
-        web_ui::open_browser(&url);
-    }
-    Ok(true)
-}
-
-/// Hold a finished interface open until SIGINT; artifacts are already on disk.
-fn hold_interface() {
-    println!("Interface remains available. Ctrl+C to close; results are already saved.");
-    while !runner::cancelled() {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-}
+use std::{fs::OpenOptions, io::Write, path::PathBuf, process::Command};
 
 pub(crate) fn output(text: &str, path: Option<PathBuf>) -> Result<()> {
     if let Some(p) = path {
@@ -52,19 +24,9 @@ pub(crate) fn execute() -> Result<i32> {
     let cli = Cli::parse_from(args);
     let load = |p: PathBuf| Run::load(project::resolve(&cli.store, &p)?);
     match cli.command {
-        Action::Matrix {
-            plan,
-            output,
-            ui,
-            no_ui,
-            no_open,
-        } => {
-            let live = start_interface(&output, &cli.store, ui, no_ui, no_open)?;
-            let result = matrix::run(serde_json::from_slice(&std::fs::read(plan)?)?, &output);
-            if live && result.is_ok() && !runner::cancelled() {
-                hold_interface();
-            }
-            result?
+        Action::Matrix { plan, output, .. } => {
+            let matrix = serde_json::from_slice(&std::fs::read(plan)?)?;
+            crate::shared_store::session(&output, || matrix::run(matrix, &output))?
         }
         Action::Bisect {
             repo,
@@ -90,7 +52,8 @@ pub(crate) fn execute() -> Result<i32> {
             args,
         })?,
         Action::Resume { run, output } => {
-            sessions::resume(&project::resolve(&cli.store, &run)?, &output)?
+            let source = project::resolve(&cli.store, &run)?;
+            crate::shared_store::session(&output, || sessions::resume(&source, &output))?
         }
         Action::Profile {
             run,
@@ -110,11 +73,22 @@ pub(crate) fn execute() -> Result<i32> {
             serde_json::to_string_pretty(&sessions::retention(&cli.store, keep, apply)?)?
         ),
         Action::Diagnose { run } => {
-            let r = load(run)?;
+            let path = project::resolve(&cli.store, &run)?;
+            let r = Run::load(&path)?;
+            // The runner leaves the machine's state beside the run, where it could read it.
+            let directory = if path.is_dir() {
+                path.clone()
+            } else {
+                path.parent().unwrap_or(&path).to_path_buf()
+            };
+            let host: Option<Vec<crate::host::Sample>> = std::fs::read(directory.join("host.json"))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+            let host = host.map(|samples| crate::host::correlate(&r, &samples));
             println!(
                 "{}",
                 serde_json::to_string_pretty(
-                    &serde_json::json!({"spread_and_drift":diagnostics::diagnose(&r)?,"order":diagnostics::order_effects(&r)?,"status":r.status,"unavailable_observations":r.observations.iter().filter(|o|o.availability!=Availability::Available).count(),"interpretation":"Descriptive thresholds; missing observations excluded and counted. No causal or significance inference."})
+                    &serde_json::json!({"spread_and_drift":diagnostics::diagnose(&r)?,"order":diagnostics::order_effects(&r)?,"host":host,"status":r.status,"unavailable_observations":r.observations.iter().filter(|o|o.availability!=Availability::Available).count(),"interpretation":"Descriptive thresholds; missing observations excluded and counted. No causal or significance inference."})
                 )?
             );
         }
@@ -388,38 +362,41 @@ pub(crate) fn execute() -> Result<i32> {
             if !args.iter().any(|s| s == "--json") {
                 args.push("--json".into());
             }
-            for (i, (t, path)) in targets.iter().zip(builds).enumerate() {
-                let directory = out.join(format!("{i}-{}-{}", t.package, t.name));
-                eprintln!(
-                    "bench: target {}/{} {}/{}",
-                    i + 1,
-                    targets.len(),
-                    t.package,
-                    t.name
-                );
-                let run = runner::run(
-                    runner::Plan {
-                        privacy: None,
-                        variants: Default::default(),
-                        start_pair: 0,
-                        candidate: runner::Program {
-                            path,
-                            args: args.clone(),
-                            env: Default::default(),
-                            cwd: t.manifest.parent().map(|p| p.to_path_buf()),
+            crate::shared_store::session(&out, || {
+                for (i, (t, path)) in targets.iter().zip(builds).enumerate() {
+                    let directory = out.join(format!("{i}-{}-{}", t.package, t.name));
+                    eprintln!(
+                        "bench: target {}/{} {}/{}",
+                        i + 1,
+                        targets.len(),
+                        t.package,
+                        t.name
+                    );
+                    let run = runner::run(
+                        runner::Plan {
+                            privacy: None,
+                            variants: Default::default(),
+                            start_pair: 0,
+                            candidate: runner::Program {
+                                path,
+                                args: args.clone(),
+                                env: Default::default(),
+                                cwd: t.manifest.parent().map(|p| p.to_path_buf()),
+                            },
+                            baseline: None,
+                            repetitions,
+                            timeout_ms,
+                            protocol: true,
+                            fixtures: vec![],
+                            contract: Default::default(),
+                            provenance: Default::default(),
                         },
-                        baseline: None,
-                        repetitions,
-                        timeout_ms,
-                        protocol: true,
-                        fixtures: vec![],
-                        contract: Default::default(),
-                        provenance: Default::default(),
-                    },
-                    &directory,
-                )?;
-                println!("{}\nSaved {}", report::markdown(&run)?, directory.display());
-            }
+                        &directory,
+                    )?;
+                    println!("{}\nSaved {}", report::markdown(&run)?, directory.display());
+                }
+                Ok(())
+            })?;
         }
         Action::Baseline { action } => match action {
             BaselineAction::Save {
@@ -484,13 +461,11 @@ pub(crate) fn execute() -> Result<i32> {
             timeout_ms,
             protocol,
             dry_run,
-            ui,
-            no_ui,
-            no_open,
             memory,
             hub,
             output: out_arg,
             args,
+            ..
         } => {
             if plan.is_some()
                 && (program.is_some()
@@ -576,11 +551,10 @@ pub(crate) fn execute() -> Result<i32> {
                 return Ok(0);
             }
             runner::preflight(plan.clone(), &out)?;
-            let live = start_interface(&out, &cli.store, ui, no_ui, no_open)?;
             let announced = crate::shared_store::announce(&out);
             let result = runner::run(plan, &out);
             if let Some(announced) = announced {
-                announced.finish(&out);
+                announced.finish(&out, result.is_ok());
             }
             if out.join("run.json").is_file() {
                 let doc = experiment_report::build(experiment_report::Options {
@@ -598,9 +572,6 @@ pub(crate) fn execute() -> Result<i32> {
                 )?;
                 output(&doc.markdown()?, Some(out.join("report.md")))?;
                 println!("Saved results and reports: {}", out.display());
-            }
-            if live && !runner::cancelled() && out.join("status-final.json").is_file() {
-                hold_interface();
             }
             result?;
             if memory {
@@ -620,7 +591,12 @@ pub(crate) fn execute() -> Result<i32> {
                 out.display()
             );
         }
-        Action::Serve { root, port } => web_ui::serve(&root, &cli.store, port)?,
+        Action::Serve { .. } => {
+            return Err(error(
+                "the bench web interface moved into the hub: run `cargo airbug serve` and open \
+                 http://127.0.0.1:8790/#/runs",
+            ));
+        }
         Action::Analyze {
             run,
             resamples,

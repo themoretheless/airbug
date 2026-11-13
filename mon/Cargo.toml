@@ -5,19 +5,24 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
 publish = false
-description = "Native macOS host monitor (egui + sysinfo + SQLite), optional OTLP export"
+description = "Host sampler (sysinfo + SQLite, optional OTLP export) with an optional egui window"
+
+[features]
+# The window is optional: sampling is the main mode and needs none of this.
+gui = ["dep:eframe", "dep:egui", "dep:egui_plot", "dep:notify-rust"]
 
 [dependencies]
-eframe = "0.31"
-egui = "0.31"
-egui_plot = "0.32"
+eframe = { version = "0.31", optional = true }
+egui = { version = "0.31", optional = true }
+egui_plot = { version = "0.32", optional = true }
 sysinfo = "0.33"
+ctrlc = "3"
 rusqlite = { workspace = true }
 crossbeam-channel = "0.5"
 serde = { workspace = true }
 serde_json.workspace = true
 chrono = "0.4"
-notify-rust = "4"
+notify-rust = { version = "4", optional = true }
 airbug-otel = { path = "../otel" }
 tracing.workspace = true
 tracing-subscriber.workspace = true
