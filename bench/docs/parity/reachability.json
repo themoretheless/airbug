@@ -1,0 +1,28 @@
+{
+  "criterion": {
+    "version": "0.8.2",
+    "reachable_items": 125,
+    "inventory_rows": 253,
+    "reachable_outside_the_textual_inventory": {
+      "trait_methods_of_listed_traits": 8,
+      "methods_of_trait_impls": 10,
+      "macros": {
+        "criterion_main": "native entry point: Suite::main() / main_registered (criterion-runner.json)"
+      }
+    },
+    "reachable_and_unaccounted": [],
+    "inventory_rows_not_reachable": 173
+  },
+  "divan": {
+    "version": "0.1.21",
+    "reachable_items": 112,
+    "inventory_rows": 244,
+    "reachable_outside_the_textual_inventory": {
+      "trait_methods_of_listed_traits": 1,
+      "methods_of_trait_impls": 2,
+      "macros": {}
+    },
+    "reachable_and_unaccounted": [],
+    "inventory_rows_not_reachable": 182
+  }
+}

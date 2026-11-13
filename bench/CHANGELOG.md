@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `frames`: frame lifecycle for application-owned render loops (`cpu.submit.ns`, `frame.completed.ns`, `window.present.interval.ns`) and a GPU timestamp adapter (`gpu.pass.ns`) that records stale, duplicate, wrapped or missing results as unavailable with a reason. No GPU dependency; example `frames`.
+
 - Add a browser / WASM driver (`scripts/browser-driver.cjs`): a page exposes `globalThis.airbugBench`, the driver measures calibrated batches in headless Chromium and reports them in the worker protocol, so `run --protocol --program node` schedules, compares and reports a browser like any program. A page that sets `globalThis.airbugScenario` is measured as a scenario: readiness, named phases and frame intervals.
 
 - In a terminal, a results table wider than the window is shown as one record per row packed to the window width; pipes and files keep the Markdown table.

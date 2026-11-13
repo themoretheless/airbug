@@ -63,7 +63,7 @@ Forma: медиана наблюдений CPU submit 41 µs, completed 1.302521
 Сравнительные проверки overhead и устойчивости статистики остаются отдельной задачей.
 
 
-- Native window/present lifecycle, GPU timestamp adapter, async/browser drivers и macro DSL ещё не реализованы. Golden comparison реализован для отдельных checkpoints; полная последовательность кадров не проверяется.
+- Жизненный цикл кадра и адаптер GPU-меток реализованы без зависимости от GPU (`airbug_bench::frames`, тесты на отказ от устаревших, повторных и перевёрнутых меток); на реальном устройстве и в Forma они ещё не запускались. Драйвер браузера есть (`scripts/browser-driver.cjs`). Golden comparison реализован для отдельных checkpoints; полная последовательность кадров не проверяется.
 - Allocator считает Rust process scope; нет OS RSS/CPU provider, thread-local allocator scope и отдельного phase peak. Lifetime peak явно отличается от phase peak.
 - HTML автономный, с таблицей, фильтром, сортировкой и раскрытием contracts; исторический dashboard отсутствует.
 - Сборка проверена на текущем macOS toolchain. Заявленный MSRV 1.85 и Windows/Linux ещё не проверены. На Unix убирается process group; на других ОС только непосредственный child.

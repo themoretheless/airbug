@@ -5,51 +5,38 @@ to bottom; a later stage starts when the one before it is done unless it is mark
 independent. Only open work is listed — when an item ships, delete it here (changelogs and the
 feature maps at the bottom are the record of what was done).
 
-Last reviewed: 2026-11-12.
+Last reviewed: 2026-11-13.
 
 ## Stage 1 — Release (`run`, `bench`)
 
 The hub is now the only web interface and `cargo airbug` the only launcher; what is left of
 that work is shipping it.
 
-1. **Release**: publish `airbug-run`, then `cargo-airbug-bench`, which depends on it. Needs
-   the owner: the Release workflow is dispatched by hand and has no `airbug-run` family yet;
-   packaging itself is checked on every PR (`publish-dry-run.yml`).
+1. **Release**: dispatch the Release workflow for `airbug-run` (0.1.0), publish it, then
+   release `airbug-bench` — `cargo-airbug-bench` depends on `airbug-run`. Everything is in
+   place (the workflow knows the `airbug-run` family, packaging is dry-run on every PR); it
+   needs the owner's hand and crates.io token.
 
-## Stage 2 — Close Criterion / Divan parity (`bench`)
-
-Goal: parity is declared, backed by the registry in
-[bench/docs/parity/](bench/docs/parity/README.md) (46 requirements verified, 6 partial).
-Placed after stage 1 on purpose: reports and console output are reviewed once, in their final
-form.
-
-2. **Finish the partial requirements**: `measurement` (pluggable values, aggregation,
-   formatters), `plots` (on/off, linear/log scales, grouped comparisons), `output` (verbosity,
-   colour, tree/table, machine formats), `artifacts` (output directory, raw data, summary).
-3. **`platform_acceptance`** — record the macOS jobs for the current code (Linux and Windows
-   are confirmed on stable and MSRV).
-4. **`final_gate`** — accept a frozen change set requirement by requirement (the upstream
-   inventory was re-verified; no newer Criterion or Divan release exists).
-
-## Stage 3 — Hardware signals (`bench`)
+## Stage 2 — Hardware signals (`bench`)
 
 Goal: the numbers behind a run come from the machine. `mon` already samples without a window
-on Linux and macOS, with GPU load and memory (unified memory included). Independent of
-stage 2; can run in parallel with it.
+on Linux and macOS, with GPU load and memory (unified memory included). 
 
-5. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
+2. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
    and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
    development VM nor CI exposes one), macOS ARM, SIMD utilisation.
-6. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
+3. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
    temperature and throttle counts between processes on Linux (`host.json`) and notes
    throttling; `diagnose` correlates it with
    per-process timings. Still owed: model-specific registers and macOS.
 
-## Stage 4 — Measurement depth (`bench`)
+## Stage 3 — Measurement depth (`bench`)
 
 Goal: the scenarios Forma needs and evidence for the method itself.
 
-7. **Native window/present lifecycle and a GPU timestamp adapter** for Forma scenarios.
+4. **Forma on real devices**: the frame lifecycle and the GPU timestamp adapter exist
+   (`airbug_bench::frames`) but have only met a simulated device. Wire Forma's `perf_bench`
+   and `window_bench` to them and run on a machine with a GPU.
 
 ## Unscheduled
 

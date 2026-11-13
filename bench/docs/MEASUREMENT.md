@@ -80,6 +80,16 @@ Commit без dirty state и binary hash недостаточен. CPU model н�
 
 ## GPU и память
 
+Границы кадра записывает `airbug_bench::frames::Frames`: приложение сохраняет свой цикл и рендерер и
+сообщает `begin` → `submitted` → `completed`, результат `present` и пары GPU-меток
+(`GpuSpan { frame, begin_ticks, end_ticks, period_ns }`). Получаются раздельные метрики
+`cpu.submit.ns`, `frame.completed.ns`, `gpu.pass.ns` и `window.present.interval.ns`; прогревочные кадры
+наблюдений не оставляют. Метка с неизвестным, уже закрытым или слишком старым кадром, повторная,
+с неположительным периодом или с концом раньше начала записывается как недоступное наблюдение с
+причиной — не как ноль и не как длительность через переполнение; кадр, чей результат так и не
+пришёл, помечается неполным. Модуль не зависит от wgpu: источник меток — любое устройство
+(пример без GPU: `examples/frames.rs`).
+
 GPU adapter должен выдавать timestamps с ID кадра/query, declared period и проверкой валидности. Отсутствующие/устаревшие/неполные query results не дают wraparound duration. Асинхронный readback с bounded backlog предпочтителен для timeline; serialized benchmark сохраняет явный wait. На разных backends проверяются реальные границы и отсутствие stale timestamps.
 
 Allocation wrapper — `TrackingAllocator<A: GlobalAlloc>`, подключаемый пользователем. Успешный realloc учитывается по объявленной семантике requested bytes; failed realloc не удаляет старую allocation. Thread-local режим требует регистрации worker threads; whole-process атомарный режим имеет другую стоимость. Snapshot атомиков не транзакционен, reset peak допустим только с указанной моделью quiescence. Diagnostic allocation runs отдельно сравниваются с такими же instrumentation runs.
