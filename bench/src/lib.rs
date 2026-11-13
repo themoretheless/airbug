@@ -18,6 +18,7 @@ pub mod timer;
 mod timing;
 mod worker_timing;
 pub use convenience::{Fixture, Seeded, Selection, SortOrder};
+pub mod frames;
 pub mod history;
 pub mod hypothesis;
 pub mod hypothesis_plot;
