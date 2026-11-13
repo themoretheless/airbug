@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.11.0
+
+- Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on. No functional change.
+
 - With both OTLP features compiled in, the transport is no longer decided at
   compile time: HTTP stays the default (matching `otlp-http` and the `:4318`
   endpoint every airbug tool prints) and `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`

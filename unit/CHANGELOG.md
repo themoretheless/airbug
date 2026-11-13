@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.11.0
+
+- Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.
+
 - `airbug::report` events carry `pid`, `bin` and `test` (thread name) so a runner can
   attribute steps, comparisons and attachments to the test that produced them.
 - Renamed the crates: `runit` is now `airbug`, `runit-macros` is now
@@ -43,6 +47,10 @@
 # 0.5.0
 
 ## Unreleased
+
+## 0.11.0
+
+- Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on. No functional change.
 
 - Extend `airbug_report` with live per-test history, native outcomes, process durations, isolated diagnostics, bounded output and timeouts. The binary requires the existing `json` feature; the default library remains dependency-free. Failed runs now return a nonzero exit status.
 

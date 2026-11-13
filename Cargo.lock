@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "airbug"
-version = "0.6.2"
+version = "0.11.0"
 dependencies = [
  "airbug-checkout-domain",
  "airbug-macros",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-bench"
-version = "0.9.0"
+version = "0.11.0"
 dependencies = [
  "airbug",
  "airbug-bench-macros",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-bench-macros"
-version = "0.9.0"
+version = "0.11.0"
 dependencies = [
  "proc-macro-crate",
  "quote",
@@ -187,21 +187,21 @@ dependencies = [
 
 [[package]]
 name = "airbug-checkout-domain"
-version = "0.6.2"
+version = "0.11.0"
 dependencies = [
  "airbug",
 ]
 
 [[package]]
 name = "airbug-containers"
-version = "0.6.2"
+version = "0.11.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "airbug-err"
-version = "0.6.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-hub"
-version = "0.6.1"
+version = "0.11.0"
 dependencies = [
  "airbug-bench",
  "airbug-err",
@@ -244,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-macros"
-version = "0.6.2"
+version = "0.11.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-mon"
-version = "0.6.1"
+version = "0.11.0"
 dependencies = [
  "airbug-otel",
  "chrono",
@@ -274,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-otel"
-version = "0.6.1"
+version = "0.11.0"
 dependencies = [
  "airbug-bench",
  "airbug-err",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-run"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -307,7 +307,7 @@ dependencies = [
 
 [[package]]
 name = "airbug-testrun"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "airbug-run",
  "ctrlc",
@@ -866,14 +866,14 @@ dependencies = [
 
 [[package]]
 name = "cargo-airbug"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "airbug-testrun",
 ]
 
 [[package]]
 name = "cargo-airbug-bench"
-version = "0.9.0"
+version = "0.11.0"
 dependencies = [
  "airbug-bench",
  "airbug-run",
