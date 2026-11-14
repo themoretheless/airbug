@@ -11,14 +11,24 @@
 //! ```
 mod event;
 mod fingerprint;
+pub mod integrations;
 mod scope;
+pub mod scrub;
 mod transport;
 
 pub use event::{
-    Breadcrumb, EVENT_SCHEMA_VERSION, Event, Exception, Frame, SessionStatus, SessionUpdate,
-    Severity, Stacktrace, User,
+    Breadcrumb, DebugImage, EVENT_SCHEMA_VERSION, Event, Exception, Frame, SessionStatus,
+    SessionUpdate, Severity, Stacktrace, User,
 };
-pub use scope::{Scope, add_breadcrumb, add_breadcrumb_with_data, configure_scope};
+#[cfg(feature = "tracing-layer")]
+pub use integrations::ErrTracingLayer;
+#[cfg(feature = "tower")]
+pub use integrations::{AirbugTowerLayer, AirbugTowerService};
+pub use integrations::{HttpMiddleware, HttpRequestMeta};
+pub use scope::{
+    Scope, ScopeGuard, add_breadcrumb, add_breadcrumb_with_data, configure_scope, push_scope,
+};
+pub use scrub::{ScrubAction, ScrubRule, ScrubTarget, Scrubber};
 pub use transport::{EventTransport, HttpTransport, MemoryTransport, TransportError};
 
 use event::Exception as Ex;
@@ -87,6 +97,8 @@ pub struct Options {
     pub max_breadcrumbs: usize,
     pub auto_session_tracking: bool,
     pub before_send: Option<BeforeSend>,
+    pub scrubber: Option<Scrubber>,
+    pub debug_images: Vec<DebugImage>,
 }
 
 /// Callback that may drop or mutate an event before send.
@@ -104,6 +116,8 @@ impl std::fmt::Debug for Options {
             .field("max_breadcrumbs", &self.max_breadcrumbs)
             .field("auto_session_tracking", &self.auto_session_tracking)
             .field("before_send", &self.before_send.as_ref().map(|_| "<fn>"))
+            .field("scrubber", &self.scrubber)
+            .field("debug_images", &self.debug_images)
             .finish()
     }
 }
@@ -120,6 +134,8 @@ impl Default for Options {
             max_breadcrumbs: 100,
             auto_session_tracking: true,
             before_send: None,
+            scrubber: None,
+            debug_images: Vec::new(),
         }
     }
 }
@@ -174,6 +190,30 @@ impl Options {
         F: Fn(Event) -> Option<Event> + Send + Sync + 'static,
     {
         self.before_send = Some(std::sync::Arc::new(f));
+        self
+    }
+
+    /// Attach a configurable PII / secret [`Scrubber`] applied before sending events.
+    pub fn scrubber(mut self, scrubber: Scrubber) -> Self {
+        self.scrubber = Some(scrubber);
+        self
+    }
+
+    /// Enable the standard default PII scrubber ([`Scrubber::default_pii`]).
+    pub fn scrub_default_pii(mut self) -> Self {
+        self.scrubber = Some(Scrubber::default_pii());
+        self
+    }
+
+    /// Attach [`DebugImage`] descriptors for server-side symbolication.
+    pub fn debug_images(mut self, images: Vec<DebugImage>) -> Self {
+        self.debug_images = images;
+        self
+    }
+
+    /// Append a single [`DebugImage`] descriptor to every outgoing event.
+    pub fn add_debug_image(mut self, image: DebugImage) -> Self {
+        self.debug_images.push(image);
         self
     }
 }
@@ -418,15 +458,29 @@ pub fn capture_anyhow(err: &anyhow::Error) -> Option<String> {
     send_event(event)
 }
 
+/// Construct a baseline [`Event`] pre-populated with client options, scope, and breadcrumbs.
+pub fn new_event(level: Severity) -> Event {
+    base_event(level)
+}
+
+/// Capture and transmit a custom [`Event`] built from [`new_event`].
+pub fn capture_event(event: Event) -> Option<String> {
+    if matches!(event.level, Severity::Error | Severity::Fatal) || event.exception.is_some() {
+        record_session_error();
+    }
+    send_event(event)
+}
+
 fn base_event(level: Severity) -> Event {
-    let (release, environment, service) = with_client(|c| {
+    let (release, environment, service, debug_images) = with_client(|c| {
         (
             c.options.release.clone(),
             c.options.environment.clone(),
             c.options.service.clone(),
+            c.options.debug_images.clone(),
         )
     })
-    .unwrap_or((None, None, None));
+    .unwrap_or((None, None, None, Vec::new()));
 
     let mut event = Event {
         schema_version: EVENT_SCHEMA_VERSION,
@@ -446,11 +500,13 @@ fn base_event(level: Severity) -> Event {
         contexts: collect_contexts(),
         trace_id: None,
         span_id: None,
+        debug_images,
     };
 
     scope::with_scope(|s| {
         event.tags.extend(s.tags.clone());
         event.extra.extend(s.extra.clone());
+        event.contexts.extend(s.contexts.clone());
         if let Some(user) = &s.user {
             event.user = Some(user.clone());
         }
@@ -479,6 +535,22 @@ fn base_event(level: Severity) -> Event {
 
 thread_local! {
     static IN_SEND_OR_PANIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static IN_MIDDLEWARE_CATCH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) struct MiddlewareCatchGuard;
+
+impl MiddlewareCatchGuard {
+    pub(crate) fn enter() -> Self {
+        let _ = IN_MIDDLEWARE_CATCH.try_with(|c| c.set(c.get() + 1));
+        Self
+    }
+}
+
+impl Drop for MiddlewareCatchGuard {
+    fn drop(&mut self) {
+        let _ = IN_MIDDLEWARE_CATCH.try_with(|c| c.set(c.get().saturating_sub(1)));
+    }
 }
 
 struct ReentrancyGuard(bool);
@@ -588,6 +660,9 @@ fn send_event(mut event: Event) -> Option<String> {
     }
 
     apply_trace_correlation(&mut event);
+    if let Some(scrubber) = with_client(|c| c.options.scrubber.clone()).flatten() {
+        scrubber.scrub_event(&mut event);
+    }
     event.fingerprint = resolve_fingerprint(&event);
 
     let before = with_client(|c| c.options.before_send.clone()).flatten();
@@ -750,7 +825,24 @@ fn collect_frames() -> Vec<Frame> {
     let bt = backtrace::Backtrace::new();
     let mut frames = Vec::new();
     for frame in bt.frames() {
-        for sym in frame.symbols() {
+        let ip = frame.ip() as usize;
+        let instruction_addr = (ip != 0).then(|| format!("{ip:#x}"));
+        let syms = frame.symbols();
+        if syms.is_empty() {
+            if let Some(addr) = instruction_addr {
+                frames.push(Frame {
+                    function: "<unsymbolicated>".into(),
+                    filename: None,
+                    lineno: None,
+                    colno: None,
+                    in_app: false,
+                    instruction_addr: Some(addr),
+                    symbol_addr: None,
+                });
+            }
+            continue;
+        }
+        for sym in syms {
             let function = sym
                 .name()
                 .map(|n| n.to_string())
@@ -758,6 +850,10 @@ fn collect_frames() -> Vec<Frame> {
             let filename = sym.filename().map(|p| p.display().to_string());
             let lineno = sym.lineno();
             let colno = sym.colno();
+            let symbol_addr = sym.addr().and_then(|a| {
+                let raw = a as usize;
+                (raw != 0).then(|| format!("{raw:#x}"))
+            });
             if function.contains("airbug_err::") || function.contains("backtrace::") {
                 continue;
             }
@@ -768,6 +864,8 @@ fn collect_frames() -> Vec<Frame> {
                 lineno,
                 colno,
                 in_app,
+                instruction_addr: instruction_addr.clone(),
+                symbol_addr,
             });
         }
     }
@@ -785,7 +883,10 @@ fn install_panic_hook() {
     let prev = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
         let already_in_send = IN_SEND_OR_PANIC.try_with(|c| c.get()).unwrap_or(true);
-        if !already_in_send && with_client(|_| ()).is_some() {
+        let in_middleware = IN_MIDDLEWARE_CATCH
+            .try_with(|c| c.get() > 0)
+            .unwrap_or(false);
+        if !already_in_send && !in_middleware && with_client(|_| ()).is_some() {
             record_session_error();
             let payload = panic_payload(info);
             let location = info
@@ -822,12 +923,13 @@ fn panic_payload(info: &std::panic::PanicHookInfo<'_>) -> String {
 }
 
 #[cfg(test)]
+pub(crate) static TEST_INIT_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::TEST_INIT_LOCK as INIT_LOCK;
     use std::io;
-
-    /// Global client is process-wide; serialize tests that call `init*`.
-    static INIT_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn before_send_can_drop() {

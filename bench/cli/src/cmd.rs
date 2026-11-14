@@ -287,7 +287,10 @@ pub(crate) fn execute() -> Result<i32> {
             offline,
             args,
         })?,
-        Action::Ci { output: path } => output(include_str!("ci-template.yml"), Some(path))?,
+        Action::Ci {
+            provider,
+            output: path,
+        } => output(crate::ci_templates::render(&provider)?, Some(path))?,
         Action::Init {
             name,
             manifest_path,
@@ -1125,6 +1128,10 @@ pub(crate) fn execute() -> Result<i32> {
             } else {
                 "direct child only; descendants unsupported"
             };
+            let cpu = airbug_bench::cpuid::CpuSignature::detect();
+            let simd = airbug_bench::simd::detect();
+            let host_sample = crate::host::Probe::new().snapshot(0);
+            let msr_accessible = crate::host::Probe::msr_available();
             if json {
                 println!(
                     "{}",
@@ -1134,6 +1141,10 @@ pub(crate) fn execute() -> Result<i32> {
                         "arch": std::env::consts::ARCH,
                         "clock": "std::time::Instant",
                         "process_tree_cleanup": process_tree_cleanup,
+                        "cpu": cpu,
+                        "simd": simd,
+                        "host_sample": host_sample,
+                        "msr_accessible": msr_accessible,
                         "gpu": "supplied by scenario (not probed)",
                         "window": "supplied by scenario (not probed)",
                         "isolation": "local runner lease only",
@@ -1142,10 +1153,17 @@ pub(crate) fn execute() -> Result<i32> {
                 );
             } else {
                 println!(
-                    "bench {}\nOS: {}\nArch: {}\nClock: std::time::Instant\nProcess tree cleanup: {}\nGPU: supplied by scenario (not probed)\nWindow: supplied by scenario (not probed)\nIsolation: local runner lease only\nStatistics: independent process units required",
+                    "bench {}\nOS: {}\nArch: {}\nCPU: {} ({}, {} logical cores, cache line {}B, simd {}b)\nCPU kHz: {:?}\nMSR accessible: {}\nClock: std::time::Instant\nProcess tree cleanup: {}\nGPU: supplied by scenario (not probed)\nWindow: supplied by scenario (not probed)\nIsolation: local runner lease only\nStatistics: independent process units required",
                     env!("CARGO_PKG_VERSION"),
                     std::env::consts::OS,
                     std::env::consts::ARCH,
+                    cpu.brand,
+                    cpu.vendor,
+                    cpu.logical_cores,
+                    cpu.cache_line_bytes,
+                    simd.max_vector_bits,
+                    host_sample.cpu_khz,
+                    msr_accessible,
                     process_tree_cleanup
                 );
             }
@@ -1160,6 +1178,25 @@ pub(crate) fn execute() -> Result<i32> {
                 if e.kind() != std::io::ErrorKind::BrokenPipe {
                     return Err(e.into());
                 }
+            }
+        }
+        Action::Presets {
+            category,
+            json,
+            export,
+            output: out_path,
+        } => {
+            if let Some(slug) = export {
+                let text = crate::presets::export_json(&slug)?;
+                output(&text, out_path)?;
+            } else {
+                let items = crate::presets::list(category.as_deref());
+                let text = if json {
+                    serde_json::to_string_pretty(&items)?
+                } else {
+                    crate::presets::format_text(&items)
+                };
+                output(&text, out_path)?;
             }
         }
     }

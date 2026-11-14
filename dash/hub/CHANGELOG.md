@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Debug symbol server, symbolication lookup, and Relay-style PII scrubbing/upstream forwarding (`symbols.rs`).
+- Streaming benchmark progress transports (`stream.rs`: WebSocket, SSE, HTTP fragments, GraphQL subscriptions, JSONL) with bounded timeouts and integration tests (`tests/symbols_and_streams.rs`).
+
 ## 0.11.0
 
 - Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.

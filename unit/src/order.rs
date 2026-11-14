@@ -229,24 +229,348 @@ pub fn happened_before(a: &str, b: &str, events: &[(&str, u64)]) -> bool {
     }
 }
 
-/// Stub for completion-order waits that [`CallSequence`] deliberately does not provide.
+/// Thread-safe completion barrier for coordinating and verifying when concurrent or `async`
+/// operations finish.
 ///
-/// Admission order is covered by [`CallSequence`]. Waiting until async answers
-/// *finish* belongs to the application (join handles, `.await`, barriers you own).
-/// Methods here return a clear error / panic so call sites do not mistake this
-/// for a working completion API.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CompletionBarrier;
+/// While [`CallSequence`] checks the order in which calls are *admitted*, `CompletionBarrier`
+/// tracks actual task completions across threads or async executors: issue guards with
+/// [`enter`](Self::enter), record direct completions with [`complete`](Self::complete), await
+/// completion asynchronously with [`await_done`](Self::await_done), or block with
+/// [`wait_timeout`](Self::wait_timeout). Implements [`VerifyMocks`].
+#[derive(Debug, Clone)]
+pub struct CompletionBarrier {
+    inner: Arc<CompletionInner>,
+}
 
-impl CompletionBarrier {
-    /// Not implemented. Use application join/await for completion ordering.
-    pub fn await_done(&self) -> Result<(), &'static str> {
-        Err("not implemented: use application join/await")
+#[derive(Debug)]
+struct CompletionInner {
+    name: Arc<str>,
+    state: Mutex<BarrierState>,
+    cv: std::sync::Condvar,
+}
+
+#[derive(Debug, Default)]
+struct BarrierState {
+    expected: Option<usize>,
+    expected_order: Option<Vec<String>>,
+    completed: Vec<String>,
+    in_flight: usize,
+    wakers: Vec<std::task::Waker>,
+}
+
+impl BarrierState {
+    fn is_done(&self) -> bool {
+        if self.in_flight > 0 {
+            return false;
+        }
+        match self.expected {
+            Some(n) => self.completed.len() >= n,
+            None => true,
+        }
     }
 
-    /// Same gap as [`await_done`](Self::await_done), as a panic.
-    #[track_caller]
-    pub fn await_done_unchecked(&self) -> ! {
-        panic!("not implemented: use application join/await")
+    fn verify(&self, name: &str) -> Result<(), MockError> {
+        let mut details = Vec::new();
+        if self.in_flight > 0 {
+            details.push(format!("{} task(s) still in flight", self.in_flight));
+        }
+        if let Some(expected) = self.expected
+            && self.completed.len() != expected
+        {
+            details.push(format!(
+                "expected {expected} completions, got {} ({:?})",
+                self.completed.len(),
+                self.completed
+            ));
+        }
+        if let Some(expected_order) = &self.expected_order
+            && &self.completed != expected_order
+        {
+            details.push(format!(
+                "completion order mismatch: expected {expected_order:?}, got {:?}",
+                self.completed
+            ));
+        }
+        if details.is_empty() {
+            Ok(())
+        } else {
+            Err(MockError {
+                method: format!("barrier:{name}"),
+                details,
+            })
+        }
+    }
+}
+
+impl Default for CompletionBarrier {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(CompletionInner {
+                name: Arc::from("default"),
+                state: Mutex::new(BarrierState::default()),
+                cv: std::sync::Condvar::new(),
+            }),
+        }
+    }
+}
+
+impl CompletionBarrier {
+    /// Create a barrier expecting `expected` completion events.
+    pub fn new(expected: usize) -> Self {
+        Self::named("barrier", expected)
+    }
+
+    /// Create a named barrier expecting `expected` completion events.
+    pub fn named(name: impl Into<String>, expected: usize) -> Self {
+        Self {
+            inner: Arc::new(CompletionInner {
+                name: Arc::from(name.into()),
+                state: Mutex::new(BarrierState {
+                    expected: Some(expected),
+                    ..BarrierState::default()
+                }),
+                cv: std::sync::Condvar::new(),
+            }),
+        }
+    }
+
+    /// Create a barrier that waits until all issued [`CompletionToken`] guards finish.
+    pub fn unbounded(name: impl Into<String>) -> Self {
+        Self {
+            inner: Arc::new(CompletionInner {
+                name: Arc::from(name.into()),
+                state: Mutex::new(BarrierState::default()),
+                cv: std::sync::Condvar::new(),
+            }),
+        }
+    }
+
+    /// Require completions to arrive in the specified exact label sequence.
+    pub fn expect_order<I, S>(self, order: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let order: Vec<String> = order.into_iter().map(Into::into).collect();
+        let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.expected.is_none() {
+            state.expected = Some(order.len());
+        }
+        state.expected_order = Some(order);
+        drop(state);
+        self
+    }
+
+    /// Enter an in-flight unit of work labeled `label`.
+    ///
+    /// Completing explicitly via [`CompletionToken::complete`] or dropping the returned token
+    /// records completion and wakes all waiting threads and futures.
+    pub fn enter(&self, label: impl Into<String>) -> CompletionToken {
+        let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.in_flight += 1;
+        CompletionToken {
+            inner: Arc::clone(&self.inner),
+            label: label.into(),
+            finished: false,
+        }
+    }
+
+    /// Record a completion event for `label` directly and notify all waiters.
+    pub fn complete(&self, label: impl Into<String>) {
+        let wakers = {
+            let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+            state.completed.push(label.into());
+            self.inner.cv.notify_all();
+            if state.is_done() {
+                std::mem::take(&mut state.wakers)
+            } else {
+                Vec::new()
+            }
+        };
+        for waker in wakers {
+            waker.wake();
+        }
+    }
+
+    /// Return the completion labels recorded so far, in arrival order.
+    pub fn completed(&self) -> Vec<String> {
+        self.inner
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .completed
+            .clone()
+    }
+
+    /// Number of completions recorded so far.
+    pub fn completed_count(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .completed
+            .len()
+    }
+
+    /// Return `true` when zero tasks are in flight and any expected count is satisfied.
+    pub fn is_done(&self) -> bool {
+        self.inner
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_done()
+    }
+
+    /// Verify completion count and order immediately without blocking.
+    pub fn verify(&self) -> Result<(), MockError> {
+        let state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.verify(&self.inner.name)
+    }
+
+    /// Block the current thread until the barrier is done or `timeout` elapses, then verify.
+    pub fn wait_timeout(&self, timeout: std::time::Duration) -> Result<(), MockError> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut guard = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+        while !guard.is_done() {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                let mut details = vec![format!(
+                    "timed out after {timeout:?} waiting for completion ({} completed, {} in flight)",
+                    guard.completed.len(),
+                    guard.in_flight
+                )];
+                if let Err(err) = guard.verify(&self.inner.name) {
+                    details.extend(err.details);
+                }
+                return Err(MockError {
+                    method: format!("barrier:{}", self.inner.name),
+                    details,
+                });
+            }
+            let (next_guard, wait_res) = self
+                .inner
+                .cv
+                .wait_timeout(guard, remaining)
+                .unwrap_or_else(|e| e.into_inner());
+            guard = next_guard;
+            if wait_res.timed_out() && !guard.is_done() {
+                let mut details = vec![format!(
+                    "timed out after {timeout:?} waiting for completion ({} completed, {} in flight)",
+                    guard.completed.len(),
+                    guard.in_flight
+                )];
+                if let Err(err) = guard.verify(&self.inner.name) {
+                    details.extend(err.details);
+                }
+                return Err(MockError {
+                    method: format!("barrier:{}", self.inner.name),
+                    details,
+                });
+            }
+        }
+        guard.verify(&self.inner.name)
+    }
+
+    /// Block the current thread indefinitely until the barrier completes, then verify.
+    pub fn wait(&self) -> Result<(), MockError> {
+        let guard = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = self
+            .inner
+            .cv
+            .wait_while(guard, |state| !state.is_done())
+            .unwrap_or_else(|e| e.into_inner());
+        guard.verify(&self.inner.name)
+    }
+
+    /// Return a [`std::future::Future`] that resolves once all expected and in-flight
+    /// tasks complete, and verifies any configured completion count and order.
+    pub fn await_done(&self) -> CompletionDoneFuture {
+        CompletionDoneFuture {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl VerifyMocks for CompletionBarrier {
+    fn verify_mocks(&self) -> Result<(), VerificationErrors> {
+        self.verify().map_err(|e| VerificationErrors(vec![e]))
+    }
+}
+
+/// Guard returned by [`CompletionBarrier::enter`] that records completion when finished or dropped.
+#[derive(Debug)]
+pub struct CompletionToken {
+    inner: Arc<CompletionInner>,
+    label: String,
+    finished: bool,
+}
+
+impl CompletionToken {
+    /// Complete this token explicitly, waking all waiting threads and async futures.
+    pub fn complete(mut self) {
+        self.finish(true);
+    }
+
+    /// Cancel this token without recording a completion label, decrementing in-flight count.
+    pub fn cancel(mut self) {
+        self.finish(false);
+    }
+
+    fn finish(&mut self, record: bool) {
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+        let wakers = {
+            let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+            state.in_flight = state.in_flight.saturating_sub(1);
+            if record {
+                state.completed.push(std::mem::take(&mut self.label));
+            }
+            self.inner.cv.notify_all();
+            if state.is_done() {
+                std::mem::take(&mut state.wakers)
+            } else {
+                Vec::new()
+            }
+        };
+        for waker in wakers {
+            waker.wake();
+        }
+    }
+}
+
+impl Drop for CompletionToken {
+    fn drop(&mut self) {
+        self.finish(true);
+    }
+}
+
+/// Future returned by [`CompletionBarrier::await_done`].
+#[derive(Debug)]
+pub struct CompletionDoneFuture {
+    inner: Arc<CompletionInner>,
+}
+
+impl std::future::Future for CompletionDoneFuture {
+    type Output = Result<(), MockError>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.is_done() {
+            return std::task::Poll::Ready(state.verify(&self.inner.name));
+        }
+        let waker = cx.waker();
+        if !state
+            .wakers
+            .iter()
+            .any(|existing| existing.will_wake(waker))
+        {
+            state.wakers.push(waker.clone());
+        }
+        std::task::Poll::Pending
     }
 }

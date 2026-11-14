@@ -3410,6 +3410,47 @@ impl<'a> Suite<'a> {
         );
         self
     }
+
+    /// Async variant of [`Suite::bench_fixture`]. Executor construction and fixture setup/borrow
+    /// happen outside timing; each iteration awaits `f(&mut T)`.
+    pub fn bench_async_fixture<E, T: 'static, O: 'a>(
+        &mut self,
+        name: &str,
+        mut executor: impl FnMut() -> E + 'a,
+        fixture: crate::Fixture<T>,
+        mut f: impl for<'i> AsyncFnMut(&'i mut T) -> O + 'a,
+    ) -> &mut Self
+    where
+        E: crate::workloads::Executor + 'a,
+    {
+        let mut state = None;
+        self.register(
+            name,
+            "shared lazy process fixture; setup/borrow/drop and executor init excluded; future creation + polling included",
+            u64::MAX,
+            Box::new(move |n, timer| {
+                let executor = state.get_or_insert_with(&mut executor);
+                let mut input = fixture.get().borrow_mut();
+                let start = timer.start();
+                for _ in 0..n {
+                    black_box(executor.block_on(f(black_box(&mut *input))));
+                }
+                start.measure(n)
+            }),
+        );
+        self.entries
+            .last_mut()
+            .unwrap()
+            .case
+            .contract
+            .insert("async.executor".into(), std::any::type_name::<E>().into());
+        self.entries.last_mut().unwrap().case.contract.insert(
+            "async.scope".into(),
+            "lazy executor and fixture initialization excluded; future creation + polling included"
+                .into(),
+        );
+        self
+    }
     /// Validate registered identities without executing setup or workloads.
     pub fn validate_registration(&self) -> Result<()> {
         let mut ids = std::collections::BTreeSet::new();

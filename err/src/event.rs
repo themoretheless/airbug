@@ -31,7 +31,7 @@ impl Severity {
 }
 
 /// One stack frame (newest first, matching typical backtrace order).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Frame {
     pub function: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,6 +42,27 @@ pub struct Frame {
     pub colno: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub in_app: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instruction_addr: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol_addr: Option<String>,
+}
+
+/// Debug binary module metadata attached for server-side symbolication.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DebugImage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_addr: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_size: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -155,6 +176,8 @@ pub struct Event {
     pub trace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub debug_images: Vec<DebugImage>,
 }
 
 impl Event {

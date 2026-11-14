@@ -1,8 +1,9 @@
 use airbug::checks::{SoftAssert, assert_duration_eq};
 use airbug::fixture::FixtureContext;
+use airbug::mock::{GenericMock, VerifyMocks};
 use airbug::native::{EnvScope, TempDir};
-use airbug::order::{CallDag, happened_before};
-use airbug::prop::{Prop, PropError, PropFailure};
+use airbug::order::{CallDag, CallSequence, CompletionBarrier, happened_before};
+use airbug::prop::{Prop, PropError, PropFailure, Shrink};
 use airbug::snapshot::{SnapshotError, Snapshots, UpdateMode};
 use airbug::strategy::Strategy;
 use airbug::time::{Clock, Deadline, Eventually, ManualClock, ParkClock, Retry};
@@ -373,23 +374,143 @@ fn map_args_and_borrowed_helpers() {
 }
 
 #[test]
-fn completion_barrier_documents_gap() {
-    use airbug::order::CompletionBarrier;
-    let barrier = CompletionBarrier;
-    assert_eq!(
-        barrier.await_done(),
-        Err("not implemented: use application join/await")
-    );
+fn completion_barrier_coordinates_threads_order_and_async_futures() {
+    let barrier = CompletionBarrier::named("workers", 3).expect_order(["a", "b", "c"]);
+    let t_a = barrier.enter("a");
+    let t_b = barrier.enter("b");
+    let t_c = barrier.enter("c");
+    assert!(!barrier.is_done());
+
+    let err = barrier.wait_timeout(Duration::from_millis(5)).unwrap_err();
+    assert!(err.details[0].contains("timed out"), "{err}");
+
+    t_a.complete();
+    t_b.complete();
+    t_c.complete();
+    barrier.wait_timeout(Duration::from_millis(50)).unwrap();
+    barrier.verify_mocks().unwrap();
+
+    // Async future resolves Ready once expected completions arrive.
+    let async_barrier = CompletionBarrier::new(1);
+    let tok = async_barrier.enter("job");
+    let mut fut = std::pin::pin!(async_barrier.await_done());
+    let noop_waker = Waker::noop();
+    let mut cx = Context::from_waker(noop_waker);
+    assert!(matches!(fut.as_mut().poll(&mut cx), Poll::Pending));
+    tok.complete();
+    assert!(matches!(fut.as_mut().poll(&mut cx), Poll::Ready(Ok(()))));
+
+    // Cancellation decrements in-flight without recording completion -> verify detects shortfall.
+    let cancel_barrier = CompletionBarrier::new(1);
+    cancel_barrier.enter("aborted").cancel();
+    assert!(cancel_barrier.verify_mocks().is_err());
 }
 
 #[test]
-fn inline_source_is_unsupported_stub() {
+fn inline_source_rewrites_literals_atomically_and_tracks_line_deltas() {
     let dir = Temp::new("inline");
-    let snaps = Snapshots::new(&dir.0).mode(UpdateMode::InlineSource);
+    std::fs::create_dir_all(&dir.0).unwrap();
+    let src_path = dir.0.join("sample_inline.rs");
+    std::fs::write(
+        &src_path,
+        concat!(
+            "fn example() {\n",
+            "    first(\"old1\", &val1);\n",
+            "    second(\"old2\", &val2);\n",
+            "}\n",
+        ),
+    )
+    .unwrap();
+
+    // Verify mode reports mismatch without mutating source.
+    let verify_snaps = Snapshots::new(&dir.0);
     assert!(matches!(
-        snaps.check("x", "y"),
-        Err(SnapshotError::Unsupported(_))
+        verify_snaps.inline_source(&src_path, 2, 5, "old1", "new1"),
+        Err(SnapshotError::Mismatch { .. })
     ));
+
+    // InlineSource rewrites literal 1 with multiline raw string (shifting subsequent lines) and then literal 2.
+    let update_snaps = Snapshots::new(&dir.0).mode(UpdateMode::InlineSource);
+    update_snaps
+        .inline_source(&src_path, 2, 5, "old1", "line_a\n\"line_b\"")
+        .unwrap();
+    update_snaps
+        .inline_source(&src_path, 3, 5, "old2", "updated_second")
+        .unwrap();
+
+    let updated = std::fs::read_to_string(&src_path).unwrap();
+    assert!(
+        updated.contains("r#\"line_a\n\"line_b\"\"#"),
+        "expected raw string rewrite: {updated}"
+    );
+    assert!(
+        updated.contains("\"updated_second\""),
+        "expected second shifted literal rewrite: {updated}"
+    );
+
+    // Matching macro assertion passes cleanly without mutating anything.
+    airbug::assert_inline_snapshot!(verify_snaps => "alpha\n\"beta\"", r#"alpha
+"beta""#);
+    airbug::assert_inline_snapshot!("exact", @"exact");
+}
+
+#[test]
+fn shrink_and_for_all_shrunk_find_minimal_counterexample() {
+    assert!(!0_i32.shrink().contains(&0));
+    assert!((-10_i8).shrink().contains(&0));
+    assert!(Some(42_u16).shrink().contains(&None));
+    assert!(Result::<u8, bool>::Err(true).shrink().contains(&Err(false)));
+    assert!([2_u8, 3_u8].shrink().contains(&[0, 3]));
+    assert!(('Z').shrink().contains(&'z'));
+    assert!(!("héllo".to_string()).shrink().is_empty());
+
+    // Vector counterexample: fail whenever length >= 3 and sum >= 10.
+    // Shrinking should reduce down to length 3 with minimal failing sum.
+    let err = Prop::new(9)
+        .trials(200)
+        .max_shrinks(500)
+        .for_all_shrunk::<Vec<u8>, _>(|xs| {
+            Ok(xs.len() < 3 || xs.iter().copied().map(u32::from).sum::<u32>() < 10)
+        })
+        .unwrap_err();
+    match err {
+        PropError::Failed(failure) => {
+            assert!(
+                failure.message.contains("shrunk counterexample"),
+                "{}",
+                failure.message
+            );
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn generic_mock_verifies_multiple_type_instantiations_and_sequences() {
+    #[derive(Clone)]
+    struct OpaqueToken(&'static str);
+
+    let seq = CallSequence::new("generic_seq");
+    let gm = GenericMock::new("GenericStore::put");
+    gm.expect::<(String, OpaqueToken), usize>("first", |(k, tok)| k == "k1" && tok.0 == "t")
+        .times(1)
+        .in_sequence(&seq)
+        .returns(10);
+    gm.expect::<(u32,), bool>("second", |(n,)| *n == 7)
+        .times(1)
+        .in_sequence(&seq)
+        .returns(true);
+
+    assert_eq!(
+        gm.call::<_, usize>(("k1".to_string(), OpaqueToken("t"))),
+        10
+    );
+    assert!(gm.call::<_, bool>((7_u32,)));
+    assert_eq!(gm.typed_calls::<(String, OpaqueToken), usize>(), 1);
+    assert_eq!(gm.typed_calls::<(u32,), bool>(), 1);
+    assert_eq!(gm.calls(), 2);
+    gm.verify_mocks().unwrap();
+    seq.verify().unwrap();
 }
 
 #[test]

@@ -247,7 +247,15 @@ pub use airbug_bench_macros::bench;
 /// `groups = [path::to::group]` imports reusable modules declared with `#[group]`.
 #[cfg(feature = "macros")]
 pub use airbug_bench_macros::{group, suite};
+pub mod anscombe;
+pub mod build_info;
+pub mod catalog;
+pub mod cpuid;
 pub mod diagnostics;
+pub mod normality;
+pub mod overhead;
+pub mod simd;
+pub mod streaming;
 pub mod workloads;
 
 #[cfg(feature = "memory")]

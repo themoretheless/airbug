@@ -102,6 +102,10 @@ impl RootPaths {
         self.root.join("dash/hub/data/events.jsonl")
     }
 
+    pub fn symbols_dir(&self) -> PathBuf {
+        self.hub_data_dir().join("symbols")
+    }
+
     pub fn unit_report_dir(&self) -> PathBuf {
         self.root.join("target/airbug-report")
     }

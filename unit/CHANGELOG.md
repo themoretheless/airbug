@@ -1,5 +1,10 @@
 # Unreleased
 
+- `UpdateMode::InlineSource` for rewriting inline snapshot expectations in Rust test source files.
+- `Prop::shrink_from` and `Shrink` trait for minimal counterexample shrinking.
+- `GenericMock` supporting type-erased generic trait methods in `#[airbug::mock]`, `CompletionBarrier::await_done`, and `tests/service_pilot.rs`.
+- Multi-OS GitHub Actions matrix (`ubuntu-latest`, `macos-latest`, `windows-latest`) in `.github/workflows/ci.yml`.
+
 # 0.11.0
 
 - Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.

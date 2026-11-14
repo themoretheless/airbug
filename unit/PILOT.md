@@ -2,14 +2,18 @@
 
 ## Scope
 
-This is a local demonstration service, not an integration into an existing user
-application. The Airbug repository contained library code and examples only; a
-repository/module path is still needed for a real-service adoption pilot. No
-payment provider, database or event broker is contacted.
+This pilot exercises a separate domain crate (`unit/checkout-domain`, package
+`airbug-checkout-domain`) end-to-end against `airbug`. No external payment provider,
+database, or broker is contacted.
 
-The service in [examples/checkout/domain.rs](examples/checkout/domain.rs) uses
-ordinary traits, structs and Result. Optional cfg_attr annotations generate test
-mocks with the macros feature; the same service compiles without it.
+`airbug-checkout-domain` uses ordinary traits, structs, and `Result`. Optional
+`cfg_attr(feature = "macros", airbug::mock)` attributes generate thread-safe mocks
+when the `macros` feature is enabled while allowing dependency-free builds without it.
+
+`tests/service_pilot.rs` extends the pilot beyond basic mocks to cover generic and
+associated-type traits (`#[airbug::mock]`), `CallSequence` admission order,
+`CompletionBarrier` concurrent worker coordination, `FixtureContext` + `#[derive(Generate)]`,
+`Prop::for_all_shrunk`, `Snapshots` (`UpdateMode::InlineSource` and JSON), and `SoftAssert`.
 
 ## Scenarios checked
 
@@ -79,8 +83,8 @@ Use a new sequence for each test/phase; ordered counts cannot be reset.
 ## Run
 
 ```text
-cargo test --features macros --test checkout_pilot --test checkout_native --test order
-cargo run --features macros --example checkout_pilot -- success
-cargo run --features macros --example checkout_pilot -- decline
-cargo run --features macros --example checkout_pilot -- store-failure
+cargo test -p airbug --all-features --test service_pilot --test checkout_pilot --test checkout_native --test order
+cargo run -p airbug --features macros --example checkout_pilot -- success
+cargo run -p airbug --features macros --example checkout_pilot -- decline
+cargo run -p airbug --features macros --example checkout_pilot -- store-failure
 ```

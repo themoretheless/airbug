@@ -176,4 +176,99 @@ mod tests {
         assert!(figure.contains("&lt;unsafe&gt;") && !figure.contains("<unsafe>"));
         assert!(!figure.contains("NaN"));
     }
+
+    #[test]
+    fn outlier_policies_and_trimmed_mean_behave_as_expected() {
+        let data = [10.0, 11.0, 10.5, 10.2, 9.8, 10.1, 100.0];
+        assert_eq!(filter_outliers(&data, OutlierPolicy::Keep).len(), 7);
+        assert_eq!(filter_outliers(&data, OutlierPolicy::Iqr).len(), 6);
+        assert_eq!(filter_outliers(&data, OutlierPolicy::Mad).len(), 6);
+        assert_eq!(filter_outliers(&data, OutlierPolicy::ZScore).len(), 6);
+        let tm = trimmed_mean(&data, 0.15).unwrap();
+        assert!((tm - 10.36).abs() < 0.5, "tm={tm}");
+    }
+}
+
+/// `#106` Configurable outlier filtering policy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OutlierPolicy {
+    #[default]
+    Keep,
+    Iqr,
+    Mad,
+    ZScore,
+}
+
+/// `#106` Return finite values retained by `policy` (order preserved).
+pub fn filter_outliers(values: &[f64], policy: OutlierPolicy) -> Vec<f64> {
+    let finite: Vec<f64> = values.iter().copied().filter(|x| x.is_finite()).collect();
+    if finite.len() < 4 || policy == OutlierPolicy::Keep {
+        return finite;
+    }
+    match policy {
+        OutlierPolicy::Keep => finite,
+        OutlierPolicy::Iqr => {
+            let Ok(class) = classify(&finite) else {
+                return finite;
+            };
+            class
+                .points
+                .into_iter()
+                .filter(|p| matches!(p.label, Label::Normal))
+                .map(|p| p.value)
+                .collect()
+        }
+        OutlierPolicy::Mad => {
+            let mut sorted = finite.clone();
+            sorted.sort_by(f64::total_cmp);
+            let med = sorted[sorted.len() / 2];
+            let mut devs: Vec<f64> = sorted.iter().map(|x| (x - med).abs()).collect();
+            devs.sort_by(f64::total_cmp);
+            let mad = devs[devs.len() / 2];
+            if mad == 0.0 {
+                return finite;
+            }
+            // Modified Z-score threshold 3.5 using 0.6745 scaling.
+            finite
+                .into_iter()
+                .filter(|&x| (0.6745 * (x - med).abs() / mad) <= 3.5)
+                .collect()
+        }
+        OutlierPolicy::ZScore => {
+            let n = finite.len() as f64;
+            let mean = finite.iter().sum::<f64>() / n;
+            let var = finite.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / (n - 1.0);
+            let sd = var.sqrt();
+            if sd == 0.0 {
+                return finite;
+            }
+            // Standard z-score can be masked by an extreme outlier; check threshold 2.1 when n is small.
+            let thresh = if finite.len() < 12 { 2.1 } else { 3.0 };
+            finite
+                .into_iter()
+                .filter(|&x| ((x - mean).abs() / sd) <= thresh)
+                .collect()
+        }
+    }
+}
+
+/// `#107` Symmetric trimmed mean dropping `floor(n * trim_fraction)` extremes from each tail.
+pub fn trimmed_mean(values: &[f64], trim_fraction: f64) -> Option<f64> {
+    if values.is_empty()
+        || !trim_fraction.is_finite()
+        || !(0.0..0.5).contains(&trim_fraction)
+        || values.iter().any(|x| !x.is_finite())
+    {
+        return None;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let k = ((sorted.len() as f64) * trim_fraction).floor() as usize;
+    let slice = &sorted[k..sorted.len() - k];
+    if slice.is_empty() {
+        None
+    } else {
+        Some(slice.iter().sum::<f64>() / slice.len() as f64)
+    }
 }

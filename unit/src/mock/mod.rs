@@ -2,6 +2,7 @@
 pub mod borrowed;
 mod capture;
 mod expectation;
+pub mod generic;
 mod journal;
 mod matcher;
 
@@ -10,6 +11,7 @@ mod matcher;
 pub use crate::verify::{MockError, VerificationErrors, VerifyMocks, with_mocks, with_mocks_async};
 pub use capture::Capture;
 pub use expectation::ExpectationBuilder;
+pub use generic::{GenericExpectationBuilder, GenericMock};
 pub use journal::CallRecord;
 pub use matcher::Matcher;
 

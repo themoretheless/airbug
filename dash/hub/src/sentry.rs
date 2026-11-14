@@ -6,7 +6,6 @@ use crate::{
     app::HubApp,
     config::MAX_OTLP_DECOMPRESSED_BYTES,
     error::{HubError, Result},
-    event_model::EventEnvelope,
     http::{self, Request},
     issues::now_iso,
 };
@@ -48,11 +47,9 @@ pub fn handle_sentry_http(
         "store" => match parse_sentry_event_json(&raw) {
             Ok(event) => {
                 let id = event.event_id.clone();
-                let env = EventEnvelope::from_error(event.clone());
-                if let Err(e) = app.issues.ingest(event, app.webhook.as_deref()) {
+                if let Err(e) = app.ingest_error_event(event) {
                     return http::respond_err(stream, "400 Bad Request", &e);
                 }
-                let _ = app.append_event_envelope(&env);
                 http::respond_json(stream, "200 OK", &json!({ "id": id }))
             }
             Err(e) => http::respond_err(stream, "400 Bad Request", &e),
@@ -86,9 +83,7 @@ pub fn ingest_envelope(app: &HubApp, raw: &[u8]) -> Result<String> {
     let mut last_id = header_event_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     for event in events {
         last_id = event.event_id.clone();
-        let env = EventEnvelope::from_error(event.clone());
-        app.issues.ingest(event, app.webhook.as_deref())?;
-        let _ = app.append_event_envelope(&env);
+        app.ingest_error_event(event)?;
     }
     for session in sessions {
         let _ = app.issues.record_session(session);
@@ -338,6 +333,37 @@ pub fn parse_sentry_event_json(raw: &[u8]) -> Result<Event> {
         fingerprint = vec![compute_sentry_fingerprint(&exception, message.as_deref())];
     }
 
+    let debug_images: Vec<airbug_err::DebugImage> = v
+        .pointer("/debug_meta/images")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|img| airbug_err::DebugImage {
+                    debug_id: img
+                        .get("debug_id")
+                        .or_else(|| img.get("uuid"))
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    code_id: img
+                        .get("code_id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    debug_file: img
+                        .get("debug_file")
+                        .or_else(|| img.get("code_file"))
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    image_addr: img
+                        .get("image_addr")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    image_size: img.get("image_size").and_then(Value::as_u64),
+                    arch: img.get("arch").and_then(Value::as_str).map(str::to_string),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     Ok(Event {
         schema_version: EVENT_SCHEMA_VERSION,
         event_id,
@@ -356,6 +382,7 @@ pub fn parse_sentry_event_json(raw: &[u8]) -> Result<Event> {
         contexts,
         trace_id,
         span_id,
+        debug_images,
     })
 }
 
@@ -425,12 +452,22 @@ fn parse_sentry_exception(v: &Value) -> Option<Exception> {
                     let lineno = f.get("lineno").and_then(Value::as_u64).map(|n| n as u32);
                     let colno = f.get("colno").and_then(Value::as_u64).map(|n| n as u32);
                     let in_app = f.get("in_app").and_then(Value::as_bool).unwrap_or(true);
+                    let instruction_addr = f
+                        .get("instruction_addr")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    let symbol_addr = f
+                        .get("symbol_addr")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
                     Frame {
                         function,
                         filename,
                         lineno,
                         colno,
                         in_app,
+                        instruction_addr,
+                        symbol_addr,
                     }
                 })
                 .collect();
@@ -441,6 +478,7 @@ fn parse_sentry_exception(v: &Value) -> Option<Exception> {
                     lineno: None,
                     colno: None,
                     in_app: false,
+                    ..Default::default()
                 });
             }
             Stacktrace { frames }

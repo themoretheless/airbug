@@ -23,7 +23,7 @@ pub mod verify;
 
 pub use assertions::assert_that;
 pub use fixture::{FixtureContext, Generate, GenerationError, GenerationErrorKind};
-pub use mock::{Mock, MockError};
+pub use mock::{GenericMock, Mock, MockError};
 pub use order::{CallDag, CallSequence, CompletionBarrier, happened_before};
 pub use prop::{Prop, PropError, PropFailure, Shrink};
 pub use strategy::Strategy;
@@ -50,9 +50,10 @@ pub mod prelude {
     pub use crate::snapshot::{JsonMode, Snapshots, UpdateMode};
     pub use crate::time::{Clock, Deadline, Eventually, ManualClock, ParkClock, Retry};
     pub use crate::{
-        CallDag, CallSequence, CompletionBarrier, FixtureContext, Generate, Mock, Prop, Strategy,
-        Validator, VerifyMocks, assert_contains, assert_same_items, assert_that, check_all,
-        happened_before, validate_parallel, with_mocks, with_mocks_async,
+        CallDag, CallSequence, CompletionBarrier, FixtureContext, Generate, GenericMock, Mock,
+        Prop, Strategy, Validator, VerifyMocks, assert_contains, assert_inline_snapshot,
+        assert_same_items, assert_that, check_all, happened_before, validate_parallel, with_mocks,
+        with_mocks_async,
     };
     #[cfg(feature = "macros")]
     pub use crate::{cases, mock};

@@ -3,8 +3,8 @@ use airbug_bench::{image::RgbaImage, *};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf, time::Instant};
 #[global_allocator]
-static ALLOC: alloc::TrackingAllocator<std::alloc::System> =
-    alloc::TrackingAllocator::new(std::alloc::System);
+static ALLOC: alloc::TrackingAllocator<memory::Allocator<std::alloc::System>> =
+    alloc::TrackingAllocator::new(memory::Allocator(std::alloc::System));
 const N: usize = 96;
 const SCENARIOS: [&str; 7] = [
     "static",
@@ -28,6 +28,7 @@ struct Options {
     height: u32,
     dpi: f32,
     backend: wgpu::Backends,
+    alloc_stacks: Option<PathBuf>,
 }
 fn main() -> Result<()> {
     let mut o = Options {
@@ -42,6 +43,7 @@ fn main() -> Result<()> {
         height: 400,
         dpi: 2.,
         backend: wgpu::Backends::all(),
+        alloc_stacks: None,
     };
     let mut args = std::env::args().skip(1);
     let mut list = false;
@@ -99,8 +101,15 @@ fn main() -> Result<()> {
                     .ok_or_else(|| error("percentage required"))?
                     .parse()?
             }
+            "--alloc-stacks" => {
+                o.alloc_stacks = Some(
+                    args.next()
+                        .ok_or_else(|| error("alloc-stacks output directory required"))?
+                        .into(),
+                )
+            }
             "--help" => {
-                println!("--gpu-timestamps | --cold --filter static|text; --width 16..4096 --height 16..4096 --dpi 0.5..4 --backend metal|vulkan|gl|dx12; --list --filter TEXT --record-goldens NEW_DIR | --goldens DIR [--channel-tolerance 0..255 --max-changed-percent 0..100] --json\nGoldens are required. Recording creates reference images only; inspect PNGs before using them. image is unsupported by this native renderer.");
+                println!("--gpu-timestamps | --cold --filter static|text; --width 16..4096 --height 16..4096 --dpi 0.5..4 --backend metal|vulkan|gl|dx12; --list --filter TEXT --record-goldens NEW_DIR | --goldens DIR [--channel-tolerance 0..255 --max-changed-percent 0..100] [--alloc-stacks DIR] --json\nGoldens are required. Recording creates reference images only; inspect PNGs before using them. image is unsupported by this native renderer.");
                 return Ok(());
             }
             _ => return Err(error(format!("unknown argument {a}"))),
@@ -651,6 +660,60 @@ async fn run(o: Options) -> Result<()> {
                     golden(&o, name, i, &pixels(&renderer, s)?, false)?;
                 }
             }
+        }
+    }
+    if let Some(stack_dir) = &o.alloc_stacks
+        && !o.record
+    {
+        let scenarios: Vec<&str> = SCENARIOS
+            .into_iter()
+            .filter(|s| *s != "image" && s.contains(&o.filter))
+            .collect();
+        if !scenarios.is_empty() {
+            let session = memory::Session::start()?;
+            for name in scenarios {
+                let src = source(name);
+                let mut model =
+                    forma_vector::Button::from_sources(&src, forma_vector::BUTTON_COMPONENT)
+                        .map_err(error)?;
+                let mut renderer =
+                    forma_vector::gpu::Renderer::new(&adapter, wgpu::TextureFormat::Rgba8Unorm)
+                        .await
+                        .map_err(error)?;
+                let large = surface(&renderer, o.width, o.height, o.dpi);
+                let small = surface(&renderer, o.width * 4 / 5, o.height * 4 / 5, o.dpi);
+                for _ in 0..4 {
+                    draw(&mut renderer, &model, &large)?;
+                    renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+                }
+                for i in 0..N {
+                    let (w, _) = state(&mut model, name, i);
+                    let s = if w == 800 { &large } else { &small };
+                    draw(&mut renderer, &model, s)?;
+                    renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+                }
+            }
+            let profile = session.finish();
+            std::fs::create_dir_all(stack_dir)?;
+            profile.save(stack_dir.join("alloc-stacks.json"))?;
+            let html = profile.html()?;
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(stack_dir.join("alloc-stacks.html"))?
+                .write_all(html.as_bytes())?;
+            let mut folded = String::new();
+            for site in profile.sites() {
+                if !site.frames.is_empty() {
+                    folded.push_str(&format!("{} {}\n", site.frames.join(";"), site.allocated_bytes));
+                }
+            }
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(stack_dir.join("alloc-stacks.folded"))?
+                .write_all(folded.as_bytes())?;
         }
     }
     if o.record {

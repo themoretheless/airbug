@@ -103,7 +103,22 @@ pub fn run(r: Search<'_>) -> Result<()> {
         let regression = comparison
             .iter()
             .any(|c| c.decision == Decision::Regression);
-        rows.push(serde_json::json!({"revision":revision,"comparison":comparison}));
+        let (author, committed_at) = git(&["show", "-s", "--format=%an <%ae>%n%cI", revision])
+            .ok()
+            .map(|meta| {
+                let mut lines = meta.lines();
+                (
+                    lines.next().map(str::to_string),
+                    lines.next().map(str::to_string),
+                )
+            })
+            .unwrap_or((None, None));
+        rows.push(serde_json::json!({
+            "revision": revision,
+            "author": author,
+            "committed_at": committed_at,
+            "comparison": comparison
+        }));
         if uncertain {
             write_new(
                 &r.out.join("search-result.json"),

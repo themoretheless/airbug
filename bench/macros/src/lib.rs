@@ -12,6 +12,7 @@ struct Options {
     args: Option<Expr>,
     crate_path: Option<syn::Path>,
     groups: Option<Vec<syn::Path>>,
+    fixture: Option<Expr>,
     setup: Option<Expr>,
     setup_thread: Option<syn::LitStr>,
     executor: Option<Expr>,
@@ -162,6 +163,7 @@ impl Parse for Options {
                 }
                 "custom" => options.custom = input.parse::<syn::LitBool>()?.value,
                 "args" => options.args = Some(input.parse()?),
+                "fixture" => options.fixture = Some(input.parse()?),
                 "setup" => options.setup = Some(input.parse()?),
                 "setup_thread" => {
                     let value: syn::LitStr = input.parse()?;
@@ -481,7 +483,7 @@ fn registration(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block> {
     let original = registration_batch(f, options.clone())?;
     // Constructed async counters use the local fallback under inherited defaults;
     // concrete threads remain available for explicitly shareable counter state.
-    if !options.custom && options.measurement.is_none() {
+    if !options.custom && options.measurement.is_none() && options.fixture.is_none() {
         let mut threaded = options;
         threaded.inherited_thread_dispatch = true;
         threaded.threads = Some(syn::parse_quote!(
@@ -524,9 +526,9 @@ fn registration_batch(f: &ItemFn, mut options: Options) -> syn::Result<syn::Bloc
     if options.batch.is_some() {
         return Ok(original);
     }
-    if options.custom || options.threads.is_some() {
+    if options.custom || options.threads.is_some() || options.fixture.is_some() {
         return syn::parse2(quote!({
-            assert!(!suite.has_registration_batch_policy(), "imported batch cannot combine with threads or custom timing");
+            assert!(!suite.has_registration_batch_policy(), "imported batch cannot combine with threads, custom timing or fixture");
             #original
         }));
     }
@@ -552,13 +554,43 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
         options.threads = None;
         options.setup_thread = None;
     }
-    let expected_inputs = usize::from(options.args.is_some() || options.setup.is_some())
-        + usize::from(options.custom);
+    if options.fixture.is_some()
+        && (options.setup.is_some()
+            || options.args.is_some()
+            || options.custom
+            || options.threads.is_some()
+            || options.allocator.is_some()
+            || options.measurement.is_some()
+            || options.batch.is_some()
+            || options.drop_output.is_some()
+            || options.setup_thread.is_some())
+    {
+        return Err(syn::Error::new_spanned(
+            &f.sig,
+            "fixture cannot combine with setup, args, custom, threads, allocator, measurement, batch, drop_output or setup_thread",
+        ));
+    }
+    let expected_inputs =
+        usize::from(options.args.is_some() || options.setup.is_some() || options.fixture.is_some())
+            + usize::from(options.custom);
     if f.sig.inputs.len() != expected_inputs || f.sig.unsafety.is_some() {
         return Err(syn::Error::new_spanned(
             &f.sig,
-            "bench requires a safe function: one input with args/setup, plus an iteration count first with custom = true",
+            "bench requires a safe function: one input with args/setup/fixture, plus an iteration count first with custom = true",
         ));
+    }
+    if options.fixture.is_some() {
+        let valid_ref = matches!(
+            f.sig.inputs.first(),
+            Some(syn::FnArg::Typed(arg))
+                if matches!(&*arg.ty, Type::Reference(r) if r.mutability.is_some())
+        );
+        if !valid_ref {
+            return Err(syn::Error::new_spanned(
+                &f.sig.inputs,
+                "fixture benchmark requires a `&mut T` parameter",
+            ));
+        }
     }
     let is_async = f.sig.asyncness.is_some();
     if options.executor.is_some() && !is_async {
@@ -984,6 +1016,15 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
         } else {
             quote!(suite.bench_custom(&__airbug_name, move |__airbug_iterations| #call);)
         }
+    } else if let Some(fixture) = &options.fixture {
+        let into_fixture = quote!(#runtime::convenience::into_fixture(#fixture));
+        if is_async {
+            quote!(suite.bench_async_fixture(&__airbug_name, move || #executor, #into_fixture,
+                async move |__airbug_input| #target(__airbug_input).await);)
+        } else {
+            quote!(suite.bench_fixture(&__airbug_name, #into_fixture,
+                |__airbug_input| #target(__airbug_input));)
+        }
     } else if let Some(setup) = &options.setup {
         let setup_call = if has_args {
             if matches!(setup, Expr::Closure(closure) if closure.inputs.iter().any(|input| !matches!(input, syn::Pat::Type(_))))
@@ -1174,6 +1215,7 @@ fn registration_impl(f: &ItemFn, mut options: Options) -> syn::Result<syn::Block
     let body = if !options.inherited_thread_dispatch
         && options.drop_output.is_none()
         && options.setup.is_none()
+        && options.fixture.is_none()
         && options.batch.is_none()
         && options.measurement.is_none()
         && !options.custom
@@ -1635,6 +1677,7 @@ impl Options {
 
     fn validate_group(&self) -> syn::Result<()> {
         if self.args.is_some()
+            || self.fixture.is_some()
             || self.setup.is_some()
             || self.types.is_some()
             || self.consts.is_some()

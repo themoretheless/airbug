@@ -21,6 +21,9 @@ pub struct Sample {
     pub max_temp_c: Option<f64>,
     /// Thermal-throttle events since boot, summed over cores.
     pub throttle_events: Option<u64>,
+    /// Cumulative package energy counter from Intel RAPL sysfs (`energy_uj`), microjoules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub energy_uj: Option<u64>,
 }
 
 pub struct Probe {
@@ -62,7 +65,7 @@ impl Probe {
 
     fn read(&self, after_process: u32) -> Sample {
         let cpus = children(&self.root.join("devices/system/cpu"), "cpu");
-        let khz: Vec<u64> = cpus
+        let mut khz: Vec<u64> = cpus
             .iter()
             .filter_map(|cpu| number(&cpu.join("cpufreq/scaling_cur_freq")))
             .collect();
@@ -77,11 +80,42 @@ impl Probe {
             .fold(None, |hottest: Option<f64>, t| {
                 Some(hottest.map_or(t, |h| h.max(t)))
             });
+        let energy_uj =
+            number(&self.root.join("class/powercap/intel-rapl:0/energy_uj")).or_else(|| {
+                number(
+                    &self
+                        .root
+                        .join("class/powercap/intel-rapl/intel-rapl:0/energy_uj"),
+                )
+            });
+
+        if khz.is_empty() && self.root == Path::new("/sys") {
+            if let Some(os_khz) = fallback_cpu_khz() {
+                khz.push(os_khz);
+            }
+        }
+
         Sample {
             after_process,
             cpu_khz: (!khz.is_empty()).then(|| khz.iter().sum::<u64>() / khz.len() as u64),
             max_temp_c: temps,
             throttle_events: (!throttle.is_empty()).then(|| throttle.iter().sum()),
+            energy_uj,
+        }
+    }
+
+    pub fn snapshot(&self, after_process: u32) -> Sample {
+        self.read(after_process)
+    }
+
+    pub fn msr_available() -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            Path::new("/dev/cpu/0/msr").exists()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            false
         }
     }
 
@@ -91,6 +125,7 @@ impl Probe {
         if sample.cpu_khz.is_some()
             || sample.max_temp_c.is_some()
             || sample.throttle_events.is_some()
+            || sample.energy_uj.is_some()
         {
             self.samples.push(sample);
         }
@@ -204,15 +239,81 @@ pub fn correlate(run: &airbug_bench::Run, samples: &[Sample]) -> serde_json::Val
         })
     };
     let throttle: Vec<u64> = samples.iter().filter_map(|s| s.throttle_events).collect();
+    let energy: Vec<u64> = samples.iter().filter_map(|s| s.energy_uj).collect();
     serde_json::json!({
         "samples": samples.len(),
         "cpu_khz": range(samples.iter().filter_map(|s| s.cpu_khz.map(|v| v as f64)).collect()),
         "max_temp_c": range(samples.iter().filter_map(|s| s.max_temp_c).collect()),
+        "energy_uj": range(energy.iter().map(|v| *v as f64).collect()),
+        "energy_uj_during_run": energy.first().zip(energy.last()).map(|(a, b)| b.saturating_sub(*a)),
         "throttle_events_during_run": throttle.first().zip(throttle.last()).map(|(a, b)| b.saturating_sub(*a)),
+        "msr_accessible": Probe::msr_available(),
         "timing_vs_cpu_khz_r": against(|s| s.cpu_khz.map(|v| v as f64)),
         "timing_vs_max_temp_c_r": against(|s| s.max_temp_c),
+        "timing_vs_energy_uj_r": against(|s| s.energy_uj.map(|v| v as f64)),
         "interpretation": "Pearson r of each process's relative timing against the machine state sampled right after it. Strongly negative for frequency or positive for temperature means the machine, not the code, moved the timings. Descriptive only.",
     })
+}
+
+#[cfg(target_os = "windows")]
+fn fallback_cpu_khz() -> Option<u64> {
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct ProcessorPowerInfo {
+        number: u32,
+        max_mhz: u32,
+        current_mhz: u32,
+        mhz_limit: u32,
+        max_idle_state: u32,
+        current_idle_state: u32,
+    }
+    #[link(name = "powrprof")]
+    unsafe extern "system" {
+        fn CallNtPowerInformation(
+            information_level: i32,
+            input_buffer: *const core::ffi::c_void,
+            input_buffer_length: u32,
+            output_buffer: *mut core::ffi::c_void,
+            output_buffer_length: u32,
+        ) -> i32;
+    }
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    let mut infos = vec![ProcessorPowerInfo::default(); cpus];
+    let byte_len = (infos.len() * std::mem::size_of::<ProcessorPowerInfo>()) as u32;
+    // SAFETY: ProcessorInformation = 11; output buffer holds `cpus` structs matching Win32 ABI.
+    let status = unsafe {
+        CallNtPowerInformation(11, std::ptr::null(), 0, infos.as_mut_ptr().cast(), byte_len)
+    };
+    if status != 0 {
+        return None;
+    }
+    let mhz: Vec<u64> = infos
+        .iter()
+        .filter(|i| i.current_mhz > 0)
+        .map(|i| u64::from(i.current_mhz))
+        .collect();
+    (!mhz.is_empty()).then(|| (mhz.iter().sum::<u64>() / mhz.len() as u64) * 1000)
+}
+
+#[cfg(target_os = "macos")]
+fn fallback_cpu_khz() -> Option<u64> {
+    let out = std::process::Command::new("sysctl")
+        .args(["-n", "hw.cpufrequency"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let hz: u64 = String::from_utf8(out.stdout).ok()?.trim().parse().ok()?;
+    (hz > 0).then(|| hz / 1000)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn fallback_cpu_khz() -> Option<u64> {
+    None
 }
 
 #[cfg(test)]
@@ -254,7 +355,8 @@ mod tests {
                 after_process: 0,
                 cpu_khz: Some(3_200_000),
                 max_temp_c: Some(61.5),
-                throttle_events: Some(4)
+                throttle_events: Some(4),
+                energy_uj: None,
             }
         );
         assert!(probe.notes().is_empty(), "one sample is not a trend");
@@ -302,6 +404,7 @@ mod tests {
             cpu_khz: Some(3_400_000),
             max_temp_c: Some(40.0),
             throttle_events: Some(1),
+            energy_uj: None,
         }];
         for (process, khz) in khz.iter().enumerate() {
             run.observations.push(Observation {
@@ -323,6 +426,7 @@ mod tests {
                 cpu_khz: Some(*khz),
                 max_temp_c: Some(50.0 + process as f64 * 5.0),
                 throttle_events: Some(1 + process as u64),
+                energy_uj: None,
             });
         }
         let report = correlate(&run, &samples);

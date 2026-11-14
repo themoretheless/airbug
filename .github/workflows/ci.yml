@@ -104,12 +104,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
-      - run: cargo +stable test --locked -p airbug-err
+      - run: cargo +stable test --locked -p airbug-err --all-features
       # Lets the hub's `--nextest` integration test run instead of skipping.
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
       - run: cargo +stable test --locked -p airbug-hub
+
+  pilot-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo +stable test --locked -p airbug --all-features --test service_pilot --test checkout_pilot --test compile
+      - run: cargo +stable test --locked -p airbug --no-default-features
 
   airbug-mon:
     strategy:

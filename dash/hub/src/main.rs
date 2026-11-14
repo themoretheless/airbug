@@ -1,24 +1,4 @@
-mod analytics;
-mod app;
-mod assets;
-mod benchcmp;
-mod collector;
-mod config;
-mod error;
-mod event_model;
-mod http;
-mod issues;
-mod otlp;
-mod rerun;
-mod resources;
-mod rundetail;
-mod runs;
-mod scan;
-mod sentry;
-mod serve;
-mod test_runs;
-
-mod store;
+use airbug_hub::{app, collector, config, serve};
 
 use std::{env, path::PathBuf, process, sync::Arc};
 
@@ -48,6 +28,13 @@ fn main() {
     let mut collector_grpc_port = collector::DEFAULT_OTLP_GRPC_PORT;
     let mut webhook = env::var("AIRBUG_ISSUES_WEBHOOK").ok();
     let mut stack_path: Option<PathBuf> = None;
+    let mut scrub_pii = env::var("AIRBUG_SCRUB_PII")
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    let mut upstream = env::var("AIRBUG_RELAY_UPSTREAM")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -103,6 +90,13 @@ fn main() {
                     .unwrap_or_else(|| usage_exit("--stack needs a path"));
                 stack_path = Some(PathBuf::from(value));
             }
+            "--scrub-pii" => scrub_pii = true,
+            "--upstream" => {
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--upstream needs a URL"));
+                upstream = Some(value);
+            }
             "-h" | "--help" => usage_exit(""),
             other => usage_exit(&format!("unknown argument: {other}")),
         }
@@ -119,6 +113,11 @@ fn main() {
                     process::exit(1);
                 }
             };
+            app.set_scrub_pii(scrub_pii);
+            if let Err(err) = app.set_upstream(upstream) {
+                tracing::error!(error = %err, "invalid --upstream relay URL");
+                process::exit(1);
+            }
             if let Some(stack) = stack_path {
                 app.resources.set_stack_path(Some(stack));
             }
@@ -190,10 +189,12 @@ fn usage_exit(message: &str) -> ! {
 airbug-hub — monorepo dashboard for unit / bench / mon / otel / err
 
 Usage:
-  airbug-hub serve [--root PATH] [--port N] [--collector] [--collector-mode auto|builtin|docker|binary] [--stack PATH] [--webhook URL]
+  airbug-hub serve [--root PATH] [--port N] [--collector] [--collector-mode auto|builtin|docker|binary] [--stack PATH] [--webhook URL] [--scrub-pii] [--upstream URL]
       # dashboard :8790 (+ built-in HTTP OTLP at /v1/*, Sentry DSN http://airbug@127.0.0.1:8790/1)
       # --collector brings up :4318 HTTP + :4317 gRPC (Docker -> otelcol -> built-in Rust collector)
       # --webhook / AIRBUG_ISSUES_WEBHOOK fires on new issues (http:// only)
+      # --scrub-pii / AIRBUG_SCRUB_PII=1 scrubs PII before persistence & relay
+      # --upstream / AIRBUG_RELAY_UPSTREAM forwards ingested error events upstream
   airbug-hub up [--root PATH] [--port N] [--stack PATH]
       # starts hub + OTLP collector + all resources declared in .airbug/stack.json
   airbug-hub status [--root PATH]

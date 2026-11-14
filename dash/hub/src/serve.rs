@@ -23,8 +23,13 @@ pub struct ServeOpts {
 
 pub fn serve(app: Arc<HubApp>) -> std::io::Result<()> {
     let listener = TcpListener::bind(("127.0.0.1", app.port))?;
+    serve_listener(listener, app)
+}
+
+pub fn serve_listener(listener: TcpListener, app: Arc<HubApp>) -> std::io::Result<()> {
+    let port = listener.local_addr().map(|a| a.port()).unwrap_or(app.port);
     tracing::info!(
-        port = app.port,
+        port,
         hub_id = %app.hub_id,
         root = %app.paths.root.display(),
         "airbug hub listening"
@@ -306,9 +311,25 @@ fn handle_api(
                 &store::timeline(&app.paths.root, &app.runs, kind.as_deref(), limit),
             )
         }
+        ("GET", "/ws") => crate::stream::handle_ws(stream, app, req),
+        ("GET", "/stream") => crate::stream::handle_sse(stream, app, req),
+        ("GET", "/fragments/issues") => crate::stream::handle_fragment_issues(stream, app, req),
+        ("GET", "/fragments/runs") => crate::stream::handle_fragment_runs(stream, app, req),
+        ("POST", "/graphql") => crate::stream::handle_graphql(stream, app, req),
+        ("GET", "/debug-images") => http::respond_json(
+            stream,
+            "200 OK",
+            &serde_json::json!({ "images": app.symbols.list() }),
+        ),
+        ("POST", "/debug-images") => handle_upload_debug_image(stream, app, req),
+        ("POST", "/symbolicate") => handle_symbolicate_event(stream, app, req),
         ("GET", p) if p.starts_with("/runs/") && p.ends_with("/junit.xml") => {
             let id = &p["/runs/".len()..p.len() - "/junit.xml".len()];
             handle_run_junit(stream, app, id)
+        }
+        ("GET", p) if p.starts_with("/runs/") && p.ends_with("/progress.jsonl") => {
+            let id = &p["/runs/".len()..p.len() - "/progress.jsonl".len()];
+            crate::stream::handle_run_progress_jsonl(stream, app, id)
         }
         ("GET", p) if p.starts_with("/runs/") => {
             let id = &p["/runs/".len()..];
@@ -471,7 +492,13 @@ fn handle_create_run(stream: &mut TcpStream, app: &HubApp, req: &Request) -> std
         }
     };
     match app.runs.create(body) {
-        Ok(resp) => http::respond_json(stream, "200 OK", &resp),
+        Ok(resp) => {
+            app.stream.publish(
+                "run",
+                serde_json::to_value(&resp).unwrap_or(serde_json::Value::Null),
+            );
+            http::respond_json(stream, "200 OK", &resp)
+        }
         Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
     }
 }
@@ -534,7 +561,7 @@ fn handle_unified_event(
     app: &HubApp,
     req: &Request,
 ) -> std::io::Result<()> {
-    let envelope: EventEnvelope = match serde_json::from_slice(&req.body) {
+    let mut envelope: EventEnvelope = match serde_json::from_slice(&req.body) {
         Ok(value) => value,
         Err(error) => return http::respond_err(stream, "400 Bad Request", &HubError::from(error)),
     };
@@ -550,8 +577,11 @@ fn handle_unified_event(
     }
     let event_id = envelope.event_id.clone();
     let signal = envelope.signal();
-    let issue = match &envelope.payload {
+    let mut relayed_error: Option<airbug_err::Event> = None;
+    let issue = match &mut envelope.payload {
         EventPayload::Error(event) => {
+            app.prepare_error_event(event);
+            relayed_error = Some((**event).clone());
             match app.issues.ingest((**event).clone(), app.webhook.as_deref()) {
                 Ok(resp) => Some(resp),
                 Err(e) => {
@@ -568,6 +598,22 @@ fn handle_unified_event(
     };
     if let Err(err) = app.append_event_envelope(&envelope) {
         return http::respond_err(stream, "500 Internal Server Error", &HubError::from(err));
+    }
+    if let Some(ev) = relayed_error {
+        app.stream.publish(
+            "error",
+            serde_json::json!({
+                "event_id": event_id,
+                "issue": issue,
+                "title": ev.title(),
+            }),
+        );
+        app.relay_event(&ev);
+    } else {
+        app.stream.publish(
+            "event",
+            serde_json::json!({ "event_id": event_id, "signal": signal }),
+        );
     }
 
     http::respond_json(
@@ -692,17 +738,8 @@ fn handle_errors_ingest(
             return http::respond_err(stream, "400 Bad Request", &HubError::from(e));
         }
     };
-    let envelope = EventEnvelope::from_error(event.clone());
-    tracing::debug!(
-        event_id = %envelope.event_id,
-        signal = ?envelope.signal(),
-        "normalized collector event"
-    );
-    match app.issues.ingest(event, app.webhook.as_deref()) {
-        Ok(resp) => {
-            let _ = app.append_event_envelope(&envelope);
-            http::respond_json(stream, "200 OK", &resp)
-        }
+    match app.ingest_error_event(event) {
+        Ok(resp) => http::respond_json(stream, "200 OK", &resp),
         Err(e) => {
             let status = if e.to_string().contains("schema_version") {
                 "400 Bad Request"
@@ -712,6 +749,52 @@ fn handle_errors_ingest(
             http::respond_err(stream, status, &e)
         }
     }
+}
+
+fn handle_upload_debug_image(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    let is_breakpad = req
+        .header("content-type")
+        .is_some_and(|ct| ct.to_ascii_lowercase().starts_with("text/plain"))
+        || req.body.starts_with(b"MODULE ");
+    let result = if is_breakpad {
+        let debug_id_override = http::query_str(&req.query, "debug_id");
+        let text = String::from_utf8_lossy(&req.body);
+        app.symbols
+            .upload_breakpad_sym(debug_id_override.as_deref(), &text)
+    } else {
+        match serde_json::from_slice::<crate::symbols::DebugImageSymbolMap>(&req.body) {
+            Ok(map) => app.symbols.upload_json(map),
+            Err(e) => Err(HubError::from(e)),
+        }
+    };
+    match result {
+        Ok(summary) => http::respond_json(stream, "200 OK", &summary),
+        Err(e) => http::respond_err(stream, "400 Bad Request", &e),
+    }
+}
+
+fn handle_symbolicate_event(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    let mut event: airbug_err::Event = match serde_json::from_slice(&req.body) {
+        Ok(v) => v,
+        Err(e) => return http::respond_err(stream, "400 Bad Request", &HubError::from(e)),
+    };
+    let resolved = app.symbols.symbolicate_event(&mut event);
+    http::respond_json(
+        stream,
+        "200 OK",
+        &serde_json::json!({
+            "resolved_frames": resolved,
+            "event": event,
+        }),
+    )
 }
 
 fn handle_issue_action(stream: &mut TcpStream, app: &HubApp, path: &str) -> std::io::Result<()> {

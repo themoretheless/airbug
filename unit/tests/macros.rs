@@ -162,6 +162,48 @@ fn async_mock_and_verification_use_callers_executor() {
         Poll::Ready(())
     ));
 }
+
+#[airbug::mock]
+trait GenericKV<K, V = String>
+where
+    K: Eq + std::hash::Hash,
+{
+    type Stored: Clone;
+    fn get(&self, key: &K) -> Option<Self::Stored>;
+    fn put(&self, key: K, val: V) -> Result<(), String>;
+    fn transform<T: 'static>(&self, key: &K, payload: T) -> Self::Stored;
+    fn tag<U: 'static>(&self) -> u64;
+}
+
+#[test]
+fn generated_mock_supports_generics_where_associated_types_and_generic_methods() {
+    let mock = MockGenericKV::<String, u32, String>::default();
+    mock.get
+        .expect("k", |(k,)| k == "alpha")
+        .times(1)
+        .returns(Some("found".into()));
+    mock.put
+        .expect("put", |(k, v)| k == "beta" && *v == 9)
+        .times(1)
+        .returns(Ok(()));
+    mock.transform
+        .expect::<(String, Vec<u8>), String>("bytes", |(k, p)| k == "alpha" && p == b"hi")
+        .times(1)
+        .returns("transformed".into());
+    mock.tag
+        .expect::<(std::marker::PhantomData<bool>,), u64>("bool_tag", |_| true)
+        .times(1)
+        .returns(77);
+
+    assert_eq!(mock.get(&"alpha".to_string()), Some("found".to_string()));
+    assert!(mock.put("beta".to_string(), 9).is_ok());
+    assert_eq!(
+        mock.transform(&"alpha".to_string(), b"hi".to_vec()),
+        "transformed"
+    );
+    assert_eq!(mock.tag::<bool>(), 77);
+    mock.clone().verify_mocks().unwrap();
+}
 #[derive(Generate)]
 struct Keywords {
     r#type: u64,

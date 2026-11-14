@@ -35,8 +35,8 @@ fn consumer_macros_and_compile_fail_diagnostics() {
             Some("exactly one fixture strategy"),
         ),
         (
-            "#[helpers::mock] trait Invalid { type Value; }",
-            Some("associated types and constants"),
+            "#[helpers::mock] trait Invalid { const ID: u8; }",
+            Some("associated constants"),
         ),
         (
             "#[helpers::mock] trait Invalid { fn get(&self) -> &str; }",
@@ -48,7 +48,7 @@ fn consumer_macros_and_compile_fail_diagnostics() {
         ),
         (
             "#[helpers::mock] trait Invalid { fn get<T>(&self, value: T); }",
-            Some("without generics"),
+            Some("'static"),
         ),
         (
             "#[helpers::cases(one(1), one(2))] fn sample(v: u8) {}",
@@ -66,12 +66,27 @@ fn consumer_macros_and_compile_fail_diagnostics() {
             r#"
             #[derive(helpers::Generate)] pub struct Data { pub value: u64 }
             #[helpers::mock] pub trait Store { fn get(&self, name: &str) -> u64; }
+            #[helpers::mock]
+            pub trait GenericRepo<K>
+            where
+                K: Eq + Clone,
+            {
+                type Value: Clone;
+                fn load(&self, key: &K) -> Option<Self::Value>;
+                fn map<T: 'static>(&self, value: T) -> u64;
+            }
             pub fn smoke() {
                 let mut ctx = helpers::FixtureContext::new();
                 assert_eq!(ctx.builder::<Data>().with_value(7).build().value, 7);
                 let mock = MockStore::default();
                 mock.get.expect("all", |_| true).returns(1);
                 assert_eq!(mock.get("name"), 1);
+
+                let generic = MockGenericRepo::<String, u64>::default();
+                generic.load.expect("k", |(k,)| k == "k").returns(Some(42));
+                generic.map.expect::<(bool,), u64>("b", |&(v,)| v).returns(9);
+                assert_eq!(generic.load(&"k".into()), Some(42));
+                assert_eq!(generic.map(true), 9);
             }
         "#,
             None,

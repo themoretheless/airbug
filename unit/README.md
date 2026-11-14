@@ -56,10 +56,10 @@ cargo run --features macros --example checkout_pilot -- decline
 cargo run --features macros --example checkout_pilot -- store-failure
 ```
 
-## Top 50 additions (0.4)
+## Additions (0.4+)
 
-[TOP50.md](TOP50.md) maps the first 50 ideas; [NEXT50.md](NEXT50.md) is complete
-(including listed stubs: `InlineSource`, `CompletionBarrier`, `#[mock]` generics).
+Remaining deliberate stubs (`InlineSource`, `CompletionBarrier`, `#[mock]` on generics)
+are tracked in [ROADMAP.md](../ROADMAP.md).
 The `prelude` is optional; direct module imports remain supported.
 
 ```rust

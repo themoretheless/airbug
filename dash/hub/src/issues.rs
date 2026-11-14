@@ -1443,6 +1443,7 @@ mod tests {
             contexts: Default::default(),
             trace_id: None,
             span_id: None,
+            debug_images: vec![],
         }
     }
 
@@ -1588,6 +1589,7 @@ mod tests {
                         lineno: Some(8),
                         colno: None,
                         in_app: true,
+                        ..Default::default()
                     },
                     airbug_err::Frame {
                         function: "evil::escape".into(),
@@ -1595,6 +1597,7 @@ mod tests {
                         lineno: Some(1),
                         colno: None,
                         in_app: true,
+                        ..Default::default()
                     },
                     airbug_err::Frame {
                         function: "evil::rel".into(),
@@ -1602,6 +1605,7 @@ mod tests {
                         lineno: Some(1),
                         colno: None,
                         in_app: true,
+                        ..Default::default()
                     },
                 ],
             }),

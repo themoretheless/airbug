@@ -32,16 +32,24 @@ pub enum Event {
     CacheMisses,
     Branches,
     BranchMisses,
+    ICacheMisses,
+    DtlbMisses,
+    ItlbMisses,
+    PageFaults,
 }
 
 impl Event {
-    pub const ALL: [Event; 6] = [
+    pub const ALL: [Event; 10] = [
         Event::Instructions,
         Event::Cycles,
         Event::CacheReferences,
         Event::CacheMisses,
         Event::Branches,
         Event::BranchMisses,
+        Event::ICacheMisses,
+        Event::DtlbMisses,
+        Event::ItlbMisses,
+        Event::PageFaults,
     ];
 
     /// Metric id, stable across runs: `hw.cache_misses`.
@@ -53,25 +61,40 @@ impl Event {
             Event::CacheMisses => "hw.cache_misses",
             Event::Branches => "hw.branches",
             Event::BranchMisses => "hw.branch_misses",
+            Event::ICacheMisses => "hw.icache_misses",
+            Event::DtlbMisses => "hw.dtlb_misses",
+            Event::ItlbMisses => "hw.itlb_misses",
+            Event::PageFaults => "sw.page_faults",
         }
     }
 
-    /// `PERF_COUNT_HW_*` of `linux/perf_event.h`.
+    /// `(type, config)` for `linux/perf_event.h`.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    fn config(self) -> u64 {
+    fn attr_kind_and_config(self) -> (u32, u64) {
+        const PERF_TYPE_HARDWARE: u32 = 0;
+        const PERF_TYPE_SOFTWARE: u32 = 1;
+        const PERF_TYPE_HW_CACHE: u32 = 3;
+        const fn hw_cache(id: u64) -> u64 {
+            // (id) | (OP_READ << 8) | (RESULT_MISS << 16)
+            id | (1u64 << 16)
+        }
         match self {
-            Event::Cycles => 0,
-            Event::Instructions => 1,
-            Event::CacheReferences => 2,
-            Event::CacheMisses => 3,
-            Event::Branches => 4,
-            Event::BranchMisses => 5,
+            Event::Cycles => (PERF_TYPE_HARDWARE, 0),
+            Event::Instructions => (PERF_TYPE_HARDWARE, 1),
+            Event::CacheReferences => (PERF_TYPE_HARDWARE, 2),
+            Event::CacheMisses => (PERF_TYPE_HARDWARE, 3),
+            Event::Branches => (PERF_TYPE_HARDWARE, 4),
+            Event::BranchMisses => (PERF_TYPE_HARDWARE, 5),
+            Event::ICacheMisses => (PERF_TYPE_HW_CACHE, hw_cache(1)),
+            Event::DtlbMisses => (PERF_TYPE_HW_CACHE, hw_cache(3)),
+            Event::ItlbMisses => (PERF_TYPE_HW_CACHE, hw_cache(4)),
+            Event::PageFaults => (PERF_TYPE_SOFTWARE, 2),
         }
     }
 }
 
-/// One counter for the calling thread, user space only. Counts from `open` until drop; a
-/// measurement is the difference between two reads, so nesting and reuse are safe.
+/// One counter for the calling thread (or process page faults on Windows). Counts from `open`
+/// until drop; a measurement is the difference between two reads, so nesting and reuse are safe.
 #[derive(Debug)]
 pub struct PerfCounter {
     event: Event,
@@ -90,7 +113,84 @@ impl PerfCounter {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+mod windows {
+    use super::*;
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct ProcessMemoryCounters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> *mut core::ffi::c_void;
+        fn K32GetProcessMemoryInfo(
+            process: *mut core::ffi::c_void,
+            counters: *mut ProcessMemoryCounters,
+            cb: u32,
+        ) -> i32;
+    }
+
+    fn read_page_faults() -> Result<u64> {
+        let mut counters = ProcessMemoryCounters {
+            cb: std::mem::size_of::<ProcessMemoryCounters>() as u32,
+            ..ProcessMemoryCounters::default()
+        };
+        // SAFETY: `counters` is repr(C) matching Win32 `PROCESS_MEMORY_COUNTERS` with valid `cb`.
+        let ok = unsafe {
+            K32GetProcessMemoryInfo(
+                GetCurrentProcess(),
+                &mut counters as *mut ProcessMemoryCounters,
+                counters.cb,
+            )
+        };
+        if ok == 0 {
+            return Err(error(format!(
+                "software counter sw.page_faults unavailable: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+        Ok(u64::from(counters.page_fault_count))
+    }
+
+    impl PerfCounter {
+        pub fn open(event: Event) -> Result<Self> {
+            match event {
+                Event::PageFaults => {
+                    let _ = read_page_faults()?;
+                    Ok(Self { event })
+                }
+                _ => Err(error(format!(
+                    "hardware counter {} needs Linux perf_event_open; unavailable on Windows",
+                    event.id()
+                ))),
+            }
+        }
+
+        pub(super) fn read(&mut self) -> Result<u64> {
+            match self.event {
+                Event::PageFaults => read_page_faults(),
+                _ => Err(error(format!(
+                    "hardware counter {} unavailable on this platform",
+                    self.event.id()
+                ))),
+            }
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 impl PerfCounter {
     pub fn open(event: Event) -> Result<Self> {
         Err(error(format!(
@@ -134,19 +234,24 @@ mod linux {
         reserved: u16,
     }
 
-    const PERF_TYPE_HARDWARE: u32 = 0;
     const EXCLUDE_KERNEL: u64 = 1 << 5;
     const EXCLUDE_HV: u64 = 1 << 6;
     const PERF_FLAG_FD_CLOEXEC: libc::c_ulong = 1 << 3;
 
     impl PerfCounter {
         pub fn open(event: Event) -> Result<Self> {
+            let (kind, config) = event.attr_kind_and_config();
+            let flags = if matches!(event, Event::PageFaults) {
+                0
+            } else {
+                EXCLUDE_KERNEL | EXCLUDE_HV
+            };
             let attr = Attr {
-                kind: PERF_TYPE_HARDWARE,
+                kind,
                 size: std::mem::size_of::<Attr>() as u32,
-                config: event.config(),
+                config,
                 // Enabled from the start: a measurement is the difference of two reads.
-                flags: EXCLUDE_KERNEL | EXCLUDE_HV,
+                flags,
                 ..Attr::default()
             };
             // SAFETY: `attr` is a properly sized, initialised `perf_event_attr`; the call

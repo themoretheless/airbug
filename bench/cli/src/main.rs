@@ -1,6 +1,7 @@
 #![allow(clippy::collapsible_if, clippy::manual_is_multiple_of)]
 mod args;
 mod artifacts;
+mod ci_templates;
 mod cmd;
 mod experiment_report;
 mod forma;
@@ -8,6 +9,7 @@ mod git_run;
 mod host;
 mod hub;
 mod matrix;
+mod presets;
 mod privacy;
 mod project;
 mod revisions;

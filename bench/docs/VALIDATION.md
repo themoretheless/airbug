@@ -4,7 +4,7 @@
 
 ## Вторая итерация: ещё 20 возможностей
 
-Реализованные пункты и команды: [NEXT20.md](NEXT20.md).
+Команды и отчёты описаны в [README](../README.md) и [REPORTS.md](REPORTS.md).
 
 - 38 тестов workspace проходят: 26 библиотечных и 12 CLI. Строгий Clippy всех targets проходит. Проверены release-сборки CLI/библиотеки/examples.
 - `.airbug-bench/workflow20/0-bench-workloads`: автоматическая сборка зарегистрированного target, 3 независимых процесса × 2 cases × 8 samples = 48 наблюдений. Общий lazy fixture, seed 42, CPU tags и throughput. Это smoke, не acceptance производительности; короткие samples отмечены предупреждением.
@@ -88,4 +88,4 @@ Privacy tests cover streamed split literals, escaped secrets, allowlisted inheri
 
 Instrumentation cost was measured in a balanced system/tracked/phase A/B/C experiment (36 processes, 8 samples each). Both corrected comparisons were Inconclusive at the 5% practical margin; no zero-overhead or universal coefficient claim is made. Pilot simulation uses independent confirmation data, 2,000 fixed-seed experiments; the budget extrapolation remains a heuristic, not a power guarantee.
 
-Local artifact paths and detailed feature contracts are in [FINAL20.md](FINAL20.md). Checksums are recorded in ignored `.airbug-bench/final20-evidence.json`. Raw artifacts are intentionally not committed. Window image goldens, compositor scanout/drop counts, non-Metal GPU success paths, actual query-device-failure recovery, remote CI execution and new browser visual validation are **not** established by these checks.
+Detailed feature contracts are in [README](../README.md) and [CHANGELOG](../CHANGELOG.md). Checksums are recorded in ignored `.airbug-bench/final20-evidence.json`. Raw artifacts are intentionally not committed. Window image goldens, compositor scanout/drop counts, non-Metal GPU success paths, actual query-device-failure recovery, remote CI execution and new browser visual validation are **not** established by these checks.

@@ -75,6 +75,9 @@ Env override: `AIRBUG_ERR_ENDPOINT`. Hub webhook: `AIRBUG_ISSUES_WEBHOOK` or `--
 | `MemoryTransport` | yes (tests / inject) |
 | `Guard::flush` | yes (sync no-op today) |
 | `anyhow` helper | feature `anyhow` |
+| PII scrubbing rules engine (`scrub.rs`) | yes (`ScrubRule`, `ScrubAction`) |
+| `tracing-subscriber`, `HttpMiddleware`, `tower` (`integrations.rs`) | yes (`tracing-layer` / `tower`) |
+| `debug_images` & instruction addresses | yes (`event`, hub `symbols.rs`) |
 | Issues grouping + counts | hub |
 | Issue states resolve / ignore / reopen | hub |
 | New-issue webhook | hub |
@@ -91,9 +94,5 @@ for a Rust-first monorepo SDK:
 4. **CSP / browser handlers / Web Vitals** — web client only.
 5. **Suspect commits / code owners / PR linking** — VCS SaaS product layer, not SDK core.
 6. **Quota / billing / multi-tenant org UI** — cloud product; local hub + `sample_rate` is enough.
-7. **Full Performance APM / transactions UI** — owned by `airbug-otel` + Jaeger.
-8. **Release Health session protocol** — deferred; release is a tag on events for MVP.
-9. **PII scrubbing rules engine / Relay** — start with `before_send`; full scrubbing later.
-10. **Multi-language SDKs / JVM local-var agents** — Rust-only goal.
-11. **Debug-image upload / Breakpad symbol server** — userspace backtrace is enough for MVP.
-12. **Actix / Tower / Tracing deep integrations** — core API first; framework glue as follow-ups.
+7. **Full Performance APM / transactions UI** — owned by `airbug-otel` + hub traces.
+8. **Multi-language SDKs / JVM local-var agents** — Rust-only goal.

@@ -100,8 +100,8 @@ Nextest видит каждый параметризованный кейс от
 
 
 Подключение вручную без CLI показано ниже. Дополнительные сценарии:
-[рабочий процесс](docs/USABILITY.md), [история и CI](docs/NEXT20.md),
-[профилирование и матрицы](docs/FINAL20.md).
+[рабочий процесс](docs/USABILITY.md), [отчёты и история](docs/REPORTS.md),
+[профиль памяти](docs/MEMORY_PROFILER.md).
 
 Временные флаги `cargo bench -- --…-ms` принимают десятичные миллисекунды:
 например, `--warmup-ms 0.125` и `--measurement-ms 2.5`. Минимальный шаг настройки —
@@ -610,7 +610,7 @@ The final twenty features are implemented with explicit capability limits: priva
 process diagnostics and pilot planning, A/B/C, optional benchmark attributes, async/thread/pipeline
 helpers, cold runs, allocation phases, Forma GPU/window measurement, argument matrices,
 profiler replay, linked continuation, reversible retention and bounded revision searches.
-See [FINAL20.md](docs/FINAL20.md) for runnable examples, validation evidence and limitations.
+See [VALIDATION.md](docs/VALIDATION.md) for validation evidence and limitations.
 
 ### Границы времени и расписание выборки
 

@@ -175,6 +175,7 @@ mod tests {
             contexts: Default::default(),
             trace_id: Some("5b8efff798038103d269b633813fc60c".into()),
             span_id: Some("eee19b7ec3c1b174".into()),
+            debug_images: vec![],
         }
     }
 

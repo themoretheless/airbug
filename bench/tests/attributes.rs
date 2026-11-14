@@ -3318,3 +3318,86 @@ fn zero_sampling_disables_cases_and_child_values_can_enable_them() {
     });
     assert_eq!(disabled.list(""), ["zero-global/never"]);
 }
+
+thread_local! {
+    static FIXTURE_INITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SHARED_FIXTURE: airbug_bench::Fixture<Vec<u64>> = airbug_bench::Fixture::new(|| {
+        FIXTURE_INITS.set(FIXTURE_INITS.get() + 1);
+        vec![1, 2, 3, 4]
+    });
+}
+
+#[airbug_bench::bench(
+    fixture = SHARED_FIXTURE.with(Clone::clone),
+    samples = 2,
+    iterations = 3,
+    warmup_ms = 0
+)]
+fn fixture_sync_shared(data: &mut [u64]) -> u64 {
+    data[0] += 1;
+    data.iter().sum()
+}
+
+#[airbug_bench::bench(
+    fixture = SHARED_FIXTURE.with(Clone::clone),
+    samples = 2,
+    iterations = 2,
+    warmup_ms = 0
+)]
+async fn fixture_async_shared(data: &mut [u64]) -> u64 {
+    data.len() as u64 + data[0]
+}
+
+#[airbug_bench::bench(
+    fixture = || vec![10u64, 20],
+    samples = 1,
+    iterations = 2,
+    warmup_ms = 0
+)]
+fn fixture_inline_closure(data: &mut [u64]) -> u64 {
+    data[1]
+}
+
+#[airbug_bench::bench(threads = [1, 2], samples = 1, iterations = 2, warmup_ms = 0)]
+async fn combined_async_threads_direct() -> usize {
+    42
+}
+
+#[test]
+fn fixture_attributes_and_combined_async_threads_work() {
+    let before = FIXTURE_INITS.get();
+    let mut suite = Suite::new("attr-fixture");
+    register_fixture_sync_shared(&mut suite);
+    register_fixture_async_shared(&mut suite);
+    register_fixture_inline_closure(&mut suite);
+    register_combined_async_threads_direct(&mut suite);
+    assert_eq!(FIXTURE_INITS.get(), before);
+
+    let run = suite.run("").unwrap();
+    assert_eq!(FIXTURE_INITS.get(), before + 1);
+    assert!(
+        run.cases
+            .iter()
+            .any(|c| c.id.ends_with("fixture_sync_shared"))
+    );
+    assert!(
+        run.cases
+            .iter()
+            .any(|c| c.id.ends_with("fixture_async_shared"))
+    );
+    assert!(
+        run.cases
+            .iter()
+            .any(|c| c.id.ends_with("fixture_inline_closure"))
+    );
+    assert!(
+        run.cases
+            .iter()
+            .any(|c| c.id.contains("combined_async_threads_direct/threads=1"))
+    );
+    assert!(
+        run.cases
+            .iter()
+            .any(|c| c.id.contains("combined_async_threads_direct/threads=2"))
+    );
+}

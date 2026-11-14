@@ -238,8 +238,11 @@ pub(crate) enum Action {
         #[arg(last = true)]
         args: Vec<String>,
     },
-    /// Write a manually triggered GitHub Actions smoke workflow, never overwrite.
+    /// Write a manually triggered CI or edge-runtime template, never overwrite.
     Ci {
+        /// Provider template (`github`, `gitlab`, `jenkins`, `circleci`, `travis`, `appveyor`, `azure`, `bitbucket`, `buildkite`, `drone`, `cloudflare-workers`, `fastly-compute`, `aws-lambda`, `vercel-edge`).
+        #[arg(long, default_value = "github")]
+        provider: String,
         #[arg(short, long)]
         output: PathBuf,
     },
@@ -462,6 +465,20 @@ pub(crate) enum Action {
     Completions {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
+    },
+    /// List or export curated domain benchmark matrix presets (#311–400).
+    Presets {
+        /// Filter presets by domain category.
+        #[arg(long)]
+        category: Option<String>,
+        /// Emit preset catalog as JSON.
+        #[arg(long)]
+        json: bool,
+        /// Export a named preset's runnable Matrix JSON plan.
+        #[arg(long)]
+        export: Option<String>,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 }
 #[derive(Clone, Copy, clap::ValueEnum)]

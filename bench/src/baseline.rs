@@ -308,7 +308,7 @@ impl Store {
             },
         )?;
         let _cleanup = Pending(temporary.clone());
-        fs::rename(temporary, &path)?;
+        rename_atomic(&temporary, &path)?;
         Ok(SavedCases {
             manifest: path,
             retained: false,
@@ -405,7 +405,7 @@ impl Store {
         file.sync_all()?;
         drop(file);
         if matches!(mode, SaveMode::Replace) {
-            fs::rename(&temporary, &destination)?;
+            rename_atomic(&temporary, &destination)?;
         } else {
             match fs::hard_link(&temporary, &destination) {
                 Ok(()) => {}
@@ -418,6 +418,26 @@ impl Store {
                     }
                     return Err(error(format!("baseline @{name} already exists")));
                 }
+                #[cfg(windows)]
+                Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => {
+                    // Some Windows sandboxes/filesystems forbid CreateHardLinkW; `_storage_lock`
+                    // already serializes writers, so check existence and publish via atomic rename.
+                    match fs::symlink_metadata(&destination) {
+                        Ok(_) => {
+                            if matches!(mode, SaveMode::Retain) {
+                                return Ok(Saved {
+                                    reference: self.require(name)?,
+                                    retained: true,
+                                });
+                            }
+                            return Err(error(format!("baseline @{name} already exists")));
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            rename_atomic(&temporary, &destination)?;
+                        }
+                        Err(e) => return Err(e.into()),
+                    }
+                }
                 Err(err) => return Err(err.into()),
             }
         }
@@ -425,6 +445,26 @@ impl Store {
             reference,
             retained: false,
         })
+    }
+}
+
+fn rename_atomic(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        for delay_ms in [2u64, 4, 8, 16, 32, 64] {
+            match fs::rename(from, to) {
+                Ok(()) => return Ok(()),
+                Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => {
+                    std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        fs::rename(from, to)
+    }
+    #[cfg(not(windows))]
+    {
+        fs::rename(from, to)
     }
 }
 fn checked_case(id: &str, reference: &BaselineRef) -> Result<Run> {

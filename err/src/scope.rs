@@ -14,6 +14,7 @@ pub struct Scope {
     pub tags: BTreeMap<String, String>,
     pub user: Option<User>,
     pub extra: BTreeMap<String, serde_json::Value>,
+    pub contexts: BTreeMap<String, serde_json::Value>,
     pub fingerprint: Option<Vec<String>>,
     pub level: Option<Severity>,
     pub trace_id: Option<String>,
@@ -31,6 +32,10 @@ impl Scope {
 
     pub fn set_extra(&mut self, key: impl Into<String>, value: serde_json::Value) {
         self.extra.insert(key.into(), value);
+    }
+
+    pub fn set_context(&mut self, key: impl Into<String>, value: serde_json::Value) {
+        self.contexts.insert(key.into(), value);
     }
 
     pub fn set_fingerprint(&mut self, parts: impl IntoIterator<Item = impl Into<String>>) {
@@ -151,6 +156,46 @@ where
             f(&guard);
         }
     });
+}
+
+/// RAII guard that restores the previous thread-local [`Scope`] when dropped.
+pub struct ScopeGuard {
+    previous: Option<Scope>,
+}
+
+impl Drop for ScopeGuard {
+    fn drop(&mut self) {
+        if let Some(prev) = self.previous.take() {
+            let _ = SCOPE.try_with(|cell| {
+                *cell.borrow_mut() = prev;
+            });
+        }
+    }
+}
+
+/// Push a fresh cloned child scope for the current thread and restore the previous
+/// scope when the returned [`ScopeGuard`] is dropped (including across unwinds).
+pub fn push_scope() -> ScopeGuard {
+    let previous = SCOPE.try_with(|cell| cell.borrow().clone()).ok();
+    ScopeGuard { previous }
+}
+
+/// Temporarily swap in `temp`, returning a [`ScopeGuard`] that restores the prior
+/// scope when dropped.
+pub(crate) fn swap_scope(temp: Scope) -> ScopeGuard {
+    let previous = SCOPE
+        .try_with(|cell| {
+            let mut b = cell.borrow_mut();
+            std::mem::replace(&mut *b, temp)
+        })
+        .ok();
+    ScopeGuard { previous }
+}
+
+pub(crate) fn snapshot_scope() -> Scope {
+    SCOPE
+        .try_with(|cell| cell.borrow().clone())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

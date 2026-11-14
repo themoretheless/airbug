@@ -58,6 +58,7 @@ struct App {
     occluded: bool,
     last: Option<Instant>,
     start: Instant,
+    frames_recorder: frames::Frames,
     error: Option<String>,
 }
 impl App {
@@ -87,14 +88,17 @@ impl App {
             wgpu::CurrentSurfaceTexture::Outdated => {
                 g.config.width = 0;
                 self.skipped += 1;
+                self.frames_recorder.presented(self.draws as u64, false)?;
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => {
                 self.skipped += 1;
+                self.frames_recorder.presented(self.draws as u64, false)?;
                 return Ok(());
             }
             e => return Err(error(format!("surface failure: {e:?}"))),
         };
+        let fid = self.frames_recorder.begin();
         self.model
             .pointer(if self.draws % 24 < 12 { 100. } else { -10. }, 90., 0);
         self.model.tick(16.);
@@ -110,13 +114,16 @@ impl App {
                 true,
             )
             .map_err(error)?;
+        self.frames_recorder.submitted(fid)?;
         let present = Instant::now();
         w.pre_present_notify();
         frame.present();
         let present_ns = present.elapsed().as_nanos();
+        self.frames_recorder.presented(fid, true)?;
         g.renderer
             .device
             .poll(wgpu::PollType::wait_indefinitely())?;
+        self.frames_recorder.completed(fid)?;
         let elapsed = start.elapsed().as_nanos();
         let interval = self
             .last
@@ -217,6 +224,15 @@ fn main() -> Result<()> {
         occluded: false,
         last: None,
         start: Instant::now(),
+        frames_recorder: frames::Frames::new(
+            "forma/window/lifecycle",
+            BTreeMap::from([(
+                "lifecycle".into(),
+                "main thread; FIFO; 20 warmup; 96 measured frames".into(),
+            )]),
+            20,
+            false,
+        )?,
         error: None,
     };
     events.run_app(&mut app)?;
@@ -240,6 +256,12 @@ fn main() -> Result<()> {
         r.observe(id, "frame.interval", c)?;
     }
     r.note(format!("Observed resize events: {}; occlusion events: {}; skipped acquire/occluded frames: {}. These are not compositor dropped-frame counts. No window pixel golden verification; use offscreen correctness pass separately.",app.resizes,app.occlusions,app.skipped));
-    println!("BENCH_RESULT={}", serde_json::to_string(&r.finish()?)?);
+    let lifecycle_run = app.frames_recorder.finish()?;
+    let mut run = r.finish()?;
+    run.cases.extend(lifecycle_run.cases);
+    run.observations.extend(lifecycle_run.observations);
+    run.notes.extend(lifecycle_run.notes);
+    run.validate()?;
+    println!("BENCH_RESULT={}", serde_json::to_string(&run)?);
     Ok(())
 }

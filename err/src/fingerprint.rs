@@ -217,6 +217,7 @@ mod tests {
             contexts: Default::default(),
             trace_id: None,
             span_id: None,
+            debug_images: vec![],
         }
     }
 
@@ -228,6 +229,8 @@ mod tests {
                 lineno: Some(10),
                 colno: None,
                 in_app: true,
+                instruction_addr: None,
+                symbol_addr: None,
             },
             Frame {
                 function: "bar".into(),
@@ -235,6 +238,8 @@ mod tests {
                 lineno: Some(20),
                 colno: None,
                 in_app: true,
+                instruction_addr: None,
+                symbol_addr: None,
             },
         ]
     }

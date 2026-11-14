@@ -193,6 +193,34 @@ impl<T> Fixture<T> {
         })
     }
 }
+
+#[doc(hidden)]
+pub struct DirectFixture;
+#[doc(hidden)]
+pub struct ClosureFixture;
+
+/// Conversion accepted by `#[bench(fixture = ...)]` for either a `Fixture<T>` or an initializer closure.
+pub trait IntoFixture<T: 'static, Marker> {
+    fn into_fixture(self) -> Fixture<T>;
+}
+
+impl<T: 'static> IntoFixture<T, DirectFixture> for Fixture<T> {
+    fn into_fixture(self) -> Fixture<T> {
+        self
+    }
+}
+
+impl<T: 'static, F: FnOnce() -> T + 'static> IntoFixture<T, ClosureFixture> for F {
+    fn into_fixture(self) -> Fixture<T> {
+        Fixture::new(self)
+    }
+}
+
+#[doc(hidden)]
+pub fn into_fixture<T: 'static, M>(value: impl IntoFixture<T, M>) -> Fixture<T> {
+    value.into_fixture()
+}
+
 /// Reproducible SplitMix64 generator. Not cryptographic; seed=0 is valid.
 #[derive(Clone)]
 pub struct Seeded {
@@ -201,6 +229,24 @@ pub struct Seeded {
 impl Seeded {
     pub fn new(seed: u64) -> Self {
         Self { state: seed }
+    }
+
+    /// Build from `AIRBUG_BENCH_SEED` (decimal or `0x` hex) when present and valid, else `default_seed`.
+    pub fn from_env_or(default_seed: u64) -> Self {
+        let seed = std::env::var("AIRBUG_BENCH_SEED")
+            .ok()
+            .and_then(|raw| Self::parse_seed_str(&raw))
+            .unwrap_or(default_seed);
+        Self::new(seed)
+    }
+
+    pub fn parse_seed_str(raw: &str) -> Option<u64> {
+        let s = raw.trim();
+        if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+            u64::from_str_radix(hex, 16).ok()
+        } else {
+            s.parse::<u64>().ok()
+        }
     }
     pub fn next_u64(&mut self) -> u64 {
         self.state = self.state.wrapping_add(0x9e3779b97f4a7c15);

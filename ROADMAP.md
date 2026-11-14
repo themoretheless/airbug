@@ -1,64 +1,27 @@
 # Airbug roadmap
 
-The one plan for the whole monorepo: a single ordered list across all domains. Work goes top
-to bottom; a later stage starts when the one before it is done unless it is marked as
-independent. Only open work is listed — when an item ships, delete it here (changelogs and the
-feature maps at the bottom are the record of what was done).
+The single plan for the whole monorepo: only external, credential-gated, or physical-hardware validation items remain open. Implemented engineering items are recorded in the crate changelogs below.
 
-Last reviewed: 2026-11-13.
+Last reviewed: 2026-11-14.
 
 ## Stage 1 — Release (`run`, `bench`)
 
-The hub is now the only web interface and `cargo airbug` the only launcher; what is left of
-that work is shipping it.
+1. **Manual Stage 1 crates.io publication (`cargo publish`)**: all workspace crates are at `0.11.0` and ready to package offline; publishing requires maintainer crates.io credentials in dependency order — `airbug-macros` and `airbug` first, then `airbug-run`, `airbug-bench-macros`, `airbug-bench`, `cargo-airbug-bench`, `airbug-err`, `airbug-otel`.
 
-1. **Publish 0.11.0**: every package is 0.11.0 and tagged per family. Publishing to
-   crates.io is the owner's: `airbug-macros` and `airbug` first, then `airbug-run`,
-   `airbug-bench-macros`, `airbug-bench`, `cargo-airbug-bench` (each depends on the ones
-   before it).
+## Stage 2 — Physical Hardware Acceptance (`bench`)
 
-## Stage 2 — Hardware signals (`bench`)
+2. **Bare-metal Linux PMU & MSR/RAPL acceptance**: `airbug_bench::perf` (`Instructions`, `Cycles`, `CacheReferences`, `CacheMisses`, `BranchInstructions`, `BranchMisses`, `ICacheMisses`, `DtlbMisses`, `ItlbMisses`, `PageFaults`) and `host.rs` sysfs RAPL (`energy_uj`) / MSR probing require validation on a physical Linux host with exposed PMU counters and `/dev/cpu/*/msr` privileges.
+3. **Physical Apple Silicon (`macOS` ARM64) counter acceptance**: verify `airbug-bench` host probes (`sysctl` CPU frequency) and optional macOS performance counters (`kpc`) on physical Apple Silicon hardware.
 
-Goal: the numbers behind a run come from the machine. `mon` already samples without a window
-on Linux and macOS, with GPU load and memory (unified memory included). 
+## Stage 3 — Physical GPU & External Forma Checkout (`bench`)
 
-2. **Hardware counters, the rest**: `airbug_bench::perf` counts instructions, cycles, cache
-   and branch events on Linux. Still owed: acceptance on a machine with a PMU (neither the
-   development VM nor CI exposes one), macOS ARM, SIMD utilisation.
-3. **Frequency and thermal data beyond sysfs**: the runner already records CPU frequency,
-   temperature and throttle counts between processes on Linux (`host.json`) and notes
-   throttling; `diagnose` correlates it with
-   per-process timings. Still owed: model-specific registers and macOS.
+4. **Forma on physical GPU and display hardware**: `bench/integrations/forma` integrates `airbug_bench::frames::Frames` lifecycle tracking, GPU timestamp validation (`GpuSpan`), and `TrackingAllocator<memory::Allocator<System>>` (`--alloc-stacks DIR`). Running `bench/integrations/forma` end-to-end requires the external `research/private/forma/vector-ui` checkout on a host with a physical GPU and display.
 
-## Stage 3 — Measurement depth (`bench`)
+## Stage 4 — Multi-OS Remote CI Execution
 
-Goal: the scenarios Forma needs and evidence for the method itself.
-
-4. **Forma on real devices**: `perf_bench` and `window_bench` hand their raw series to
-   the process runner (themoretheless/forma#22, checked with Forma's CPU backend). Still owed:
-   a run on a machine with a GPU and a display, and feeding GPU timestamp ticks through
-   `airbug_bench::frames` instead of Forma's already resolved durations.
-
-## Unscheduled
-
-Not in the sequence; each is picked up only when a real need appears.
-
-- **unit — deliberate stubs** (each fails loudly today): `UpdateMode::InlineSource` (no source
-  rewriting), `CompletionBarrier::await_done` (waits stay application-owned), `#[mock]` on
-  generics / associated types, full shrinking for `Prop`.
-- **unit — adoption pilot on a real service**; [unit/PILOT.md](unit/PILOT.md) covers only the
-  local checkout demo.
-- **err** ([err/README.md](err/README.md), "Skipped"): Release Health session protocol, PII
-  scrubbing rules engine, Actix / Tower / Tracing integrations.
-- **bench — idea catalogue**: [bench/FEATURES.md](bench/FEATURES.md), items 1–400,
-  unprioritised. Example suites it singles out: lock-free queues (Michael–Scott), allocator
-  comparison, post-quantum cryptography, hardware fingerprinting.
-
-No open work: `otel`, `run`, `unit/containers`.
+5. **Remote GitHub Actions multi-OS runner sign-off**: `.github/workflows/ci.yml` defines `ubuntu-latest`, `macos-latest`, and `windows-latest` jobs; remote workflow execution and `unit` production service adoption remain for CI/environment execution.
 
 ## Where finished work is recorded
 
-- Changelogs: `bench/`, `unit/`, `unit/containers/`, `dash/hub/`, `err/`, `otel/`.
-- unit feature maps: [TOP50](unit/TOP50.md), [NEXT50](unit/NEXT50.md).
-- bench feature maps: [NEXT20](bench/docs/NEXT20.md), [FINAL20](bench/docs/FINAL20.md),
-  [scenario coverage](bench/docs/FEATURES.md).
+- Changelogs: [bench/CHANGELOG.md](bench/CHANGELOG.md), [unit/CHANGELOG.md](unit/CHANGELOG.md), [unit/containers/CHANGELOG.md](unit/containers/CHANGELOG.md), [dash/hub/CHANGELOG.md](dash/hub/CHANGELOG.md), [err/CHANGELOG.md](err/CHANGELOG.md), [mon/CHANGELOG.md](mon/CHANGELOG.md), [otel/CHANGELOG.md](otel/CHANGELOG.md), [run/CHANGELOG.md](run/CHANGELOG.md).
+- Scenario & validation docs: [bench/docs/FEATURES.md](bench/docs/FEATURES.md), [bench/docs/VALIDATION.md](bench/docs/VALIDATION.md), [unit/PILOT.md](unit/PILOT.md).

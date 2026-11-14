@@ -1,7 +1,7 @@
 use crate::runner;
 use airbug_bench::{model::write_new, *};
 use std::{collections::BTreeMap, path::Path};
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Matrix {
     pub plan: runner::Plan,

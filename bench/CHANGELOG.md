@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Attribute fixtures & environment seeds: `#[bench(fixture = ...)]` (`DirectFixture`, `ClosureFixture`, `IntoFixture`), `Suite::bench_async_fixture`, explicit async+threads combination guard in macro registration, and `Seeded::from_env_or` (`AIRBUG_BENCH_SEED`).
+- Expanded hardware, OS & statistical telemetry: `perf::Event::{ICacheMisses, DtlbMisses, ItlbMisses, PageFaults}` (including Windows `K32GetProcessMemoryInfo`), `simd`, `cpuid::CpuSignature`, `overhead` (yield jitter, interrupt jitter, SMT contention, locality stride, `pin_current_thread`, `EnergyPerOp`, idle wake penalty, startup warmup decomposition), `outliers::{OutlierPolicy, filter_outliers, trimmed_mean}`, `normality` (`ks_normality_test`, `jarque_bera_test`, `ols_slope`), `anscombe`, `build_info::BuildProvenance`, and `streaming` (`BoundedProgressStream`, `JsonlProgressLog`, compact binary observation encoding).
+- Curated workload catalog (`catalog`, `benches/catalog.rs`, `tests/catalog.rs`): `#22–1000` systems, RNG/hash, algorithms, concurrency (including ABA-tagged bounded-arena `MpmcQueue`, `TreiberStack`, `SpscRing`, `SeqLock`, `TicketLock`, `StripedCounter`), and post-quantum/lattice crypto (`ntt_forward`/`ntt_inverse`/`ntt_basemul` for ML-KEM/Kyber `q=3329, N=256`, Ring-LWE, Lamport OTS, Winternitz WOTS+, Merkle tree, branchless `ct_eq`/`ct_select_u64`).
+- `cargo-airbug-bench`: 14 CI/edge provider templates (`ci --provider <name>`), curated matrix `presets` (`presets.rs`, `presets --export`), enriched `doctor` capability probes, Linux RAPL energy + Windows/macOS CPU kHz fallbacks and correlation in `host.rs`, commit author/timestamp metadata in `revisions.rs`, and Windows hardlink fallback + retry atomicity in `baseline.rs`.
+- `bench/integrations/forma`: `TrackingAllocator<memory::Allocator<System>>`, `--alloc-stacks <DIR>` exporting `alloc-stacks.{json,html,folded}` outside timing, `window.rs` `Frames` lifecycle tracking, and in-workspace `tests/forma_signals.rs` contract coverage.
+
 ## 0.11.0
 
 - Version aligned with the rest of the airbug workspace: every package is 0.11.0 from here on.
