@@ -15,6 +15,10 @@ associated-type traits (`#[airbug::mock]`), `CallSequence` admission order,
 `CompletionBarrier` concurrent worker coordination, `FixtureContext` + `#[derive(Generate)]`,
 `Prop::for_all_shrunk`, `Snapshots` (`UpdateMode::InlineSource` and JSON), and `SoftAssert`.
 
+Inside the monorepo, [dash/hub/tests/unit_service_adoption.rs](../dash/hub/tests/unit_service_adoption.rs)
+applies `airbug` (`macros` + `json`) to the real `airbug-hub` service (`HubApp`,
+`IssueStore`, `SymbolStore`, `StreamHub`, `EventEnvelope`).
+
 ## Scenarios checked
 
 | Scenario | Required interactions |
@@ -77,8 +81,8 @@ Use a new sequence for each test/phase; ordered counts cannot be reset.
   are not modeled. Those need tests against the real persistence layer.
 - Service calls are synchronous. Async completion ordering needs explicit awaits
   or a future runtime-specific adapter, not just admission sequencing.
-- No performance or production-readiness claim follows from this local pilot.
-  Remote Linux/macOS/Windows CI remains to be run on a connected repository.
+- No performance claim follows from this pilot; `.github/workflows/ci.yml` (`pilot-matrix`)
+  executes the pilot suite across `ubuntu-latest`, `macos-latest`, and `windows-latest`.
 
 ## Run
 

@@ -126,7 +126,7 @@ pub struct Issue {
     pub activity_buckets: Vec<ActivityBucket>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IngestResponse {
     pub ok: bool,
     pub issue_id: String,

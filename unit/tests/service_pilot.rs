@@ -147,14 +147,24 @@ fn service_pilot_save_failure_compensates_and_coordinates_workers() {
         .returns(Ok(None));
     payments
         .charge
-        .expect("charge", |_| true)
-        .times(2)
-        .returns_sequence([Ok("ch-1".into()), Ok("ch-2".into())]);
+        .expect("charge_1", |(id, _)| *id == 1)
+        .times(1)
+        .returns(Ok("ch-1".into()));
+    payments
+        .charge
+        .expect("charge_2", |(id, _)| *id == 2)
+        .times(1)
+        .returns(Ok("ch-2".into()));
     orders
         .save
-        .expect("fail_one_pass_one", |_| true)
-        .times(2)
-        .returns_sequence([Err(Failure::Unavailable), Ok(())]);
+        .expect("fail_first", |(saved,)| saved.request.id == 1)
+        .times(1)
+        .returns(Err(Failure::Unavailable));
+    orders
+        .save
+        .expect("pass_second", |(saved,)| saved.request.id == 2)
+        .times(1)
+        .returns(Ok(()));
     payments
         .refund
         .expect("compensate", |(cid,)| cid == "ch-1")

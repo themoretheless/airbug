@@ -2,7 +2,7 @@
 
 The single plan for the whole monorepo: only external, credential-gated, or physical-hardware validation items remain open. Implemented engineering items are recorded in the crate changelogs below.
 
-Last reviewed: 2026-11-14.
+Last reviewed: 2026-11-15.
 
 ## Stage 1 — Release (`run`, `bench`)
 
@@ -16,10 +16,6 @@ Last reviewed: 2026-11-14.
 ## Stage 3 — Physical GPU & External Forma Checkout (`bench`)
 
 4. **Forma on physical GPU and display hardware**: `bench/integrations/forma` integrates `airbug_bench::frames::Frames` lifecycle tracking, GPU timestamp validation (`GpuSpan`), and `TrackingAllocator<memory::Allocator<System>>` (`--alloc-stacks DIR`). Running `bench/integrations/forma` end-to-end requires the external `research/private/forma/vector-ui` checkout on a host with a physical GPU and display.
-
-## Stage 4 — Multi-OS Remote CI Execution
-
-5. **Remote GitHub Actions multi-OS runner sign-off**: `.github/workflows/ci.yml` defines `ubuntu-latest`, `macos-latest`, and `windows-latest` jobs; remote workflow execution and `unit` production service adoption remain for CI/environment execution.
 
 ## Where finished work is recorded
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adopted `airbug` (`unit`) mocks, `CallSequence`, `CompletionBarrier`, property shrinking, and canonical JSON snapshots for `HubApp` / `IssueStore` / `SymbolStore` / `StreamHub` testing (`tests/unit_service_adoption.rs`).
 - Debug symbol server, symbolication lookup, and Relay-style PII scrubbing/upstream forwarding (`symbols.rs`).
 - Streaming benchmark progress transports (`stream.rs`: WebSocket, SSE, HTTP fragments, GraphQL subscriptions, JSONL) with bounded timeouts and integration tests (`tests/symbols_and_streams.rs`).
 

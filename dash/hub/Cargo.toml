@@ -33,3 +33,6 @@ base64 = "0.22"
 airbug-err = { path = "../../err", default-features = false }
 # Bench comparisons on the Now page use the same statistics as `cargo airbug-bench compare`.
 airbug-bench.workspace = true
+
+[dev-dependencies]
+airbug = { path = "../../unit", features = ["macros", "json"] }

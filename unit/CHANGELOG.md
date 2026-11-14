@@ -4,6 +4,7 @@
 - `Prop::shrink_from` and `Shrink` trait for minimal counterexample shrinking.
 - `GenericMock` supporting type-erased generic trait methods in `#[airbug::mock]`, `CompletionBarrier::await_done`, and `tests/service_pilot.rs`.
 - Multi-OS GitHub Actions matrix (`ubuntu-latest`, `macos-latest`, `windows-latest`) in `.github/workflows/ci.yml`.
+- Production service adoption in `airbug-hub` (`dash/hub/tests/unit_service_adoption.rs`) exercising `HubApp`, `IssueStore`, `SymbolStore`, and `StreamHub` with `#[airbug::mock]`, `CallSequence`, `CompletionBarrier`, `Prop::for_all_shrunk`, and `Snapshots`.
 
 # 0.11.0
 

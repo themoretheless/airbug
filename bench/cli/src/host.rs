@@ -89,10 +89,11 @@ impl Probe {
                 )
             });
 
-        if khz.is_empty() && self.root == Path::new("/sys") {
-            if let Some(os_khz) = fallback_cpu_khz() {
-                khz.push(os_khz);
-            }
+        if khz.is_empty()
+            && self.root == Path::new("/sys")
+            && let Some(os_khz) = fallback_cpu_khz()
+        {
+            khz.push(os_khz);
         }
 
         Sample {
@@ -308,7 +309,7 @@ fn fallback_cpu_khz() -> Option<u64> {
         return None;
     }
     let hz: u64 = String::from_utf8(out.stdout).ok()?.trim().parse().ok()?;
-    (hz > 0).then(|| hz / 1000)
+    (hz > 0).then_some(hz / 1000)
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]

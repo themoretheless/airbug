@@ -19,8 +19,11 @@ fn obs<'a>(run: &'a Run, metric: &str) -> Vec<&'a airbug_bench::Observation> {
         .collect()
 }
 
+static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn frames_lifecycle_and_gpu_span_contracts() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut frames = Frames::new(
         "forma/synthetic",
         BTreeMap::from([("mode".into(), "window-lifecycle".into())]),
@@ -114,17 +117,23 @@ fn frames_lifecycle_and_gpu_span_contracts() {
 #[cfg(feature = "memory")]
 #[test]
 fn memory_allocator_captures_stacks_html_and_json() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    std::hint::black_box(vec![0u8; 64]);
+
     let phase = ALLOC.begin_phase().unwrap();
     let session = airbug_bench::memory::Session::start().unwrap();
 
     let mut retained = Vec::with_capacity(64);
-    for i in 0..8 {
-        let mut buf = vec![i as u8; 4096];
-        buf[0] = 42;
-        std::hint::black_box(&buf);
-        if i % 2 == 0 {
-            retained.push(buf);
+    for round in 0..4 {
+        for i in 0..4 {
+            let mut buf = vec![(round * 4 + i) as u8; 4096];
+            buf[0] = 42;
+            std::hint::black_box(&buf);
+            if i % 2 == 0 {
+                retained.push(buf);
+            }
         }
+        std::thread::sleep(std::time::Duration::from_millis(2));
     }
     std::hint::black_box(&retained);
 

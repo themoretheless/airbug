@@ -171,7 +171,7 @@ pub fn pin_current_thread(cpu: usize) -> Result<bool> {
                 std::io::Error::last_os_error()
             )));
         }
-        return Ok(true);
+        Ok(true)
     }
     #[cfg(target_os = "windows")]
     {

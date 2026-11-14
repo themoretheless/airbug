@@ -6,7 +6,10 @@ use std::{
     collections::BTreeMap,
     sync::{
         Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
+        atomic::{
+            AtomicBool, AtomicU64,
+            Ordering::{Acquire, Relaxed, Release},
+        },
     },
 };
 const CAPACITY: usize = 8192;
@@ -47,17 +50,14 @@ struct Hook {
 impl Hook {
     fn enter_trace() -> Self {
         INSTALLED.store(true, Relaxed);
-        if !ACTIVE.load(Relaxed) {
+        if !ACTIVE.load(Acquire) {
             return Self {
                 entered: false,
                 locked: false,
             };
         }
         let entered = ENTERED.try_with(|e| !e.replace(true)).unwrap_or(false);
-        let locked = entered
-            && GATE
-                .compare_exchange(false, true, std::sync::atomic::Ordering::Acquire, Relaxed)
-                .is_ok();
+        let locked = entered && GATE.compare_exchange(false, true, Acquire, Relaxed).is_ok();
         if entered && !locked {
             DROPPED.fetch_add(1, Relaxed);
         }
@@ -65,7 +65,7 @@ impl Hook {
     }
     fn enter_free() -> Self {
         INSTALLED.store(true, Relaxed);
-        if !ACTIVE.load(Relaxed) {
+        if !ACTIVE.load(Acquire) {
             return Self {
                 entered: false,
                 locked: false,
@@ -81,7 +81,7 @@ impl Hook {
 impl Drop for Hook {
     fn drop(&mut self) {
         if self.locked {
-            GATE.store(false, std::sync::atomic::Ordering::Release);
+            GATE.store(false, Release);
         }
         if self.entered {
             let _ = ENTERED.try_with(|e| e.set(false));
@@ -251,11 +251,14 @@ impl Session {
         if USED.swap(true, Relaxed) {
             return Err(crate::error("memory session already used in this process"));
         }
-        ACTIVE.store(true, Relaxed);
+        ACTIVE.store(true, Release);
         Ok(Self(()))
     }
     pub fn finish(self) -> Profile {
-        ACTIVE.store(false, Relaxed);
+        ACTIVE.store(false, Release);
+        while GATE.load(Acquire) {
+            std::hint::spin_loop();
+        }
         let b = BUFFER.lock().unwrap_or_else(|e| e.into_inner());
         let events = b.events[..b.len].to_vec();
         drop(b);
@@ -264,7 +267,7 @@ impl Session {
 }
 impl Drop for Session {
     fn drop(&mut self) {
-        ACTIVE.store(false, Relaxed);
+        ACTIVE.store(false, Release);
     }
 }
 fn analyze(events: &[Event], dropped_events: u64) -> Profile {

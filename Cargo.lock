@@ -224,6 +224,7 @@ dependencies = [
 name = "airbug-hub"
 version = "0.11.0"
 dependencies = [
+ "airbug",
  "airbug-bench",
  "airbug-err",
  "airbug-run",
