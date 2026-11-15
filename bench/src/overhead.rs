@@ -1,7 +1,7 @@
 //! System & scheduling overhead probes (`#11–15`, `#17–20`):
 //! yield latency, interrupt jitter, SMT contention, locality stride, thread affinity,
 //! energy-per-op accounting, wake-from-idle penalty, and warmup decomposition.
-use crate::{Result, error};
+use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::hint::black_box;
 use std::sync::{Arc, Barrier};
@@ -156,7 +156,7 @@ pub fn pin_current_thread(cpu: usize) -> Result<bool> {
     #[cfg(target_os = "linux")]
     {
         if cpu >= 1024 {
-            return Err(error("cpu index exceeds cpu_set_t width (1024)"));
+            return Err(crate::error("cpu index exceeds cpu_set_t width (1024)"));
         }
         // SAFETY: `cpu_set_t` is zero-initialized and populated via `CPU_SET` within bounds.
         let rc = unsafe {
@@ -166,7 +166,7 @@ pub fn pin_current_thread(cpu: usize) -> Result<bool> {
             libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set)
         };
         if rc != 0 {
-            return Err(error(format!(
+            return Err(crate::error(format!(
                 "sched_setaffinity failed: {}",
                 std::io::Error::last_os_error()
             )));
@@ -181,7 +181,7 @@ pub fn pin_current_thread(cpu: usize) -> Result<bool> {
             fn SetThreadAffinityMask(thread: *mut core::ffi::c_void, mask: usize) -> usize;
         }
         if cpu >= usize::BITS as usize {
-            return Err(error(
+            return Err(crate::error(
                 "cpu index exceeds pointer-width thread affinity mask",
             ));
         }
@@ -189,7 +189,7 @@ pub fn pin_current_thread(cpu: usize) -> Result<bool> {
         // SAFETY: `GetCurrentThread()` returns a valid pseudo-handle; `mask` has bit `cpu` set.
         let prev = unsafe { SetThreadAffinityMask(GetCurrentThread(), mask) };
         if prev == 0 {
-            return Err(error(format!(
+            return Err(crate::error(format!(
                 "SetThreadAffinityMask failed: {}",
                 std::io::Error::last_os_error()
             )));

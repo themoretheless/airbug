@@ -64,7 +64,7 @@ pub fn detect() -> SimdCapabilities {
             compile_features.push("neon".into());
         }
         runtime_features.push("neon".into());
-        max_bits = 128;
+        max_bits = max_bits.max(128);
     }
 
     SimdCapabilities {
