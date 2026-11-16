@@ -4,6 +4,7 @@
 mod analytics;
 pub mod app;
 mod assets;
+pub mod bench_launch;
 mod benchcmp;
 pub mod collector;
 pub mod config;

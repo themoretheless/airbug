@@ -56,6 +56,7 @@ struct Bench {
     /// URL prefix that serves `dir`.
     files: String,
     title: String,
+    command: Option<Vec<String>>,
     started_at_ms: u64,
     /// Set when OTLP signals carry `airbug.run_id` for this run.
     signals_run_id: Option<String>,
@@ -84,23 +85,28 @@ fn locate(root: &Path, registry: &RunStore, id: &str) -> Option<(Option<Manifest
             dir: PathBuf::from(m.artifacts.clone()?),
             files: format!("/runs/{id}/files/"),
             title: m.title.clone(),
+            command: Some(m.command.clone()),
             started_at_ms: m.started_at_ms,
             signals_run_id: None,
             recorded: state,
         };
         return Some((Some(m), Some(bench)));
     }
-    let (dir, rel, title, signals) = match registry.get(id) {
+    let (dir, rel, title, command, signals) = match registry.get(id) {
         Ok(detail) => (
             RootPaths::new(root).bench_run_dir(id),
             format!("runs/{id}"),
             detail.title,
+            detail
+                .command
+                .map(|c| c.split_whitespace().map(str::to_string).collect()),
             Some(id.to_string()),
         ),
         Err(_) => (
             root.join(".airbug-bench").join(id),
             id.to_string(),
             id.to_string(),
+            None,
             None,
         ),
     };
@@ -116,6 +122,7 @@ fn locate(root: &Path, registry: &RunStore, id: &str) -> Option<(Option<Manifest
                 files: format!("/bench/{rel}/"),
                 dir,
                 title,
+                command,
                 started_at_ms: started,
                 signals_run_id: signals,
                 recorded: None,
@@ -143,7 +150,13 @@ fn observe(dir: &Path) -> (Option<String>, u64, u64, u64) {
     let count = |key: &str| live.as_ref().and_then(|p| p[key].as_u64()).unwrap_or(0);
     let state = match (&last, &live) {
         (Some(v), _) => v["state"].as_str().map(str::to_string),
-        (None, Some(_)) => Some("running".into()),
+        (None, Some(p)) => Some(
+            p["state"]
+                .as_str()
+                .filter(|s| matches!(*s, "building" | "running"))
+                .unwrap_or("running")
+                .to_string(),
+        ),
         (None, None) => dir.join("run.json").is_file().then(|| "complete".into()),
     };
     let at = ["status-final.json", "progress.json", "run.json"]
@@ -301,7 +314,8 @@ pub fn describe(root: &Path, registry: &RunStore, id: &str) -> Option<Value> {
         "run_id": id,
         "kind": KIND_BENCH,
         "title": bench.title,
-        "command": manifest.as_ref().map(|m| m.command.clone()),
+        "command": manifest.as_ref().map(|m| m.command.clone()).or(bench.command),
+        "can_cancel": crate::bench_launch::is_running(id),
         "state": state,
         "started_at_ms": bench.started_at_ms,
         "finished_at_ms": done.then(|| recorded_end.and_then(|(_, end)| end).unwrap_or(at)),

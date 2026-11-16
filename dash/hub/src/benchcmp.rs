@@ -6,12 +6,12 @@
 //! polls and run files can be large.
 use crate::scan::find_run_json;
 use airbug_bench::{
-    Run, Status,
+    Case, Run, Status,
     analysis::{self, Comparison, Decision},
 };
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -23,10 +23,16 @@ const SCAN: usize = 40;
 /// Percent change that counts as a regression / improvement (the CLI's default).
 pub const THRESHOLD: f64 = 5.0;
 const ALPHA: f64 = 0.05;
-const MAX_ROWS: usize = 60;
+const MAX_ROWS: usize = 500;
 const MAX_RUN_BYTES: u64 = 64 * 1024 * 1024;
 
-type CacheKey = (Vec<(PathBuf, u64)>, Option<String>, Option<String>);
+type CacheKey = (
+    Vec<(PathBuf, u64)>,
+    Option<String>,
+    Option<String>,
+    u64,
+    usize,
+);
 static CACHE: Mutex<Option<(CacheKey, Value)>> = Mutex::new(None);
 
 struct Entry {
@@ -46,7 +52,23 @@ fn mtime_ms(path: &Path) -> u64 {
 }
 
 /// `GET /api/v1/bench/compare[?run=<id>][&baseline=<id>]`.
+#[allow(dead_code)]
 pub fn compare(root: &Path, id: Option<&str>, baseline: Option<&str>) -> Value {
+    compare_opts(root, id, baseline, None, None)
+}
+
+/// `GET /api/v1/bench/compare[?run=<id>][&baseline=<id>][&threshold=<pct>][&limit=<n>]`.
+pub fn compare_opts(
+    root: &Path,
+    id: Option<&str>,
+    baseline: Option<&str>,
+    threshold: Option<f64>,
+    limit: Option<usize>,
+) -> Value {
+    let eff_threshold = threshold
+        .filter(|t| t.is_finite() && (0.0..=500.0).contains(t))
+        .unwrap_or(THRESHOLD);
+    let eff_limit = limit.unwrap_or(MAX_ROWS).clamp(1, 2000);
     let store = root.join(".airbug-bench");
     let files: Vec<(PathBuf, u64)> = find_run_json(&store, SCAN)
         .into_iter()
@@ -59,6 +81,8 @@ pub fn compare(root: &Path, id: Option<&str>, baseline: Option<&str>) -> Value {
         files.clone(),
         id.map(str::to_string),
         baseline.map(str::to_string),
+        eff_threshold.to_bits(),
+        eff_limit,
     );
     if let Ok(cache) = CACHE.lock()
         && let Some((cached_key, value)) = cache.as_ref()
@@ -70,7 +94,7 @@ pub fn compare(root: &Path, id: Option<&str>, baseline: Option<&str>) -> Value {
         .iter()
         .filter_map(|(path, when)| load(&store, path, *when))
         .collect();
-    let value = compare_entries(&entries, id, baseline);
+    let value = compare_entries_opts(&entries, id, baseline, eff_threshold, eff_limit);
     if let Ok(mut cache) = CACHE.lock() {
         *cache = Some((key, value.clone()));
     }
@@ -134,6 +158,9 @@ fn result(
     current: &Entry,
     previous: Option<&Entry>,
     mut rows: Vec<Comparison>,
+    threshold: f64,
+    limit: usize,
+    overlap: Option<Value>,
 ) -> Value {
     let count = |d: Decision| rows.iter().filter(|r| r.decision == d).count();
     let summary = json!({
@@ -153,20 +180,95 @@ fn result(
             })
     });
     let total = rows.len();
-    rows.truncate(MAX_ROWS);
-    json!({
+    rows.truncate(limit);
+    let mut out = json!({
         "mode": mode,
-        "threshold": THRESHOLD,
+        "threshold": threshold,
         "current": describe(current),
         "previous": previous.map(describe),
         "summary": summary,
         "total": total,
         "rows": rows,
-    })
+    });
+    if let Some(ov) = overlap {
+        out["overlap"] = ov;
+    }
+    out
 }
 
+fn overlap_subset(previous: &Run, current: &Run) -> Option<(Run, Run, Value)> {
+    let prev_cases: BTreeMap<&str, &Case> =
+        previous.cases.iter().map(|c| (c.id.as_str(), c)).collect();
+    let mut shared_cases = Vec::new();
+    let mut shared_ids = BTreeSet::new();
+    let mut only_current = Vec::new();
+
+    for c in &current.cases {
+        if let Some(pc) = prev_cases.get(c.id.as_str())
+            && pc.metrics == c.metrics
+        {
+            shared_ids.insert(c.id.clone());
+            shared_cases.push(c.clone());
+        } else {
+            only_current.push(c.id.clone());
+        }
+    }
+    if shared_cases.is_empty() {
+        return None;
+    }
+    let only_baseline: Vec<String> = previous
+        .cases
+        .iter()
+        .filter(|c| !shared_ids.contains(&c.id))
+        .map(|c| c.id.clone())
+        .collect();
+
+    let mut prev_sub = previous.clone();
+    prev_sub.environment = current.environment.clone();
+    prev_sub.cases = shared_cases.clone();
+    prev_sub
+        .observations
+        .retain(|o| shared_ids.contains(&o.case) && o.variant == "candidate");
+    prev_sub
+        .worker_allocations
+        .retain(|w| shared_ids.contains(&w.case) && w.variant == "candidate");
+    prev_sub
+        .worker_timings
+        .retain(|w| shared_ids.contains(&w.case) && w.variant == "candidate");
+
+    let mut curr_sub = current.clone();
+    curr_sub.cases = shared_cases;
+    curr_sub
+        .observations
+        .retain(|o| shared_ids.contains(&o.case) && o.variant == "candidate");
+    curr_sub
+        .worker_allocations
+        .retain(|w| shared_ids.contains(&w.case) && w.variant == "candidate");
+    curr_sub
+        .worker_timings
+        .retain(|w| shared_ids.contains(&w.case) && w.variant == "candidate");
+
+    let overlap = json!({
+        "shared": shared_ids.len(),
+        "only_current": only_current.len(),
+        "only_baseline": only_baseline.len(),
+    });
+    Some((prev_sub, curr_sub, overlap))
+}
+
+#[cfg(test)]
 fn compare_entries(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> Value {
-    let mut value = compare_with(entries, id, baseline);
+    compare_entries_opts(entries, id, baseline, THRESHOLD, MAX_ROWS)
+}
+
+fn compare_entries_opts(
+    entries: &[Entry],
+    id: Option<&str>,
+    baseline: Option<&str>,
+    threshold: f64,
+    limit: usize,
+) -> Value {
+    let mut value = compare_with(entries, id, baseline, threshold, limit);
     // What the baseline picker offers: every other finished run, newest first.
     if let Some(current) = value["current"]["id"].as_str().map(str::to_string) {
         let others: Vec<Value> = entries
@@ -179,7 +281,13 @@ fn compare_entries(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) 
     value
 }
 
-fn compare_with(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> Value {
+fn compare_with(
+    entries: &[Entry],
+    id: Option<&str>,
+    baseline: Option<&str>,
+    threshold: f64,
+    limit: usize,
+) -> Value {
     let complete = |e: &&Entry| e.run.status == Status::Complete;
     let current = match id {
         Some(id) => entries
@@ -199,8 +307,8 @@ fn compare_with(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> 
     }
     let own = variants(&current.run);
     if own == BTreeSet::from(["baseline", "candidate"]) {
-        return match analysis::compare(&current.run, None, THRESHOLD, ALPHA) {
-            Ok(rows) => result("ab", current, None, rows),
+        return match analysis::compare(&current.run, None, threshold, ALPHA) {
+            Ok(rows) => result("ab", current, None, rows, threshold, limit, None),
             Err(err) => json!({
                 "mode": null,
                 "current": describe(current),
@@ -218,7 +326,7 @@ fn compare_with(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> 
     if let Some(wanted) = baseline {
         let Some(previous) = entries
             .iter()
-            .find(|e| e.id == wanted && e.id != current.id)
+            .find(|e| (e.id == wanted || e.id == format!("runs/{wanted}")) && e.id != current.id)
         else {
             return json!({
                 "mode": null,
@@ -226,13 +334,36 @@ fn compare_with(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> 
                 "note": "the chosen baseline run was not found",
             });
         };
-        return match analysis::compare(&previous.run, Some(&current.run), THRESHOLD, ALPHA) {
-            Ok(rows) => result("previous", current, Some(previous), rows),
-            Err(err) => json!({
-                "mode": null,
-                "current": describe(current),
-                "note": format!("cannot compare with the chosen baseline: {err}"),
-            }),
+        return match analysis::compare(&previous.run, Some(&current.run), threshold, ALPHA) {
+            Ok(rows) => result(
+                "previous",
+                current,
+                Some(previous),
+                rows,
+                threshold,
+                limit,
+                None,
+            ),
+            Err(err) => {
+                if let Some((prev_sub, curr_sub, overlap)) = overlap_subset(&previous.run, &current.run)
+                    && let Ok(rows) = analysis::compare(&prev_sub, Some(&curr_sub), threshold, ALPHA)
+                {
+                    return result(
+                        "previous",
+                        current,
+                        Some(previous),
+                        rows,
+                        threshold,
+                        limit,
+                        Some(overlap),
+                    );
+                }
+                json!({
+                    "mode": null,
+                    "current": describe(current),
+                    "note": format!("cannot compare with the chosen baseline: {err}"),
+                })
+            }
         };
     }
     let position = entries
@@ -248,8 +379,16 @@ fn compare_with(entries: &[Entry], id: Option<&str>, baseline: Option<&str>) -> 
         if !comparable {
             continue;
         }
-        if let Ok(rows) = analysis::compare(&previous.run, Some(&current.run), THRESHOLD, ALPHA) {
-            return result("previous", current, Some(previous), rows);
+        if let Ok(rows) = analysis::compare(&previous.run, Some(&current.run), threshold, ALPHA) {
+            return result(
+                "previous",
+                current,
+                Some(previous),
+                rows,
+                threshold,
+                limit,
+                None,
+            );
         }
     }
     json!({
@@ -366,5 +505,41 @@ mod tests {
             compare_entries(&[], None, None)["note"],
             "no finished bench run yet"
         );
+    }
+
+    #[test]
+    fn partial_overlap_baseline_and_custom_threshold() {
+        let mut wide = run("wide", &[("candidate", &SLOW)]);
+        wide.cases.push(Case {
+            id: "extra_only".into(),
+            contract: BTreeMap::new(),
+            metrics: vec![Metric::duration("wall", "operation", "median")],
+        });
+        for (i, v) in SLOW.iter().enumerate() {
+            wide.observations.push(Observation {
+                case: "extra_only".into(),
+                metric: "wall".into(),
+                variant: "candidate".into(),
+                process: i as u32,
+                pair: Some(i as u32),
+                sequence: (i + 1) as u64,
+                value: Some(v.to_string()),
+                operations: 1,
+                worker_work_totals: Default::default(),
+                work_totals: BTreeMap::new(),
+                availability: Availability::Available,
+            });
+        }
+        let mut narrow = run("narrow", &[("candidate", &FAST)]);
+        narrow.environment.insert("runner".into(), "protocol".into());
+
+        let entries = vec![entry("narrow", 2, narrow), entry("wide", 1, wide)];
+        let value = compare_entries_opts(&entries, Some("narrow"), Some("wide"), 12.0, 500);
+        assert_eq!(value["mode"], "previous", "{value}");
+        assert_eq!(value["threshold"], 12.0);
+        assert_eq!(value["overlap"]["shared"], 1);
+        assert_eq!(value["overlap"]["only_baseline"], 1);
+        assert_eq!(value["overlap"]["only_current"], 0);
+        assert_eq!(value["summary"]["improvement"], 1);
     }
 }

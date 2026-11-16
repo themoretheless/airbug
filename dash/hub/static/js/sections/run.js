@@ -1,27 +1,66 @@
 // One run, any kind: Results / Output / Signals / Compare.
 //
 // `GET /api/v1/run?id=` says what the run is and where its files are served; each tab reads
-// only what it shows. Old links (`#/tests/‹id›`, `#/bench/‹id›`) land here too.
+// only what it shows and preserves interactive state across live polls.
 
 import { enc, getJson, tryJson } from "../api.js";
-import { $, bindCopy, escapeAttr, escapeHtml } from "../dom.js";
+import { createBenchExplorer } from "../bench_view.js";
+import { sparkSvg } from "../charts.js";
+import { $, bindCopy, copy, escapeAttr, escapeHtml } from "../dom.js";
+import { fmtNs, fmtValue, formatTime, normalizeSev, SEV_ORDER, sevClass } from "../format.js";
 import { currentRoute, setTitle } from "../shell.js";
 import { fetchTimeline, TR } from "../runs.js";
-import { benchCompareHtml, renderCharts } from "./bench.js";
+import { createBenchCompareView, takePreferredBaseline } from "./bench.js";
 
 const TABS = [["results", "Results"], ["output", "Output"], ["signals", "Signals"], ["compare", "Compare"]];
 const MAX_TEXT = 400000;
 const DONE = ["passed", "failed", "error", "interrupted", "complete", "cancelled", "incomplete"];
 
-let run = null;        // description from /api/v1/run, or a stand-in for runs it does not know
-let detail = null;     // test runs: /api/v1/runs/<id>
-let view = null;       // test results view, kept across ticks
+let run = null;          // description from /api/v1/run, or a stand-in for runs it does not know
+let detail = null;       // test runs: /api/v1/runs/<id>
+let view = null;         // test results view, kept across ticks
 let viewKey = "";
-let chartsKey = "";
-let logPath = "";
-let baseline = {};     // run id → chosen baseline id
+let benchExplorer = null;
+let benchHostRunId = "";
+let runJsonKey = "";
+let lastRunJson = null;
 let pendingRerun = null;
-let pace = { id: "", at: 0, done: 0 };  // first sighting of a live bench run, for the ETA
+let pace = { id: "", at: 0, done: 0 };
+
+const baseline = {};     // run id -> chosen baseline id
+const cmpThreshold = {}; // run id -> chosen % threshold
+let cmpView = null;
+let cmpViewRunId = "";
+
+const outState = {
+  runId: "",
+  path: "",
+  sig: "",
+  rawText: "",
+  query: "",
+  level: "all",   // all | done | running | warn
+  follow: true,
+  wrap: true,
+  pendingFocusCase: "",
+};
+
+const sigState = {
+  runId: "",
+  sig: "",
+  tab: "traces",  // overview | traces | metrics | logs | issues
+  query: "",
+  sort: "seq",    // seq | dur_desc | name
+  scale: "log",   // log | lin
+  traces: [],
+  logs: [],
+  metricsData: null,
+  issues: [],
+  expandedTraceId: "",
+  traceDetails: new Map(),
+  expandedLogs: new Set(),
+  sevs: new Set(SEV_ORDER),
+  scopeText: "",
+};
 
 const note = text => `<p class="now-quiet">${escapeHtml(text)}</p>`;
 const isTest = () => run && run.kind === "test";
@@ -30,8 +69,15 @@ const live = () => Boolean(run) && !DONE.includes(state()) && !(detail && detail
 const tabOf = route => (TABS.some(([id]) => id === route.tab) ? route.tab : "results");
 const here = (id, tab) => `#/run/${enc(id)}${tab && tab !== "results" ? "/" + tab : ""}`;
 
+function fmtBytes(n) {
+  const b = Number(n || 0);
+  if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB";
+  if (b >= 1024) return (b / 1024).toFixed(1) + " KB";
+  return b + " B";
+}
+
 async function fetchText(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   const text = await res.text();
   return text.length > MAX_TEXT ? "… earlier output cut …\n" + text.slice(-MAX_TEXT) : text;
@@ -44,7 +90,6 @@ async function load(id) {
     detail = null;
     return;
   }
-  // Test runs keep their results in the test API; live case history is known only there.
   detail = await getJson("runs/" + enc(id));
   const item = detail.item || {};
   run = described || { run_id: detail.run_id, kind: "test", title: item.title, started_at_ms: item.started_at_ms, files: detail.files };
@@ -55,7 +100,7 @@ function renderHead(route) {
   const item = (detail && detail.item) || {};
   const started = run.started_at_ms || item.started_at_ms;
   const p = run.progress || {};
-  const facts = [run.kind, started && TR ? TR.fmtWhen(started) : "", p.total ? `${p.completed}/${p.total} processes` : ""];
+  const facts = [run.kind, started && TR ? TR.fmtWhen(started) : "", p.total ? `${p.completed}/${p.total} cases` : ""];
   if (run.matrix) facts.push(`${(run.cells || []).length} combinations`);
   $("run-head").innerHTML = `<a class="bench-back" href="#/runs">← all runs</a>
     <h2><span class="atr-state ${escapeAttr(state())}">${escapeHtml(state() || "…")}</span> ${escapeHtml(run.title || run.run_id)}</h2>
@@ -81,7 +126,6 @@ function cellGrid() {
   return `<table class="run-grid"><thead><tr>${head}<th>state</th><th>processes</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-/** Time left, from how fast processes finished since this page first saw the run. */
 function eta(p) {
   if (pace.id !== run.run_id) pace = { id: run.run_id, at: Date.now(), done: p.completed || 0 };
   const gained = (p.completed || 0) - pace.done;
@@ -91,42 +135,65 @@ function eta(p) {
 }
 
 async function benchResults(body, fresh) {
-  if (fresh) {
-    body.innerHTML = `<div class="bench-progress-wrap"><progress id="run-progress" max="100" value="0"></progress>
-        <div class="bench-live" id="run-now"></div></div>
-      <div class="bench-links" id="run-links"></div><div id="run-cells"></div>
-      <div id="run-charts" class="bench-charts"></div>
-      <iframe id="run-report" class="bench-report-frame" title="Bench report" hidden></iframe>`;
-    chartsKey = "";
+  const needMount = fresh || !$("run-explorer") || benchHostRunId !== run.run_id;
+  if (needMount) {
+    if (benchExplorer) benchExplorer.destroy();
+    body.innerHTML = `<div class="bench-progress-wrap" id="run-progress-wrap">
+        <progress id="run-progress" max="100" value="0"></progress>
+        <div class="bench-live" id="run-now"></div>
+      </div>
+      <div id="run-cells"></div>
+      <div id="run-explorer"></div>`;
+    benchHostRunId = run.run_id;
+    runJsonKey = "";
+    lastRunJson = null;
+    benchExplorer = createBenchExplorer($("run-explorer"), {
+      onNavigate: href => { location.hash = href; },
+      onOpenOutput: term => {
+        if (outState.runId !== run.run_id) { outState.runId = run.run_id; outState.sig = ""; outState.path = ""; }
+        outState.query = term || "";
+        location.hash = here(run.run_id, "output");
+      },
+      onOpenSignals: term => {
+        if (sigState.runId !== run.run_id) { sigState.runId = run.run_id; sigState.sig = ""; sigState.traceDetails.clear(); }
+        sigState.query = term || "";
+        sigState.tab = "traces";
+        location.hash = here(run.run_id, "signals");
+      },
+    });
   }
+
   const p = run.progress || {};
+  const isLiveRun = live();
+  $("run-progress-wrap").hidden = !isLiveRun && !p.total;
   const bar = $("run-progress");
   bar.max = p.total || 100;
-  bar.value = p.total ? p.completed : (live() ? 0 : 100);
-  $("run-now").textContent = live() ? [p.variant, eta(p)].filter(Boolean).join(" · ") : "";
-  const files = [[run.has_report_html, "report.html"], [run.has_memory_html, "memory.html"], [run.has_run_json, "run.json"]]
-    .filter(([has]) => has)
-    .map(([, name]) => `<a href="${escapeAttr(run.files + name)}" target="_blank" rel="noopener">${name}</a>`);
-  $("run-links").innerHTML = files.join(" · ");
+  bar.value = p.total ? p.completed : (isLiveRun ? 0 : 100);
+  const pctText = p.total ? `${Math.round(((p.completed || 0) / p.total) * 100)}% (${p.completed}/${p.total})` : "";
+  $("run-now").textContent = isLiveRun
+    ? [pctText, p.variant, eta(p)].filter(Boolean).join(" · ")
+    : pctText;
   $("run-cells").innerHTML = cellGrid();
-  const frame = $("run-report");
-  frame.hidden = !run.has_report_html;
-  if (run.has_report_html && frame.getAttribute("data-src") !== run.files) {
-    frame.src = run.files + "report.html";
-    frame.setAttribute("data-src", run.files);
+
+  const nextKey = `${run.run_id}|${state()}|${run.updated_at_ms || 0}|${run.has_run_json}`;
+  if (run.has_run_json && runJsonKey !== nextKey) {
+    const data = await getJson(run.files + "run.json").catch(() => null);
+    if (data) {
+      lastRunJson = data;
+      runJsonKey = nextKey;
+    }
   }
-  const charts = $("run-charts");
-  if (!run.has_run_json) {
-    charts.innerHTML = (run.cells || []).length || run.has_report_html ? "" : note("Results appear when the first process finishes.");
-  } else if (!run.has_report_html && chartsKey !== run.run_id + state()) {
-    // The report page already draws these; without it, draw from run.json.
-    await renderCharts(run.files + "run.json", charts);
-    if (!live()) chartsKey = run.run_id + state();
+  benchExplorer.update({ runMeta: run, runData: lastRunJson, live: isLiveRun });
+  if (outState.pendingFocusCase && lastRunJson) {
+    const target = outState.pendingFocusCase;
+    outState.pendingFocusCase = "";
+    benchExplorer.focusCase(target);
   }
 }
 
 function testResults(body, fresh) {
   if (fresh || !view || viewKey !== run.run_id) {
+    if (benchExplorer) { benchExplorer.destroy(); benchExplorer = null; benchHostRunId = ""; }
     body.innerHTML = "";
     const host = document.createElement("div");
     body.appendChild(host);
@@ -138,58 +205,443 @@ function testResults(body, fresh) {
 
 // ---- Output ----
 
-async function output(body, fresh) {
-  let url = isTest() ? run.files + "output.log" : "";
-  if (!isTest()) {
-    const logs = run.logs || [];
-    if (!logs.length) {
-      body.innerHTML = note("No captured output yet.");
-      return;
-    }
-    if (!logs.some(l => l.path === logPath)) logPath = logs[0].path;
-    if (fresh || !$("run-log-pick") || $("run-log-pick").options.length !== logs.length) {
-      body.innerHTML = `<select id="run-log-pick" class="run-pick">${logs.map(l =>
-        `<option value="${escapeAttr(l.path)}"${l.path === logPath ? " selected" : ""}>${escapeHtml(l.path)} · ${l.bytes} B</option>`).join("")}</select>
-        <pre class="run-output" id="run-output"></pre>`;
-      $("run-log-pick").addEventListener("change", e => { logPath = e.target.value; output(body, false).catch(() => {}); });
-    }
-    url = run.files + logPath;
-  } else if (fresh || !$("run-output")) {
-    body.innerHTML = `<pre class="run-output" id="run-output"></pre>`;
-  }
+function classifyLogLine(line) {
+  const low = line.toLowerCase();
+  if (low.includes("error:") || low.includes("failed") || low.includes("panicked") || low.includes("warn")) return "warn";
+  if (line.includes(" done ") || line.includes("median ") || line.includes("win ")) return "done";
+  if (line.includes(" running ") || line.includes("compiling")) return "running";
+  return "info";
+}
+
+function formatLogLineHtml(line, idx) {
+  const kind = classifyLogLine(line);
+  const highlighted = escapeHtml(line).replace(/\b(compare\/[A-Za-z0-9_/-]+)\b/g,
+    `<button type="button" class="out-case-link" data-case="$1" title="Inspect $1 in Results">$1</button>`);
+  return `<div class="out-line out-${kind}">
+    <span class="out-ln">${idx + 1}</span>
+    <span class="out-txt">${highlighted}</span>
+  </div>`;
+}
+
+function paintBenchOutput(body) {
   const pre = $("run-output");
-  const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
-  pre.textContent = await fetchText(url).catch(() => "No output recorded.");
+  if (!pre) return;
+  const sel = typeof window.getSelection === "function" ? window.getSelection() : null;
+  if (sel && !sel.isCollapsed && pre.contains(sel.anchorNode)) return;
+
+  const lines = (outState.rawText || "").split("\n");
+  const q = outState.query.trim().toLowerCase();
+  const matched = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (i === lines.length - 1 && l === "") continue;
+    if (outState.level !== "all" && classifyLogLine(l) !== outState.level) continue;
+    if (q && !l.toLowerCase().includes(q)) continue;
+    matched.push([i, l]);
+  }
+  $("out-count").textContent = `${matched.length} / ${Math.max(0, lines.length - 1)} lines`;
+  pre.classList.toggle("nowrap", !outState.wrap);
+
+  const stick = outState.follow || (pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 12);
+  pre.innerHTML = matched.length
+    ? matched.slice(-2500).map(([i, l]) => formatLogLineHtml(l, i)).join("")
+    : `<p class="logs-empty">No lines match filter.</p>`;
+
+  pre.querySelectorAll(".out-case-link[data-case]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const c = btn.dataset.case || "";
+      const parts = c.split("/");
+      outState.pendingFocusCase = parts.length >= 2 ? parts[parts.length - 2] : c;
+      location.hash = here(run.run_id, "results");
+    });
+  });
+
   if (stick) pre.scrollTop = pre.scrollHeight;
+}
+
+async function output(body, fresh) {
+  if (isTest()) {
+    if (fresh || !$("run-output")) {
+      body.innerHTML = `<pre class="run-output" id="run-output"></pre>`;
+    }
+    const pre = $("run-output");
+    const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+    pre.textContent = await fetchText(run.files + "output.log").catch(() => "No output recorded.");
+    if (stick) pre.scrollTop = pre.scrollHeight;
+    return;
+  }
+
+  const logs = run.logs || [];
+  if (!logs.length) {
+    body.innerHTML = note("No captured output yet.");
+    return;
+  }
+  if (outState.runId !== run.run_id) {
+    outState.runId = run.run_id;
+    outState.sig = "";
+    outState.path = logs[0].path;
+  }
+  if (!logs.some(l => l.path === outState.path)) outState.path = logs[0].path;
+
+  const needMount = fresh || !$("out-shell");
+  if (needMount) {
+    body.innerHTML = `<div id="out-shell" class="out-shell">
+      <div class="out-bar">
+        <div class="bx-chips" id="out-files"></div>
+        <div class="out-actions">
+          <a id="out-raw" class="mini-btn" target="_blank" rel="noopener">Raw ↗</a>
+          <button type="button" class="mini-btn" id="out-copy">Copy visible</button>
+          <button type="button" class="mini-btn" id="out-follow">Follow tail</button>
+          <button type="button" class="mini-btn" id="out-wrap">Wrap</button>
+        </div>
+      </div>
+      <div class="bx-ctrl-row">
+        <input type="search" id="out-search" class="bx-search" placeholder="Filter log lines, case names, medians…" autocomplete="off" />
+        <div class="bx-chips" id="out-levels">
+          <button type="button" data-lv="all">All</button>
+          <button type="button" data-lv="done">Done (medians)</button>
+          <button type="button" data-lv="running">Running</button>
+          <button type="button" data-lv="warn">Warn / Error</button>
+        </div>
+        <span class="traces-hint" id="out-count"></span>
+      </div>
+      <div class="run-output out-pre" id="run-output"></div>
+    </div>`;
+
+    $("out-search").value = outState.query;
+    $("out-search").addEventListener("input", e => { outState.query = e.target.value; paintBenchOutput(body); });
+    $("out-levels").querySelectorAll("button[data-lv]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        outState.level = btn.dataset.lv;
+        $("out-levels").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+        paintBenchOutput(body);
+      });
+    });
+    $("out-follow").addEventListener("click", () => {
+      outState.follow = !outState.follow;
+      $("out-follow").classList.toggle("on", outState.follow);
+      if (outState.follow) {
+        const pre = $("run-output");
+        if (pre) pre.scrollTop = pre.scrollHeight;
+      }
+    });
+    $("out-wrap").addEventListener("click", () => {
+      outState.wrap = !outState.wrap;
+      $("out-wrap").classList.toggle("on", outState.wrap);
+      paintBenchOutput(body);
+    });
+    $("out-copy").addEventListener("click", () => {
+      const text = Array.from(document.querySelectorAll("#run-output .out-txt")).map(el => el.textContent).join("\n");
+      copy(text || outState.rawText);
+    });
+  }
+
+  $("out-files").innerHTML = logs.map(l =>
+    `<button type="button" class="${l.path === outState.path ? "on" : ""}" data-lpath="${escapeAttr(l.path)}">${escapeHtml(l.path)} <small>${fmtBytes(l.bytes)}</small></button>`
+  ).join("");
+  $("out-files").querySelectorAll("button[data-lpath]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      outState.path = btn.dataset.lpath;
+      outState.sig = "";
+      output(body, false).catch(() => {});
+    });
+  });
+
+  $("out-follow").classList.toggle("on", outState.follow);
+  $("out-wrap").classList.toggle("on", outState.wrap);
+  $("out-levels").querySelectorAll("button[data-lv]").forEach(b => b.classList.toggle("on", b.dataset.lv === outState.level));
+  $("out-raw").href = run.files + outState.path;
+
+  const meta = logs.find(l => l.path === outState.path) || logs[0];
+  const nextSig = `${run.run_id}|${outState.path}|${meta.bytes}`;
+  if (outState.sig !== nextSig) {
+    outState.rawText = await fetchText(run.files + outState.path).catch(() => "No output recorded.");
+    outState.sig = nextSig;
+    paintBenchOutput(body);
+  }
 }
 
 // ---- Signals ----
 
-const SIGNALS = [
-  { title: "Issues", path: "issues", params: {}, items: d => d.issues, at: i => Date.parse(i.last_seen),
-    html: i => `<a href="#/issues/${escapeAttr(i.id)}">${escapeHtml(i.title)} · ${escapeHtml(i.status)}</a>` },
-  { title: "Traces", path: "traces", params: { limit: 200 }, items: d => d.traces, at: t => t.time_ms,
-    html: t => `<a href="#/traces/${escapeAttr(t.trace_id)}">[${escapeHtml(t.status || "OK")}] ${escapeHtml(t.root_service)} · ${escapeHtml(t.root_name)} (${t.span_count} spans · ${Number(t.duration_ms || 0).toFixed(2)} ms)</a>` },
-  { title: "Logs", path: "logs", params: { limit: 500 }, items: d => d.entries, at: e => e.time_ms,
-    html: e => escapeHtml(`[${e.severity}] ${e.service} ${e.body}`) },
-  { title: "Metrics", path: "metrics", params: { limit: 200 }, items: d => (d.points || []).slice(-60), at: p => p.time_ms,
-    html: p => escapeHtml(`${p.name}=${p.value} ${p.unit || ""}`.trim()) },
-];
+function kvHtml(obj) {
+  const entries = Object.entries(obj || {}).sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) return `<p class="now-quiet">No attributes.</p>`;
+  return `<table class="kv-table"><tbody>${entries.map(([k, v]) =>
+    `<tr><th>${escapeHtml(k)}</th><td><code>${escapeHtml(v)}</code></td></tr>`
+  ).join("")}</tbody></table>`;
+}
 
-async function signals(body) {
+function paintSignals() {
+  const stage = $("sig-stage");
+  if (!stage) return;
+
+  $("sig-scope").textContent = sigState.scopeText;
+  const counts = {
+    traces: sigState.traces.length,
+    metrics: ((sigState.metricsData && sigState.metricsData.series) || []).length,
+    logs: sigState.logs.length,
+    issues: sigState.issues.length,
+  };
+
+  const tabs = [
+    ["traces", `Traces (${counts.traces})`],
+    ["metrics", `Metrics (${counts.metrics})`],
+    ["logs", `Logs (${counts.logs})`],
+    ["issues", `Issues (${counts.issues})`],
+    ["overview", "Overview"],
+  ];
+  $("sig-tabs").innerHTML = tabs.map(([id, lbl]) =>
+    `<button type="button" class="${sigState.tab === id ? "on" : ""}" data-stab="${id}">${escapeHtml(lbl)}</button>`
+  ).join("");
+  $("sig-tabs").querySelectorAll("button").forEach(b => {
+    b.onclick = () => { sigState.tab = b.dataset.stab; paintSignals(); };
+  });
+
+  const q = sigState.query.trim().toLowerCase();
+
+  if (sigState.tab === "traces") {
+    let list = sigState.traces.filter(t => !q || `${t.root_name} ${t.root_service} ${t.trace_id} ${t.status}`.toLowerCase().includes(q));
+    if (sigState.sort === "dur_desc") list = list.slice().sort((a, b) => (b.duration_ms || 0) - (a.duration_ms || 0));
+    else if (sigState.sort === "name") list = list.slice().sort((a, b) => (a.root_name || "").localeCompare(b.root_name || ""));
+    const maxDur = Math.max(0.01, ...list.map(t => Number(t.duration_ms || 0)));
+
+    stage.innerHTML = `<div class="traces-toolbar">
+        <select id="sig-sort">
+          <option value="seq"${sigState.sort === "seq" ? " selected" : ""}>Sequence order</option>
+          <option value="dur_desc"${sigState.sort === "dur_desc" ? " selected" : ""}>Longest span first</option>
+          <option value="name"${sigState.sort === "name" ? " selected" : ""}>Operation A→Z</option>
+        </select>
+        <span class="traces-hint">${list.length} trace(s) · click any span to inspect inline</span>
+      </div>
+      <div class="sig-list">${list.length ? list.map(t => {
+        const dur = Number(t.duration_ms || 0);
+        const w = Math.max(2, Math.min(100, (dur / maxDur) * 100));
+        const open = sigState.expandedTraceId === t.trace_id;
+        const det = sigState.traceDetails.get(t.trace_id);
+        let drawer = "";
+        if (open) {
+          const spans = (det && det.trace && det.trace.spans) || [];
+          drawer = `<div class="sig-drawer">
+            ${det === undefined ? `<p class="now-quiet">Loading trace spans…</p>` : spans.length ? spans.map(sp => `
+              <div class="sig-span-box">
+                <div class="bx-card-head">
+                  <strong>${escapeHtml(sp.name)}</strong>
+                  <span><a href="#/traces/${escapeAttr(t.trace_id)}" class="trace-pill">Full Waterfall ↗</a></span>
+                </div>
+                <div class="traces-hint">${escapeHtml(sp.service)} · ${escapeHtml(sp.kind)} · ${Number(sp.duration_ms || 0).toFixed(3)} ms · status ${escapeHtml(sp.status)}</div>
+                ${kvHtml(sp.attrs)}
+              </div>`).join("") : `<p class="now-quiet">No spans returned for trace <code>${escapeHtml(t.trace_id)}</code>.</p>`}
+          </div>`;
+        }
+        return `<div class="sig-trace-item${open ? " open" : ""}">
+          <button type="button" class="sig-trace-row" data-tid="${escapeAttr(t.trace_id)}">
+            <span class="trace-status ${t.status === "ERROR" ? "error" : "ok"}">${escapeHtml(t.status || "OK")}</span>
+            <span class="sig-op"><code>${escapeHtml(t.root_name)}</code> <small>${escapeHtml(t.root_service)} · ${t.span_count} span(s)</small></span>
+            <span class="sig-bar-wrap"><span class="sig-bar" style="width:${w.toFixed(1)}%"></span></span>
+            <span class="num sig-dur">${dur.toFixed(2)} ms</span>
+          </button>
+          ${drawer}
+        </div>`;
+      }).join("") : `<p class="now-quiet">No traces match filter.</p>`}</div>`;
+
+    const sortEl = $("sig-sort");
+    if (sortEl) sortEl.onchange = () => { sigState.sort = sortEl.value; paintSignals(); };
+    stage.querySelectorAll(".sig-trace-row[data-tid]").forEach(btn => {
+      btn.onclick = async () => {
+        const tid = btn.dataset.tid;
+        if (sigState.expandedTraceId === tid) {
+          sigState.expandedTraceId = "";
+          paintSignals();
+          return;
+        }
+        sigState.expandedTraceId = tid;
+        paintSignals();
+        if (!sigState.traceDetails.has(tid)) {
+          const det = await tryJson("traces/" + enc(tid), null, null);
+          sigState.traceDetails.set(tid, det || null);
+          if (sigState.expandedTraceId === tid) paintSignals();
+        }
+      };
+    });
+    return;
+  }
+
+  if (sigState.tab === "metrics") {
+    const m = sigState.metricsData || {};
+    const points = (m.points || []).filter(p => !q || `${p.name} ${p.attrs} ${p.service}`.toLowerCase().includes(q));
+    const series = (m.series || []).filter(s => !q || `${s.name} ${s.attrs} ${s.service}`.toLowerCase().includes(q));
+    const groups = new Map();
+    for (const p of points) {
+      const arr = groups.get(p.name) || [];
+      arr.push(p);
+      groups.set(p.name, arr);
+    }
+
+    const boards = [...groups.entries()].map(([name, pts]) => {
+      const sorted = pts.slice().sort((a, b) => Number(b.value) - Number(a.value));
+      const minV = Math.max(0.1, Math.min(...sorted.map(x => Number(x.value) || 0)));
+      const maxV = Math.max(1, ...sorted.map(x => Number(x.value) || 0));
+      const rows = sorted.slice(0, 80).map(p => {
+        const val = Number(p.value || 0);
+        const w = sigState.scale === "log"
+          ? Math.max(4, ((Math.log10(Math.max(0.1, val)) - Math.log10(minV)) / Math.max(0.4, Math.log10(maxV) - Math.log10(minV))) * 100)
+          : Math.max(4, (val / maxV) * 100);
+        const caseLbl = (p.attr_map && (p.attr_map["bench.case"] || p.attr_map["bench.variant"])) || p.attrs || p.name;
+        const unit = p.unit === "ns" ? fmtNs(val) : fmtValue(val, p.unit || "");
+        return `<div class="bx-erow">
+          <span class="bx-ename" title="${escapeAttr(caseLbl)}">${escapeHtml(caseLbl)}</span>
+          <div class="bx-track"><div class="bx-fill" style="width:${w.toFixed(1)}%;background:var(--glow)"></div></div>
+          <span class="bx-eval">${escapeHtml(unit)}</span>
+        </div>`;
+      }).join("");
+      return `<div class="bench-chart-card">
+        <div class="bx-card-head"><h4>${escapeHtml(name)}</h4><span class="traces-hint">${pts.length} series</span></div>
+        <div class="bx-bars">${rows}</div>
+      </div>`;
+    }).join("");
+
+    const multiSeries = series.filter(s => (s.points || []).length >= 2);
+    const sparks = multiSeries.slice(0, 12).map((s, i) => `<article class="metric-board">
+      <header><div><h3>${escapeHtml(s.name)}</h3><div class="sub">${escapeHtml(s.attrs || s.service || "")}</div></div></header>
+      ${sparkSvg(s.points, "smf" + i)}
+    </article>`).join("");
+
+    stage.innerHTML = `<div class="bx-ctrl-row">
+        <div class="bx-seg">
+          <button type="button" class="${sigState.scale === "log" ? "on" : ""}" id="sig-sc-log">Log10</button>
+          <button type="button" class="${sigState.scale === "lin" ? "on" : ""}" id="sig-sc-lin">Linear</button>
+        </div>
+        <span class="traces-hint">${points.length} metric point(s) across ${groups.size} instrument(s)</span>
+      </div>
+      ${sparks ? `<div class="metrics-boards">${sparks}</div>` : ""}
+      <div class="bx-dist-grid">${boards || `<p class="now-quiet">No OTLP metrics match filter.</p>`}</div>`;
+    $("sig-sc-log").onclick = () => { sigState.scale = "log"; paintSignals(); };
+    $("sig-sc-lin").onclick = () => { sigState.scale = "lin"; paintSignals(); };
+    return;
+  }
+
+  if (sigState.tab === "logs") {
+    const entries = sigState.logs.filter(e => {
+      if (!sigState.sevs.has(normalizeSev(e.severity))) return false;
+      if (!q) return true;
+      return `${e.body || ""} ${e.service || ""} ${e.trace_id || ""} ${JSON.stringify(e.attrs || {})}`.toLowerCase().includes(q);
+    });
+    const sevHtml = SEV_ORDER.map(s =>
+      `<button type="button" class="${sigState.sevs.has(s) ? "on" : ""}" data-ssev="${s}">${s}</button>`
+    ).join("");
+    const rows = entries.slice(0, 200).map((e, i) => {
+      const k = `${e.time || i}|${(e.body || "").slice(0, 32)}`;
+      const open = sigState.expandedLogs.has(k);
+      const tracePill = e.trace_id
+        ? ` <a class="trace-pill" href="#/traces/${escapeAttr(e.trace_id)}">trace:${escapeHtml(e.trace_id.slice(0, 8))}</a>`
+        : "";
+      return `<div class="log-row expandable${open ? " open" : ""}" data-sk="${escapeAttr(k)}">
+        <div class="log-time">${escapeHtml(formatTime(e))}</div>
+        <div class="log-sev ${sevClass(e.severity)}">${escapeHtml(e.severity || "INFO")}</div>
+        <div class="log-body">${escapeHtml(e.body || "")}${tracePill}${open ? kvHtml({ ...(e.attrs || {}), trace_id: e.trace_id || "", span_id: e.span_id || "" }) : ""}</div>
+      </div>`;
+    }).join("");
+    stage.innerHTML = `<div class="bx-ctrl-row"><div class="sev-chips" id="sig-sevs">${sevHtml}</div><span class="traces-hint">${entries.length} record(s) · click any log to inspect attributes</span></div>
+      <div class="logs-panel">${rows || `<p class="logs-empty">No logs match filter.</p>`}</div>`;
+    $("sig-sevs").querySelectorAll("button").forEach(b => {
+      b.onclick = () => {
+        const s = b.dataset.ssev;
+        if (sigState.sevs.has(s) && sigState.sevs.size > 1) sigState.sevs.delete(s);
+        else sigState.sevs.add(s);
+        paintSignals();
+      };
+    });
+    stage.querySelectorAll(".log-row.expandable").forEach(row => {
+      row.onclick = ev => {
+        if (ev.target && ev.target.closest && ev.target.closest("a")) return;
+        const k = row.dataset.sk;
+        if (sigState.expandedLogs.has(k)) sigState.expandedLogs.delete(k);
+        else sigState.expandedLogs.add(k);
+        paintSignals();
+      };
+    });
+    return;
+  }
+
+  if (sigState.tab === "issues") {
+    const items = sigState.issues.filter(i => !q || `${i.id} ${i.title} ${i.status}`.toLowerCase().includes(q));
+    stage.innerHTML = `<div class="bench-tele-panel">${items.length
+      ? items.map(i => `<div><a href="#/issues/${escapeAttr(i.id)}">${escapeHtml(i.title)} · ${escapeHtml(i.status)}</a></div>`).join("")
+      : "No issues correlated with this run."}</div>`;
+    return;
+  }
+
+  // Overview
+  stage.innerHTML = `<div class="bx-kpis">
+    <button type="button" class="bx-kpi" data-go="traces"><small>Traces</small><strong>${counts.traces}</strong><span>Open trace explorer →</span></button>
+    <button type="button" class="bx-kpi" data-go="metrics"><small>Metric series</small><strong>${counts.metrics}</strong><span>Open metric charts →</span></button>
+    <button type="button" class="bx-kpi" data-go="logs"><small>OTLP Logs</small><strong>${counts.logs}</strong><span>Open log inspector →</span></button>
+    <button type="button" class="bx-kpi" data-go="issues"><small>Issues</small><strong>${counts.issues}</strong><span>Open issues →</span></button>
+  </div>`;
+  stage.querySelectorAll(".bx-kpi[data-go]").forEach(b => {
+    b.onclick = () => { sigState.tab = b.dataset.go; paintSignals(); };
+  });
+}
+
+async function signals(body, fresh, force = false) {
+  if (sigState.runId !== run.run_id) {
+    sigState.runId = run.run_id;
+    sigState.sig = "";
+    sigState.expandedTraceId = "";
+    sigState.traceDetails.clear();
+  }
+  const needMount = fresh || !$("sig-shell");
+  if (needMount) {
+    body.innerHTML = `<div id="sig-shell" class="sig-shell">
+      <div class="bx-ctrl-row">
+        <div class="bx-chips" id="sig-tabs"></div>
+        <input type="search" id="sig-search" class="bx-search" placeholder="Filter spans, metrics, log attrs…" autocomplete="off" />
+        <button type="button" class="mini-btn" id="sig-refresh">↻ Refresh</button>
+      </div>
+      <p class="now-quiet" id="sig-scope"></p>
+      <div id="sig-stage"></div>
+    </div>`;
+    $("sig-search").value = sigState.query;
+    $("sig-search").addEventListener("input", e => { sigState.query = e.target.value; paintSignals(); });
+    $("sig-refresh").addEventListener("click", () => { signals(body, false, true).catch(() => {}); });
+  }
+
+  const nextSig = `${run.run_id}|${state()}|${run.updated_at_ms || 0}`;
+  if (!force && !live() && sigState.sig === nextSig) {
+    paintSignals();
+    return;
+  }
+
   const tagged = run.signals_run_id;
   const from = (run.started_at_ms || 0) - 2000;
   const to = (run.finished_at_ms || Date.now()) + 2000;
-  const scope = tagged ? "tagged with this run's id" : "received while the run was going";
-  const blocks = await Promise.all(SIGNALS.map(async s => {
-    const data = await tryJson(s.path, tagged ? { ...s.params, run_id: tagged } : s.params, {});
-    let items = s.items(data) || [];
-    // Without a run id on the signal, the run's time window is the scope.
-    if (!tagged) items = items.filter(x => { const at = Number(s.at(x)); return !Number.isFinite(at) || (at >= from && at <= to); });
-    const lines = items.slice(0, 80).map(x => `<div>${s.html(x)}</div>`).join("");
-    return `<h3>${s.title} <small>${items.length}</small></h3><div class="bench-tele-panel">${lines || escapeHtml(data.note || "Nothing.")}</div>`;
-  }));
-  body.innerHTML = `${note("Signals " + scope + ".")}<div class="bench-tele">${blocks.join("")}</div>`;
+  sigState.scopeText = tagged
+    ? `Signals tagged with airbug.run_id=${tagged}.`
+    : "Signals received while this run executed (time-window correlation).";
+
+  const scope = (items, atFn) => tagged ? (items || []) : (items || []).filter(x => {
+    const at = Number(atFn(x));
+    return !Number.isFinite(at) || (at >= from && at <= to);
+  });
+
+  const qParams = extra => (tagged ? { ...extra, run_id: tagged } : extra);
+  const [trResp, lgResp, mtResp, isResp] = await Promise.all([
+    tryJson("traces", qParams({ limit: 300 }), {}),
+    tryJson("logs", qParams({ limit: 500 }), {}),
+    tryJson("metrics", qParams({ limit: 600 }), {}),
+    tryJson("issues", tagged ? { run_id: tagged } : {}, {}),
+  ]);
+
+  sigState.traces = scope(trResp.traces, t => t.time_ms);
+  sigState.logs = scope(lgResp.entries, e => e.time_ms);
+  sigState.metricsData = {
+    ...mtResp,
+    points: scope(mtResp.points, p => p.time_ms),
+    series: mtResp.series || [],
+  };
+  sigState.issues = scope(isResp.issues, i => Date.parse(i.last_seen));
+  sigState.sig = nextSig;
+  paintSignals();
 }
 
 // ---- Compare ----
@@ -209,11 +661,26 @@ async function compareBench(body) {
     body.innerHTML = note("This session was written outside .airbug-bench, so there are no other runs to compare it with.");
     return;
   }
+  const pref = takePreferredBaseline(run.run_id);
+  if (pref) baseline[run.run_id] = pref;
+
+  if (!cmpView || cmpViewRunId !== run.run_id || !body.querySelector("#run-baseline")) {
+    body.innerHTML = `<div id="cmp-host"></div>`;
+    cmpViewRunId = run.run_id;
+    cmpView = createBenchCompareView($("cmp-host"), {
+      onBaselineChange: val => { baseline[run.run_id] = val; compareBench(body).catch(() => {}); },
+      onThresholdChange: th => { cmpThreshold[run.run_id] = th; compareBench(body).catch(() => {}); },
+    });
+  }
   const chosen = baseline[run.run_id] || "";
-  const cmp = await getJson("bench/compare", { run: run.compare_id, baseline: chosen });
-  const options = [["", "previous comparable run"], ...(cmp.candidates || []).map(c => [c.id, `${c.id} · ${when(c.when_ms)} · ${c.cases} cases`])];
-  body.innerHTML = picker(options, chosen) + (benchCompareHtml(cmp) || note("Nothing to compare yet."));
-  bindPicker(body);
+  const threshold = cmpThreshold[run.run_id] != null ? cmpThreshold[run.run_id] : 5;
+  const cmp = await getJson("bench/compare", {
+    run: run.compare_id,
+    baseline: chosen,
+    threshold,
+    limit: 500,
+  });
+  cmpView.update(cmp, chosen);
 }
 
 function list(title, ids, tone) {
@@ -223,6 +690,7 @@ function list(title, ids, tone) {
 }
 
 async function compareTests(body) {
+  cmpView = null;
   const timeline = await fetchTimeline("test", 40);
   const others = (timeline.runs || []).filter(r => r.run_id !== run.run_id);
   if (!others.length) {
@@ -262,6 +730,7 @@ async function refresh(route, fresh) {
   } catch (err) {
     run = null;
     view = null;
+    if (benchExplorer) { benchExplorer.destroy(); benchExplorer = null; benchHostRunId = ""; }
     const starting = route.runId === pendingRerun;
     $("run-head").innerHTML = `<a class="bench-back" href="#/runs">← all runs</a>`;
     $("run-tabs").innerHTML = "";
@@ -273,13 +742,16 @@ async function refresh(route, fresh) {
   const tab = tabOf(route);
   if (tab === "results") await (isTest() ? testResults(body, fresh) : benchResults(body, fresh));
   else if (tab === "output") await output(body, fresh);
-  else if (tab === "signals") await signals(body);
+  else if (tab === "signals") await signals(body, fresh);
   else if (fresh || !$("run-baseline")) await compare(body);
   bindCopy(body);
 }
 
 export default {
   cats: ["run"],
+  hide: () => {
+    if (benchExplorer) { benchExplorer.destroy(); benchExplorer = null; benchHostRunId = ""; }
+  },
   show: (route, changed) => {
     if (!route.runId) {
       location.hash = "#/runs";
@@ -287,7 +759,6 @@ export default {
     }
     return refresh(route, changed).catch(err => { $("run-body").innerHTML = note(String(err)); });
   },
-  // Live runs refresh every tick, finished ones every fourth.
   tick: n => {
     const route = currentRoute();
     if (!route.runId || (pendingRerun !== route.runId && !live() && n % 4)) return null;

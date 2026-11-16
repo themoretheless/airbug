@@ -389,14 +389,34 @@ fn handle_api(
                 "dsn": format!("http://airbug@127.0.0.1:{}/1", app.port),
             }),
         ),
+        ("GET", "/bench/targets") => {
+            http::respond_json(stream, "200 OK", &crate::bench_launch::targets(&app.paths.root))
+        }
+        ("POST", "/bench/launch") => handle_bench_launch(stream, app, req),
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
+        ("POST", p) if p.starts_with("/bench/runs/") && p.ends_with("/cancel") => {
+            let id = &p["/bench/runs/".len()..p.len() - "/cancel".len()];
+            handle_bench_cancel(stream, app, req, id)
+        }
         ("GET", "/bench/compare") => {
             let run = http::query_str(&req.query, "run");
             let baseline = http::query_str(&req.query, "baseline");
+            let threshold = http::query_f64(&req.query, "threshold");
+            let limit = req
+                .query
+                .split('&')
+                .any(|p| p.starts_with("limit="))
+                .then(|| http::query_usize(&req.query, "limit", 500));
             http::respond_json(
                 stream,
                 "200 OK",
-                &crate::benchcmp::compare(&app.paths.root, run.as_deref(), baseline.as_deref()),
+                &crate::benchcmp::compare_opts(
+                    &app.paths.root,
+                    run.as_deref(),
+                    baseline.as_deref(),
+                    threshold,
+                    limit,
+                ),
             )
         }
         ("GET", "/bench") | ("GET", "/bench/runs") => match app.runs.list() {
@@ -500,6 +520,62 @@ fn handle_create_run(stream: &mut TcpStream, app: &HubApp, req: &Request) -> std
             http::respond_json(stream, "200 OK", &resp)
         }
         Err(e) => http::respond_err(stream, "500 Internal Server Error", &e),
+    }
+}
+
+fn handle_bench_launch(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+) -> std::io::Result<()> {
+    if !req.same_origin_json() {
+        return http::respond_err(
+            stream,
+            "403 Forbidden",
+            &HubError::msg("send JSON (Content-Type: application/json) from the hub page"),
+        );
+    }
+    let body: crate::bench_launch::LaunchRequest = if req.body.is_empty() {
+        Default::default()
+    } else {
+        match serde_json::from_slice(&req.body) {
+            Ok(v) => v,
+            Err(e) => return http::respond_err(stream, "400 Bad Request", &HubError::from(e)),
+        }
+    };
+    match crate::bench_launch::launch(app, body) {
+        Ok(started) => {
+            app.stream.publish("run", started.clone());
+            http::respond_json(stream, "202 Accepted", &started)
+        }
+        Err(e) => {
+            let text = e.to_string();
+            let status = if text.starts_with("busy") {
+                "409 Conflict"
+            } else {
+                "400 Bad Request"
+            };
+            http::respond_err(stream, status, &e)
+        }
+    }
+}
+
+fn handle_bench_cancel(
+    stream: &mut TcpStream,
+    app: &HubApp,
+    req: &Request,
+    id: &str,
+) -> std::io::Result<()> {
+    if !req.same_origin_json() {
+        return http::respond_err(
+            stream,
+            "403 Forbidden",
+            &HubError::msg("send JSON (Content-Type: application/json) from the hub page"),
+        );
+    }
+    match crate::bench_launch::cancel(&app.paths.root, id) {
+        Ok(val) => http::respond_json(stream, "200 OK", &val),
+        Err(e) => http::respond_err(stream, "400 Bad Request", &e),
     }
 }
 
