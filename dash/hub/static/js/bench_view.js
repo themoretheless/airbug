@@ -382,7 +382,8 @@ function renderBoxSamplesSvg(fam, visibleEngines, scale) {
   const allVals = items.flatMap(it => it.samples.map(s => s.nsPerOp));
   const minVal = Math.max(0.5, Math.min(...allVals) * 0.85);
   const maxVal = Math.max(...allVals, minVal * 1.2) * 1.08;
-  const w = 520, padL = 128, padR = 18, padT = 18, padB = 26, rowH = 32;
+  const maxNameLen = Math.max(8, ...items.map(it => it.engine.length));
+  const w = 520, padL = Math.min(168, Math.max(116, Math.ceil(maxNameLen * 6.8) + 14)), padR = 30, padT = 18, padB = 26, rowH = 32;
   const h = padT + padB + items.length * rowH;
   const plotW = w - padL - padR;
 
@@ -397,10 +398,13 @@ function renderBoxSamplesSvg(fam, visibleEngines, scale) {
     ? logTicks(minVal, maxVal, 4)
     : [0, 0.25, 0.5, 0.75, 1].map(f => maxVal * f);
 
-  const grid = ticks.map(t => {
+  const grid = ticks.map((t, idx) => {
     const x = toX(t);
+    const isLast = idx === ticks.length - 1;
+    const tx = isLast ? Math.min(w - 4, x + 8) : x;
+    const anchor = isLast ? "end" : "middle";
     return `<line x1="${x.toFixed(1)}" y1="${padT - 4}" x2="${x.toFixed(1)}" y2="${h - padB}" stroke="#d9d9d4" stroke-dasharray="2 3" />
-      <text x="${x.toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="9.5" fill="#5c5c58">${escapeHtml(fmtNs(t))}</text>`;
+      <text x="${tx.toFixed(1)}" y="${h - 8}" text-anchor="${anchor}" font-size="9.5" fill="#5c5c58">${escapeHtml(fmtNs(t))}</text>`;
   }).join("");
 
   const rows = items.map((it, i) => {
@@ -1073,10 +1077,10 @@ export function createBenchExplorer(host, callbacks = {}) {
           ? renderBoxSamplesSvg(fam, state.visibleEngines, state.scale)
           : renderSequenceSvg(fam, state.visibleEngines, state.scale)}
       </div>
-      <table class="bx-table">
+      <div class="bx-table-wrap"><table class="bx-table">
         <thead><tr><th>Engine</th><th class="num">Median</th><th class="num">IQR</th><th class="num">CV%</th><th class="num">Rate</th><th class="num">Rel</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
       ${contractPairs.length ? `<details class="bx-contract"><summary>Contract (${contractPairs.length} fields)</summary>
         <dl>${contractPairs.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd><code>${escapeHtml(v)}</code></dd>`).join("")}</dl></details>` : ""}`;
   }
