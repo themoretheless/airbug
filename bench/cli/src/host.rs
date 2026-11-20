@@ -429,6 +429,62 @@ mod tests {
     }
 
     #[test]
+    fn rapl_energy_uj_is_read_and_correlated_from_both_sysfs_layouts() {
+        use airbug_bench::{Availability, Observation, Run};
+        let dir = tempfile::tempdir().unwrap();
+        let sys = dir.path();
+        write(sys, "class/powercap/intel-rapl:0/energy_uj", "1000000\n");
+        let mut probe = Probe::at(sys);
+        probe.observe(0);
+        assert_eq!(probe.samples()[0].energy_uj, Some(1_000_000));
+
+        // Nested layout (`class/powercap/intel-rapl/intel-rapl:0/energy_uj`) when direct symlink is absent.
+        let dir_nested = tempfile::tempdir().unwrap();
+        write(
+            dir_nested.path(),
+            "class/powercap/intel-rapl/intel-rapl:0/energy_uj",
+            "2500000\n",
+        );
+        let mut probe_nested = Probe::at(dir_nested.path());
+        probe_nested.observe(0);
+        assert_eq!(probe_nested.samples()[0].energy_uj, Some(2_500_000));
+
+        let mut run = Run::new();
+        for (i, uj) in [1_500_000u64, 2_200_000, 3_100_000, 4_200_000]
+            .into_iter()
+            .enumerate()
+        {
+            write(
+                sys,
+                "class/powercap/intel-rapl:0/energy_uj",
+                &uj.to_string(),
+            );
+            probe.observe(i as u32 + 1);
+            run.observations.push(Observation {
+                case: "work".into(),
+                metric: "wall".into(),
+                variant: "candidate".into(),
+                process: i as u32,
+                pair: None,
+                sequence: i as u64 + 1,
+                value: Some((1000.0 + i as f64 * 150.0).to_string()),
+                operations: 1,
+                worker_work_totals: Default::default(),
+                work_totals: Default::default(),
+                availability: Availability::Available,
+            });
+        }
+        let report = correlate(&run, probe.samples());
+        assert_eq!(report["energy_uj_during_run"], 3_200_000);
+        assert_eq!(report["energy_uj"]["first"], 1_000_000.0);
+        assert_eq!(report["energy_uj"]["last"], 4_200_000.0);
+        assert!(
+            report["timing_vs_energy_uj_r"].as_f64().unwrap() > 0.98,
+            "{report}"
+        );
+    }
+
+    #[test]
     fn timings_that_follow_the_frequency_correlate_with_it() {
         use airbug_bench::{Availability, Observation, Run};
         let mut run = Run::new();

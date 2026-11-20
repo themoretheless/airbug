@@ -67,3 +67,10 @@ jobs:
         with:
           package-name: airbug-otel
           dry-run: true
+
+      - name: Validate package file lists for dependent crates
+        run: |
+          set -euo pipefail
+          for pkg in airbug airbug-bench cargo-airbug-bench; do
+            cargo package --list -p "$pkg"
+          done

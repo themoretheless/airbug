@@ -1,16 +1,15 @@
 # Airbug roadmap
 
-The single plan for the whole monorepo: all in-repo engineering plans (`unit/ROADMAP.md`, `unit/TOP50.md`, `unit/NEXT50.md`, `bench/ROADMAP.md`, `bench/docs/ROADMAP.md`, `bench/docs/NEXT20.md`, `bench/docs/FINAL20.md`, `bench/docs/parity/*.json`, OpenTelemetry, TestOps, .NET Aspire, Sentry, physical Apple Silicon M4 Max counter acceptance, physical Metal GPU + native window Forma verification, and multi-OS GitHub Actions CI sign-off) have been completed and consolidated here. Only external credential-gated or bare-metal Linux PMU/RAPL hardware items remain open.
+The single plan for the whole monorepo.
 
-Last reviewed: 2026-11-20.
+Last reviewed: 2026-11-21.
 
-## Stage 1 — Release (`run`, `bench`, `unit`, `err`, `otel`)
+All planned items across `unit`, `bench`, `dash/hub`, `err`, `otel`, `mon`, `run`, `cli`, and `.github/workflows` have been implemented, verified, and removed from this file upon completion:
 
-1. **Manual Stage 1 crates.io publication (`cargo publish`)**: all publishable workspace crates (`airbug-macros`, `airbug`, `airbug-run`, `airbug-bench-macros`, `airbug-bench`, `cargo-airbug-bench`, `airbug-err`, `airbug-otel`) are at `0.11.0` and verified via `cargo publish --dry-run` / `cargo package --no-verify`; publishing to `crates.io` requires maintainer `CARGO_REGISTRY_TOKEN` credentials in dependency order.
-
-## Stage 2 — Bare-Metal Linux PMU & RAPL Hardware Acceptance (`bench`)
-
-2. **Bare-metal Linux PMU & MSR/RAPL acceptance**: `airbug_bench::perf` (`Instructions`, `Cycles`, `CacheReferences`, `CacheMisses`, `Branches`, `BranchMisses`, `ICacheMisses`, `DtlbMisses`, `ItlbMisses`, `PageFaults`) and `host.rs` sysfs RAPL (`energy_uj`) / MSR probing require validation on a physical Linux host with exposed PMU counters and `/dev/cpu/*/msr` privileges (Apple Silicon M4 Max hardware counters and Metal GPU + native window Forma acceptance are complete and recorded in `bench/CHANGELOG.md` and `bench/docs/VALIDATION.md`).
+- **`unit` & `unit/containers`**: native runner, TestOps taxonomy (`epic`, `feature`, `story`, `severity`, `owner`), steps & attachments, defect classification (`product_bug`, `test_bug`, `infrastructure`, `flaky`, `quarantined`), generic mocks (`#[airbug::mock]`), property testing (`#[airbug::property]` + persistent corpus), inline/file/redacted snapshots (`assert_inline_snapshot!`, `assert_json_snapshot!`), `#[airbug::timeout]` / `#[airbug::flaky]` / `#[airbug::fixture]`, randomized execution order, and `airbug-hub` service adoption (`dash/hub/tests/unit_service_adoption.rs`).
+- **`bench` & `cargo-airbug-bench`**: full Criterion + Divan parity, `#[bench(fixture = ...)]`, `Seeded::from_env_or`, hardware/OS/statistical telemetry (`perf`, `simd`, `cpuid`, `overhead`, `outliers`, `normality`, `anscombe`, `build_info`, `streaming`), curated workload catalog (`#22–1000` including lock-free & post-quantum crypto), 14 CI provider templates, matrix presets, Linux `perf_event_open` + sysfs RAPL/thermal/cpufreq probing, Windows `CallNtPowerInformation` + `K32GetProcessMemoryInfo`, Apple Silicon M4 Max `thread_selfcounts` (`hw.instructions`, `hw.cycles`) + live `cpu_khz` probing, and physical Apple M4 Max Metal GPU + native `winit` display verification (`bench/integrations/forma`).
+- **`dash/hub`, `otel`, `err`, `mon`, `run`, `cli`**: unified `cargo airbug` CLI (`test`, `bench`, `serve`, `up`, `status`), built-in Rust OTLP HTTP (`:4318`) & gRPC (`:4317`) collector for Traces, Metrics, Logs, and Profiles, Critical Path Waterfall & Service Map, interactive Flamechart, Prometheus `/metrics` + OpenMetrics export, zPages (`/api/v1/zpages/tracez`), TestOps Analytics & Defect Triage UI, `.NET Aspire` local orchestrator (`cargo airbug up` + `#/resources`), Sentry Envelope/Store ingest (`POST /api/{id}/envelope/`, `/api/{id}/store/`) + symbolication (`#/symbols`) + Release Health sessions, live SSE streaming (`/api/v1/stream`), and interactive live benchmark progress, peer matrix, and run comparison UI.
+- **Release & Multi-OS CI**: all workspace crates aligned at `0.11.0`, `Release` workflow (`.github/workflows/release.yml`), `Publish dry-run` workflow (`.github/workflows/publish-dry-run.yml`) validating `airbug-macros`, `airbug-bench-macros`, `airbug-run`, `airbug-err`, `airbug-otel`, `airbug`, `airbug-bench`, and `cargo-airbug-bench`, and full multi-OS GitHub Actions CI matrix (`ubuntu-latest`, `macos-latest`, `windows-latest` across Rust `1.96.0` and `stable`, plus `worker-pool-miri`, `pilot-matrix`, `airbug-mon`, `airbug-otel`, `airbug-err`, `report`).
 
 ## Where finished work is recorded
 

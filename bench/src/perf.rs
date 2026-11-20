@@ -201,7 +201,7 @@ mod macos {
 
     /// `THCOUNTS_INSTRS_CYCLES` (`1`): returns `[instructions, cycles]` for the calling thread
     /// via XNU's `kpc` / PMC per-thread accumulators without root privileges.
-    fn read_thread_instrs_cycles() -> Result<[u64; 2]> {
+    fn read_thread_instrs_cycles(event: Event) -> Result<[u64; 2]> {
         let mut counts = [0u64; 2];
         // SAFETY: `counts` is a 16-byte buffer for `[instructions, cycles]`.
         let rc = unsafe {
@@ -212,9 +212,16 @@ mod macos {
             )
         };
         if rc != 0 {
+            let os = std::io::Error::last_os_error();
+            let hint = match os.raw_os_error() {
+                Some(libc::ENOTSUP) | Some(libc::EOPNOTSUPP) | Some(libc::ENOENT) => {
+                    " (this CPU or virtual machine exposes no per-thread PMC counters)"
+                }
+                _ => "",
+            };
             return Err(error(format!(
-                "macOS thread_selfcounts failed: {}",
-                std::io::Error::last_os_error()
+                "hardware counter {} unavailable: macOS thread_selfcounts failed: {os}{hint}",
+                event.id()
             )));
         }
         Ok(counts)
@@ -240,7 +247,7 @@ mod macos {
         pub fn open(event: Event) -> Result<Self> {
             match event {
                 Event::Instructions | Event::Cycles => {
-                    let counts = read_thread_instrs_cycles()?;
+                    let counts = read_thread_instrs_cycles(event)?;
                     let value = match event {
                         Event::Instructions => counts[0],
                         Event::Cycles => counts[1],
@@ -267,8 +274,8 @@ mod macos {
 
         pub(super) fn read(&mut self) -> Result<u64> {
             match self.event {
-                Event::Instructions => Ok(read_thread_instrs_cycles()?[0]),
-                Event::Cycles => Ok(read_thread_instrs_cycles()?[1]),
+                Event::Instructions => Ok(read_thread_instrs_cycles(self.event)?[0]),
+                Event::Cycles => Ok(read_thread_instrs_cycles(self.event)?[1]),
                 Event::PageFaults => read_page_faults(),
                 _ => Err(error(format!(
                     "hardware counter {} unavailable on macOS",
@@ -433,6 +440,24 @@ mod tests {
     fn ids_are_distinct_and_a_missing_counter_says_why() {
         let ids: std::collections::BTreeSet<_> = Event::ALL.iter().map(|e| e.id()).collect();
         assert_eq!(ids.len(), Event::ALL.len());
+        let configs: std::collections::BTreeSet<_> = Event::ALL
+            .iter()
+            .map(|e| e.attr_kind_and_config())
+            .collect();
+        assert_eq!(configs.len(), Event::ALL.len());
+        assert_eq!(Event::Cycles.attr_kind_and_config(), (0, 0));
+        assert_eq!(Event::Instructions.attr_kind_and_config(), (0, 1));
+        assert_eq!(Event::CacheReferences.attr_kind_and_config(), (0, 2));
+        assert_eq!(Event::CacheMisses.attr_kind_and_config(), (0, 3));
+        assert_eq!(Event::Branches.attr_kind_and_config(), (0, 4));
+        assert_eq!(Event::BranchMisses.attr_kind_and_config(), (0, 5));
+        assert_eq!(
+            Event::ICacheMisses.attr_kind_and_config(),
+            (3, 1 | (1 << 16))
+        );
+        assert_eq!(Event::DtlbMisses.attr_kind_and_config(), (3, 3 | (1 << 16)));
+        assert_eq!(Event::ItlbMisses.attr_kind_and_config(), (3, 4 | (1 << 16)));
+        assert_eq!(Event::PageFaults.attr_kind_and_config(), (1, 2));
         for event in Event::ALL {
             match PerfCounter::open(event) {
                 Ok(counter) => assert_eq!(counter.metric().id, event.id()),
