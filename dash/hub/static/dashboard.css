@@ -1705,3 +1705,10 @@
       display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem;
       padding: 0.45rem 0.6rem; background: var(--paper); border-radius: 6px; font: 0.71rem var(--mono);
     }
+
+    /* Explicit red text for any benchmark lag / loss (< 1.0x vs peer) */
+    .bad, td.bad, th.bad, tr.bad td, tr.bad code, h3.bad, h4.bad, strong.bad, span.bad, b.bad { color: #dc2626 !important; }
+    .bx-card.is-loss { border-color: #fca5a5; background: #fffafa; }
+    .bx-card.is-loss.on { border-color: #dc2626; box-shadow: inset 3px 0 0 #dc2626; background: #fff5f5; }
+    .bx-chips button.bad-chip { color: #dc2626; border-color: #fca5a5; }
+    .bx-chips button.bad-chip.on { background: #dc2626; color: #fff; border-color: #dc2626; }

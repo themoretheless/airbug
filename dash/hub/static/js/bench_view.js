@@ -361,6 +361,7 @@ function choosePeerItem(family, primaryItem, peerMode) {
 
 function familyOutcome(ratio) {
   if (ratio == null) return "single";
+  if (ratio < 1.0) return "loss";
   if (ratio >= 1.15) return "win";
   return "lag";
 }
@@ -612,7 +613,11 @@ export function createBenchExplorer(host, callbacks = {}) {
   function filterAndSort(families) {
     const q = state.query.trim().toLowerCase();
     let list = families.filter(f => {
-      if (state.outcome !== "all" && f.outcome !== state.outcome) return false;
+      if (state.outcome === "lag") {
+        if (f.outcome !== "loss" && f.outcome !== "lag") return false;
+      } else if (state.outcome !== "all" && f.outcome !== state.outcome) {
+        return false;
+      }
       if (state.tag !== "all" && !f.tags.includes(state.tag)) return false;
       if (state.visibleEngines && !f.items.some(x => state.visibleEngines.has(x.engine))) return false;
       if (q) {
@@ -776,8 +781,8 @@ export function createBenchExplorer(host, callbacks = {}) {
   function renderKpis(families, parsed) {
     const cmp = families.filter(f => f.ratio != null);
     const wins = cmp.filter(f => f.ratio >= 1.15).length;
-    const parity = cmp.filter(f => f.ratio >= 0.87 && f.ratio < 1.15).length;
-    const lags = cmp.filter(f => f.ratio < 0.87).length;
+    const parity = cmp.filter(f => f.ratio >= 1.0 && f.ratio < 1.15).length;
+    const lags = cmp.filter(f => f.ratio < 1.0).length;
     const bestWin = cmp.slice().sort((a, b) => b.ratio - a.ratio)[0];
     const fastest = parsed.cases.slice().sort((a, b) => a.stats.median - b.stats.median)[0];
     const peakTput = parsed.cases.filter(c => c.throughput).sort((a, b) => b.throughput - a.throughput)[0];
@@ -791,7 +796,7 @@ export function createBenchExplorer(host, callbacks = {}) {
       <button type="button" class="bx-kpi" data-kpi="score">
         <small>${escapeHtml(state.primary)} vs ${escapeHtml(state.peer)}</small>
         <strong>${cmp.length ? `${wins} / ${cmp.length} wins` : `${parsed.cases.length} single-engine`}</strong>
-        <span>${cmp.length ? `${parity} parity · ${lags} behind (click filter)` : "no shared peer in selection"}</span>
+        <span>${cmp.length ? `${parity} narrow (1–1.15×) · ${lags ? `<b class="bad">${lags} behind (&lt;1×)</b>` : "0 behind"} (click filter)` : "no shared peer in selection"}</span>
       </button>
       <button type="button" class="bx-kpi" data-kpi="best" ${bestWin ? `data-fam="${escapeAttr(bestWin.id)}"` : ""}>
         <small>Peak speedup</small>
@@ -813,7 +818,13 @@ export function createBenchExplorer(host, callbacks = {}) {
           state.query = "";
           part("search").value = "";
         } else if (k === "score") {
-          state.outcome = state.outcome === "lag" ? "win" : state.outcome === "win" ? "all" : "lag";
+          state.outcome = state.outcome === "loss"
+            ? "lag"
+            : state.outcome === "lag"
+              ? "win"
+              : state.outcome === "win"
+                ? "all"
+                : "loss";
         } else if (btn.dataset.fam) {
           state.selectedFamilyId = btn.dataset.fam;
           state.subview = "explorer";
@@ -882,15 +893,18 @@ export function createBenchExplorer(host, callbacks = {}) {
     sortSel.value = state.sort;
     sortSel.onchange = () => { state.sort = sortSel.value; paint(); };
 
+    const lagsCount = families.filter(f => f.ratio != null && f.ratio < 1.0).length;
     const outcomes = [
       ["all", "All"],
+      ["loss", lagsCount ? `Behind (${lagsCount})` : "Behind (<1×)"],
       ["win", "Wins (>1.15×)"],
       ["lag", "Parity / Lag"],
       ["single", "Single-engine"],
     ];
-    part("outcomes").innerHTML = outcomes.map(([id, lbl]) =>
-      `<button type="button" class="${state.outcome === id ? "on" : ""}" data-out="${id}">${lbl}</button>`
-    ).join("");
+    part("outcomes").innerHTML = outcomes.map(([id, lbl]) => {
+      const cls = [state.outcome === id ? "on" : "", id === "loss" && lagsCount ? "bad-chip" : ""].filter(Boolean).join(" ");
+      return `<button type="button" class="${cls}" data-out="${id}">${lbl}</button>`;
+    }).join("");
     part("outcomes").querySelectorAll("button").forEach(b => b.onclick = () => { state.outcome = b.dataset.out; paint(); });
 
     const tagCounts = new Map();
@@ -953,7 +967,8 @@ export function createBenchExplorer(host, callbacks = {}) {
     const cardsHtml = list.map(f => {
       const active = f.id === state.selectedFamilyId;
       const items = f.items.filter(x => state.visibleEngines.has(x.engine)).slice().sort((a, b) => a.stats.median - b.stats.median);
-      const badgeTone = f.ratio == null ? "single" : f.ratio >= 1.15 ? "good" : f.ratio >= 0.92 ? "warn" : "bad";
+      const isLoss = f.ratio != null && f.ratio < 1.0;
+      const badgeTone = f.ratio == null ? "single" : isLoss ? "bad" : f.ratio < 1.15 ? "warn" : "good";
       const ratioBadge = f.ratio != null
         ? `<span class="bx-badge ${badgeTone}">${escapeHtml(fmtMult(f.ratio))} vs ${escapeHtml(f.peerItem.engine)}</span>`
         : `<span class="bx-badge single">${items.length} eng</span>`;
@@ -964,7 +979,7 @@ export function createBenchExplorer(host, callbacks = {}) {
         const w = Math.max(8, Math.min(100, (Math.log10(Math.max(1.05, mag)) / maxLogRatio) * 100));
         barsHtml = `
           <div class="bx-speed-bar">
-            <span class="bx-lbl-sm">${escapeHtml(f.primaryItem.engine)}: ${fmtNs(f.primaryItem.stats.median)}</span>
+            <span class="bx-lbl-sm${isLoss ? " bad" : ""}">${escapeHtml(f.primaryItem.engine)}: ${fmtNs(f.primaryItem.stats.median)}</span>
             <div class="bx-track"><div class="bx-fill ${badgeTone}" style="width:${w.toFixed(1)}%"></div></div>
             <span class="bx-lbl-sm">${escapeHtml(f.peerItem.engine)}: ${fmtNs(f.peerItem.stats.median)}</span>
           </div>`;
@@ -984,10 +999,10 @@ export function createBenchExplorer(host, callbacks = {}) {
         }).join("");
       }
 
-      return `<div class="bx-card${active ? " on" : ""}" data-fid="${escapeAttr(f.id)}">
+      return `<div class="bx-card${active ? " on" : ""}${isLoss ? " is-loss" : ""}" data-fid="${escapeAttr(f.id)}">
         <div class="bx-card-head">
           <div>
-            <strong>${escapeHtml(f.suiteLabel ? f.id : f.shortFamily)}</strong>
+            <strong class="${isLoss ? "bad" : ""}">${escapeHtml(f.suiteLabel ? f.id : f.shortFamily)}</strong>
             ${f.params.length ? `<small class="bx-params">${escapeHtml(f.params.join(" · "))}</small>` : ""}
           </div>
           <div class="bx-card-meta">
@@ -1040,16 +1055,21 @@ export function createBenchExplorer(host, callbacks = {}) {
   function renderInspector(fam) {
     const items = fam.items.slice().sort((a, b) => a.stats.median - b.stats.median);
     const baseMed = fam.primaryItem ? fam.primaryItem.stats.median : items[0].stats.median;
+    const fastestOther = items.find(x => fam.primaryItem && x !== fam.primaryItem && x.stats.median < baseMed);
+    const isFamLoss = (fam.ratio != null && fam.ratio < 1.0) || Boolean(fastestOther);
     const rows = items.map((it, i) => {
       const ratio = baseMed > 0 ? it.stats.median / baseMed : 1;
-      const ratioStr = it === fam.primaryItem ? "base" : (ratio >= 1 ? ratio.toFixed(2) + "× slower" : (1 / ratio).toFixed(2) + "× faster");
-      return `<tr>
+      const isPrimaryLossRow = it === fam.primaryItem && Boolean(fastestOther);
+      const ratioStr = it === fam.primaryItem
+        ? (fastestOther ? `base (${(baseMed / fastestOther.stats.median).toFixed(2)}× slower vs ${fastestOther.engine})` : "base")
+        : (ratio >= 1 ? ratio.toFixed(2) + "× slower" : (1 / ratio).toFixed(2) + "× faster");
+      return `<tr class="${isPrimaryLossRow ? "bad" : ""}">
         <td><span class="bx-dot" style="background:${engineColor(it.engine, i)}"></span><code>${escapeHtml(it.engine)}</code></td>
         <td class="num"><strong>${fmtNs(it.stats.median)}</strong></td>
         <td class="num">${fmtNs(it.stats.iqr)}</td>
         <td class="num">${it.stats.cvPct.toFixed(1)}%</td>
         <td class="num">${escapeHtml(it.throughputText || "—")}</td>
-        <td class="num">${escapeHtml(ratioStr)}</td>
+        <td class="num${isPrimaryLossRow ? " bad" : ""}">${escapeHtml(ratioStr)}</td>
       </tr>`;
     }).join("");
 
@@ -1060,7 +1080,7 @@ export function createBenchExplorer(host, callbacks = {}) {
     return `<div class="bx-insp-head">
         <div>
           <div class="traces-hint">${escapeHtml(fam.rawFamilyId)}</div>
-          <h3>${escapeHtml(fam.shortFamily)}</h3>
+          <h3 class="${isFamLoss ? "bad" : ""}">${escapeHtml(fam.shortFamily)}</h3>
         </div>
         <div class="bx-insp-actions">
           <button type="button" class="mini-btn primary" id="bx-insp-run">▶ Run</button>
@@ -1093,8 +1113,8 @@ export function createBenchExplorer(host, callbacks = {}) {
     const cards = list.slice(0, 60).map(f => `
       <div class="bench-chart-card">
         <div class="bx-card-head">
-          <h4>${escapeHtml(f.id)}</h4>
-          ${f.ratio ? `<span class="bx-badge ${f.ratio >= 1.15 ? "good" : f.ratio >= 0.92 ? "warn" : "bad"}">${escapeHtml(fmtMult(f.ratio))}</span>` : ""}
+          <h4 class="${f.ratio != null && f.ratio < 1.0 ? "bad" : ""}">${escapeHtml(f.id)}</h4>
+          ${f.ratio != null ? `<span class="bx-badge ${f.ratio < 1.0 ? "bad" : f.ratio < 1.15 ? "warn" : "good"}">${escapeHtml(fmtMult(f.ratio))}</span>` : ""}
         </div>
         ${renderBoxSamplesSvg(f, state.visibleEngines, state.scale)}
       </div>`).join("");
@@ -1139,15 +1159,19 @@ export function createBenchExplorer(host, callbacks = {}) {
     const ths = cols.map(([id, lbl]) =>
       `<th class="${id === "case" || id === "engine" ? "" : "num"}"><button type="button" class="bx-th-sort" data-col="${id}">${lbl}${col === id ? (asc ? " ▲" : " ▼") : ""}</button></th>`
     ).join("");
-    const rows = flat.map(({ it, ratio }) => `<tr>
+    const rows = flat.map(({ fam, it, ratio }) => {
+      const isLossRow = ratio != null && ratio < 1.0 && it === fam.primaryItem;
+      const ratioTone = ratio == null ? "" : ratio < 1.0 ? "bad" : ratio >= 1.15 ? "good" : "warn";
+      return `<tr class="${isLossRow ? "bad" : ""}">
       <td><code>${escapeHtml(it.id)}</code></td>
       <td><span class="bx-dot" style="background:${engineColor(it.engine)}"></span>${escapeHtml(it.engine)}</td>
       <td class="num">${fmtNs(it.stats.median)}</td>
       <td class="num">${fmtNs(it.stats.p95)}</td>
       <td class="num">${it.stats.cvPct.toFixed(1)}%</td>
       <td class="num">${escapeHtml(it.throughputText || "—")}</td>
-      <td class="num">${ratio != null ? escapeHtml(fmtMult(ratio)) : "—"}</td>
-    </tr>`).join("");
+      <td class="num ${ratioTone}">${ratio != null ? escapeHtml(fmtMult(ratio)) : "—"}</td>
+    </tr>`;
+    }).join("");
 
     part("stage").innerHTML = `<div class="bx-table-tools">
         <span>${flat.length} rows</span>

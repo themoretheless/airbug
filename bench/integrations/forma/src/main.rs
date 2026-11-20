@@ -15,7 +15,7 @@ const SCENARIOS: [&str; 7] = [
     "text",
     "image",
 ];
-const SCROLL:&str="component Demo { Frame { width:400; height:200; padding:10; clip:true; background:#181e2a; Scroll { Button { width:600; height:400; text:'Scroll content'; } } } }";
+const SCROLL: &str = "component Demo { Frame { width:400; height:200; padding:10; clip:true; background:#181e2a; Scroll { Button { width:600; height:400; text:'Scroll content'; } } } }";
 struct Options {
     filter: String,
     goldens: PathBuf,
@@ -109,7 +109,9 @@ fn main() -> Result<()> {
                 )
             }
             "--help" => {
-                println!("--gpu-timestamps | --cold --filter static|text; --width 16..4096 --height 16..4096 --dpi 0.5..4 --backend metal|vulkan|gl|dx12; --list --filter TEXT --record-goldens NEW_DIR | --goldens DIR [--channel-tolerance 0..255 --max-changed-percent 0..100] [--alloc-stacks DIR] --json\nGoldens are required. Recording creates reference images only; inspect PNGs before using them. image is unsupported by this native renderer.");
+                println!(
+                    "--gpu-timestamps | --cold --filter static|text; --width 16..4096 --height 16..4096 --dpi 0.5..4 --backend metal|vulkan|gl|dx12; --list --filter TEXT --record-goldens NEW_DIR | --goldens DIR [--channel-tolerance 0..255 --max-changed-percent 0..100] [--alloc-stacks DIR] --json\nGoldens are required. Recording creates reference images only; inspect PNGs before using them. image is unsupported by this native renderer."
+                );
                 return Ok(());
             }
             _ => return Err(error(format!("unknown argument {a}"))),
@@ -210,8 +212,14 @@ fn surface(r: &forma_vector::gpu::Renderer, w: u32, h: u32, dpi: f32) -> Surface
     }
 }
 fn draw(r: &mut forma_vector::gpu::Renderer, m: &forma_vector::Button, s: &Surface) -> Result<()> {
-    r.draw(m, &s.view, s.w, s.h, s.dpi, true, true)
-        .map_err(error)?;
+    r.draw(
+        m,
+        &s.view,
+        forma_vector::gpu::Viewport::new(s.w, s.h, s.dpi),
+        true,
+        true,
+    )
+    .map_err(error)?;
     Ok(())
 }
 fn pixels(r: &forma_vector::gpu::Renderer, s: &Surface) -> Result<RgbaImage> {
@@ -249,8 +257,12 @@ fn pixels(r: &forma_vector::gpu::Renderer, s: &Surface) -> Result<RgbaImage> {
     b.slice(..).map_async(wgpu::MapMode::Read, move |v| {
         let _ = send.send(v);
     });
-    r.device.poll(wgpu::PollType::wait_indefinitely())?;
-    recv.recv()??;
+    r.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|e| error(e.to_string()))?;
+    recv.recv()
+        .map_err(|e| error(e.to_string()))?
+        .map_err(|e| error(e.to_string()))?;
     let mapped = b.slice(..).get_mapped_range();
     let mut data = Vec::with_capacity((s.w * s.h * 4) as usize);
     for row in mapped.chunks_exact(stride as usize) {
@@ -286,7 +298,11 @@ fn golden(
         let mut encoder = png::Encoder::new(f, image.width, image.height);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
-        encoder.write_header()?.write_image_data(&image.pixels)?;
+        encoder
+            .write_header()
+            .map_err(|e| error(e.to_string()))?
+            .write_image_data(&image.pixels)
+            .map_err(|e| error(e.to_string()))?;
     } else {
         let expected = RgbaImage::load(&path).map_err(|e| {
             error(format!(
@@ -330,15 +346,47 @@ fn metrics() -> Vec<Metric> {
         ),
         phase("geometry.uploads", "Forma renderer geometry"),
     ];
-    for (id,unit,scope) in [
-        ("renderer.frames","calls","Forma successful draw frames; one render pass per frame in this snapshot"),
-        ("renderer.uploaded_bytes","bytes","Forma application payload writes and initialized buffers; excludes driver traffic"),
-        ("renderer.tile_uploads","calls","Forma tile upload counter"),
-        ("renderer.buffer_allocations","calls","Forma application buffer creations"),
-        ("renderer.bind_groups","calls","Forma bind group creations"),
-        ("alloc.phase_peak","bytes","whole-process peak Rust live bytes during phase; caller quiescence required at boundaries"),
-        ("alloc.live_end","bytes","whole-process Rust live bytes at phase end"),
-    ] {let mut m=phase(id,scope);m.unit=unit.into();result.push(m);}
+    for (id, unit, scope) in [
+        (
+            "renderer.frames",
+            "calls",
+            "Forma successful draw frames; one render pass per frame in this snapshot",
+        ),
+        (
+            "renderer.uploaded_bytes",
+            "bytes",
+            "Forma application payload writes and initialized buffers; excludes driver traffic",
+        ),
+        (
+            "renderer.tile_uploads",
+            "calls",
+            "Forma tile upload counter",
+        ),
+        (
+            "renderer.buffer_allocations",
+            "calls",
+            "Forma application buffer creations",
+        ),
+        (
+            "renderer.bind_groups",
+            "calls",
+            "Forma bind group creations",
+        ),
+        (
+            "alloc.phase_peak",
+            "bytes",
+            "whole-process peak Rust live bytes during phase; caller quiescence required at boundaries",
+        ),
+        (
+            "alloc.live_end",
+            "bytes",
+            "whole-process Rust live bytes at phase end",
+        ),
+    ] {
+        let mut m = phase(id, scope);
+        m.unit = unit.into();
+        result.push(m);
+    }
     result.push(phase(
         "renderer.draw_calls",
         "one pass.draw per successful Renderer frame in Forma snapshot e2ef5f7",
@@ -379,7 +427,7 @@ async fn run(o: Options) -> Result<()> {
         Ok(a) => a,
         Err(e) => {
             if o.record {
-                return Err(e.into());
+                return Err(error(e.to_string()));
             }
             let mut r = Recorder::new();
             let id = format!(
@@ -418,7 +466,10 @@ async fn run(o: Options) -> Result<()> {
                 .map_err(error)?;
         let target = surface(&renderer, o.width, o.height, o.dpi);
         draw(&mut renderer, &model, &target)?;
-        renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+        renderer
+            .device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| error(e.to_string()))?;
         let elapsed = start.elapsed().as_nanos();
         let golden_hash = golden(&o, &o.filter, 0, &pixels(&renderer, &target)?, false)?;
         let mut r = Recorder::new();
@@ -470,7 +521,10 @@ async fn run(o: Options) -> Result<()> {
             let small = surface(&renderer, o.width * 4 / 5, o.height * 4 / 5, o.dpi);
             for _ in 0..20 {
                 draw(&mut renderer, &model, &large)?;
-                renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+                renderer
+                    .device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .map_err(|e| error(e.to_string()))?;
             }
             let mut submits = [0u128; N];
             let mut completes = [0u128; N];
@@ -488,7 +542,10 @@ async fn run(o: Options) -> Result<()> {
                 let s = if w == 800 { &large } else { &small };
                 draw(&mut renderer, &model, s)?;
                 submits[i] = start.elapsed().as_nanos();
-                renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+                renderer
+                    .device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .map_err(|e| error(e.to_string()))?;
                 completes[i] = start.elapsed().as_nanos();
                 if pass == 0 && (i == 0 || i == N - 1) {
                     let hash = golden(&o, name, i, &pixels(&renderer, s)?, o.record)?;
@@ -684,35 +741,56 @@ async fn run(o: Options) -> Result<()> {
                 let small = surface(&renderer, o.width * 4 / 5, o.height * 4 / 5, o.dpi);
                 for _ in 0..4 {
                     draw(&mut renderer, &model, &large)?;
-                    renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+                    renderer
+                        .device
+                        .poll(wgpu::PollType::wait_indefinitely())
+                        .map_err(|e| error(e.to_string()))?;
                 }
                 for i in 0..N {
                     let (w, _) = state(&mut model, name, i);
                     let s = if w == 800 { &large } else { &small };
                     draw(&mut renderer, &model, s)?;
-                    renderer.device.poll(wgpu::PollType::wait_indefinitely())?;
+                    renderer
+                        .device
+                        .poll(wgpu::PollType::wait_indefinitely())
+                        .map_err(|e| error(e.to_string()))?;
                 }
             }
             let profile = session.finish();
             std::fs::create_dir_all(stack_dir)?;
-            profile.save(stack_dir.join("alloc-stacks.json"))?;
+            let mut target = stack_dir.join("alloc-stacks.json");
+            let mut suffix = 0u32;
+            while target.exists() {
+                suffix += 1;
+                target = stack_dir.join(format!("alloc-stacks-{suffix}.json"));
+            }
+            let stem = if suffix == 0 {
+                "alloc-stacks".to_string()
+            } else {
+                format!("alloc-stacks-{suffix}")
+            };
+            profile.save(stack_dir.join(format!("{stem}.json")))?;
             let html = profile.html()?;
             use std::io::Write;
             std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(stack_dir.join("alloc-stacks.html"))?
+                .open(stack_dir.join(format!("{stem}.html")))?
                 .write_all(html.as_bytes())?;
             let mut folded = String::new();
             for site in profile.sites() {
                 if !site.frames.is_empty() {
-                    folded.push_str(&format!("{} {}\n", site.frames.join(";"), site.allocated_bytes));
+                    folded.push_str(&format!(
+                        "{} {}\n",
+                        site.frames.join(";"),
+                        site.allocated_bytes
+                    ));
                 }
             }
             std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(stack_dir.join("alloc-stacks.folded"))?
+                .open(stack_dir.join(format!("{stem}.folded")))?
                 .write_all(folded.as_bytes())?;
         }
     }
@@ -757,9 +835,11 @@ mod tests {
             gpu_sample(&mut r, "gpu", sample).unwrap();
         }
         let r = r.finish().unwrap();
-        assert!(r.observations[..4]
-            .iter()
-            .all(|o| o.value.is_none() && matches!(o.availability, Availability::Invalid(_))));
+        assert!(
+            r.observations[..4]
+                .iter()
+                .all(|o| o.value.is_none() && matches!(o.availability, Availability::Invalid(_)))
+        );
         assert_eq!(r.observations[4].value.as_deref(), Some("123"));
     }
 }

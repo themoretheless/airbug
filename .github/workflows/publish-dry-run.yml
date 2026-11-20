@@ -6,6 +6,9 @@ on:
     paths:
       - 'unit/**'
       - 'bench/**'
+      - 'run/**'
+      - 'err/**'
+      - 'otel/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/publish-dry-run.yml'
@@ -51,4 +54,16 @@ jobs:
         uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
         with:
           package-name: airbug-run
+          dry-run: true
+
+      - name: Dry-run airbug-err
+        uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          package-name: airbug-err
+          dry-run: true
+
+      - name: Dry-run airbug-otel
+        uses: themoretheless/.github/.github/actions/publish-crate@a6c40a906bc786a3668362d270ca95212b5bffce # v1
+        with:
+          package-name: airbug-otel
           dry-run: true

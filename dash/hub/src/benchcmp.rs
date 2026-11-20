@@ -345,8 +345,10 @@ fn compare_with(
                 None,
             ),
             Err(err) => {
-                if let Some((prev_sub, curr_sub, overlap)) = overlap_subset(&previous.run, &current.run)
-                    && let Ok(rows) = analysis::compare(&prev_sub, Some(&curr_sub), threshold, ALPHA)
+                if let Some((prev_sub, curr_sub, overlap)) =
+                    overlap_subset(&previous.run, &current.run)
+                    && let Ok(rows) =
+                        analysis::compare(&prev_sub, Some(&curr_sub), threshold, ALPHA)
                 {
                     return result(
                         "previous",
@@ -531,7 +533,9 @@ mod tests {
             });
         }
         let mut narrow = run("narrow", &[("candidate", &FAST)]);
-        narrow.environment.insert("runner".into(), "protocol".into());
+        narrow
+            .environment
+            .insert("runner".into(), "protocol".into());
 
         let entries = vec![entry("narrow", 2, narrow), entry("wide", 1, wide)];
         let value = compare_entries_opts(&entries, Some("narrow"), Some("wide"), 12.0, 500);

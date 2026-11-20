@@ -22,13 +22,16 @@ impl Gpu {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
             Box::new(window.clone()),
         ));
-        let surface = instance.create_surface(window.clone())?;
+        let surface = instance
+            .create_surface(window.clone())
+            .map_err(|e| error(e.to_string()))?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: Some(&surface),
                 ..Default::default()
             })
-            .await?;
+            .await
+            .map_err(|e| error(e.to_string()))?;
         let size = window.inner_size();
         let mut config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
@@ -107,9 +110,7 @@ impl App {
             .draw(
                 &self.model,
                 &frame.texture.create_view(&Default::default()),
-                size.width,
-                size.height,
-                w.scale_factor() as f32,
+                forma_vector::gpu::Viewport::new(size.width, size.height, w.scale_factor() as f32),
                 true,
                 true,
             )
@@ -122,7 +123,8 @@ impl App {
         self.frames_recorder.presented(fid, true)?;
         g.renderer
             .device
-            .poll(wgpu::PollType::wait_indefinitely())?;
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| error(e.to_string()))?;
         self.frames_recorder.completed(fid)?;
         let elapsed = start.elapsed().as_nanos();
         let interval = self
@@ -147,11 +149,13 @@ impl ApplicationHandler for App {
         }
         let init = (|| -> Result<()> {
             let w = Arc::new(
-                events.create_window(
-                    Window::default_attributes()
-                        .with_title("bench · Forma window benchmark")
-                        .with_inner_size(winit::dpi::LogicalSize::new(400., 200.)),
-                )?,
+                events
+                    .create_window(
+                        Window::default_attributes()
+                            .with_title("bench · Forma window benchmark")
+                            .with_inner_size(winit::dpi::LogicalSize::new(400., 200.)),
+                    )
+                    .map_err(|e| error(e.to_string()))?,
             );
             self.gpu = Some(pollster::block_on(Gpu::new(w.clone()))?);
             self.window = Some(w);
@@ -207,7 +211,7 @@ fn main() -> Result<()> {
             ));
         }
     }
-    let events = EventLoop::new()?;
+    let events = EventLoop::new().map_err(|e| error(e.to_string()))?;
     let mut app = App {
         window: None,
         gpu: None,
@@ -235,7 +239,7 @@ fn main() -> Result<()> {
         )?,
         error: None,
     };
-    events.run_app(&mut app)?;
+    events.run_app(&mut app).map_err(|e| error(e.to_string()))?;
     if let Some(e) = app.error {
         return Err(error(e));
     }

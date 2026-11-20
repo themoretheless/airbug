@@ -138,57 +138,6 @@ pub fn figure(classification: &Classification, title: &str, unit: &str) -> Strin
     plot.figure()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn preserves_order_and_classifies_both_sides_including_fence_equalities() {
-        let values = [
-            -6., -5., -3., -2., 0., 1., 1., 1., 2., 2., 2., 2., 3., 3., 3., 3., 4., 6., 7., 9., 10.,
-        ];
-        let result = classify(&values).unwrap();
-        assert_eq!(result.counts, [1, 2, 15, 2, 1]);
-        for (actual, expected) in result.fences.into_iter().zip([-5., -2., 6., 9.]) {
-            assert!((actual.unwrap() - expected).abs() < 1e-12);
-        }
-        assert_eq!(
-            result.points.iter().map(|p| p.value).collect::<Vec<_>>(),
-            values
-        );
-        assert_eq!(result.points[1].label, Label::LowMild);
-        assert_eq!(result.points[3].label, Label::Normal);
-        assert_eq!(result.points[17].label, Label::Normal);
-        assert_eq!(result.points[19].label, Label::HighMild);
-    }
-    #[test]
-    fn tied_core_and_extreme_range_remain_valid() {
-        assert_eq!(classify(&[1.; 10]).unwrap().counts, [0, 0, 10, 0, 0]);
-        assert_eq!(
-            classify(&[1., 1., 1., 1., 1., 100.]).unwrap().counts,
-            [0, 0, 5, 0, 1]
-        );
-        let result = classify(&[-f64::MAX, 0., f64::MAX]).unwrap();
-        assert_eq!(result.counts, [0, 0, 3, 0, 0]);
-        assert!(result.fences.iter().all(Option::is_none));
-        assert!(classify(&[]).is_err());
-        assert!(classify(&[f64::NAN]).is_err());
-        let figure = figure(&classify(&[1., 2., 30.]).unwrap(), "<unsafe>", "ns");
-        assert!(figure.contains("&lt;unsafe&gt;") && !figure.contains("<unsafe>"));
-        assert!(!figure.contains("NaN"));
-    }
-
-    #[test]
-    fn outlier_policies_and_trimmed_mean_behave_as_expected() {
-        let data = [10.0, 11.0, 10.5, 10.2, 9.8, 10.1, 100.0];
-        assert_eq!(filter_outliers(&data, OutlierPolicy::Keep).len(), 7);
-        assert_eq!(filter_outliers(&data, OutlierPolicy::Iqr).len(), 6);
-        assert_eq!(filter_outliers(&data, OutlierPolicy::Mad).len(), 6);
-        assert_eq!(filter_outliers(&data, OutlierPolicy::ZScore).len(), 6);
-        let tm = trimmed_mean(&data, 0.15).unwrap();
-        assert!((tm - 10.36).abs() < 0.5, "tm={tm}");
-    }
-}
-
 /// `#106` Configurable outlier filtering policy.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -270,5 +219,56 @@ pub fn trimmed_mean(values: &[f64], trim_fraction: f64) -> Option<f64> {
         None
     } else {
         Some(slice.iter().sum::<f64>() / slice.len() as f64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn preserves_order_and_classifies_both_sides_including_fence_equalities() {
+        let values = [
+            -6., -5., -3., -2., 0., 1., 1., 1., 2., 2., 2., 2., 3., 3., 3., 3., 4., 6., 7., 9., 10.,
+        ];
+        let result = classify(&values).unwrap();
+        assert_eq!(result.counts, [1, 2, 15, 2, 1]);
+        for (actual, expected) in result.fences.into_iter().zip([-5., -2., 6., 9.]) {
+            assert!((actual.unwrap() - expected).abs() < 1e-12);
+        }
+        assert_eq!(
+            result.points.iter().map(|p| p.value).collect::<Vec<_>>(),
+            values
+        );
+        assert_eq!(result.points[1].label, Label::LowMild);
+        assert_eq!(result.points[3].label, Label::Normal);
+        assert_eq!(result.points[17].label, Label::Normal);
+        assert_eq!(result.points[19].label, Label::HighMild);
+    }
+    #[test]
+    fn tied_core_and_extreme_range_remain_valid() {
+        assert_eq!(classify(&[1.; 10]).unwrap().counts, [0, 0, 10, 0, 0]);
+        assert_eq!(
+            classify(&[1., 1., 1., 1., 1., 100.]).unwrap().counts,
+            [0, 0, 5, 0, 1]
+        );
+        let result = classify(&[-f64::MAX, 0., f64::MAX]).unwrap();
+        assert_eq!(result.counts, [0, 0, 3, 0, 0]);
+        assert!(result.fences.iter().all(Option::is_none));
+        assert!(classify(&[]).is_err());
+        assert!(classify(&[f64::NAN]).is_err());
+        let figure = figure(&classify(&[1., 2., 30.]).unwrap(), "<unsafe>", "ns");
+        assert!(figure.contains("&lt;unsafe&gt;") && !figure.contains("<unsafe>"));
+        assert!(!figure.contains("NaN"));
+    }
+
+    #[test]
+    fn outlier_policies_and_trimmed_mean_behave_as_expected() {
+        let data = [10.0, 11.0, 10.5, 10.2, 9.8, 10.1, 100.0];
+        assert_eq!(filter_outliers(&data, OutlierPolicy::Keep).len(), 7);
+        assert_eq!(filter_outliers(&data, OutlierPolicy::Iqr).len(), 6);
+        assert_eq!(filter_outliers(&data, OutlierPolicy::Mad).len(), 6);
+        assert_eq!(filter_outliers(&data, OutlierPolicy::ZScore).len(), 6);
+        let tm = trimmed_mean(&data, 0.15).unwrap();
+        assert!((tm - 10.36).abs() < 0.5, "tm={tm}");
     }
 }

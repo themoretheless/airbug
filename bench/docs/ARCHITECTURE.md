@@ -65,10 +65,10 @@ Runner заранее строит и сохраняет schedule. Compile вы�
 
 Browser/WASM: драйвер через внешний host (`scripts/browser-driver.cjs`, см. MEASUREMENT.md) измеряет и микро-кейсы, и сценарии с готовностью, фазами и кадрами. Внутри wasm нет предположения о spawn процесса, Unix APIs или обычном native timer.
 
-## API — эскиз
+## API — пример
 
 ```rust,ignore
-// Предлагаемый синтаксис; ещё не доступная библиотека.
+// Эскиз builder-стиля (актуальный API Suite и макроса #[bench] см. в bench/README.md).
 let mut suite = Suite::new("tokenizer");
 suite.case("json/parse")
     .param("dataset", "unicode")

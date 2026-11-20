@@ -58,8 +58,7 @@ cargo run --features macros --example checkout_pilot -- store-failure
 
 ## Additions (0.4+)
 
-Remaining deliberate stubs (`InlineSource`, `CompletionBarrier`, `#[mock]` on generics)
-are tracked in [ROADMAP.md](../ROADMAP.md).
+`InlineSource` snapshot updates, `CompletionBarrier::await_done`, and `#[mock]` on generic traits are implemented; external/hardware items are tracked in [ROADMAP.md](../ROADMAP.md).
 The `prelude` is optional; direct module imports remain supported.
 
 ```rust

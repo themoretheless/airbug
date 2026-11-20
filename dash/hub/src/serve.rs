@@ -389,9 +389,11 @@ fn handle_api(
                 "dsn": format!("http://airbug@127.0.0.1:{}/1", app.port),
             }),
         ),
-        ("GET", "/bench/targets") => {
-            http::respond_json(stream, "200 OK", &crate::bench_launch::targets(&app.paths.root))
-        }
+        ("GET", "/bench/targets") => http::respond_json(
+            stream,
+            "200 OK",
+            &crate::bench_launch::targets(&app.paths.root),
+        ),
         ("POST", "/bench/launch") => handle_bench_launch(stream, app, req),
         ("POST", "/bench/runs") => handle_create_run(stream, app, req),
         ("POST", p) if p.starts_with("/bench/runs/") && p.ends_with("/cancel") => {
@@ -523,11 +525,7 @@ fn handle_create_run(stream: &mut TcpStream, app: &HubApp, req: &Request) -> std
     }
 }
 
-fn handle_bench_launch(
-    stream: &mut TcpStream,
-    app: &HubApp,
-    req: &Request,
-) -> std::io::Result<()> {
+fn handle_bench_launch(stream: &mut TcpStream, app: &HubApp, req: &Request) -> std::io::Result<()> {
     if !req.same_origin_json() {
         return http::respond_err(
             stream,

@@ -301,15 +301,48 @@ fn fallback_cpu_khz() -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn fallback_cpu_khz() -> Option<u64> {
-    let out = std::process::Command::new("sysctl")
+    if let Ok(out) = std::process::Command::new("sysctl")
         .args(["-n", "hw.cpufrequency"])
         .output()
-        .ok()?;
-    if !out.status.success() {
+        && out.status.success()
+        && let Ok(text) = String::from_utf8(out.stdout)
+        && let Ok(hz) = text.trim().parse::<u64>()
+        && hz > 0
+    {
+        return Some(hz / 1000);
+    }
+    // On Apple Silicon `hw.cpufrequency` is absent; measure real-time core frequency over a
+    // short calibration spin using XNU's `thread_selfcounts` cycle counter against Instant.
+    unsafe extern "C" {
+        fn thread_selfcounts(kind: libc::c_int, buf: *mut u64, nbytes: libc::size_t)
+        -> libc::c_int;
+    }
+    let mut c0 = [0u64; 2];
+    let mut c1 = [0u64; 2];
+    let t0 = std::time::Instant::now();
+    // SAFETY: `c0` is a 16-byte buffer for `[instructions, cycles]`.
+    if unsafe { thread_selfcounts(1, c0.as_mut_ptr(), std::mem::size_of::<[u64; 2]>()) } != 0 {
         return None;
     }
-    let hz: u64 = String::from_utf8(out.stdout).ok()?.trim().parse().ok()?;
-    (hz > 0).then_some(hz / 1000)
+    let mut acc = 1u64;
+    for i in 0..50_000u64 {
+        acc = std::hint::black_box(acc.wrapping_mul(6364136223846793005).wrapping_add(i));
+    }
+    std::hint::black_box(acc);
+    // SAFETY: `c1` is a 16-byte buffer for `[instructions, cycles]`.
+    if unsafe { thread_selfcounts(1, c1.as_mut_ptr(), std::mem::size_of::<[u64; 2]>()) } != 0 {
+        return None;
+    }
+    let elapsed_ns = t0.elapsed().as_nanos() as u64;
+    let cycles = c1[1].checked_sub(c0[1])?;
+    if elapsed_ns == 0 || cycles == 0 {
+        return None;
+    }
+    // cycles / ns = GHz = 1_000_000 kHz
+    let khz = u128::from(cycles)
+        .checked_mul(1_000_000)?
+        .checked_div(u128::from(elapsed_ns))?;
+    u64::try_from(khz).ok().filter(|&v| v > 0)
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]

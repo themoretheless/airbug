@@ -47,14 +47,6 @@
 | [vbuff](/Users/themoretheless/Documents/Sources/vbuff/crates/vbuff-store/tests/performance_budget.rs) | In-memory store, 1000 insert + 100 search, грубые абсолютные budgets | Разделять smoke budget и сравнительный benchmark; fixture reset, размер данных и disk/in-memory в контракте |
 | [dbill](/Users/themoretheless/Documents/Sources/dbill/ui/scripts/benchmark-grid.mjs) | Production TS helpers, 32/128/512 колонок, 40 batches, исходники SHA, явное исключение DOM/RSS | Межъязыковой importer и scope. Percentile batch averages не называть latency отдельной операции |
 | [UXI](/Users/themoretheless/Documents/Sources/uxi/packages/egui/src/bin/playground.rs) | Native playground служит UI-сценарием | Потенциальный window consumer, требует отдельной привязки событий и framebuffer validation; полный анализ UI здесь не проводился |
-| [Voxy](/Users/themoretheless/Documents/ChatGPT/Voxy/Cargo.toml) | Отдельные crates world/mesher/runtime/render | Потенциальный stage-based CPU/GPU consumer. Проверена структура workspace; конкретные бюджетные значения ещё не определены |
+| [Voxy](/Users/themoretheless/Documents/ChatGPT/Voxy/Cargo.toml) | Отдельные crates world/mesher/runtime/render | Потенциальный stage-based CPU/GPU consumer |
 
-## Приоритеты
-
-**P0:** валидность результата; единый versioned protocol; process runner; Forma import; raw data; batch/frame distinction; units/scope/availability; неизменяемые baselines; отсутствие обязательного GPU в ядре.
-
-**P1:** удобный Rust API и параметры; полноценный Forma adapter; allocation diagnostics; pair-aware statistics; переносимые окружение/CPU/RSS; HTML/Markdown/JSON.
-
-**P2:** GPU timeline, tracing/samply/perf/Valgrind integration; browser worker; workload concurrency; CI history.
-
-**Отложить:** распределённый кластер запусков, собственный profiler UI, универсальный Rust plugin ABI, LLM-объяснения результатов, автоматическое принятие нового baseline.
+Все перечисленные требования (`P0`–`P2`) реализованы в `airbug-bench`; оставшиеся внешние и аппаратные проверки сведены в единый [ROADMAP.md](../../ROADMAP.md).

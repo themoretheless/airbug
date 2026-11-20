@@ -91,8 +91,7 @@ pub fn parse_cargo_targets(cargo_toml: &str) -> (Option<String>, Vec<String>) {
             {
                 if section == "package" && pkg_name.is_none() {
                     pkg_name = Some(val);
-                } else if section == "bench" && valid_target_name(&val) && !benches.contains(&val)
-                {
+                } else if section == "bench" && valid_target_name(&val) && !benches.contains(&val) {
                     benches.push(val);
                 }
             }
@@ -230,9 +229,7 @@ pub fn launch(app: &HubApp, req: LaunchRequest) -> Result<Value> {
         None => None,
         Some(p @ ("quick" | "normal" | "thorough")) => Some(p.to_string()),
         Some(_) => {
-            return Err(HubError::msg(
-                "profile must be quick, normal, or thorough",
-            ));
+            return Err(HubError::msg("profile must be quick, normal, or thorough"));
         }
     };
 
@@ -326,7 +323,10 @@ pub fn launch(app: &HubApp, req: LaunchRequest) -> Result<Value> {
         )
         .env(
             "OTEL_RESOURCE_ATTRIBUTES",
-            format!("airbug.hub_id={},airbug.run_id={}", app.hub_id, created.run_id),
+            format!(
+                "airbug.hub_id={},airbug.run_id={}",
+                app.hub_id, created.run_id
+            ),
         )
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout_file))

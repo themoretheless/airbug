@@ -52,8 +52,10 @@ export async function renderCharts(url, el) {
   const cards = Object.keys(families).sort().map(family => {
     const rows = families[family].sort((a, b) => a.median - b.median);
     const max = Math.max(...rows.map(r => r.median), 1);
-    const tr = rows.map(r => `<tr><td>${escapeHtml(r.engine)}</td><td>${fmtNs(r.median)}<div class="bench-bar" style="width:${Math.max(2, (r.median / max) * 100)}%"></div></td></tr>`).join("");
-    return `<div class="bench-chart-card"><h4>${escapeHtml(family)}</h4>
+    const linRow = rows.find(r => r.engine === "lin");
+    const linLags = Boolean(linRow && rows[0] && linRow.median > rows[0].median);
+    const tr = rows.map(r => `<tr class="${linLags && r.engine === "lin" ? "bad" : ""}"><td>${escapeHtml(r.engine)}</td><td>${fmtNs(r.median)}<div class="bench-bar" style="width:${Math.max(2, (r.median / max) * 100)}%"></div></td></tr>`).join("");
+    return `<div class="bench-chart-card"><h4 class="${linLags ? "bad" : ""}">${escapeHtml(family)}</h4>
       <table><thead><tr><th>engine</th><th>median wall</th></tr></thead><tbody>${tr}</tbody></table></div>`;
   }).join("");
   el.innerHTML = cards || `<p class="bench-live">No wall observations in run.json.</p>`;
@@ -371,7 +373,7 @@ export function createBenchCompareView(host, opts = {}) {
 
     const htmlRows = list.map(r => {
       const cp = r.change_percent;
-      const empTone = cp == null ? "" : cp <= -st.threshold ? "good" : cp >= st.threshold ? "bad" : "";
+      const empTone = cp == null ? "" : cp <= -st.threshold ? "good" : (cp >= st.threshold || r.decision === "regression") ? "bad" : "";
       const speedup = r.baseline > 0 && r.candidate > 0 ? r.baseline / r.candidate : null;
       const spStr = speedup != null ? (speedup >= 1 ? `${speedup.toFixed(2)}× faster` : `${(1 / speedup).toFixed(2)}× slower`) : "—";
       const units = r.hypothesis && r.hypothesis.test ? Math.min(r.hypothesis.test.baseline_units || 0, r.hypothesis.test.candidate_units || 0) : r.independent_units;

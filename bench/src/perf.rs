@@ -190,7 +190,96 @@ mod windows {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+mod macos {
+    use super::*;
+
+    unsafe extern "C" {
+        fn thread_selfcounts(kind: libc::c_int, buf: *mut u64, nbytes: libc::size_t)
+        -> libc::c_int;
+    }
+
+    /// `THCOUNTS_INSTRS_CYCLES` (`1`): returns `[instructions, cycles]` for the calling thread
+    /// via XNU's `kpc` / PMC per-thread accumulators without root privileges.
+    fn read_thread_instrs_cycles() -> Result<[u64; 2]> {
+        let mut counts = [0u64; 2];
+        // SAFETY: `counts` is a 16-byte buffer for `[instructions, cycles]`.
+        let rc = unsafe {
+            thread_selfcounts(
+                1,
+                counts.as_mut_ptr(),
+                std::mem::size_of::<[u64; 2]>() as libc::size_t,
+            )
+        };
+        if rc != 0 {
+            return Err(error(format!(
+                "macOS thread_selfcounts failed: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+        Ok(counts)
+    }
+
+    fn read_page_faults() -> Result<u64> {
+        let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+        // SAFETY: `getrusage(RUSAGE_SELF)` initializes `usage` on return 0.
+        let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) };
+        if rc != 0 {
+            return Err(error(format!(
+                "software counter sw.page_faults unavailable: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+        let usage = unsafe { usage.assume_init() };
+        let minflt = u64::try_from(usage.ru_minflt).unwrap_or(0);
+        let majflt = u64::try_from(usage.ru_majflt).unwrap_or(0);
+        Ok(minflt.saturating_add(majflt))
+    }
+
+    impl PerfCounter {
+        pub fn open(event: Event) -> Result<Self> {
+            match event {
+                Event::Instructions | Event::Cycles => {
+                    let counts = read_thread_instrs_cycles()?;
+                    let value = match event {
+                        Event::Instructions => counts[0],
+                        Event::Cycles => counts[1],
+                        _ => unreachable!(),
+                    };
+                    if value == 0 {
+                        return Err(error(format!(
+                            "hardware counter {} unavailable: thread_selfcounts reported 0",
+                            event.id()
+                        )));
+                    }
+                    Ok(Self { event })
+                }
+                Event::PageFaults => {
+                    let _ = read_page_faults()?;
+                    Ok(Self { event })
+                }
+                _ => Err(error(format!(
+                    "hardware counter {} needs Linux perf_event_open; unavailable on macOS",
+                    event.id()
+                ))),
+            }
+        }
+
+        pub(super) fn read(&mut self) -> Result<u64> {
+            match self.event {
+                Event::Instructions => Ok(read_thread_instrs_cycles()?[0]),
+                Event::Cycles => Ok(read_thread_instrs_cycles()?[1]),
+                Event::PageFaults => read_page_faults(),
+                _ => Err(error(format!(
+                    "hardware counter {} unavailable on macOS",
+                    self.event.id()
+                ))),
+            }
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 impl PerfCounter {
     pub fn open(event: Event) -> Result<Self> {
         Err(error(format!(
@@ -356,22 +445,28 @@ mod tests {
         }
     }
 
-    /// Where the machine has a PMU, more work must count more instructions.
+    /// Where the machine has a PMU, more work must count more instructions and cycles.
     #[test]
     fn instructions_grow_with_work_where_counters_exist() {
-        let Ok(mut counter) = PerfCounter::open(Event::Instructions) else {
-            return;
-        };
-        let mut spin = |n: u64| {
-            let start = counter.start().unwrap();
-            let mut x = 0u64;
-            for i in 0..n {
-                x = std::hint::black_box(x.wrapping_mul(31).wrapping_add(i));
-            }
-            std::hint::black_box(x);
-            counter.end(start).unwrap()
-        };
-        let (small, large) = (spin(1_000), spin(1_000_000));
-        assert!(small > 0 && large > small * 10, "{small} vs {large}");
+        for event in [Event::Instructions, Event::Cycles] {
+            let Ok(mut counter) = PerfCounter::open(event) else {
+                continue;
+            };
+            let mut spin = |n: u64| {
+                let start = counter.start().unwrap();
+                let mut x = 0u64;
+                for i in 0..n {
+                    x = std::hint::black_box(x.wrapping_mul(31).wrapping_add(i));
+                }
+                std::hint::black_box(x);
+                counter.end(start).unwrap()
+            };
+            let (small, large) = (spin(1_000), spin(1_000_000));
+            assert!(
+                small > 0 && large > small * 10,
+                "{}: {small} vs {large}",
+                event.id()
+            );
+        }
     }
 }

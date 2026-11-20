@@ -1,21 +1,16 @@
 # Airbug roadmap
 
-The single plan for the whole monorepo: only external, credential-gated, or physical-hardware validation items remain open. Implemented engineering items are recorded in the crate changelogs below.
+The single plan for the whole monorepo: all in-repo engineering plans (`unit/ROADMAP.md`, `unit/TOP50.md`, `unit/NEXT50.md`, `bench/ROADMAP.md`, `bench/docs/ROADMAP.md`, `bench/docs/NEXT20.md`, `bench/docs/FINAL20.md`, `bench/docs/parity/*.json`, OpenTelemetry, TestOps, .NET Aspire, Sentry, physical Apple Silicon M4 Max counter acceptance, physical Metal GPU + native window Forma verification, and multi-OS GitHub Actions CI sign-off) have been completed and consolidated here. Only external credential-gated or bare-metal Linux PMU/RAPL hardware items remain open.
 
-Last reviewed: 2026-11-15.
+Last reviewed: 2026-11-20.
 
-## Stage 1 — Release (`run`, `bench`)
+## Stage 1 — Release (`run`, `bench`, `unit`, `err`, `otel`)
 
-1. **Manual Stage 1 crates.io publication (`cargo publish`)**: all workspace crates are at `0.11.0` and ready to package offline; publishing requires maintainer crates.io credentials in dependency order — `airbug-macros` and `airbug` first, then `airbug-run`, `airbug-bench-macros`, `airbug-bench`, `cargo-airbug-bench`, `airbug-err`, `airbug-otel`.
+1. **Manual Stage 1 crates.io publication (`cargo publish`)**: all publishable workspace crates (`airbug-macros`, `airbug`, `airbug-run`, `airbug-bench-macros`, `airbug-bench`, `cargo-airbug-bench`, `airbug-err`, `airbug-otel`) are at `0.11.0` and verified via `cargo publish --dry-run` / `cargo package --no-verify`; publishing to `crates.io` requires maintainer `CARGO_REGISTRY_TOKEN` credentials in dependency order.
 
-## Stage 2 — Physical Hardware Acceptance (`bench`)
+## Stage 2 — Bare-Metal Linux PMU & RAPL Hardware Acceptance (`bench`)
 
-2. **Bare-metal Linux PMU & MSR/RAPL acceptance**: `airbug_bench::perf` (`Instructions`, `Cycles`, `CacheReferences`, `CacheMisses`, `BranchInstructions`, `BranchMisses`, `ICacheMisses`, `DtlbMisses`, `ItlbMisses`, `PageFaults`) and `host.rs` sysfs RAPL (`energy_uj`) / MSR probing require validation on a physical Linux host with exposed PMU counters and `/dev/cpu/*/msr` privileges.
-3. **Physical Apple Silicon (`macOS` ARM64) counter acceptance**: verify `airbug-bench` host probes (`sysctl` CPU frequency) and optional macOS performance counters (`kpc`) on physical Apple Silicon hardware.
-
-## Stage 3 — Physical GPU & External Forma Checkout (`bench`)
-
-4. **Forma on physical GPU and display hardware**: `bench/integrations/forma` integrates `airbug_bench::frames::Frames` lifecycle tracking, GPU timestamp validation (`GpuSpan`), and `TrackingAllocator<memory::Allocator<System>>` (`--alloc-stacks DIR`). Running `bench/integrations/forma` end-to-end requires the external `research/private/forma/vector-ui` checkout on a host with a physical GPU and display.
+2. **Bare-metal Linux PMU & MSR/RAPL acceptance**: `airbug_bench::perf` (`Instructions`, `Cycles`, `CacheReferences`, `CacheMisses`, `Branches`, `BranchMisses`, `ICacheMisses`, `DtlbMisses`, `ItlbMisses`, `PageFaults`) and `host.rs` sysfs RAPL (`energy_uj`) / MSR probing require validation on a physical Linux host with exposed PMU counters and `/dev/cpu/*/msr` privileges (Apple Silicon M4 Max hardware counters and Metal GPU + native window Forma acceptance are complete and recorded in `bench/CHANGELOG.md` and `bench/docs/VALIDATION.md`).
 
 ## Where finished work is recorded
 
